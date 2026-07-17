@@ -9724,9 +9724,20 @@ Deno.serve(async (req) => {
           }))
       : [];
     const formalSpecForRun = FORMAL_ARTIFACT_AGENTS[request.agentId];
-    const formalRunMode = formalSpecForRun
+    let formalRunMode = formalSpecForRun
       ? deriveFormalRunMode(request, getInnerProgramData(contextProgramData), formalSpecForRun.fieldKey)
       : undefined;
+    // A PROVISIONAL ontology run (no Listen evidence on record) is always a
+    // fresh synthesis, whatever mode the request inferred: a refresh-mode
+    // prompt anchors the drafts to the PRIOR reconciled doc, so all five
+    // parrot its entity list and the vote has nothing to demote — candidates
+    // vanish and the doc stops being a function of (mandate, steering,
+    // client vocabulary). Force initial_generation until Listen evidence
+    // exists; from then on refreshes anchor to evidence as designed.
+    if (request.agentId === "domain-ontology" && formalRunMode && formalRunMode !== "initial_generation"
+      && !ontologyListenEvidenceOnRecord(getInnerProgramData(contextProgramData))) {
+      formalRunMode = "initial_generation";
+    }
     // Set when the regeneration guard turns this run's document into a Tier-2
     // decision instead of a write — the post-run stamp/attest block must not
     // record it as generated.
@@ -10202,14 +10213,17 @@ Deno.serve(async (req) => {
     // auto-escalate spend. Tier routing is provider-agnostic — claudeClient maps
     // the tier to the active provider's model.
     const routedTier = resolveAgentTier(request.agentId) === "tier1" ? "tier1" as const : undefined;
-    // Voted provisional ontology: a first-generation ontology with no Listen
-    // evidence yet is the one artifact where a single temperature-0 draft still
-    // wobbles on borderline concepts. Run the SAME grounded prompt N times and
-    // reconcile by majority vote (see runVotedProvisionalOntology). Null (not a
-    // provisional ontology run, or too few usable drafts) falls through to the
-    // normal single generation below.
+    // Voted provisional ontology: with NO Listen evidence on record, EVERY
+    // domain-ontology generation takes the voted path — including the app's
+    // Regenerate, which infers a REFRESH runMode once a prior doc exists. A
+    // provisional doc is a function of (mandate, steering, client vocabulary),
+    // never of its own prior draft: routing a refresh through single-draft
+    // synthesis let the LLM rewrite the reconciled doc — echoing its gap
+    // templates, dropping the candidates array, drifting names. The Listen-
+    // evidence boundary is the real gate; runMode is not. Null (not this
+    // agent, evidence on record, or too few usable drafts) falls through to
+    // the normal single generation below.
     let claudeResult = request.agentId === "domain-ontology"
-      && formalRunMode === "initial_generation"
       && !ontologyListenEvidenceOnRecord(getInnerProgramData(contextProgramData))
       ? await runVotedProvisionalOntology(
           prompt,

@@ -487,6 +487,13 @@ describe("prompt ↔ reconciler lockstep", () => {
     }
   });
 
+  it("the voted path gates on Listen evidence, never on runMode", () => {
+    // The app's Regenerate infers a refresh runMode once a prior doc exists —
+    // that must NOT bypass the voted reconciler while the doc is provisional.
+    expect(EDGE).toMatch(/agentId === "domain-ontology"\s*\n\s*&& !ontologyListenEvidenceOnRecord/);
+    expect(EDGE).not.toMatch(/agentId === "domain-ontology"\s*\n\s*&& formalRunMode === "initial_generation"/);
+  });
+
   it("the generation context ships the standard backbone as facts", () => {
     expect(EDGE).toContain("standardBackbone: backbonePacks.map");
     expect(EDGE).toContain("const clientBackbonePack = clientVocabularyPack(inner)");
