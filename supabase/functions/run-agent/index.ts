@@ -6783,9 +6783,18 @@ function ontologyModal<T>(values: T[], key: (v: T) => string, tie: (a: T, b: T) 
  * verbatim naming tiebreak; `sponsor` addresses the derived gaps. */
 function reconcileVotedOntology(
   drafts: Array<Record<string, unknown>>,
-  opts: { threshold: number; total: number; mandate: string; sponsor: string; programName: string; allowedUris?: Set<string> },
+  opts: {
+    threshold: number; total: number; mandate: string; sponsor: string; programName: string;
+    allowedUris?: Set<string>;
+    /** pack class/alias name-key → the class name — entity grounding check. */
+    packClasses?: Map<string, string>;
+    /** standard-keyed pack URI → the class name — endpoint class resolution. */
+    uriToClass?: Map<string, string>;
+    /** "From verb To" association strings the packs define — relation check. */
+    packAssociations?: Set<string>;
+  },
 ): Record<string, unknown> {
-  const { threshold, total, sponsor, programName, allowedUris } = opts;
+  const { threshold, total, sponsor, programName, allowedUris, packClasses, uriToClass, packAssociations } = opts;
   // Pack validation: with the backbone shipped as facts, an alignment URI the
   // pack does not list is recall leaking back in — strip it (standard-keyed
   // comparison) so a hallucinated or off-pack class can never reach the record.
@@ -6851,6 +6860,10 @@ function reconcileVotedOntology(
   const standardAlignment: Array<Record<string, unknown>> = [];
   const belowConsensus: string[] = []; // demoted to gaps
   const lowAgreement: string[] = [];    // included but flagged
+  const ungrounded: string[] = [];      // failed the acid test — demoted to gaps
+  // Per-survivor grounding facts, for the relation acid test below.
+  const mandateByName = new Map<string, boolean>();
+  const classByName = new Map<string, string>();
   [...buckets.entries()]
     .sort((a, b) => ontologyCompare(canonicalName(a[1]), canonicalName(b[1])))
     .forEach(([key, b]) => {
@@ -6869,7 +6882,32 @@ function reconcileVotedOntology(
         if (b.docs.size >= 2) belowConsensus.push(name);
         return;
       }
+      // ACID TEST, enforced in code: an asserted entity must be grounded in the
+      // mandate or in the standard (a pack class — matched by its already-
+      // validated URI or by name/alias). Mandate grounding accepts WORD-level
+      // vocabulary too: "improves patient identification, engagement, and
+      // enrollment" names "Patient Engagement" distributively, so a majority-
+      // voted concept whose every word is mandate vocabulary counts (the
+      // 1-vote FLOOR above still demands the strict verbatim phrase). Anything
+      // else is a GAP, never an assertion, no matter how many drafts voted.
+      const wordsGrounded = ontologyNameKey(name).split(" ").every((w) => w && mandate.includes(` ${w} `));
+      const packGrounded = b.uris.length > 0
+        || (!!packClasses && [...b.names, ...b.aliases].some((n) => packClasses.has(ontologyNameKey(n))));
+      if (packClasses && !mandateConcept && !wordsGrounded && !packGrounded) { ungrounded.push(name); return; }
       survivor.set(key, name);
+      // Chain eligibility is WORD-level: "improves patient identification,
+      // engagement, and enrollment" names the stages distributively, so
+      // "Patient Engagement" must count even though the exact phrase never
+      // appears. Every word of the concept must be mandate vocabulary.
+      mandateByName.set(name, ontologyNameKey(name).split(" ").every((w) => w && mandate.includes(` ${w} `)));
+      // The endpoint's pack class, for the relation acid test: via the modal
+      // (pack-validated) URI first, else via a name/alias match.
+      const modalUriKey = b.uris.length
+        ? ontologyStandardKey(ontologyModal(b.uris, (u) => ontologyStandardKey(u), (a, z) => ontologyCompare(a, z)))
+        : "";
+      const cls = (modalUriKey ? uriToClass?.get(modalUriKey) : undefined)
+        ?? [...b.names, ...b.aliases].map((n) => packClasses?.get(ontologyNameKey(n))).find(Boolean);
+      if (cls) classByName.set(name, cls);
       // Flag only NON-mandate survivors below full consensus — a mandate noun is
       // certain even if just one draft emitted it, so it is never "provisional".
       if (!mandateConcept && b.docs.size < total) lowAgreement.push(name);
@@ -6936,12 +6974,23 @@ function reconcileVotedOntology(
     }
   }
   const relations = [...byUnordered.values()]
-    .map((rb) => {
+    .flatMap((rb) => {
       const menuVerbs = rb.verbs.filter((v) => ONTOLOGY_MENU_RANK.has(v));
       const verb = menuVerbs.length
         ? ontologyModal(menuVerbs, (v) => v, (a, z) => (ONTOLOGY_MENU_RANK.get(a)! - ONTOLOGY_MENU_RANK.get(z)!))
         : "relates to";
-      return { from: rb.from, relation: verb, to: rb.to, cardinality: "unknown" };
+      // ACID TEST, enforced in code: a relation must be an association the
+      // packs define between the endpoints' classes, or a "leads to" link in
+      // the mandate's own stage sequence. Anything else is dropped — the
+      // standard did not define it and the mandate did not state it.
+      if (packAssociations) {
+        const chainLink = verb === "leads to" && mandateByName.get(rb.from) && mandateByName.get(rb.to);
+        const clsFrom = classByName.get(rb.from);
+        const clsTo = classByName.get(rb.to);
+        const standardAssoc = !!(clsFrom && clsTo && packAssociations.has(clsFrom + " " + verb + " " + clsTo));
+        if (!chainLink && !standardAssoc) return [];
+      }
+      return [{ from: rb.from, relation: verb, to: rb.to, cardinality: "unknown" }];
     })
     .sort((a, b) => ontologyCompare(`${a.from} ${a.to}`, `${b.from} ${b.to}`));
 
@@ -6976,6 +7025,7 @@ function reconcileVotedOntology(
   // asks. Deterministic and sponsor-addressed. ──
   const ask = sponsor ? `Ask ${sponsor}: ` : "Ask the sponsor: ";
   const gaps = [
+    ...ungrounded.sort(ontologyCompare).map((n) => ask + 'drafts modelled "' + n + '" but it is neither named by the mandate nor a class of the industry standard - is it part of this process?'),
     ...belowConsensus.sort(ontologyCompare).map((n) => `${ask}some drafts modelled "${n}" and others did not — is it part of this process, and who owns it?`),
     ...lowAgreement.sort(ontologyCompare).map((n) => `${ask}confirm "${n}" is a distinct part of the process today, and name the system that records it.`),
   ].slice(0, 8);
@@ -7044,17 +7094,30 @@ async function runVotedProvisionalOntology(
       .filter((d) => Array.isArray(d.entities) && d.entities.length);
     if (drafts.length < ONTOLOGY_VOTE_THRESHOLD) return null; // not enough to vote — fall through
     const mc = ontologyMandateContext(inner, programRow);
-    // The same pack the context shipped as facts also gates the reconciliation:
-    // only its class URIs may land in standardAlignment.
-    const allowedUris = new Set(
-      resolveProvisionalPacks(ontologyVocabularySteering(mc.industry, mc.segment))
-        .flatMap((pack) => pack.entities.map((e) => e.uri).filter(Boolean))
-        .map((uri) => ontologyStandardKey(uri)),
-    );
+    // The same packs the context shipped as facts also gate the reconciliation:
+    // class URIs, class names/aliases, and associations — so the acid test is
+    // ENFORCED in code, not just requested in the prompt.
+    const packs = resolveProvisionalPacks(ontologyVocabularySteering(mc.industry, mc.segment));
+    const allowedUris = new Set<string>();
+    const packClasses = new Map<string, string>();
+    const uriToClass = new Map<string, string>();
+    for (const pack of packs) {
+      for (const entity of pack.entities) {
+        for (const alias of [entity.name, ...entity.aliases]) {
+          const k = ontologyNameKey(alias);
+          if (k && !packClasses.has(k)) packClasses.set(k, entity.name);
+        }
+        if (entity.uri) {
+          allowedUris.add(ontologyStandardKey(entity.uri));
+          uriToClass.set(ontologyStandardKey(entity.uri), entity.name);
+        }
+      }
+    }
+    const packAssociations = new Set(packs.flatMap((pack) => pack.relations.map((r) => `${r.from} ${r.verb} ${r.to}`)));
     const doc = reconcileVotedOntology(drafts, {
       threshold: ONTOLOGY_VOTE_THRESHOLD, total: ONTOLOGY_VOTE_N,
       mandate: mc.mandate, sponsor: mc.sponsor, programName: mc.programName,
-      allowedUris,
+      allowedUris, packClasses, uriToClass, packAssociations,
     });
     const base = usable[0];
     return {

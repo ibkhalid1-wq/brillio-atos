@@ -1,0 +1,171 @@
+/**
+ * Ontology grounding — the acid test, pinned.
+ *
+ * The provisional ontology is reconciled from N drafts by majority vote, with
+ * grounding ENFORCED in code: entities must be mandate- or pack-grounded,
+ * alignment URIs must be pack classes, relations must be pack associations or
+ * the mandate's stage chain. These tests EXTRACT the reconciler (a pure
+ * function) from the edge source, evaluate it, and drive it with canned draft
+ * fixtures — so the guarantees stay true as prompts and models drift.
+ */
+import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import ts from "typescript";
+
+const EDGE = readFileSync(resolve(__dirname, "../../../supabase/functions/run-agent/index.ts"), "utf8");
+
+// ── Extract the voted-ensemble section (pure code, no Deno APIs) and eval it. ──
+const start = EDGE.indexOf("// ─── Voted provisional ontology");
+const end = EDGE.indexOf("/** True when a Listen conversation is on record");
+const section = EDGE.slice(start, end);
+const js = ts.transpileModule(
+  `const isRecord = (v: unknown) => typeof v === "object" && v !== null && !Array.isArray(v);\n${section}\n` +
+  `return { reconcileVotedOntology, resolveProvisionalPacks, ontologyNameKey, ontologyStandardKey, ONTOLOGY_VOTE_N, ONTOLOGY_VOTE_THRESHOLD, ONTOLOGY_MENU_VERBS };`,
+  { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.None } },
+).outputText;
+const sandbox = new Function(js)() as {
+  reconcileVotedOntology: (drafts: Array<Record<string, unknown>>, opts: Record<string, unknown>) => Record<string, unknown>;
+  resolveProvisionalPacks: (steering: string) => Array<{ vocabulary: string; entities: Array<{ name: string; uri: string; aliases: string[] }>; relations: Array<{ from: string; verb: string; to: string }> }>;
+  ontologyNameKey: (name: unknown) => string;
+  ontologyStandardKey: (uri: unknown) => string;
+  ONTOLOGY_VOTE_N: number;
+  ONTOLOGY_VOTE_THRESHOLD: number;
+  ONTOLOGY_MENU_VERBS: string[];
+};
+
+const MANDATE = "Accelerate clinical trial recruitment through an AI-powered CRM that improves patient identification, engagement, and enrollment, reducing time-to-enrollment by 30% and increasing enrollment conversion by 20%.";
+
+// Grounding facts, built exactly as the runner builds them (FHIR + schema.org).
+const packs = sandbox.resolveProvisionalPacks("Primary: HL7 FHIR (URIs under http://hl7.org/fhir/). Fall back to schema.org (URIs under https://schema.org/).");
+const allowedUris = new Set<string>();
+const packClasses = new Map<string, string>();
+const uriToClass = new Map<string, string>();
+for (const pack of packs) {
+  for (const entity of pack.entities) {
+    for (const alias of [entity.name, ...entity.aliases]) {
+      const k = sandbox.ontologyNameKey(alias);
+      if (k && !packClasses.has(k)) packClasses.set(k, entity.name);
+    }
+    if (entity.uri) {
+      allowedUris.add(sandbox.ontologyStandardKey(entity.uri));
+      uriToClass.set(sandbox.ontologyStandardKey(entity.uri), entity.name);
+    }
+  }
+}
+const packAssociations = new Set(packs.flatMap((pack) => pack.relations.map((r) => `${r.from} ${r.verb} ${r.to}`)));
+const OPTS = { threshold: 3, total: 5, mandate: MANDATE, sponsor: "david burns", programName: "test", allowedUris, packClasses, uriToClass, packAssociations };
+
+type Draft = Record<string, unknown>;
+function draft(entities: Array<[name: string, uri?: string]>, relations: Array<[string, string, string]> = []): Draft {
+  return {
+    entities: entities.map(([name]) => ({ name, definition: `${name}.`, area: "Clinical", attributes: [], systemOfRecord: null, aliases: [], evidence: "from the sponsor mandate — to confirm" })),
+    relations: relations.map(([from, relation, to]) => ({ from, relation, to, cardinality: "unknown" })),
+    events: [],
+    standardAlignment: entities.filter(([, uri]) => uri).map(([name, uri]) => ({ entity: name, standard: uri, vocabulary: "HL7 FHIR", relation: "skos:closeMatch", confidence: 0.8 })),
+    gaps: [],
+  };
+}
+const names = (doc: Record<string, unknown>) => (doc.entities as Array<{ name: string }>).map((e) => e.name);
+const rels = (doc: Record<string, unknown>) => (doc.relations as Array<{ from: string; relation: string; to: string }>).map((r) => `${r.from} ${r.relation} ${r.to}`);
+
+const BASE: Array<[string, string?]> = [
+  ["Patient", "http://hl7.org/fhir/Patient"],
+  ["Organization", "http://hl7.org/fhir/Organization"],
+  ["Patient Identification"],
+  ["Patient Engagement"],
+  ["Enrollment"],
+];
+const CHAIN: Array<[string, string, string]> = [
+  ["Patient Identification", "leads to", "Patient Engagement"],
+  ["Patient Engagement", "leads to", "Enrollment"],
+];
+
+describe("voted ontology reconciliation — determinism", () => {
+  it("the same drafts always reconcile to the same document", () => {
+    const drafts = Array.from({ length: 5 }, () => draft(BASE, CHAIN));
+    const a = sandbox.reconcileVotedOntology(drafts.map((d) => JSON.parse(JSON.stringify(d))), { ...OPTS });
+    const b = sandbox.reconcileVotedOntology(drafts.map((d) => JSON.parse(JSON.stringify(d))), { ...OPTS });
+    expect(a).toEqual(b);
+  });
+
+  it("N and the threshold stay at the measured configuration (5 / 3)", () => {
+    // N=3/threshold-2 was tried and measurably wobbled — see the constant's
+    // comment. Changing this requires re-measuring, not just editing.
+    expect(sandbox.ONTOLOGY_VOTE_N).toBe(5);
+    expect(sandbox.ONTOLOGY_VOTE_THRESHOLD).toBe(3);
+  });
+});
+
+describe("voting rules", () => {
+  it("a below-majority backbone concept is excluded and demoted to a gap", () => {
+    const withCoverage = draft([...BASE, ["Coverage", "http://hl7.org/fhir/Coverage"]], CHAIN);
+    const without = draft(BASE, CHAIN);
+    const doc = sandbox.reconcileVotedOntology([withCoverage, JSON.parse(JSON.stringify(withCoverage)), without, JSON.parse(JSON.stringify(without)), JSON.parse(JSON.stringify(without))], { ...OPTS });
+    expect(names(doc)).not.toContain("Coverage");
+    expect((doc.gaps as string[]).join(" ")).toContain("Coverage");
+  });
+
+  it("a mandate-named concept is floored in even from a single draft", () => {
+    const withTrial = draft([...BASE, ["Clinical Trial", "http://hl7.org/fhir/ResearchStudy"]], CHAIN);
+    const without = draft(BASE, CHAIN);
+    const doc = sandbox.reconcileVotedOntology([withTrial, without, JSON.parse(JSON.stringify(without)), JSON.parse(JSON.stringify(without)), JSON.parse(JSON.stringify(without))], { ...OPTS });
+    expect(names(doc)).toContain("Clinical Trial");
+  });
+});
+
+describe("the acid test is enforced in code", () => {
+  it("an entity that is neither mandate- nor pack-grounded cannot be asserted, even at 5/5", () => {
+    const bad = draft([...BASE, ["Telemetry Log", "http://hl7.org/fhir/CarePlan"]], CHAIN); // CarePlan is real FHIR but NOT in the pack
+    const doc = sandbox.reconcileVotedOntology(Array.from({ length: 5 }, () => JSON.parse(JSON.stringify(bad))), { ...OPTS });
+    expect(names(doc)).not.toContain("Telemetry Log");
+    expect((doc.gaps as string[]).join(" ")).toContain("Telemetry Log");
+  });
+
+  it("alignment URIs are pack classes only — an off-pack URI is stripped", () => {
+    const doc = sandbox.reconcileVotedOntology(Array.from({ length: 5 }, () => draft(BASE, CHAIN)), { ...OPTS });
+    for (const row of doc.standardAlignment as Array<{ standard: string }>) {
+      expect(allowedUris.has(sandbox.ontologyStandardKey(row.standard))).toBe(true);
+    }
+  });
+
+  it("a relation the packs do not define is dropped, even at 5/5", () => {
+    const bad = draft(BASE, [...CHAIN, ["Patient", "manages", "Organization"]]);
+    const doc = sandbox.reconcileVotedOntology(Array.from({ length: 5 }, () => JSON.parse(JSON.stringify(bad))), { ...OPTS });
+    expect(rels(doc)).not.toContain("Patient manages Organization");
+  });
+
+  it("pack associations and the mandate stage chain survive", () => {
+    const good = draft(BASE, [...CHAIN, ["Patient", "participates in", "Organization"]]);
+    // "Patient participates in Organization" is NOT a pack association — dropped;
+    // the distributed-stage chain links are mandate-worded — kept.
+    const doc = sandbox.reconcileVotedOntology(Array.from({ length: 5 }, () => JSON.parse(JSON.stringify(good))), { ...OPTS });
+    expect(rels(doc)).toContain("Patient Identification leads to Patient Engagement");
+    expect(rels(doc)).toContain("Patient Engagement leads to Enrollment");
+    expect(rels(doc)).not.toContain("Patient participates in Organization");
+  });
+});
+
+describe("prompt ↔ reconciler lockstep", () => {
+  it("the closed verb menu matches the prompt's CLOSED MENU sentence", () => {
+    const sentence = EDGE.match(/RELATION VERBS are a CLOSED MENU: ([^.]+)\./);
+    expect(sentence).toBeTruthy();
+    const promptVerbs = sentence![1].split(",").map((v) => v.trim()).sort();
+    expect([...sandbox.ONTOLOGY_MENU_VERBS].sort()).toEqual(promptVerbs);
+  });
+
+  it("every pack URI is namespace-valid against ONTOLOGY_VOCAB_PREFIXES", () => {
+    const prefixBlock = EDGE.match(/ONTOLOGY_VOCAB_PREFIXES = \[([\s\S]*?)\];/);
+    const prefixes = [...prefixBlock![1].matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+    for (const pack of packs) {
+      for (const entity of pack.entities) {
+        if (entity.uri) expect(prefixes.some((p) => entity.uri.startsWith(p)), `${entity.name}: ${entity.uri}`).toBe(true);
+      }
+    }
+  });
+
+  it("the generation context ships the standard backbone as facts", () => {
+    expect(EDGE).toContain("standardBackbone: resolveProvisionalPacks(steering)");
+    expect(EDGE).toContain('The input context carries "standardBackbone"');
+  });
+});
