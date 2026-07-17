@@ -6611,7 +6611,7 @@ function ontologyClassFromUri(uri: unknown): string {
 // generation context so grounding is matching against provided facts rather
 // than training recall — a class the pack does not list cannot be aligned to.
 // Recovered from the deterministic-compiler experiment (689d9ff).
-type ProvisionalPackEntity = { name: string; uri: string; definition: string; aliases: string[] };
+type ProvisionalPackEntity = { name: string; uri: string; definition: string; aliases: string[]; core?: boolean };
 type ProvisionalPack = {
   vocabulary: string;
   entities: ProvisionalPackEntity[];
@@ -6622,11 +6622,11 @@ const PROVISIONAL_BACKBONE_PACKS: Record<string, ProvisionalPack> = {
   fhir: {
     vocabulary: "HL7 FHIR",
     entities: [
-      { name: "Patient", uri: "http://hl7.org/fhir/Patient", definition: "A person receiving or registered to receive care", aliases: ["patient", "subject"] },
-      { name: "Practitioner", uri: "http://hl7.org/fhir/Practitioner", definition: "A clinician or professional delivering care", aliases: ["clinician", "doctor", "physician", "investigator", "nurse"] },
-      { name: "Organization", uri: "http://hl7.org/fhir/Organization", definition: "A provider, sponsor or site organisation", aliases: ["organisation", "sponsor organization", "hospital", "site", "clinic", "provider organisation"] },
-      { name: "ResearchStudy", uri: "http://hl7.org/fhir/ResearchStudy", definition: "A clinical study or trial", aliases: ["clinical trial", "trial", "study", "research study"] },
-      { name: "ResearchSubject", uri: "http://hl7.org/fhir/ResearchSubject", definition: "A patient's participation in a study", aliases: ["trial participant", "enrollee", "study subject"] },
+      { core: true, name: "Patient", uri: "http://hl7.org/fhir/Patient", definition: "A person receiving or registered to receive care", aliases: ["patient", "subject"] },
+      { core: true, name: "Practitioner", uri: "http://hl7.org/fhir/Practitioner", definition: "A clinician or professional delivering care", aliases: ["clinician", "doctor", "physician", "investigator", "nurse"] },
+      { core: true, name: "Organization", uri: "http://hl7.org/fhir/Organization", definition: "A provider, sponsor or site organisation", aliases: ["organisation", "sponsor organization", "hospital", "site", "clinic", "provider organisation"] },
+      { core: true, name: "ResearchStudy", uri: "http://hl7.org/fhir/ResearchStudy", definition: "A clinical study or trial", aliases: ["clinical trial", "trial", "study", "research study"] },
+      { core: true, name: "ResearchSubject", uri: "http://hl7.org/fhir/ResearchSubject", definition: "A patient's participation in a study", aliases: ["trial participant", "enrollee", "study subject"] },
       { name: "Encounter", uri: "http://hl7.org/fhir/Encounter", definition: "An interaction between a patient and care providers", aliases: ["visit", "consultation"] },
       { name: "Appointment", uri: "http://hl7.org/fhir/Appointment", definition: "A scheduled visit", aliases: ["appointment", "screening visit"] },
       { name: "Consent", uri: "http://hl7.org/fhir/Consent", definition: "A patient's recorded consent", aliases: ["informed consent", "consent form"] },
@@ -6647,9 +6647,9 @@ const PROVISIONAL_BACKBONE_PACKS: Record<string, ProvisionalPack> = {
   gs1: {
     vocabulary: "GS1",
     entities: [
-      { name: "Product", uri: "https://gs1.org/voc/Product", definition: "A traded good", aliases: ["product", "item", "sku", "goods"] },
+      { core: true, name: "Product", uri: "https://gs1.org/voc/Product", definition: "A traded good", aliases: ["product", "item", "sku", "goods"] },
       { name: "Offer", uri: "https://gs1.org/voc/Offer", definition: "An offer to sell a product", aliases: ["offer"] },
-      { name: "Organization", uri: "https://gs1.org/voc/Organization", definition: "A party in the supply chain", aliases: ["organisation", "manufacturer", "supplier", "distributor", "retailer"] },
+      { core: true, name: "Organization", uri: "https://gs1.org/voc/Organization", definition: "A party in the supply chain", aliases: ["organisation", "manufacturer", "supplier", "distributor", "retailer"] },
       { name: "Place", uri: "https://gs1.org/voc/Place", definition: "A physical location", aliases: ["location", "warehouse", "store", "plant"] },
       { name: "Brand", uri: "https://gs1.org/voc/Brand", definition: "A brand of products", aliases: ["brand"] },
       { name: "Shipment", uri: "", definition: "Goods in transit between parties", aliases: ["shipment", "delivery", "consignment"] },
@@ -6666,14 +6666,14 @@ const PROVISIONAL_BACKBONE_PACKS: Record<string, ProvisionalPack> = {
     vocabulary: "FIBO",
     entities: [
       { name: "Party", uri: "", definition: "A person or organisation party to an arrangement", aliases: ["party", "counterparty"] },
-      { name: "Client", uri: "", definition: "A customer of the institution", aliases: ["client", "customer", "account holder"] },
-      { name: "Account", uri: "", definition: "A financial account", aliases: ["account", "bank account"] },
+      { core: true, name: "Client", uri: "", definition: "A customer of the institution", aliases: ["client", "customer", "account holder"] },
+      { core: true, name: "Account", uri: "", definition: "A financial account", aliases: ["account", "bank account"] },
       { name: "Financial Product", uri: "", definition: "A product or service the institution offers", aliases: ["financial product", "deposit", "card"] },
       { name: "Loan", uri: "", definition: "A credit arrangement", aliases: ["loan", "mortgage", "credit"] },
       { name: "Contract", uri: "", definition: "A binding agreement", aliases: ["contract", "agreement", "policy"] },
       { name: "Transaction", uri: "", definition: "A financial transaction", aliases: ["transaction"] },
       { name: "Payment", uri: "", definition: "A transfer of funds", aliases: ["payment", "settlement", "transfer"] },
-      { name: "Financial Institution", uri: "", definition: "The bank, insurer or lender itself", aliases: ["bank", "insurer", "lender", "institution"] },
+      { core: true, name: "Financial Institution", uri: "", definition: "The bank, insurer or lender itself", aliases: ["bank", "insurer", "lender", "institution"] },
     ],
     relations: [
       { from: "Financial Institution", verb: "manages", to: "Account" },
@@ -6686,11 +6686,11 @@ const PROVISIONAL_BACKBONE_PACKS: Record<string, ProvisionalPack> = {
   cim: {
     vocabulary: "IEC CIM",
     entities: [
-      { name: "Asset", uri: "", definition: "A physical grid or plant asset", aliases: ["asset", "equipment"] },
-      { name: "Meter", uri: "", definition: "A metering device", aliases: ["meter", "smart meter"] },
+      { core: true, name: "Asset", uri: "", definition: "A physical grid or plant asset", aliases: ["asset", "equipment"] },
+      { core: true, name: "Meter", uri: "", definition: "A metering device", aliases: ["meter", "smart meter"] },
       { name: "Usage Point", uri: "", definition: "A point where service is delivered and measured", aliases: ["usage point", "service point", "connection"] },
       { name: "Measurement", uri: "", definition: "A measured value", aliases: ["measurement", "reading", "meter reading"] },
-      { name: "Customer", uri: "", definition: "A consumer of the service", aliases: ["customer", "consumer"] },
+      { core: true, name: "Customer", uri: "", definition: "A consumer of the service", aliases: ["customer", "consumer"] },
       { name: "Work Order", uri: "", definition: "Scheduled work on an asset", aliases: ["work order", "maintenance order"] },
     ],
     relations: [
@@ -6703,8 +6703,8 @@ const PROVISIONAL_BACKBONE_PACKS: Record<string, ProvisionalPack> = {
   ebucore: {
     vocabulary: "EBUCore",
     entities: [
-      { name: "MediaResource", uri: "http://www.ebu.ch/metadata/ontologies/ebucore#MediaResource", definition: "A piece of media content", aliases: ["media resource", "content", "video", "programme", "media asset"] },
-      { name: "Agent", uri: "http://www.ebu.ch/metadata/ontologies/ebucore#Agent", definition: "A person or organisation contributing to content", aliases: ["contributor", "producer", "talent"] },
+      { core: true, name: "MediaResource", uri: "http://www.ebu.ch/metadata/ontologies/ebucore#MediaResource", definition: "A piece of media content", aliases: ["media resource", "content", "video", "programme", "media asset"] },
+      { core: true, name: "Agent", uri: "http://www.ebu.ch/metadata/ontologies/ebucore#Agent", definition: "A person or organisation contributing to content", aliases: ["contributor", "producer", "talent"] },
       { name: "Rights", uri: "http://www.ebu.ch/metadata/ontologies/ebucore#Rights", definition: "Rights attached to content", aliases: ["rights", "licence", "license"] },
       { name: "Publication", uri: "", definition: "A publication or broadcast of content", aliases: ["publication", "broadcast", "release"] },
     ],
@@ -6717,8 +6717,8 @@ const PROVISIONAL_BACKBONE_PACKS: Record<string, ProvisionalPack> = {
   org: {
     vocabulary: "W3C ORG",
     entities: [
-      { name: "Organization", uri: "http://www.w3.org/ns/org#Organization", definition: "An agency, ministry or body", aliases: ["organisation", "agency", "department", "ministry"] },
-      { name: "OrganizationalUnit", uri: "http://www.w3.org/ns/org#OrganizationalUnit", definition: "A unit within an organisation", aliases: ["unit", "division", "team", "directorate"] },
+      { core: true, name: "Organization", uri: "http://www.w3.org/ns/org#Organization", definition: "An agency, ministry or body", aliases: ["organisation", "agency", "department", "ministry"] },
+      { core: true, name: "OrganizationalUnit", uri: "http://www.w3.org/ns/org#OrganizationalUnit", definition: "A unit within an organisation", aliases: ["unit", "division", "team", "directorate"] },
       { name: "Role", uri: "http://www.w3.org/ns/org#Role", definition: "A role a person holds", aliases: ["role", "post", "position"] },
       { name: "Membership", uri: "http://www.w3.org/ns/org#Membership", definition: "A person's membership of an organisation", aliases: ["membership"] },
       { name: "Site", uri: "http://www.w3.org/ns/org#Site", definition: "A site of an organisation", aliases: ["office"] },
@@ -6732,8 +6732,8 @@ const PROVISIONAL_BACKBONE_PACKS: Record<string, ProvisionalPack> = {
   schema: {
     vocabulary: "schema.org",
     entities: [
-      { name: "Person", uri: "https://schema.org/Person", definition: "An individual", aliases: ["person", "user", "individual", "customer"] },
-      { name: "Organization", uri: "https://schema.org/Organization", definition: "A company or organisation", aliases: ["organisation", "company", "vendor", "supplier", "partner"] },
+      { core: true, name: "Person", uri: "https://schema.org/Person", definition: "An individual", aliases: ["person", "user", "individual", "customer"] },
+      { core: true, name: "Organization", uri: "https://schema.org/Organization", definition: "A company or organisation", aliases: ["organisation", "company", "vendor", "supplier", "partner"] },
       { name: "Product", uri: "https://schema.org/Product", definition: "A product", aliases: ["product", "goods"] },
       { name: "Service", uri: "https://schema.org/Service", definition: "A service", aliases: ["service", "offering"] },
       { name: "Order", uri: "https://schema.org/Order", definition: "An order for products or services", aliases: ["order", "purchase order", "sales order"] },
@@ -6792,9 +6792,14 @@ function reconcileVotedOntology(
     uriToClass?: Map<string, string>;
     /** "From verb To" association strings the packs define — relation check. */
     packAssociations?: Set<string>;
+    /** Class names that are ALWAYS in scope when the pack is steered — asserted
+     * even with zero draft votes (synthesised from the pack). */
+    coreClasses?: Set<string>;
+    /** Class name → its pack entity + vocabulary, for core synthesis. */
+    packEntityByClass?: Map<string, { name: string; uri: string; definition: string; vocabulary: string }>;
   },
 ): Record<string, unknown> {
-  const { threshold, total, sponsor, programName, allowedUris, packClasses, uriToClass, packAssociations } = opts;
+  const { threshold, total, sponsor, programName, allowedUris, packClasses, uriToClass, packAssociations, coreClasses, packEntityByClass } = opts;
   // Pack validation: with the backbone shipped as facts, an alignment URI the
   // pack does not list is recall leaking back in — strip it (standard-keyed
   // comparison) so a hallucinated or off-pack class can never reach the record.
@@ -6861,6 +6866,7 @@ function reconcileVotedOntology(
   const belowConsensus: string[] = []; // demoted to gaps
   const lowAgreement: string[] = [];    // included but flagged
   const ungrounded: string[] = [];      // failed the acid test — demoted to gaps
+  const extendedDemoted: string[] = []; // real standard classes outside the core — confirm first
   // Per-survivor grounding facts, for the relation acid test below.
   const mandateByName = new Map<string, boolean>();
   const classByName = new Map<string, string>();
@@ -6893,20 +6899,28 @@ function reconcileVotedOntology(
       const wordsGrounded = ontologyNameKey(name).split(" ").every((w) => w && mandate.includes(` ${w} `));
       const packGrounded = b.uris.length > 0
         || (!!packClasses && [...b.names, ...b.aliases].some((n) => packClasses.has(ontologyNameKey(n))));
-      if (packClasses && !mandateConcept && !wordsGrounded && !packGrounded) { ungrounded.push(name); return; }
-      survivor.set(key, name);
-      // Chain eligibility is WORD-level: "improves patient identification,
-      // engagement, and enrollment" names the stages distributively, so
-      // "Patient Engagement" must count even though the exact phrase never
-      // appears. Every word of the concept must be mandate vocabulary.
-      mandateByName.set(name, ontologyNameKey(name).split(" ").every((w) => w && mandate.includes(` ${w} `)));
-      // The endpoint's pack class, for the relation acid test: via the modal
-      // (pack-validated) URI first, else via a name/alias match.
+      // The endpoint's pack class — via the modal (pack-validated) URI first,
+      // else via a name/alias match. Needed both for the core/extended policy
+      // and for the relation acid test below.
       const modalUriKey = b.uris.length
         ? ontologyStandardKey(ontologyModal(b.uris, (u) => ontologyStandardKey(u), (a, z) => ontologyCompare(a, z)))
         : "";
       const cls = (modalUriKey ? uriToClass?.get(modalUriKey) : undefined)
         ?? [...b.names, ...b.aliases].map((n) => packClasses?.get(ontologyNameKey(n))).find(Boolean);
+      if (packClasses && !mandateConcept && !wordsGrounded && !packGrounded) { ungrounded.push(name); return; }
+      // CORE vs EXTENDED, by POLICY not by vote: an extended pack class is a
+      // real standard fact but not automatically in this mandate's scope — the
+      // exact boundary (Consent / Coverage / Encounter at 3-of-5) that made
+      // sibling programmes with identical mandates diverge. Extended classes
+      // ALWAYS demote to a confirm gap, however many drafts voted for them;
+      // core classes are guaranteed below, with or without votes. The asserted
+      // set becomes a pure function of (mandate, steering).
+      if (coreClasses && cls && !coreClasses.has(cls) && !mandateConcept && !wordsGrounded) {
+        extendedDemoted.push(name);
+        return;
+      }
+      survivor.set(key, name);
+      mandateByName.set(name, wordsGrounded);
       if (cls) classByName.set(name, cls);
       // Flag only NON-mandate survivors below full consensus — a mandate noun is
       // certain even if just one draft emitted it, so it is never "provisional".
@@ -6933,6 +6947,35 @@ function reconcileVotedOntology(
         });
       }
     });
+
+  // CORE GUARANTEE: every core class of the steered primary pack is asserted -
+  // from the drafts when they produced it, synthesised from the pack when they
+  // did not. A class already covered (directly, or via a mandate concept
+  // aligned to its URI - Clinical Trial -> ResearchStudy) is left alone. With
+  // extended classes demoted above, the asserted entity set is a pure function
+  // of (mandate, steering): sibling programmes with the same charter get the
+  // same ontology by construction.
+  if (coreClasses && packEntityByClass) {
+    const coveredClasses = new Set(classByName.values());
+    for (const cls of [...coreClasses].sort(ontologyCompare)) {
+      if (coveredClasses.has(cls)) continue;
+      const pe = packEntityByClass.get(cls);
+      if (!pe) continue;
+      entities.push({
+        name: pe.name,
+        definition: pe.definition + " - to be confirmed in interviews.",
+        area: "General",
+        attributes: [] as string[],
+        systemOfRecord: null,
+        aliases: [] as string[],
+        evidence: "implied by " + pe.vocabulary + " - to confirm",
+      });
+      if (pe.uri) standardAlignment.push({ entity: pe.name, standard: pe.uri, vocabulary: pe.vocabulary, relation: "skos:exactMatch", confidence: 1 });
+      classByName.set(pe.name, cls);
+      mandateByName.set(pe.name, false);
+    }
+    entities.sort((a, b) => ontologyCompare(String(a.name), String(b.name)));
+  }
 
   // ── Relation vote over canonical concept endpoints. A relation counts only
   // when BOTH endpoints survived; the modal verb wins (menu-ranked tiebreak). ──
@@ -6994,6 +7037,30 @@ function reconcileVotedOntology(
     })
     .sort((a, b) => ontologyCompare(`${a.from} ${a.to}`, `${b.from} ${b.to}`));
 
+  // Deterministic ASSOCIATION CLOSURE - the prompt's "mandatory closure"
+  // doctrine, enforced: every association the packs define between two PRESENT
+  // classes is asserted, so a synthesised core node never floats unconnected
+  // and the relation set is as deterministic as the entity set.
+  if (packAssociations && packEntityByClass) {
+    const nameByClass = new Map<string, string>();
+    for (const [entityName, cls] of classByName) if (!nameByClass.has(cls)) nameByClass.set(cls, entityName);
+    const classNames = [...packEntityByClass.keys()].sort((a, z) => z.length - a.length);
+    const existingPairs = new Set(relations.map((r) => r.from + " " + r.to));
+    for (const assoc of [...packAssociations].sort(ontologyCompare)) {
+      const fromCls = classNames.find((c) => assoc.startsWith(c + " "));
+      const toCls = classNames.find((c) => assoc.endsWith(" " + c));
+      if (!fromCls || !toCls) continue;
+      const verb = assoc.slice(fromCls.length + 1, assoc.length - toCls.length - 1);
+      const from = nameByClass.get(fromCls);
+      const to = nameByClass.get(toCls);
+      if (!from || !to || from === to) continue;
+      if (existingPairs.has(from + " " + to) || existingPairs.has(to + " " + from)) continue;
+      existingPairs.add(from + " " + to);
+      relations.push({ from, relation: verb, to, cardinality: "unknown" });
+    }
+    relations.sort((a, b) => ontologyCompare(a.from + " " + a.to, b.from + " " + b.to));
+  }
+
   // ── Events vote by name-key. ──
   const evBuckets = new Map<string, { docs: Set<number>; names: string[]; rows: Array<Record<string, unknown>> }>();
   drafts.forEach((doc, di) => {
@@ -7026,6 +7093,7 @@ function reconcileVotedOntology(
   const ask = sponsor ? `Ask ${sponsor}: ` : "Ask the sponsor: ";
   const gaps = [
     ...ungrounded.sort(ontologyCompare).map((n) => ask + 'drafts modelled "' + n + '" but it is neither named by the mandate nor a class of the industry standard - is it part of this process?'),
+    ...extendedDemoted.sort(ontologyCompare).map((n) => ask + 'the industry standard models "' + n + '" - does it play a part in this process, and who owns it?'),
     ...belowConsensus.sort(ontologyCompare).map((n) => `${ask}some drafts modelled "${n}" and others did not — is it part of this process, and who owns it?`),
     ...lowAgreement.sort(ontologyCompare).map((n) => `${ask}confirm "${n}" is a distinct part of the process today, and name the system that records it.`),
   ].slice(0, 8);
@@ -7114,10 +7182,21 @@ async function runVotedProvisionalOntology(
       }
     }
     const packAssociations = new Set(packs.flatMap((pack) => pack.relations.map((r) => `${r.from} ${r.verb} ${r.to}`)));
+    // Cores come from the PRIMARY pack only - the schema.org fallback rides
+    // along for alignment, but its generic classes (Person...) must not be
+    // guaranteed into every industry's ontology.
+    const coreClasses = new Set<string>();
+    for (const entity of (packs[0]?.entities ?? [])) if (entity.core) coreClasses.add(entity.name);
+    const packEntityByClass = new Map<string, { name: string; uri: string; definition: string; vocabulary: string }>();
+    for (const pack of packs) {
+      for (const entity of pack.entities) {
+        if (!packEntityByClass.has(entity.name)) packEntityByClass.set(entity.name, { name: entity.name, uri: entity.uri, definition: entity.definition, vocabulary: pack.vocabulary });
+      }
+    }
     const doc = reconcileVotedOntology(drafts, {
       threshold: ONTOLOGY_VOTE_THRESHOLD, total: ONTOLOGY_VOTE_N,
       mandate: mc.mandate, sponsor: mc.sponsor, programName: mc.programName,
-      allowedUris, packClasses, uriToClass, packAssociations,
+      allowedUris, packClasses, uriToClass, packAssociations, coreClasses, packEntityByClass,
     });
     const base = usable[0];
     return {

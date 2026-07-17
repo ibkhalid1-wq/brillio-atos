@@ -54,7 +54,15 @@ for (const pack of packs) {
   }
 }
 const packAssociations = new Set(packs.flatMap((pack) => pack.relations.map((r) => `${r.from} ${r.verb} ${r.to}`)));
-const OPTS = { threshold: 3, total: 5, mandate: MANDATE, sponsor: "david burns", programName: "test", allowedUris, packClasses, uriToClass, packAssociations };
+const coreClasses = new Set<string>();
+for (const entity of packs[0].entities as Array<{ name: string; core?: boolean }>) if (entity.core) coreClasses.add(entity.name);
+const packEntityByClass = new Map<string, { name: string; uri: string; definition: string; vocabulary: string }>();
+for (const pack of packs) {
+  for (const entity of pack.entities as Array<{ name: string; uri: string; definition?: string }>) {
+    if (!packEntityByClass.has(entity.name)) packEntityByClass.set(entity.name, { name: entity.name, uri: entity.uri, definition: String(entity.definition ?? ""), vocabulary: pack.vocabulary });
+  }
+}
+const OPTS = { threshold: 3, total: 5, mandate: MANDATE, sponsor: "david burns", programName: "test", allowedUris, packClasses, uriToClass, packAssociations, coreClasses, packEntityByClass };
 
 type Draft = Record<string, unknown>;
 function draft(entities: Array<[name: string, uri?: string]>, relations: Array<[string, string, string]> = []): Draft {
@@ -143,6 +151,32 @@ describe("the acid test is enforced in code", () => {
     expect(rels(doc)).toContain("Patient Identification leads to Patient Engagement");
     expect(rels(doc)).toContain("Patient Engagement leads to Enrollment");
     expect(rels(doc)).not.toContain("Patient participates in Organization");
+  });
+});
+
+describe("core/extended policy — the asserted set is (mandate, steering), not a vote", () => {
+  it("an EXTENDED pack class demotes to a gap even at 5/5 consensus", () => {
+    const withConsent = draft([...BASE, ["Consent", "http://hl7.org/fhir/Consent"]], CHAIN);
+    const doc = sandbox.reconcileVotedOntology(Array.from({ length: 5 }, () => JSON.parse(JSON.stringify(withConsent))), { ...OPTS });
+    expect(names(doc)).not.toContain("Consent");
+    expect((doc.gaps as string[]).join(" ")).toContain("Consent");
+  });
+
+  it("CORE classes are guaranteed — synthesised from the pack when no draft produced them", () => {
+    const doc = sandbox.reconcileVotedOntology(Array.from({ length: 5 }, () => draft(BASE, CHAIN)), { ...OPTS });
+    for (const core of ["Practitioner", "ResearchStudy", "ResearchSubject"]) expect(names(doc)).toContain(core);
+    const practitioner = (doc.entities as Array<{ name: string; evidence: string }>).find((e) => e.name === "Practitioner");
+    expect(practitioner?.evidence).toContain("implied by");
+    // …and the closure connects them: no synthesised core floats unlinked.
+    expect(rels(doc)).toContain("Practitioner is part of Organization");
+  });
+
+  it("two batches with DIFFERENT draft noise assert the identical entity set", () => {
+    const noisyA = [draft([...BASE, ["Coverage", "http://hl7.org/fhir/Coverage"]], CHAIN), ...Array.from({ length: 4 }, () => draft(BASE, CHAIN))];
+    const noisyB = Array.from({ length: 5 }, () => draft([...BASE, ["Encounter", "http://hl7.org/fhir/Encounter"], ["Consent", "http://hl7.org/fhir/Consent"]], CHAIN));
+    const a = sandbox.reconcileVotedOntology(noisyA, { ...OPTS });
+    const b = sandbox.reconcileVotedOntology(noisyB, { ...OPTS });
+    expect(names(a)).toEqual(names(b));
   });
 });
 
