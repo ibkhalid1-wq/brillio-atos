@@ -1334,6 +1334,12 @@ STANDARD-GROUNDED RELATIONS: entities alone do not ground an ontology — relati
 (b) the mandate's stated process sequence — chain the stages exactly as the mandate orders them with "leads to".
 RELATION VERBS are a CLOSED MENU: conducts, runs, manages, supports, produces, measures, leads to, is part of, applies to, participates in. Never author a synonym — "oversees", "drives", "results in", "enables", "is identified by" are all banned; pick the closest menu verb, and when torn between two menu verbs use the one listed EARLIER in the menu. Cardinality on a provisional draft is ALWAYS "unknown" — cardinality is precisely what interviews confirm; never guess 1:N. A relation that is merely plausible but neither standard-defined between two included concepts nor stated by the mandate is OMITTED. List relations sorted by "from", then "to". Two runs over the same mandate and industry must produce the SAME relation list, verb for verb. Once real conversations exist, relations take the stakeholders' own verb phrases and evidenced cardinalities — the closed menu governs only the provisional draft.
 
+STANDARDS-FIRST GROUNDING (the acid test for every provisional entity and relation): the provisional draft is deliberately CONSERVATIVE — when in doubt, leave it out and raise a gap. Apply this test before including anything:
+- A business OBJECT or ACTOR entity (a party, a document, a thing exchanged, a system, a place) MUST map to a class in the steered vocabulary — carry that mapping in standardAlignment (skos:closeMatch is fine). If you cannot name a class in FHIR / FIBO / GS1 / IEC CIM / EBUCore / W3C ORG / schema.org that this noun IS or closely matches, it is NOT a grounded domain entity: drop it and raise a gap instead. This is what "grounded in industry standards" means — every object is traceable to a published class. GROUNDING IS ALIGNMENT, NOT RENAMING: when the mandate names the concept (Clinical Trial), the entity NAME stays the mandate's word and the standard class rides in standardAlignment (Clinical Trial → skos:closeMatch fhir/ResearchStudy). NEVER rename a mandate-named subject to the standard's class ("ResearchStudy", "Encounter") — MANDATE-VERBATIM NAMING still governs; the standard grounds it, it does not relabel it.
+- A process STAGE entity (a step of the funnel the mandate names — "Patient Identification") is the ONE exception to the mapping requirement, because standards model objects and events, not a client's process steps. A stage is admissible ONLY when the mandate EXPLICITLY names it; it needs no standardAlignment, but an invented stage the mandate does not name is banned.
+- Every RELATION must be either a named association the steered standard defines between two included classes (carrying that standard's semantics) or the mandate's own stated stage sequence. A relation you can ground in neither is dropped — never assert a relationship the standard does not define and the mandate does not state.
+Net effect: an outsider should be able to check every object entity against a published standard class and every relation against a standard association or a mandate sentence. Anything that fails that check is a gap, not a guess.
+
 COMPLETENESS CHECK before returning: for the core process in the mandate, account for each of — (1) every ACTOR named, (2) the ORGANISATION each actor belongs to, (3) the THING being requested / exchanged / produced (the service, product, application or request at the heart of the process), (4) the SYSTEM OF RECORD each entity lives in — recorded on the entity's systemOfRecord field, never as an entity of its own. Each of these is either a provisional entity (labelled "— to confirm") or, if the mandate cannot support it, an explicit gap phrased as a plain business question. Never silently drop one. Outcome measures and the proposed solution system are NOT part of this check — see the exclusions above.
 
 Use the stakeholders' own nouns — the ontology's names should be their language, not generic data-modelling vocabulary. Every entity carries at least one evidence source. Where different teams use different words for the same thing (or the same word for different things), record it under "ambiguities" — those collisions are exactly what the Blueprint's data contracts must resolve.
@@ -6525,6 +6531,349 @@ const ONTOLOGY_VOCAB_PREFIXES = [
   "https://www.ebu.ch/metadata/ontologies/ebucore",
 ];
 
+// ─── Voted provisional ontology (5-version ensemble) ─────────────────────────
+// A provisional ontology (no Listen evidence yet) is drafted from the mandate
+// alone. Temperature-0 + the prompt's grounding rules make a single run mostly
+// stable, but one concept can still be represented two ways run-to-run (Clinical
+// Trial vs the FHIR ResearchStudy/ResearchSubject cluster). The ensemble runs
+// the SAME grounded prompt N times in parallel and reconciles the drafts by
+// majority vote: the LLM stays the author (each draft is a full, standards-
+// grounded synthesis) and only the reconciliation is code — so the same N
+// drafts always yield the same output, and a borderline concept must flip a
+// whole vote to change it. The vote share is a real confidence signal: a
+// concept that misses full consensus rides into gaps as an interview question.
+
+const ONTOLOGY_VOTE_N = 5;
+const ONTOLOGY_VOTE_THRESHOLD = 3; // majority of 5
+
+// Verb menu (mirrors the prompt's closed menu) — the modal verb wins a relation
+// vote; ties break to the EARLIER menu index, matching the prompt's own rule.
+const ONTOLOGY_MENU_VERBS = [
+  "conducts", "runs", "manages", "supports", "produces", "measures",
+  "leads to", "is part of", "applies to", "participates in",
+];
+const ONTOLOGY_MENU_RANK = new Map(ONTOLOGY_MENU_VERBS.map((v, i) => [v, i]));
+
+const ONTOLOGY_STOPWORDS = new Set([
+  "a", "an", "and", "as", "at", "by", "for", "in", "of", "on", "or", "per", "the", "to", "via", "with",
+]);
+
+/** Codepoint comparator — locale-independent, so the reconciliation is stable. */
+function ontologyCompare(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/** Normalised name key: case / punctuation / plural / stop-word insensitive, so
+ * "Time-to-Enrollment", "time to enrollment" and "Enrollment Times" collide. */
+function ontologyNameKey(name: unknown): string {
+  return String(name ?? "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim().split(/\s+/)
+    .map((w) => w.length > 3 && w.endsWith("s") && !w.endsWith("ss") ? w.slice(0, -1) : w)
+    .filter((w) => w && !ONTOLOGY_STOPWORDS.has(w))
+    .join(" ");
+}
+
+/** A standard URI reduced to its class identity (trailing #/ and case ignored),
+ * so http://hl7.org/fhir/ResearchStudy and .../researchstudy/ are one concept. */
+function ontologyStandardKey(uri: unknown): string {
+  return String(uri ?? "").trim().replace(/[#/]+$/, "").toLowerCase();
+}
+
+/** The standard's own class NAME — the URI's last path/fragment segment, e.g.
+ * http://hl7.org/fhir/ServiceRequest → "ServiceRequest". Used to name a voted
+ * backbone concept from the standard (deterministic, and standards-grounded),
+ * so "ServiceRequest" and "Service Request" never split the vote. */
+function ontologyClassFromUri(uri: unknown): string {
+  const u = String(uri ?? "").trim().replace(/[#/]+$/, "");
+  return u.split(/[#/]/).pop() ?? "";
+}
+
+/** The most frequent value, ties broken by a comparator over the values. */
+function ontologyModal<T>(values: T[], key: (v: T) => string, tie: (a: T, b: T) => number): T {
+  const counts = new Map<string, { value: T; n: number }>();
+  for (const v of values) {
+    const k = key(v);
+    const cur = counts.get(k);
+    if (cur) cur.n += 1; else counts.set(k, { value: v, n: 1 });
+  }
+  return [...counts.values()].sort((a, b) => b.n - a.n || tie(a.value, b.value))[0].value;
+}
+
+/** Reconcile N ontology drafts into one by majority vote. PURE — the same drafts
+ * always yield the same document. `mandate` (lowercased) drives the mandate-
+ * verbatim naming tiebreak; `sponsor` addresses the derived gaps. */
+function reconcileVotedOntology(
+  drafts: Array<Record<string, unknown>>,
+  opts: { threshold: number; total: number; mandate: string; sponsor: string; programName: string },
+): Record<string, unknown> {
+  const { threshold, total, sponsor, programName } = opts;
+  const mandate = ` ${opts.mandate.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ")} `;
+  const asRows = (doc: Record<string, unknown>, field: string): Array<Record<string, unknown>> =>
+    (Array.isArray(doc[field]) ? doc[field] as unknown[] : []).filter(isRecord);
+
+  // ── Entity vote, keyed by standard-URI-then-name so the same concept votes
+  // together across drafts even when the drafts name it differently. ──
+  type Bucket = { docs: Set<number>; names: string[]; aliases: string[]; uris: string[]; rows: Array<{ di: number; row: Record<string, unknown> }> };
+  const buckets = new Map<string, Bucket>();
+  // Per-draft URI lookup: entity name-key → its standardAlignment URI in that draft.
+  const draftUri: Array<Map<string, string>> = [];
+  drafts.forEach((doc) => {
+    const map = new Map<string, string>();
+    for (const row of asRows(doc, "standardAlignment")) {
+      const ek = ontologyNameKey(row.entity);
+      const uri = typeof row.standard === "string" ? row.standard.trim() : "";
+      if (ek && uri && !map.has(ek)) map.set(ek, uri);
+    }
+    draftUri.push(map);
+  });
+  drafts.forEach((doc, di) => {
+    const seen = new Set<string>();
+    for (const row of asRows(doc, "entities")) {
+      const name = typeof row.name === "string" ? row.name.trim() : "";
+      if (!name) continue;
+      const nk = ontologyNameKey(name);
+      const uri = draftUri[di].get(nk) ?? "";
+      const conceptKey = uri ? `u:${ontologyStandardKey(uri)}` : `n:${nk}`;
+      if (!conceptKey || seen.has(conceptKey)) continue; // one vote per draft per concept
+      seen.add(conceptKey);
+      const b = buckets.get(conceptKey) ?? { docs: new Set(), names: [], aliases: [], uris: [], rows: [] };
+      b.docs.add(di); b.names.push(name); if (uri) b.uris.push(uri);
+      if (Array.isArray(row.aliases)) for (const al of row.aliases) if (typeof al === "string" && al.trim()) b.aliases.push(al.trim());
+      b.rows.push({ di, row });
+      buckets.set(conceptKey, b);
+    }
+  });
+
+  const isMandateWord = (name: string) => mandate.includes(` ${ontologyNameKey(name).replace(/ /g, " ")} `);
+  // Naming priority: (1) the mandate's own wording wins (keeps "Clinical Trial"
+  // over the FHIR class), (2) else, for a concept the standard names, the
+  // standard's class name — deterministic and grounded, so "ServiceRequest" and
+  // "Service Request" resolve to one name, (3) else the modal draft name.
+  const canonicalName = (b: Bucket): string => {
+    // Mandate wording wins from names OR aliases — a concept a draft named
+    // "ResearchStudy" but aliased "Clinical Trial" is named for the mandate.
+    const verbatim = [...b.names, ...b.aliases].filter(isMandateWord);
+    if (verbatim.length) return ontologyModal(verbatim, (n) => n, (a, z) => ontologyCompare(a, z));
+    if (b.uris.length) {
+      const uri = ontologyModal(b.uris, (u) => ontologyStandardKey(u), (a, z) => ontologyCompare(a, z));
+      const cls = ontologyClassFromUri(uri);
+      if (cls) return cls;
+    }
+    return ontologyModal(b.names, (n) => n, (a, z) => ontologyCompare(a, z));
+  };
+
+  // conceptKey → canonical name, for surviving concepts (>= threshold votes).
+  const survivor = new Map<string, string>();
+  const entities: Array<Record<string, unknown>> = [];
+  const standardAlignment: Array<Record<string, unknown>> = [];
+  const belowConsensus: string[] = []; // demoted to gaps
+  const lowAgreement: string[] = [];    // included but flagged
+  [...buckets.entries()]
+    .sort((a, b) => ontologyCompare(canonicalName(a[1]), canonicalName(b[1])))
+    .forEach(([key, b]) => {
+      const name = canonicalName(b);
+      // Mandate FLOOR: a concept the mandate itself names is guaranteed — it
+      // needs no vote (threshold 1), so the mandate core is deterministic and a
+      // borderline draft can never drop it. Only the STANDARD-BACKBONE tail the
+      // model reaches for (Encounter, Coverage…) is voted at the real majority.
+      // Match on names AND aliases: a draft that named the concept by its FHIR
+      // class ("ResearchStudy") often still carries the mandate word ("Clinical
+      // Trial") as an alias — that mandate grounding must floor it all the same.
+      const mandateConcept = b.names.some(isMandateWord) || b.aliases.some(isMandateWord);
+      const effThreshold = mandateConcept ? 1 : threshold;
+      if (b.docs.size < effThreshold) {
+        // Below consensus: a demote-to-gap candidate if at least two drafts saw it.
+        if (b.docs.size >= 2) belowConsensus.push(name);
+        return;
+      }
+      survivor.set(key, name);
+      // Flag only NON-mandate survivors below full consensus — a mandate noun is
+      // certain even if just one draft emitted it, so it is never "provisional".
+      if (!mandateConcept && b.docs.size < total) lowAgreement.push(name);
+      // Representative row: the winning-name row from the lowest draft index.
+      const rep = b.rows.find((r) => (typeof r.row.name === "string" ? r.row.name.trim() : "") === name)?.row
+        ?? b.rows[0].row;
+      entities.push({
+        name,
+        definition: typeof rep.definition === "string" ? rep.definition : "",
+        area: typeof rep.area === "string" && rep.area ? rep.area : "General",
+        attributes: Array.isArray(rep.attributes) ? rep.attributes : [],
+        systemOfRecord: typeof rep.systemOfRecord === "string" ? rep.systemOfRecord : null,
+        aliases: [...new Set(b.names.filter((n) => n !== name))],
+        evidence: typeof rep.evidence === "string" ? rep.evidence : "from the sponsor mandate — to confirm",
+      });
+      if (b.uris.length) {
+        const uri = ontologyModal(b.uris, (u) => ontologyStandardKey(u), (a, z) => ontologyCompare(a, z));
+        const alignRow = b.rows.map((r) => r.row).find((_r) => true);
+        standardAlignment.push({
+          entity: name, standard: uri,
+          vocabulary: typeof alignRow?.vocabulary === "string" ? alignRow.vocabulary : "",
+          relation: "skos:closeMatch", confidence: b.docs.size / total,
+        });
+      }
+    });
+
+  // ── Relation vote over canonical concept endpoints. A relation counts only
+  // when BOTH endpoints survived; the modal verb wins (menu-ranked tiebreak). ──
+  const relBuckets = new Map<string, { docs: Set<number>; verbs: string[]; from: string; to: string }>();
+  drafts.forEach((doc, di) => {
+    // This draft's name-key → canonical survivor name.
+    const local = new Map<string, string>();
+    for (const row of asRows(doc, "entities")) {
+      const nk = ontologyNameKey(row.name);
+      const uri = draftUri[di].get(nk) ?? "";
+      const conceptKey = uri ? `u:${ontologyStandardKey(uri)}` : `n:${nk}`;
+      const canon = survivor.get(conceptKey);
+      if (canon) local.set(nk, canon);
+    }
+    const seen = new Set<string>();
+    for (const row of asRows(doc, "relations")) {
+      const from = local.get(ontologyNameKey(row.from));
+      const to = local.get(ontologyNameKey(row.to));
+      if (!from || !to || from === to) continue;
+      const verb = typeof row.relation === "string" ? row.relation.trim().toLowerCase() : "";
+      const dkey = `${from} ${to}`;
+      if (seen.has(dkey)) continue;
+      seen.add(dkey);
+      const rb = relBuckets.get(dkey) ?? { docs: new Set(), verbs: [], from, to };
+      rb.docs.add(di); if (verb) rb.verbs.push(verb);
+      relBuckets.set(dkey, rb);
+    }
+  });
+  // Keep directed pairs at/above threshold; when both directions survive, keep
+  // the better-supported one so the graph never carries A→B and B→A at once.
+  const kept = [...relBuckets.values()].filter((rb) => rb.docs.size >= threshold);
+  const byUnordered = new Map<string, typeof kept[number]>();
+  for (const rb of kept) {
+    const uk = [rb.from, rb.to].sort(ontologyCompare).join(" ");
+    const cur = byUnordered.get(uk);
+    if (!cur || rb.docs.size > cur.docs.size
+      || (rb.docs.size === cur.docs.size && ontologyCompare(`${rb.from}${rb.to}`, `${cur.from}${cur.to}`) < 0)) {
+      byUnordered.set(uk, rb);
+    }
+  }
+  const relations = [...byUnordered.values()]
+    .map((rb) => {
+      const menuVerbs = rb.verbs.filter((v) => ONTOLOGY_MENU_RANK.has(v));
+      const verb = menuVerbs.length
+        ? ontologyModal(menuVerbs, (v) => v, (a, z) => (ONTOLOGY_MENU_RANK.get(a)! - ONTOLOGY_MENU_RANK.get(z)!))
+        : "relates to";
+      return { from: rb.from, relation: verb, to: rb.to, cardinality: "unknown" };
+    })
+    .sort((a, b) => ontologyCompare(`${a.from} ${a.to}`, `${b.from} ${b.to}`));
+
+  // ── Events vote by name-key. ──
+  const evBuckets = new Map<string, { docs: Set<number>; names: string[]; rows: Array<Record<string, unknown>> }>();
+  drafts.forEach((doc, di) => {
+    const seen = new Set<string>();
+    for (const row of asRows(doc, "events")) {
+      const nk = ontologyNameKey(row.name);
+      if (!nk || seen.has(nk)) continue;
+      seen.add(nk);
+      const eb = evBuckets.get(nk) ?? { docs: new Set(), names: [], rows: [] };
+      eb.docs.add(di); eb.names.push(typeof row.name === "string" ? row.name.trim() : ""); eb.rows.push(row);
+      evBuckets.set(nk, eb);
+    }
+  });
+  const events = [...evBuckets.values()]
+    .filter((eb) => eb.docs.size >= threshold)
+    .map((eb) => {
+      const name = ontologyModal(eb.names.filter(Boolean), (n) => n, (a, z) => ontologyCompare(a, z));
+      const rep = eb.rows.find((r) => (typeof r.name === "string" ? r.name.trim() : "") === name) ?? eb.rows[0];
+      return {
+        name,
+        triggers: typeof rep.triggers === "string" ? rep.triggers : "",
+        produces: typeof rep.produces === "string" ? rep.produces : "",
+      };
+    })
+    .sort((a, b) => ontologyCompare(a.name, b.name));
+
+  // ── Gaps: DERIVED from the vote, not voted as prose. Below-consensus concepts
+  // become "is this in scope?" asks; low-agreement survivors become "confirm"
+  // asks. Deterministic and sponsor-addressed. ──
+  const ask = sponsor ? `Ask ${sponsor}: ` : "Ask the sponsor: ";
+  const gaps = [
+    ...belowConsensus.sort(ontologyCompare).map((n) => `${ask}some drafts modelled "${n}" and others did not — is it part of this process, and who owns it?`),
+    ...lowAgreement.sort(ontologyCompare).map((n) => `${ask}confirm "${n}" is a distinct part of the process today, and name the system that records it.`),
+  ].slice(0, 8);
+
+  const solid = entities.length - lowAgreement.length;
+  return {
+    title: `Domain Ontology — ${programName}`,
+    entities,
+    relations,
+    events,
+    standardAlignment: standardAlignment.sort((a, b) => ontologyCompare(String(a.entity), String(b.entity))),
+    ambiguities: [] as unknown[],
+    gaps,
+    summary: `Provisional ontology — reconciled from ${total} standards-grounded drafts by majority vote; ${entities.length} entities (${solid} at full consensus, ${lowAgreement.length} provisional), to confirm and extend in interviews.`,
+    confidence: entities.length ? Number((entities.length ? (solid + lowAgreement.length * 0.5) / entities.length * 0.6 : 0).toFixed(2)) : 0.3,
+  };
+}
+
+/** True when a Listen conversation is on record — the boundary past which the
+ * ensemble yields to normal (evidence-anchored) single-draft synthesis. */
+function ontologyListenEvidenceOnRecord(inner: Record<string, unknown>): boolean {
+  const phaseInputs = normalizeProgramData(inner.phaseInputs as JsonValue | null);
+  const listen = normalizeProgramData(phaseInputs.listen as JsonValue | null);
+  return Object.entries(listen).some(([key, value]) =>
+    key !== "savedAt" && !key.startsWith("_")
+    && typeof value === "string" && !value.trim().startsWith("[")
+    && value.trim().length >= 400);
+}
+
+/** The mandate text + sponsor, for the reconciler's naming tiebreak and gaps. */
+function ontologyMandateContext(inner: Record<string, unknown>, programRow: Record<string, unknown>): { mandate: string; sponsor: string; programName: string } {
+  const phaseInputs = normalizeProgramData(inner.phaseInputs as JsonValue | null);
+  const frame = normalizeProgramData(phaseInputs.frame as JsonValue | null);
+  const projectMeta = normalizeProgramData(inner.projectMeta as JsonValue | null);
+  const str = (v: unknown) => typeof v === "string" ? v.trim() : "";
+  return {
+    mandate: [str(frame.sponsorConversation), str(frame.objective), str(frame.businessObjective)].filter(Boolean).join("\n").slice(0, 8000),
+    sponsor: str(frame.sponsor) || str(inner.sponsor) || str(projectMeta.sponsor),
+    programName: str(programRow.name) || str(projectMeta.name) || "Programme",
+  };
+}
+
+/** Run the ontology prompt N times in parallel and reconcile by vote. Returns a
+ * streamClaudeText-shaped result (so the shared repair / cost-ledger / persist
+ * path is untouched) or null to fall through to a single generation. */
+async function runVotedProvisionalOntology(
+  prompt: { system: string; user: string },
+  inner: Record<string, unknown>,
+  programRow: Record<string, unknown>,
+  opts: { maxTokens: number; tier?: "tier1" },
+): Promise<Awaited<ReturnType<typeof streamClaudeText>> | null> {
+  try {
+    const results = await Promise.all(Array.from({ length: ONTOLOGY_VOTE_N }, () =>
+      streamClaudeText({
+        system: prompt.system,
+        messages: [{ role: "user", content: prompt.user }],
+        maxTokens: opts.maxTokens,
+        temperature: 0,
+        tier: opts.tier,
+      }).catch(() => null)));
+    const usable = results.filter((r): r is NonNullable<typeof r> => !!r);
+    const drafts = usable.map((r) => extractAgentJson(r.text)).filter(isRecord)
+      .filter((d) => Array.isArray(d.entities) && d.entities.length);
+    if (drafts.length < ONTOLOGY_VOTE_THRESHOLD) return null; // not enough to vote — fall through
+    const mc = ontologyMandateContext(inner, programRow);
+    const doc = reconcileVotedOntology(drafts, {
+      threshold: ONTOLOGY_VOTE_THRESHOLD, total: ONTOLOGY_VOTE_N,
+      mandate: mc.mandate, sponsor: mc.sponsor, programName: mc.programName,
+    });
+    const base = usable[0];
+    return {
+      ...base,
+      text: JSON.stringify(doc),
+      inputTokens: usable.reduce((s, r) => s + r.inputTokens, 0),
+      outputTokens: usable.reduce((s, r) => s + r.outputTokens, 0),
+      cachedInputTokens: usable.reduce((s, r) => s + (r.cachedInputTokens ?? 0), 0),
+    };
+  } catch {
+    return null; // never let the ensemble take a run down — single synthesis still works
+  }
+}
+
 // ─── ATOS Flow: decisions, attestations, staleness ───────────────────────────
 // Flow programmes run propose-then-confirm: consequential agent results become
 // Tier-2 DECISIONS a human resolves instead of silent writes, every applied run
@@ -9192,16 +9541,34 @@ Deno.serve(async (req) => {
     // auto-escalate spend. Tier routing is provider-agnostic — claudeClient maps
     // the tier to the active provider's model.
     const routedTier = resolveAgentTier(request.agentId) === "tier1" ? "tier1" as const : undefined;
-    let claudeResult = await streamClaudeText({
-      system: prompt.system,
-      messages: [{ role: "user", content: prompt.user }],
-      maxTokens: outputTokenBudget,
-      // Formal artifacts (ontology, atlas, charter, blueprint…) generate at
-      // temperature 0 for reproducibility: the same evidence should yield the
-      // same document run-to-run, not drift by a borderline entity each time.
-      temperature: 0,
-      tier: routedTier,
-    });
+    // Voted provisional ontology: a first-generation ontology with no Listen
+    // evidence yet is the one artifact where a single temperature-0 draft still
+    // wobbles on borderline concepts. Run the SAME grounded prompt N times and
+    // reconcile by majority vote (see runVotedProvisionalOntology). Null (not a
+    // provisional ontology run, or too few usable drafts) falls through to the
+    // normal single generation below.
+    let claudeResult = request.agentId === "domain-ontology"
+      && formalRunMode === "initial_generation"
+      && !ontologyListenEvidenceOnRecord(getInnerProgramData(contextProgramData))
+      ? await runVotedProvisionalOntology(
+          prompt,
+          getInnerProgramData(contextProgramData),
+          programRow as Record<string, unknown>,
+          { maxTokens: outputTokenBudget, tier: routedTier },
+        )
+      : null;
+    if (!claudeResult) {
+      claudeResult = await streamClaudeText({
+        system: prompt.system,
+        messages: [{ role: "user", content: prompt.user }],
+        maxTokens: outputTokenBudget,
+        // Formal artifacts (ontology, atlas, charter, blueprint…) generate at
+        // temperature 0 for reproducibility: the same evidence should yield the
+        // same document run-to-run, not drift by a borderline entity each time.
+        temperature: 0,
+        tier: routedTier,
+      });
+    }
 
     // Resilience: if the model returned no parseable JSON object (prose-only,
     // truncated stream, fenced markdown that broke extraction), repair it cheaply
