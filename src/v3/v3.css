@@ -6639,7 +6639,6 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-lib-group-caret,.v3fs-ppl-group-caret,.v3fs-ctl-group-caret{margin-left:auto;color:var(--v3-text-muted);font-size:12px;transition:transform .18s ease}
 .v3fs-lib-group[open] > .v3fs-lib-group-h .v3fs-lib-group-caret,.v3fs-ppl-group[open] > .v3fs-ppl-group-h .v3fs-ppl-group-caret,.v3fs-ctl-group[open] > .v3fs-ctl-group-h .v3fs-ctl-group-caret{transform:rotate(180deg)}
 .v3fs-lib-group-b,.v3fs-ctl-group-b{padding:4px 8px 8px}
-.v3fs-ppl-group > .v3fs-dir{margin:0}
 /* Editable Design intent + Workflow machines surfaces. */
 .v3fs-wf-intent-edit{display:flex;flex-direction:column;gap:11px}
 .v3fs-wf-machines-edit{display:flex;flex-direction:column;gap:14px}
@@ -6824,22 +6823,6 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-po-t {font-size:13.5px;font-weight:750;color:var(--v3-text-primary)}
 .v3fs-po-sum {margin-left:auto;font-size:11px;font-weight:650;color:var(--v3-text-muted);font-variant-numeric:tabular-nums}
 .v3fs-po-body {padding:0 15px 14px;display:flex;flex-direction:column;gap:12px}
-.v3fs-po-board {display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:9px}
-.v3fs-po-lane {display:flex;flex-direction:column;gap:6px;padding:10px 12px;border:1px solid var(--fs-line);border-left-width:3px;border-radius:10px;background:var(--fs-bg,transparent);cursor:pointer;text-align:left;font:inherit;transition:background .15s ease}
-.v3fs-po-lane.ok {border-left-color:var(--v3-green)} .v3fs-po-lane.part {border-left-color:var(--v3-amber)} .v3fs-po-lane.obj {border-left-color:var(--v3-red,#d64545)} .v3fs-po-lane.open {border-left-color:var(--fs-line)}
-.v3fs-po-lane:hover {background:color-mix(in srgb,var(--v3-accent) 5%,transparent)}
-.v3fs-po-lane-h {display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12.5px}
-.v3fs-po-lane-h b {color:var(--v3-text-primary)}
-.v3fs-po-lane-h span {font-size:11px;font-weight:650;color:var(--v3-text-secondary);font-variant-numeric:tabular-nums;white-space:nowrap}
-.v3fs-po-bar {display:flex;height:6px;border-radius:3px;overflow:hidden;background:var(--fs-line)}
-.v3fs-po-bar span {display:block}
-.v3fs-po-bar .ok {background:var(--v3-green)} .v3fs-po-bar .part {background:var(--v3-amber)} .v3fs-po-bar .obj {background:var(--v3-red,#d64545)} .v3fs-po-bar .pend {background:color-mix(in srgb,var(--v3-text-muted) 25%,transparent)}
-.v3fs-po-lane-f {font-size:10.5px;color:var(--v3-text-muted)}
-.v3fs-po-coh {display:flex;flex-direction:column;gap:6px;padding:9px 12px;border-radius:10px;background:color-mix(in srgb,var(--v3-amber) 7%,transparent);border:1px solid color-mix(in srgb,var(--v3-amber) 30%,transparent)}
-.v3fs-po-coh-l {font-size:10.5px;font-weight:750;letter-spacing:.02em;color:var(--v3-amber)}
-.v3fs-po-coh-list {display:flex;gap:6px;flex-wrap:wrap}
-.v3fs-po-coh-chip {font-size:11px;padding:3px 9px;border-radius:999px;background:var(--fs-card);border:1px solid var(--fs-line);color:var(--v3-text-muted)}
-.v3fs-po-coh-chip b {color:var(--v3-text-primary);margin-right:3px}
 /* The loop changelog on the phase home — what the last Build refined. */
 .v3fs-po-refined {display:flex;flex-direction:column;gap:6px;padding:9px 12px;border-radius:10px;
   background:color-mix(in srgb,var(--v3-accent-2) 6%,transparent);border:1px solid color-mix(in srgb,var(--v3-accent-2) 24%,var(--fs-line))}
@@ -6856,22 +6839,6 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-po-backlog li em {font-style:normal;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:var(--v3-text-muted);min-width:88px}
 .v3fs-po-backlog li b {min-width:96px;color:var(--v3-text-primary)}
 .v3fs-po-backlog li span {color:var(--v3-text-secondary)}
-/* Listen cockpit — the phase home: Collect + Model by area, then Reconcile. */
-.v3fs-lc-lane {display:flex;flex-direction:column;gap:7px;padding:10px 12px;border:1px solid var(--fs-line);border-left-width:3px;border-left-color:var(--lane-accent,var(--fs-line));border-radius:10px;background:var(--fs-bg,transparent)}
-.v3fs-lc-lane.ok {border-left-color:var(--v3-green)}
-.v3fs-lc-lane-h {display:flex;align-items:center;gap:8px;font-size:12.5px}
-.v3fs-lc-lane-h b {color:var(--v3-text-primary);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.v3fs-lc-ic {display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:6px;background:color-mix(in srgb,var(--lane-accent,var(--v3-text-muted)) 16%,transparent);color:var(--lane-accent,var(--v3-text-secondary));font-size:9.5px;font-weight:800;letter-spacing:.02em;flex-shrink:0}
-.v3fs-lc-vn {font-size:11px;font-weight:700;color:var(--v3-text-secondary);font-variant-numeric:tabular-nums;white-space:nowrap}
-.v3fs-lc-bar {display:flex;height:6px;border-radius:3px;overflow:hidden;background:var(--fs-line)}
-.v3fs-lc-bar .heard {display:block;background:var(--lane-accent,var(--v3-green))}
-.v3fs-lc-model {display:flex;gap:6px;flex-wrap:wrap}
-.v3fs-lc-mchip {font:inherit;font-size:10.5px;padding:2px 8px;border-radius:999px;background:var(--fs-card);border:1px solid var(--fs-line);color:var(--v3-text-muted);cursor:pointer;transition:background .12s ease,border-color .12s ease}
-.v3fs-lc-mchip b {color:var(--v3-text-secondary);font-variant-numeric:tabular-nums;margin-right:2px}
-.v3fs-lc-mchip:hover:not(:disabled) {background:color-mix(in srgb,var(--v3-accent) 6%,transparent);border-color:color-mix(in srgb,var(--v3-accent) 30%,var(--fs-line))}
-.v3fs-lc-mchip:disabled {cursor:default}
-.v3fs-lc-lane-f {font-size:10.5px;color:var(--v3-text-muted)}
-.v3fs-lc-lane.ok .v3fs-lc-lane-f {color:var(--v3-green);font-weight:600}
 .v3fs-lc-rec {display:flex;flex-direction:column;gap:7px;padding:10px 12px;border-radius:10px;background:color-mix(in srgb,var(--v3-amber) 7%,transparent);border:1px solid color-mix(in srgb,var(--v3-amber) 30%,transparent)}
 .v3fs-lc-rec-l {font-size:10.5px;font-weight:750;letter-spacing:.02em;color:var(--v3-amber)}
 .v3fs-lc-rec ul {display:flex;flex-direction:column;gap:4px;margin:0;padding:0;list-style:none}
@@ -6882,27 +6849,6 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-lc-rec-routed {font-size:10.5px;font-weight:650;color:var(--v3-accent);white-space:nowrap}
 .v3fs-lc-rec-hint {font-size:10.5px;color:var(--v3-text-muted)}
 .v3fs-lc-clear {font-size:11.5px;color:var(--v3-green);padding:2px 2px}
-/* Area cards as a filter — the toggle affordance + selected/dim states. */
-.v3fs-lc-filterhint {font-size:10.5px;color:var(--v3-text-muted);display:flex;align-items:center;gap:6px}
-.v3fs-lc-filterhint b {color:var(--v3-text-secondary)}
-.v3fs-lc-clearf,.v3fs-lc-clearf:hover {font:inherit;font-size:10.5px;background:none;border:0;padding:0;color:var(--v3-accent);cursor:pointer;text-decoration:underline}
-.v3fs-lc-lane-toggle {width:100%;background:none;border:0;font:inherit;cursor:pointer;text-align:left}
-/* Whole card is the filter toggle — click anywhere on it to filter below. */
-.v3fs-lc-lane-btn {font:inherit;text-align:left;width:100%;cursor:pointer;appearance:none;-webkit-appearance:none}
-.v3fs-lc-lane-btn:hover {background:color-mix(in srgb,var(--lane-accent,var(--v3-accent)) 6%,transparent)}
-.v3fs-lc-lane-btn:focus-visible {outline:2px solid var(--v3-accent);outline-offset:2px}
-.v3fs-lc-lane {cursor:default;transition:box-shadow .12s ease,opacity .12s ease,background .12s ease}
-.v3fs-lc-lane.sel {box-shadow:0 0 0 2px color-mix(in srgb,var(--lane-accent,var(--v3-accent)) 55%,transparent);background:color-mix(in srgb,var(--lane-accent,var(--v3-accent)) 6%,transparent)}
-.v3fs-lc-lane.dim {opacity:.42}
-.v3fs-lc-lane-toggle:hover .v3fs-lc-vn {color:var(--v3-text-primary)}
-/* PO board lanes as a filter — selected/dim to match. */
-.v3fs-po-lane.sel {box-shadow:0 0 0 2px color-mix(in srgb,var(--v3-accent) 45%,transparent);background:color-mix(in srgb,var(--v3-accent) 6%,transparent)}
-.v3fs-po-lane.dim {opacity:.42}
-.v3fs-showc-area.dim {opacity:.4}
-/* The delivery team's own board tile — distinct from business-area lanes. */
-.v3fs-po-lane-design {--lane-accent:var(--v3-accent-2,var(--v3-accent));border-left-color:var(--v3-accent-2,var(--v3-accent));background:color-mix(in srgb,var(--v3-accent-2,var(--v3-accent)) 5%,transparent)}
-.v3fs-po-lane-design .v3fs-po-lane-ic {background:color-mix(in srgb,var(--v3-accent-2,var(--v3-accent)) 18%,transparent);color:var(--v3-accent-2,var(--v3-accent))}
-.v3fs-po-lane-design.sel {box-shadow:0 0 0 2px color-mix(in srgb,var(--v3-accent-2,var(--v3-accent)) 50%,transparent)}
 .v3fs-lanes-empty {font-size:12px;color:var(--v3-text-muted);padding:14px 12px;border:1px dashed var(--fs-line);border-radius:10px;background:var(--fs-bg,transparent)}
 /* Role-remap (alias) chips on the People page. */
 .v3fs-alias-list {display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
@@ -6921,15 +6867,6 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-loopswitch-t em {font-style:normal;font-size:11px;font-weight:500;color:var(--v3-text-muted)}
 .v3fs-loopswitch-b.on .v3fs-loopswitch-t {color:var(--v3-accent)}
 @media (max-width:560px){.v3fs-loopswitch{grid-template-columns:1fr}}
-/* Area cards consistent across phases: PO lanes borrow the Listen lane grammar
-   — area-accent spine, monogram tile, wrapping title (no truncation). */
-.v3fs-po-lane {gap:7px;border-left-color:var(--lane-accent,var(--fs-line))}
-.v3fs-po-lane.ok,.v3fs-po-lane.part,.v3fs-po-lane.obj,.v3fs-po-lane.open {border-left-color:var(--lane-accent,var(--fs-line))}
-.v3fs-po-lane-h {align-items:center;gap:8px}
-.v3fs-po-lane-ic {display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:6px;background:color-mix(in srgb,var(--lane-accent,var(--v3-text-muted)) 16%,transparent);color:var(--lane-accent,var(--v3-text-secondary));font-size:9.5px;font-weight:800;letter-spacing:.02em;flex-shrink:0}
-.v3fs-po-lane-n {font-size:11px;font-weight:650;color:var(--v3-text-secondary);font-variant-numeric:tabular-nums;white-space:nowrap;flex-shrink:0;margin-left:auto}
-/* No truncated headers — area names wrap to a second line in both phases. */
-.v3fs-po-lane-h b,.v3fs-lc-lane-h b {flex:1;min-width:0;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere;line-height:1.2}
 /* Discovery Kit — who we'll hear × areas we'll cover, at a glance. */
 .v3fs-covmap {display:flex;flex-direction:column;border:1px solid var(--fs-line);border-radius:10px;overflow:hidden;margin:0 0 12px}
 .v3fs-covmap-h {display:grid;grid-template-columns:minmax(140px,0.5fr) 1fr;gap:12px;padding:7px 12px;background:color-mix(in srgb,var(--v3-accent) 5%,transparent);font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--v3-text-muted)}
