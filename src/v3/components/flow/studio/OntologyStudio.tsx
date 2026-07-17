@@ -379,8 +379,8 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
           <span className="v3fs-onto-count">{entities.length} entit{entities.length === 1 ? "y" : "ies"} · {relations.length} relation{relations.length === 1 ? "" : "s"}{candidates.length ? ` · ${candidates.length} to confirm` : ""}</span>
           {candidates.length ? (
             <button type="button" className="v3fs-btn" onClick={() => setShowCandidates((v) => !v)}
-              title="Candidates are standard classes the generation demoted to sponsor questions — dashed means asked, solid means asserted">
-              {showCandidates ? "◌ Hide candidates" : `◌ Candidates (${candidates.length})`}
+              title="Entities the industry standard suggests but the sponsor has not confirmed — dashed means suggested, solid means confirmed in the model">
+              {showCandidates ? "◌ Hide suggested entities" : `◌ Show suggested entities (${candidates.length})`}
             </button>
           ) : null}
         </div>
@@ -437,12 +437,12 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
           </>
         ) : selected?.kind === "candidate" ? (() => {
           const candidate = candidates.find((c) => CAND_PREFIX + asText(c.name) === selected.id);
-          if (!candidate) return <div className="v3fs-stu-empty">This candidate is no longer proposed.</div>;
+          if (!candidate) return <div className="v3fs-stu-empty">This entity is no longer suggested.</div>;
           const gapList = asStrings(doc.gaps);
           const ask = gapList.find((gap) => gap.includes(`"${asText(candidate.name)}"`));
           return (
             <>
-              <div className="v3fs-stu-sec-h"><h3>Candidate</h3><span>proposed by the industry standard — not yet asserted</span></div>
+              <div className="v3fs-stu-sec-h"><h3>Suggested entity</h3><span>from the industry standard — awaiting the sponsor&rsquo;s confirmation</span></div>
               <p><b>{asText(candidate.name)}</b>{asText(candidate.vocabulary) ? <> · {asText(candidate.vocabulary)}</> : null}</p>
               <p style={{ opacity: 0.85 }}>{asText(candidate.definition)}</p>
               {asText(candidate.uri) ? <p><a href={asText(candidate.uri)} target="_blank" rel="noreferrer">{asText(candidate.uri)}</a></p> : null}
