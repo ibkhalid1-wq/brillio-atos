@@ -1334,7 +1334,7 @@ STANDARD-GROUNDED RELATIONS: entities alone do not ground an ontology — relati
 (b) the mandate's stated process sequence — chain the stages exactly as the mandate orders them with "leads to".
 RELATION VERBS are a CLOSED MENU: conducts, runs, manages, supports, produces, measures, leads to, is part of, applies to, participates in. Never author a synonym — "oversees", "drives", "results in", "enables", "is identified by" are all banned; pick the closest menu verb, and when torn between two menu verbs use the one listed EARLIER in the menu. Cardinality on a provisional draft is ALWAYS "unknown" — cardinality is precisely what interviews confirm; never guess 1:N. A relation that is merely plausible but neither standard-defined between two included concepts nor stated by the mandate is OMITTED. List relations sorted by "from", then "to". Two runs over the same mandate and industry must produce the SAME relation list, verb for verb. Once real conversations exist, relations take the stakeholders' own verb phrases and evidenced cardinalities — the closed menu governs only the provisional draft.
 
-STANDARDS-FIRST GROUNDING (the acid test for every provisional entity and relation): the provisional draft is deliberately CONSERVATIVE — when in doubt, leave it out and raise a gap. Apply this test before including anything:
+STANDARDS-FIRST GROUNDING (the acid test for every provisional entity and relation): the provisional draft is deliberately CONSERVATIVE — when in doubt, leave it out and raise a gap. The input context carries "standardBackbone": the steered standards' class lists AS FACTS — names, URIs, definitions and associations. That list is AUTHORITATIVE: align entities ONLY to classes it lists (use the exact URI given), ground relations in the associations it states, and treat a class it does not list as NOT AVAILABLE to this draft — never recall additional classes from memory, even real ones. Facts over recall, always. Apply this test before including anything:
 - A business OBJECT or ACTOR entity (a party, a document, a thing exchanged, a system, a place) MUST map to a class in the steered vocabulary — carry that mapping in standardAlignment (skos:closeMatch is fine). If you cannot name a class in FHIR / FIBO / GS1 / IEC CIM / EBUCore / W3C ORG / schema.org that this noun IS or closely matches, it is NOT a grounded domain entity: drop it and raise a gap instead. This is what "grounded in industry standards" means — every object is traceable to a published class. GROUNDING IS ALIGNMENT, NOT RENAMING: when the mandate names the concept (Clinical Trial), the entity NAME stays the mandate's word and the standard class rides in standardAlignment (Clinical Trial → skos:closeMatch fhir/ResearchStudy). NEVER rename a mandate-named subject to the standard's class ("ResearchStudy", "Encounter") — MANDATE-VERBATIM NAMING still governs; the standard grounds it, it does not relabel it.
 - A process STAGE entity (a step of the funnel the mandate names — "Patient Identification") is the ONE exception to the mapping requirement, because standards model objects and events, not a client's process steps. A stage is admissible ONLY when the mandate EXPLICITLY names it; it needs no standardAlignment, but an invented stage the mandate does not name is banned.
 - Every RELATION must be either a named association the steered standard defines between two included classes (carrying that standard's semantics) or the mandate's own stated stage sequence. A relation you can ground in neither is dropped — never assert a relationship the standard does not define and the mandate does not state.
@@ -3135,10 +3135,24 @@ function buildSpecialAgentInputContext(
       artifact: formalSpec.title,
       phase: formalSpec.phase,
       ...(target?.agentId === "domain-ontology"
-        ? { vocabularySteering: ontologyVocabularySteering(
+        ? (() => {
+          const steering = ontologyVocabularySteering(
             meta.industry || strategyInputs.industry || frameInputs.industry || projectMeta.industry,
             frameInputs.segment || strategyInputs.segment,
-          ) }
+          );
+          // The steered standards as DATA: the distilled class lists ride the
+          // context so "grounded in the standard" means matching against these
+          // provided facts — never recalling a class from training. The prompt
+          // treats this list as authoritative for standardAlignment.
+          return {
+            vocabularySteering: steering,
+            standardBackbone: resolveProvisionalPacks(steering).map((pack) => ({
+              vocabulary: pack.vocabulary,
+              classes: pack.entities.map((e) => ({ name: e.name, uri: e.uri || null, definition: e.definition })),
+              associations: pack.relations.map((r) => `${r.from} ${r.verb} ${r.to}`),
+            })),
+          };
+        })()
         : {}),
       // The synthesis agents read the WHOLE captured record — grounding facts
       // only preview long fields, and documentCarryForward only covers Library
@@ -6543,6 +6557,11 @@ const ONTOLOGY_VOCAB_PREFIXES = [
 // whole vote to change it. The vote share is a real confidence signal: a
 // concept that misses full consensus rides into gaps as an interview question.
 
+// Measured, not assumed: with the standard backbone shipped as FACTS in the
+// context (see standardBackbone), N=5/threshold-3 produced IDENTICAL documents
+// across three independent batches — entities, relations and alignment. N=3/
+// threshold-2 was tried and wobbled (a single draft's flip clears a 2-vote
+// bar): batches admitted Coverage/Encounter or dropped Consent. Keep 5.
 const ONTOLOGY_VOTE_N = 5;
 const ONTOLOGY_VOTE_THRESHOLD = 3; // majority of 5
 
@@ -6587,6 +6606,167 @@ function ontologyClassFromUri(uri: unknown): string {
   return u.split(/[#/]/).pop() ?? "";
 }
 
+// ─── Standard backbone packs (facts, not recall) ────────────────────────────
+// Distilled class lists of the steered standards, shipped as DATA in the
+// generation context so grounding is matching against provided facts rather
+// than training recall — a class the pack does not list cannot be aligned to.
+// Recovered from the deterministic-compiler experiment (689d9ff).
+type ProvisionalPackEntity = { name: string; uri: string; definition: string; aliases: string[] };
+type ProvisionalPack = {
+  vocabulary: string;
+  entities: ProvisionalPackEntity[];
+  relations: Array<{ from: string; verb: string; to: string }>;
+};
+
+const PROVISIONAL_BACKBONE_PACKS: Record<string, ProvisionalPack> = {
+  fhir: {
+    vocabulary: "HL7 FHIR",
+    entities: [
+      { name: "Patient", uri: "http://hl7.org/fhir/Patient", definition: "A person receiving or registered to receive care", aliases: ["patient", "subject"] },
+      { name: "Practitioner", uri: "http://hl7.org/fhir/Practitioner", definition: "A clinician or professional delivering care", aliases: ["clinician", "doctor", "physician", "investigator", "nurse"] },
+      { name: "Organization", uri: "http://hl7.org/fhir/Organization", definition: "A provider, sponsor or site organisation", aliases: ["organisation", "sponsor organization", "hospital", "site", "clinic", "provider organisation"] },
+      { name: "ResearchStudy", uri: "http://hl7.org/fhir/ResearchStudy", definition: "A clinical study or trial", aliases: ["clinical trial", "trial", "study", "research study"] },
+      { name: "ResearchSubject", uri: "http://hl7.org/fhir/ResearchSubject", definition: "A patient's participation in a study", aliases: ["trial participant", "enrollee", "study subject"] },
+      { name: "Encounter", uri: "http://hl7.org/fhir/Encounter", definition: "An interaction between a patient and care providers", aliases: ["visit", "consultation"] },
+      { name: "Appointment", uri: "http://hl7.org/fhir/Appointment", definition: "A scheduled visit", aliases: ["appointment", "screening visit"] },
+      { name: "Consent", uri: "http://hl7.org/fhir/Consent", definition: "A patient's recorded consent", aliases: ["informed consent", "consent form"] },
+      { name: "Condition", uri: "http://hl7.org/fhir/Condition", definition: "A diagnosis or clinical condition", aliases: ["diagnosis", "disease", "indication"] },
+      { name: "Coverage", uri: "http://hl7.org/fhir/Coverage", definition: "Insurance or payment coverage", aliases: ["insurance", "payer"] },
+      { name: "Observation", uri: "http://hl7.org/fhir/Observation", definition: "A measurement or assertion about a patient", aliases: ["lab result", "screening result", "assessment"] },
+    ],
+    relations: [
+      { from: "Practitioner", verb: "is part of", to: "Organization" },
+      { from: "Organization", verb: "conducts", to: "ResearchStudy" },
+      { from: "Patient", verb: "participates in", to: "ResearchStudy" },
+      { from: "ResearchSubject", verb: "is part of", to: "ResearchStudy" },
+      { from: "Consent", verb: "applies to", to: "Patient" },
+      { from: "Encounter", verb: "applies to", to: "Patient" },
+      { from: "Observation", verb: "applies to", to: "Patient" },
+    ],
+  },
+  gs1: {
+    vocabulary: "GS1",
+    entities: [
+      { name: "Product", uri: "https://gs1.org/voc/Product", definition: "A traded good", aliases: ["product", "item", "sku", "goods"] },
+      { name: "Offer", uri: "https://gs1.org/voc/Offer", definition: "An offer to sell a product", aliases: ["offer"] },
+      { name: "Organization", uri: "https://gs1.org/voc/Organization", definition: "A party in the supply chain", aliases: ["organisation", "manufacturer", "supplier", "distributor", "retailer"] },
+      { name: "Place", uri: "https://gs1.org/voc/Place", definition: "A physical location", aliases: ["location", "warehouse", "store", "plant"] },
+      { name: "Brand", uri: "https://gs1.org/voc/Brand", definition: "A brand of products", aliases: ["brand"] },
+      { name: "Shipment", uri: "", definition: "Goods in transit between parties", aliases: ["shipment", "delivery", "consignment"] },
+      { name: "Batch", uri: "", definition: "A production batch or lot", aliases: ["batch", "lot", "serialisation", "serial number"] },
+    ],
+    relations: [
+      { from: "Organization", verb: "produces", to: "Product" },
+      { from: "Offer", verb: "applies to", to: "Product" },
+      { from: "Shipment", verb: "applies to", to: "Product" },
+      { from: "Batch", verb: "is part of", to: "Product" },
+    ],
+  },
+  fibo: {
+    vocabulary: "FIBO",
+    entities: [
+      { name: "Party", uri: "", definition: "A person or organisation party to an arrangement", aliases: ["party", "counterparty"] },
+      { name: "Client", uri: "", definition: "A customer of the institution", aliases: ["client", "customer", "account holder"] },
+      { name: "Account", uri: "", definition: "A financial account", aliases: ["account", "bank account"] },
+      { name: "Financial Product", uri: "", definition: "A product or service the institution offers", aliases: ["financial product", "deposit", "card"] },
+      { name: "Loan", uri: "", definition: "A credit arrangement", aliases: ["loan", "mortgage", "credit"] },
+      { name: "Contract", uri: "", definition: "A binding agreement", aliases: ["contract", "agreement", "policy"] },
+      { name: "Transaction", uri: "", definition: "A financial transaction", aliases: ["transaction"] },
+      { name: "Payment", uri: "", definition: "A transfer of funds", aliases: ["payment", "settlement", "transfer"] },
+      { name: "Financial Institution", uri: "", definition: "The bank, insurer or lender itself", aliases: ["bank", "insurer", "lender", "institution"] },
+    ],
+    relations: [
+      { from: "Financial Institution", verb: "manages", to: "Account" },
+      { from: "Financial Institution", verb: "produces", to: "Financial Product" },
+      { from: "Account", verb: "applies to", to: "Client" },
+      { from: "Payment", verb: "applies to", to: "Account" },
+      { from: "Contract", verb: "applies to", to: "Client" },
+    ],
+  },
+  cim: {
+    vocabulary: "IEC CIM",
+    entities: [
+      { name: "Asset", uri: "", definition: "A physical grid or plant asset", aliases: ["asset", "equipment"] },
+      { name: "Meter", uri: "", definition: "A metering device", aliases: ["meter", "smart meter"] },
+      { name: "Usage Point", uri: "", definition: "A point where service is delivered and measured", aliases: ["usage point", "service point", "connection"] },
+      { name: "Measurement", uri: "", definition: "A measured value", aliases: ["measurement", "reading", "meter reading"] },
+      { name: "Customer", uri: "", definition: "A consumer of the service", aliases: ["customer", "consumer"] },
+      { name: "Work Order", uri: "", definition: "Scheduled work on an asset", aliases: ["work order", "maintenance order"] },
+    ],
+    relations: [
+      { from: "Meter", verb: "measures", to: "Usage Point" },
+      { from: "Measurement", verb: "applies to", to: "Meter" },
+      { from: "Work Order", verb: "applies to", to: "Asset" },
+      { from: "Usage Point", verb: "applies to", to: "Customer" },
+    ],
+  },
+  ebucore: {
+    vocabulary: "EBUCore",
+    entities: [
+      { name: "MediaResource", uri: "http://www.ebu.ch/metadata/ontologies/ebucore#MediaResource", definition: "A piece of media content", aliases: ["media resource", "content", "video", "programme", "media asset"] },
+      { name: "Agent", uri: "http://www.ebu.ch/metadata/ontologies/ebucore#Agent", definition: "A person or organisation contributing to content", aliases: ["contributor", "producer", "talent"] },
+      { name: "Rights", uri: "http://www.ebu.ch/metadata/ontologies/ebucore#Rights", definition: "Rights attached to content", aliases: ["rights", "licence", "license"] },
+      { name: "Publication", uri: "", definition: "A publication or broadcast of content", aliases: ["publication", "broadcast", "release"] },
+    ],
+    relations: [
+      { from: "Rights", verb: "applies to", to: "MediaResource" },
+      { from: "Agent", verb: "produces", to: "MediaResource" },
+      { from: "Publication", verb: "applies to", to: "MediaResource" },
+    ],
+  },
+  org: {
+    vocabulary: "W3C ORG",
+    entities: [
+      { name: "Organization", uri: "http://www.w3.org/ns/org#Organization", definition: "An agency, ministry or body", aliases: ["organisation", "agency", "department", "ministry"] },
+      { name: "OrganizationalUnit", uri: "http://www.w3.org/ns/org#OrganizationalUnit", definition: "A unit within an organisation", aliases: ["unit", "division", "team", "directorate"] },
+      { name: "Role", uri: "http://www.w3.org/ns/org#Role", definition: "A role a person holds", aliases: ["role", "post", "position"] },
+      { name: "Membership", uri: "http://www.w3.org/ns/org#Membership", definition: "A person's membership of an organisation", aliases: ["membership"] },
+      { name: "Site", uri: "http://www.w3.org/ns/org#Site", definition: "A site of an organisation", aliases: ["office"] },
+    ],
+    relations: [
+      { from: "OrganizationalUnit", verb: "is part of", to: "Organization" },
+      { from: "Site", verb: "is part of", to: "Organization" },
+      { from: "Membership", verb: "applies to", to: "Organization" },
+    ],
+  },
+  schema: {
+    vocabulary: "schema.org",
+    entities: [
+      { name: "Person", uri: "https://schema.org/Person", definition: "An individual", aliases: ["person", "user", "individual", "customer"] },
+      { name: "Organization", uri: "https://schema.org/Organization", definition: "A company or organisation", aliases: ["organisation", "company", "vendor", "supplier", "partner"] },
+      { name: "Product", uri: "https://schema.org/Product", definition: "A product", aliases: ["product", "goods"] },
+      { name: "Service", uri: "https://schema.org/Service", definition: "A service", aliases: ["service", "offering"] },
+      { name: "Order", uri: "https://schema.org/Order", definition: "An order for products or services", aliases: ["order", "purchase order", "sales order"] },
+      { name: "Invoice", uri: "https://schema.org/Invoice", definition: "A bill for an order", aliases: ["invoice", "bill", "billing"] },
+      { name: "Offer", uri: "https://schema.org/Offer", definition: "An offer or quotation", aliases: ["offer", "quote", "quotation", "proposal"] },
+      { name: "SoftwareApplication", uri: "https://schema.org/SoftwareApplication", definition: "A software system", aliases: ["software", "application", "platform", "app", "crm", "system"] },
+      { name: "Event", uri: "https://schema.org/Event", definition: "An event", aliases: ["event"] },
+      { name: "Reservation", uri: "https://schema.org/Reservation", definition: "A reservation or booking", aliases: ["reservation", "booking"] },
+    ],
+    relations: [
+      { from: "Organization", verb: "produces", to: "Product" },
+      { from: "Organization", verb: "produces", to: "Service" },
+      { from: "Offer", verb: "applies to", to: "Product" },
+      { from: "Invoice", verb: "applies to", to: "Order" },
+      { from: "Person", verb: "is part of", to: "Organization" },
+    ],
+  },
+};
+
+/** Deterministic pack selection: the steering table names the vocabularies —
+ * primary first, schema.org fallback nearly always second. */
+function resolveProvisionalPacks(steering: string): ProvisionalPack[] {
+  const packs: ProvisionalPack[] = [];
+  if (steering.includes("HL7 FHIR")) packs.push(PROVISIONAL_BACKBONE_PACKS.fhir);
+  if (steering.includes("FIBO")) packs.push(PROVISIONAL_BACKBONE_PACKS.fibo);
+  if (steering.includes("GS1")) packs.push(PROVISIONAL_BACKBONE_PACKS.gs1);
+  if (steering.includes("IEC CIM")) packs.push(PROVISIONAL_BACKBONE_PACKS.cim);
+  if (steering.includes("EBUCore")) packs.push(PROVISIONAL_BACKBONE_PACKS.ebucore);
+  if (steering.includes("W3C Organization")) packs.push(PROVISIONAL_BACKBONE_PACKS.org);
+  if (steering.includes("schema.org") || !packs.length) packs.push(PROVISIONAL_BACKBONE_PACKS.schema);
+  return packs;
+}
+
 /** The most frequent value, ties broken by a comparator over the values. */
 function ontologyModal<T>(values: T[], key: (v: T) => string, tie: (a: T, b: T) => number): T {
   const counts = new Map<string, { value: T; n: number }>();
@@ -6603,9 +6783,13 @@ function ontologyModal<T>(values: T[], key: (v: T) => string, tie: (a: T, b: T) 
  * verbatim naming tiebreak; `sponsor` addresses the derived gaps. */
 function reconcileVotedOntology(
   drafts: Array<Record<string, unknown>>,
-  opts: { threshold: number; total: number; mandate: string; sponsor: string; programName: string },
+  opts: { threshold: number; total: number; mandate: string; sponsor: string; programName: string; allowedUris?: Set<string> },
 ): Record<string, unknown> {
-  const { threshold, total, sponsor, programName } = opts;
+  const { threshold, total, sponsor, programName, allowedUris } = opts;
+  // Pack validation: with the backbone shipped as facts, an alignment URI the
+  // pack does not list is recall leaking back in — strip it (standard-keyed
+  // comparison) so a hallucinated or off-pack class can never reach the record.
+  const uriAllowed = (uri: string) => !allowedUris || allowedUris.size === 0 || allowedUris.has(ontologyStandardKey(uri));
   const mandate = ` ${opts.mandate.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ")} `;
   const asRows = (doc: Record<string, unknown>, field: string): Array<Record<string, unknown>> =>
     (Array.isArray(doc[field]) ? doc[field] as unknown[] : []).filter(isRecord);
@@ -6621,7 +6805,7 @@ function reconcileVotedOntology(
     for (const row of asRows(doc, "standardAlignment")) {
       const ek = ontologyNameKey(row.entity);
       const uri = typeof row.standard === "string" ? row.standard.trim() : "";
-      if (ek && uri && !map.has(ek)) map.set(ek, uri);
+      if (ek && uri && uriAllowed(uri) && !map.has(ek)) map.set(ek, uri);
     }
     draftUri.push(map);
   });
@@ -6821,8 +7005,9 @@ function ontologyListenEvidenceOnRecord(inner: Record<string, unknown>): boolean
     && value.trim().length >= 400);
 }
 
-/** The mandate text + sponsor, for the reconciler's naming tiebreak and gaps. */
-function ontologyMandateContext(inner: Record<string, unknown>, programRow: Record<string, unknown>): { mandate: string; sponsor: string; programName: string } {
+/** The mandate text + sponsor + steering inputs, for the reconciler's naming
+ * tiebreak, its gaps, and the pack the alignment URIs are validated against. */
+function ontologyMandateContext(inner: Record<string, unknown>, programRow: Record<string, unknown>): { mandate: string; sponsor: string; programName: string; industry: string; segment: string } {
   const phaseInputs = normalizeProgramData(inner.phaseInputs as JsonValue | null);
   const frame = normalizeProgramData(phaseInputs.frame as JsonValue | null);
   const projectMeta = normalizeProgramData(inner.projectMeta as JsonValue | null);
@@ -6831,6 +7016,8 @@ function ontologyMandateContext(inner: Record<string, unknown>, programRow: Reco
     mandate: [str(frame.sponsorConversation), str(frame.objective), str(frame.businessObjective)].filter(Boolean).join("\n").slice(0, 8000),
     sponsor: str(frame.sponsor) || str(inner.sponsor) || str(projectMeta.sponsor),
     programName: str(programRow.name) || str(projectMeta.name) || "Programme",
+    industry: str(frame.industry) || str(programRow.industry) || str(projectMeta.industry),
+    segment: str(frame.segment),
   };
 }
 
@@ -6857,9 +7044,17 @@ async function runVotedProvisionalOntology(
       .filter((d) => Array.isArray(d.entities) && d.entities.length);
     if (drafts.length < ONTOLOGY_VOTE_THRESHOLD) return null; // not enough to vote — fall through
     const mc = ontologyMandateContext(inner, programRow);
+    // The same pack the context shipped as facts also gates the reconciliation:
+    // only its class URIs may land in standardAlignment.
+    const allowedUris = new Set(
+      resolveProvisionalPacks(ontologyVocabularySteering(mc.industry, mc.segment))
+        .flatMap((pack) => pack.entities.map((e) => e.uri).filter(Boolean))
+        .map((uri) => ontologyStandardKey(uri)),
+    );
     const doc = reconcileVotedOntology(drafts, {
       threshold: ONTOLOGY_VOTE_THRESHOLD, total: ONTOLOGY_VOTE_N,
       mandate: mc.mandate, sponsor: mc.sponsor, programName: mc.programName,
+      allowedUris,
     });
     const base = usable[0];
     return {
