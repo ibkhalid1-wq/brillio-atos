@@ -378,9 +378,11 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
               it's a display state (focus/zoom), never data loss. */}
           <span className="v3fs-onto-count">{entities.length} entit{entities.length === 1 ? "y" : "ies"} · {relations.length} relation{relations.length === 1 ? "" : "s"}{candidates.length ? ` · ${candidates.length} to confirm` : ""}</span>
           {candidates.length ? (
-            <button type="button" className="v3fs-btn" onClick={() => setShowCandidates((v) => !v)}
+            <button type="button" className="v3fs-onto-cand-toggle" aria-pressed={showCandidates}
+              onClick={() => setShowCandidates((v) => !v)}
               title="Entities the industry standard suggests but the sponsor has not confirmed — dashed means suggested, solid means confirmed in the model">
-              {showCandidates ? "◌ Hide suggested entities" : `◌ Show suggested entities (${candidates.length})`}
+              <span className="v3fs-onto-cand-swatch" aria-hidden="true" />
+              {showCandidates ? "Hide suggested entities" : `Show suggested entities (${candidates.length})`}
             </button>
           ) : null}
         </div>

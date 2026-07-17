@@ -6389,6 +6389,17 @@ details[open] > summary .v3fs-disc-c::after {display:none}
    never place nodes under the buttons. */
 .v3fs-onto-flowwrap{position:absolute;inset:52px 0 0 0}
 .v3fs-onto-toolbar{position:absolute;left:12px;right:12px;top:12px;z-index:5;display:flex;gap:7px;flex-wrap:wrap;align-items:center}
+/* The suggested-entities toggle is CHROME, not a node: docked to the right
+   edge of the toolbar band, compact pill, a mini dashed swatch echoing the
+   ghost style it controls, and an accent-tinted pressed state — nothing about
+   it reads as an entity card. */
+.v3fs-onto-cand-toggle{margin-left:auto;display:inline-flex;align-items:center;gap:7px;padding:4px 11px;border-radius:999px;
+  border:1px solid var(--v3-border-soft);background:var(--v3-surface-2);color:var(--v3-text-soft,inherit);
+  font:inherit;font-size:11.5px;letter-spacing:.02em;cursor:pointer;transition:color .15s ease,border-color .15s ease,background .15s ease}
+.v3fs-onto-cand-toggle:hover{border-color:var(--v3-accent-2)}
+.v3fs-onto-cand-toggle[aria-pressed="true"]{color:var(--v3-accent-2);border-color:var(--v3-accent-2);
+  background:color-mix(in srgb, var(--v3-accent-2) 8%, var(--v3-surface-2))}
+.v3fs-onto-cand-swatch{width:14px;height:10px;border:1.5px dashed currentColor;border-radius:4px;opacity:.75;flex:none}
 .v3fs-onto-panel{border:1px solid var(--v3-border-soft);border-radius:12px;padding:13px 15px;background:var(--v3-surface-2);display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px 14px;align-items:start}
 .v3fs-onto-panel .v3fs-stu-sec-h{grid-column:1 / -1}
 .v3fs-onto-panel .v3fs-stu-empty{grid-column:1 / -1}
