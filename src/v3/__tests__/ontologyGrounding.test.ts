@@ -24,7 +24,7 @@ const end = EDGE.indexOf("/** True when a Listen conversation is on record");
 const section = EDGE.slice(start, end);
 const js = ts.transpileModule(
   `const isRecord = (v: unknown) => typeof v === "object" && v !== null && !Array.isArray(v);\n${section}\n` +
-  `return { reconcileVotedOntology, resolveProvisionalPacks, ontologyVocabularySteering, ontologyNameKey, ontologyStandardKey, ONTOLOGY_VOTE_N, ONTOLOGY_VOTE_THRESHOLD, ONTOLOGY_MENU_VERBS };`,
+  `return { reconcileVotedOntology, resolveProvisionalPacks, ontologyVocabularySteering, clientVocabularyPack, ontologyNameKey, ontologyStandardKey, ONTOLOGY_VOTE_N, ONTOLOGY_VOTE_THRESHOLD, ONTOLOGY_MENU_VERBS };`,
   { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.None } },
 ).outputText;
 type ResolvedPack = { vocabulary: string; entities: Array<{ name: string; uri: string; definition?: string; aliases: string[]; core?: boolean }>; relations: Array<{ from: string; verb: string; to: string }> };
@@ -32,6 +32,7 @@ const sandbox = new Function(js)() as {
   reconcileVotedOntology: (drafts: Array<Record<string, unknown>>, opts: Record<string, unknown>) => Record<string, unknown>;
   resolveProvisionalPacks: (steering: string) => ResolvedPack[];
   ontologyVocabularySteering: (industry: unknown, segment?: unknown) => string;
+  clientVocabularyPack: (inner: Record<string, unknown>) => ResolvedPack | null;
   ontologyNameKey: (name: unknown) => string;
   ontologyStandardKey: (uri: unknown) => string;
   ONTOLOGY_VOTE_N: number;
@@ -241,6 +242,54 @@ describe("steering-selected cores — the same vocabulary carries different back
   });
 });
 
+describe("client vocabulary — extend, never edit, sanitised on read", () => {
+  const wrap = (cv: unknown) => ({ phaseInputs: { listen: { clientVocabulary: JSON.stringify(cv) } } });
+  it("sanitises: off-menu verbs, fabricated URIs, dangling relations, and the core cap", () => {
+    const pack = sandbox.clientVocabularyPack(wrap({
+      vocabulary: "Acme Canonical Model",
+      entities: [
+        { name: "Site Visit", definition: "A monitoring visit", aliases: ["visit audit"], core: true, uri: "https://acme.example/SiteVisit" },
+        { name: "CRO", definition: "Contract research organisation", aliases: ["cro"], core: true },
+        { name: "A", core: true }, { name: "B", core: true }, { name: "C", core: true }, { name: "D", core: true },
+      ],
+      relations: [
+        { from: "CRO", verb: "conducts", to: "Site Visit" },
+        { from: "CRO", verb: "collaborates with", to: "Site Visit" }, // off-menu — dropped
+        { from: "CRO", verb: "manages", to: "Ghost" },                // dangling — dropped
+      ],
+    }));
+    expect(pack).not.toBeNull();
+    expect(pack!.vocabulary).toBe("Acme Canonical Model");
+    expect(pack!.entities.find((e) => e.name === "Site Visit")?.uri).toBe(""); // off-whitelist namespace blanked
+    expect(pack!.entities.filter((e) => e.core)).toHaveLength(5);              // six requested, capped
+    expect(pack!.relations).toEqual([{ from: "CRO", verb: "conducts", to: "Site Visit" }]);
+  });
+
+  it("absent, empty or malformed vocabulary resolves to null", () => {
+    expect(sandbox.clientVocabularyPack({})).toBeNull();
+    expect(sandbox.clientVocabularyPack({ phaseInputs: { listen: { clientVocabulary: "" } } })).toBeNull();
+    expect(sandbox.clientVocabularyPack({ phaseInputs: { listen: { clientVocabulary: "{not json" } } })).toBeNull();
+  });
+
+  it("client cores are asserted and the closure connects them, exactly like a standard pack", () => {
+    const clientPack = sandbox.clientVocabularyPack(wrap({
+      vocabulary: "Acme Model",
+      entities: [
+        { name: "Site Visit", definition: "A monitoring visit", aliases: [], core: true },
+        { name: "CRO", definition: "Contract research organisation", aliases: [], core: true },
+      ],
+      relations: [{ from: "CRO", verb: "conducts", to: "Site Visit" }],
+    }));
+    const resolved = [...packsFor("Life Sciences & Pharma", "Clinical"), clientPack!];
+    const opts = groundingFor(resolved, MANDATE, "david burns");
+    for (const e of clientPack!.entities) if (e.core) opts.coreClasses.add(e.name); // mirrors the runner
+    const doc = sandbox.reconcileVotedOntology(Array.from({ length: 5 }, () => draft(BASE, CHAIN)), opts);
+    expect(names(doc)).toContain("Site Visit");
+    expect(names(doc)).toContain("CRO");
+    expect(rels(doc)).toContain("CRO conducts Site Visit");
+  });
+});
+
 describe("disconnected entities are asked about, never silent", () => {
   it("a mandate-named CRM object with no pack relations derives a sponsor ask", () => {
     const opts = groundingFor(packs, MANDATE + " Track each marketing campaign.", "david burns");
@@ -410,7 +459,8 @@ describe("prompt ↔ reconciler lockstep", () => {
   });
 
   it("the generation context ships the standard backbone as facts", () => {
-    expect(EDGE).toContain("standardBackbone: resolveProvisionalPacks(steering)");
+    expect(EDGE).toContain("standardBackbone: backbonePacks.map");
+    expect(EDGE).toContain("const clientBackbonePack = clientVocabularyPack(inner)");
     expect(EDGE).toContain('The input context carries "standardBackbone"');
   });
 });

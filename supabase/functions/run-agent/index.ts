@@ -92,6 +92,7 @@ const VALID_AGENT_IDS = new Set([
   "weekly-digest",
   "phase-completion-estimator",
   "setup-prefill",
+  "grounding-manifest",
   "discovery-guide-generator",
   "sprint-planner",
   "stakeholder-comms-drafter",
@@ -3144,10 +3145,14 @@ function buildSpecialAgentInputContext(
           // The steered standards as DATA: the distilled class lists ride the
           // context so "grounded in the standard" means matching against these
           // provided facts — never recalling a class from training. The prompt
-          // treats this list as authoritative for standardAlignment.
+          // treats this list as authoritative for standardAlignment. The
+          // client vocabulary (if attached) rides as one more pack of facts.
+          const backbonePacks = resolveProvisionalPacks(steering);
+          const clientBackbonePack = clientVocabularyPack(inner);
+          if (clientBackbonePack) backbonePacks.push(clientBackbonePack);
           return {
             vocabularySteering: steering,
-            standardBackbone: resolveProvisionalPacks(steering).map((pack) => ({
+            standardBackbone: backbonePacks.map((pack) => ({
               vocabulary: pack.vocabulary,
               classes: pack.entities.map((e) => ({ name: e.name, uri: e.uri || null, definition: e.definition })),
               associations: pack.relations.map((r) => `${r.from} ${r.verb} ${r.to}`),
@@ -6911,6 +6916,47 @@ function resolveProvisionalPacks(steering: string): ProvisionalPack[] {
   return packs;
 }
 
+// ─── Client vocabulary (operator-configured pack) ───────────────────────────
+// An engagement can attach the CLIENT's canonical model — an MDM glossary or
+// internal entity dictionary — as one more name-aligned pack riding beside the
+// standards. Stored as a JSON string at phaseInputs.listen.clientVocabulary so
+// an edit stales the ontology through the normal input fingerprint. Shipped
+// packs stay immutable: this is EXTEND, never edit. Sanitised on read — verbs
+// off the closed menu are dropped, URIs outside the namespace whitelist are
+// blanked (name-aligned rather than fabricated), relations must join declared
+// entities, and cores cap at 5, because cores are ALWAYS asserted.
+function clientVocabularyPack(inner: Record<string, unknown>): ProvisionalPack | null {
+  const phaseInputs = isRecord(inner.phaseInputs) ? inner.phaseInputs : {};
+  const listen = isRecord(phaseInputs.listen) ? phaseInputs.listen : {};
+  const rawText = typeof listen.clientVocabulary === "string" ? listen.clientVocabulary : "";
+  if (!rawText.trim()) return null;
+  let cv: unknown;
+  try { cv = JSON.parse(rawText); } catch { return null; }
+  if (!isRecord(cv)) return null;
+  const entities: ProvisionalPackEntity[] = (Array.isArray(cv.entities) ? cv.entities : [])
+    .filter(isRecord)
+    .map((e) => ({
+      name: String(e.name ?? "").trim(),
+      uri: typeof e.uri === "string" && ONTOLOGY_VOCAB_PREFIXES.some((p) => (e.uri as string).startsWith(p)) ? (e.uri as string).trim() : "",
+      definition: String(e.definition ?? "").trim(),
+      aliases: (Array.isArray(e.aliases) ? e.aliases : []).map((a) => String(a).trim().toLowerCase()).filter(Boolean).slice(0, 8),
+      core: e.core === true,
+    }))
+    .filter((e) => e.name)
+    .slice(0, 24);
+  if (!entities.length) return null;
+  let cores = 0;
+  for (const e of entities) if (e.core && ++cores > 5) e.core = false;
+  const names = new Set(entities.map((e) => e.name));
+  const relations = (Array.isArray(cv.relations) ? cv.relations : [])
+    .filter(isRecord)
+    .map((r) => ({ from: String(r.from ?? "").trim(), verb: String(r.verb ?? "").trim(), to: String(r.to ?? "").trim() }))
+    .filter((r) => names.has(r.from) && names.has(r.to) && ONTOLOGY_MENU_VERBS.includes(r.verb))
+    .slice(0, 40);
+  const vocabulary = typeof cv.vocabulary === "string" && cv.vocabulary.trim() ? cv.vocabulary.trim().slice(0, 60) : "Client vocabulary";
+  return { vocabulary, entities, relations };
+}
+
 /** The most frequent value, ties broken by a comparator over the values. */
 function ontologyModal<T>(values: T[], key: (v: T) => string, tie: (a: T, b: T) => number): T {
   const counts = new Map<string, { value: T; n: number }>();
@@ -7353,6 +7399,8 @@ async function runVotedProvisionalOntology(
     // class URIs, class names/aliases, and associations — so the acid test is
     // ENFORCED in code, not just requested in the prompt.
     const packs = resolveProvisionalPacks(ontologyVocabularySteering(mc.industry, mc.segment));
+    const clientPack = clientVocabularyPack(inner);
+    if (clientPack) packs.push(clientPack);
     const allowedUris = new Set<string>();
     const packClasses = new Map<string, string>();
     const uriToClass = new Map<string, string>();
@@ -7374,6 +7422,8 @@ async function runVotedProvisionalOntology(
     // guaranteed into every industry's ontology.
     const coreClasses = new Set<string>();
     for (const entity of (packs[0]?.entities ?? [])) if (entity.core) coreClasses.add(entity.name);
+    // Client-pack cores are asserted too — the engagement declared them canonical.
+    for (const entity of (clientPack?.entities ?? [])) if (entity.core) coreClasses.add(entity.name);
     const packEntityByClass = new Map<string, { name: string; uri: string; definition: string; vocabulary: string }>();
     for (const pack of packs) {
       for (const entity of pack.entities) {
@@ -9555,6 +9605,41 @@ Deno.serve(async (req) => {
       expectedUpdatedAt: (programRow.updated_at as string | null) ?? null,
     };
     const innerContextProgramData = getInnerProgramData(contextProgramData);
+
+    // Grounding manifest: the exact cheat sheet the ontology generator uses for
+    // THIS programme — steering, standard packs and any client vocabulary —
+    // straight from the deployed resolution code, no LLM call. Powers the
+    // read-only Grounding rail page; can never drift from what generation does.
+    if (request.agentId === "grounding-manifest") {
+      const mc = ontologyMandateContext(innerContextProgramData, programRow as Record<string, unknown>);
+      const steering = ontologyVocabularySteering(mc.industry, mc.segment);
+      const standardPacks = resolveProvisionalPacks(steering);
+      const clientPack = clientVocabularyPack(innerContextProgramData);
+      const packOut = (pack: ProvisionalPack, source: "standard" | "client") => ({
+        vocabulary: pack.vocabulary,
+        source,
+        classes: pack.entities.map((e) => ({
+          name: e.name, uri: e.uri || null, definition: e.definition, aliases: e.aliases, core: e.core === true,
+        })),
+        associations: pack.relations.map((r) => `${r.from} ${r.verb} ${r.to}`),
+      });
+      return jsonResponse({
+        status: "complete",
+        runId,
+        output: {
+          steering,
+          industry: mc.industry || null,
+          segment: mc.segment || null,
+          packs: [
+            ...standardPacks.map((p) => packOut(p, "standard")),
+            ...(clientPack ? [packOut(clientPack, "client")] : []),
+          ],
+          menuVerbs: ONTOLOGY_MENU_VERBS,
+          uriPrefixes: ONTOLOGY_VOCAB_PREFIXES,
+        },
+      });
+    }
+
     const memoryContext = await getServerMemoryContext(auth.admin, request.programId, request.agentId, request.phaseId);
     const priorPhaseContext = getPriorPhaseContext(contextProgramData, request.phaseId);
     const contextSnapshot = buildContextSnapshot(request, contextProgramData, memoryContext, priorPhaseContext);

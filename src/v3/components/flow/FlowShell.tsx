@@ -1,6 +1,7 @@
 import React, { Fragment, Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import type { ProgramSummary } from "@/new/types";
 import FlowCanvas from "@/v3/components/flow/FlowCanvas";
+import FlowGrounding from "@/v3/components/flow/FlowGrounding";
 import BrilioLogo from "@/v3/components/BrilioLogo";
 import { AttachFileButton, copyTextFromAction } from "@/v3/components/flow/flowCapture";
 const FlowArtifactStudio = lazy(() => import("@/v3/components/flow/studio/FlowArtifactStudio"));
@@ -130,7 +131,7 @@ interface FlowShellProps {
   jumpToFlowNonce?: number;
 }
 
-type FlowView = "today" | "flow" | "library" | "people" | "pulse" | "mission" | "portfolio";
+type FlowView = "today" | "flow" | "library" | "people" | "pulse" | "mission" | "grounding" | "portfolio";
 
 /** The rail is programme-scoped: the work, then the system. App-global actions
  * (Search, Portfolio, Copilot, Help) live in the top bar instead — the rail
@@ -138,7 +139,7 @@ type FlowView = "today" | "flow" | "library" | "people" | "pulse" | "mission" | 
  * app". ("mission" keeps its internal id; the person-facing name is Control.) */
 const DOCK_ZONES: Array<Array<[FlowView, string]>> = [
   [["today", "Inbox"], ["flow", "Flow"], ["library", "Library"], ["people", "People"], ["pulse", "Pulse"]],
-  [["mission", "Control"]],
+  [["mission", "Control"], ["grounding", "Grounding"]],
 ];
 const DOCK_ORDER: FlowView[] = DOCK_ZONES.flat().map(([id]) => id);
 
@@ -151,6 +152,7 @@ const DOCK_TIPS: Record<FlowView, string> = {
   people: "People — everyone the programme collects from, with contact state",
   pulse: "Pulse — the steering-meeting view",
   mission: "Control — agents, governance and settings",
+  grounding: "Grounding — the standards the ontology is grounded in, plus the client vocabulary",
   portfolio: "Portfolio — every programme and its engagements",
 };
 
@@ -162,6 +164,7 @@ const DOCK_PATHS: Record<string, React.ReactNode> = {
   people: <><circle cx="9" cy="8.5" r="3" /><path d="M3.5 19c.8-3.2 3-4.8 5.5-4.8s4.7 1.6 5.5 4.8" /><circle cx="17" cy="9.5" r="2.3" /><path d="M15.5 14.6c2.4.2 4.2 1.6 5 4.4" /></>,
   pulse: <path d="M3 12h4l2.5-6 4 12 2.5-6H21" />,
   mission: <><path d="M5 8h14" /><path d="M5 16h14" /><circle cx="10" cy="8" r="2.1" /><circle cx="15" cy="16" r="2.1" /></>,
+  grounding: <><path d="M12 3.5l8 4-8 4-8-4z" /><path d="M4 12l8 4 8-4" /><path d="M4 16.5l8 4 8-4" /></>,
   portfolio: <><path d="M5 5h6v6H5z" /><path d="M13 5h6v6h-6z" /><path d="M5 13h6v6H5z" /><path d="M13 13h6v6h-6z" /></>,
   copilot: <path d="M12 4l1.9 5.6L19.5 12l-5.6 2.4L12 20l-1.9-5.6L4.5 12l5.6-2.4z" />,
   search: <><circle cx="11" cy="11" r="6.5" /><path d="m20 20-3.6-3.6" /></>,
@@ -790,6 +793,8 @@ export default function FlowShell(props: FlowShellProps) {
             autoBuildOn={props.autoBuildOn}
             onToggleAutoBuild={props.onToggleAutoBuild}
           />
+        ) : view === "grounding" ? (
+          <FlowGrounding program={program} onSaveInputs={props.onSaveInputs} />
         ) : view === "portfolio" ? (
           <FlowPortfolio
             onDeleteProgram={props.onDeleteProgram}
