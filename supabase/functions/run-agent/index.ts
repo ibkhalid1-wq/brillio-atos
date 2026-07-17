@@ -9158,7 +9158,10 @@ Deno.serve(async (req) => {
       system: prompt.system,
       messages: [{ role: "user", content: prompt.user }],
       maxTokens: outputTokenBudget,
-      temperature: 0.2,
+      // Formal artifacts (ontology, atlas, charter, blueprint…) generate at
+      // temperature 0 for reproducibility: the same evidence should yield the
+      // same document run-to-run, not drift by a borderline entity each time.
+      temperature: 0,
       tier: routedTier,
     });
 
