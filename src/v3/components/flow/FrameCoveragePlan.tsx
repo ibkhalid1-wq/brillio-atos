@@ -14,38 +14,16 @@
  */
 import { useMemo, useState, useRef, useEffect } from "react";
 import type { ProgramSummary } from "@/new/types";
-import { resolveMovementStakeholders, readDirectoryPeople, validateProgramRole, dismissedListenRoles } from "@/v3/components/flow/flowStakeholders";
+import { resolveMovementStakeholders, readDirectoryPeople, validateProgramRole, dismissedListenRoles, readListenPlan, listenPlanWrite, type ListenPlanOverlay } from "@/v3/components/flow/flowStakeholders";
 import { programAreas, GENERAL_AREA, stakeholderPrimaryArea, roleAliasKey, displayRole } from "@/v3/components/flow/flowAreas";
 import { areaAccent } from "@/v3/components/flow/CollectBoard";
 import { readMovementInputs } from "@/v3/components/flow/flowShellData";
 import { TranscribeButton } from "@/v3/components/flow/flowCapture";
 
-/** The operator's plan overlay. `coverage` is the EXPLICIT who↔area assignment
- * (area label → role labels) — set only for areas the operator has hand-curated;
- * every other area falls back to the derived (title-inferred) match. */
-interface PlanOverlay { roles: string[]; areas: string[]; coverage: Record<string, string[]>; dismissedAreas: string[] }
+// The operator's plan overlay (roles · areas · explicit who↔area coverage)
+// lives on Frame as the fingerprinted `listenPlan` field — the read/write
+// helpers are shared with the Inbox resolutions in flowStakeholders.ts.
 type EditTarget = { kind: "role" | "area"; key: string } | null;
-
-function readPlan(program: ProgramSummary): PlanOverlay {
-  const raw = readMovementInputs(program, "frame").listenPlan;
-  const empty: PlanOverlay = { roles: [], areas: [], coverage: {}, dismissedAreas: [] };
-  if (typeof raw !== "string" || !raw.trim()) return empty;
-  try {
-    const p = JSON.parse(raw) as Record<string, unknown>;
-    const cov: Record<string, string[]> = {};
-    if (p.coverage && typeof p.coverage === "object" && !Array.isArray(p.coverage)) {
-      for (const [k, v] of Object.entries(p.coverage as Record<string, unknown>)) {
-        if (Array.isArray(v)) cov[k] = v.map(String).map((s) => s.trim()).filter(Boolean);
-      }
-    }
-    return {
-      roles: Array.isArray(p.roles) ? p.roles.map(String).map((s) => s.trim()).filter(Boolean) : [],
-      areas: Array.isArray(p.areas) ? p.areas.map(String).map((s) => s.trim()).filter(Boolean) : [],
-      coverage: cov,
-      dismissedAreas: Array.isArray(p.dismissedAreas) ? p.dismissedAreas.map(String).map((s) => s.trim()).filter(Boolean) : [],
-    };
-  } catch { return empty; }
-}
 
 function monogram(label: string): string {
   const words = label.split(/[^A-Za-z0-9]+/).filter(Boolean);
@@ -84,7 +62,7 @@ export default function FrameCoveragePlan({ program, onSaveInputs }: {
     return [...seen.values()];
   }, [program, directoryNames]);
 
-  const plan = useMemo(() => readPlan(program), [program]);
+  const plan = useMemo(() => readListenPlan(program), [program]);
   const areaNorm = (a: string) => a.trim().toLowerCase();
   const areas = useMemo(() => {
     const dismissed = new Set(plan.dismissedAreas.map(areaNorm));
@@ -145,18 +123,16 @@ export default function FrameCoveragePlan({ program, onSaveInputs }: {
   // raced their own predecessor's version → ConflictError flood.) `listenExtra`
   // lets a caller fold Listen-bucket inputs — directory people, dismissals — into
   // the same write instead of a separate racing call.
-  const writePlan = async (next: Partial<PlanOverlay>, listenExtra?: Record<string, string>) => {
-    const merged: PlanOverlay = { roles: plan.roles, areas: plan.areas, coverage: plan.coverage, dismissedAreas: plan.dismissedAreas, ...next };
-    let h = 0; const s = JSON.stringify(merged);
-    for (let i = 0; i < s.length; i += 1) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-    const rev = h.toString(16);
+  const writePlan = async (next: Partial<ListenPlanOverlay>, listenExtra?: Record<string, string>) => {
+    const merged: ListenPlanOverlay = { roles: plan.roles, areas: plan.areas, coverage: plan.coverage, dismissedAreas: plan.dismissedAreas, ...next };
+    const { frame, planRev } = listenPlanWrite(merged);
     await onSaveInputs?.(
       "frame",
-      { listenPlan: JSON.stringify(merged), _listenCoverageConfirmed: "" },
+      frame,
       { silent: true, extraInputs: {
-        listen: { planRev: rev, ...(listenExtra ?? {}) },
-        envision: { planRev: rev },
-        show: { planRev: rev },
+        listen: { planRev, ...(listenExtra ?? {}) },
+        envision: { planRev },
+        show: { planRev },
       } },
     );
   };
@@ -219,7 +195,7 @@ export default function FrameCoveragePlan({ program, onSaveInputs }: {
       // bucket it skips the stale machinery — a cosmetic rename must not cascade.
       const extra: Record<string, Record<string, string>> = {};
       if (plan.roles.some((r) => r.trim().toLowerCase() === key) || Object.values(plan.coverage).some((list) => list.some((r) => r.trim().toLowerCase() === key))) {
-        const merged: PlanOverlay = {
+        const merged: ListenPlanOverlay = {
           roles: plan.roles.map((r) => (r.trim().toLowerCase() === key ? next : r)),
           areas: plan.areas,
           coverage: remapCoverageRoles((list) => list.map((r) => (r.trim().toLowerCase() === key ? next : r))),

@@ -1248,7 +1248,7 @@ Return ONLY valid JSON:
     title: "Discovery Kit",
     system: `You are the ATOS Discovery Kit Agent. From the sponsor conversation and the Frame facts, produce the discovery tour: who must be heard, and a role-aware 45-minute agenda for each of them.
 
-Use the People list carried in groundingFacts as "knownStakeholder" lines (the programme's roster — seeded by the operator, extended from a Team Roster or org chart, and grown as evidence names new voices) plus any stakeholders named in the sponsor conversation (documentCarryForward). Every named person on that roster MUST get an interview entry. Do NOT invent named individuals — where a domain clearly needs a voice but no name is known, emit a role placeholder ("Head of Fulfilment — TBC") and list it under "gaps". Questions must be specific to this objective and industry, not generic discovery boilerplate; each agenda ends by asking what artifacts (screens, reports, exports) the stakeholder can share.
+Use the People list carried in groundingFacts as "knownStakeholder" lines (the programme's roster — seeded by the operator, extended from a Team Roster or org chart, and grown as evidence names new voices) plus any stakeholders named in the sponsor conversation (documentCarryForward). Every named person on that roster MUST get an interview entry. Do NOT invent named individuals — where a domain clearly needs a voice but no name is known, emit a role placeholder ("Head of Fulfilment — TBC") and list it under "gaps". A knownStakeholder marked "confirmed by the operator" is a SETTLED voice the operator has placed on the programme: give them an interview entry and coverage rows under their name EXACTLY as listed, and NEVER re-emit them as a "— TBC" placeholder or re-list their domain under gaps for want of a name. Questions must be specific to this objective and industry, not generic discovery boilerplate; each agenda ends by asking what artifacts (screens, reports, exports) the stakeholder can share.
 
 NEVER re-ask what the record already answers. Before writing any agenda question, check the groundingFacts and the carried documents/transcripts (documentCarryForward): if the fact is already stated there — a number, a system name, a named owner, a stated constraint — the question is BANNED; build on the known fact instead ("You said X takes three days — walk us through where the time goes"). Re-asking an answered question is the fastest way to burn a stakeholder's goodwill. Also NEVER phrase a question around the methodology's own plumbing (inputs, records, transcripts, phases, artifacts) — every question must be about the stakeholder's world, in their vocabulary.
 
@@ -3020,6 +3020,22 @@ function buildSpecialAgentInputContext(
           .map((cell) => (typeof cell === "string" ? cell.trim() : ""))
           .filter(Boolean);
         if (cells.length) kitRosterSeed.push(`knownStakeholder — ${cells.join(" · ")}`);
+      }
+      // People the operator added while resolving Inbox items (coverage names,
+      // role clarifications) live in `_directoryPeople` — a fingerprint-safe
+      // underscore key, so it never rides groundingFacts on its own. Fold the
+      // Listen-bound entries in as roster lines, or the kit regenerates blind
+      // to the very voices the operator just confirmed and re-emits them as
+      // "— TBC" placeholders forever.
+      const directoryRaw = typeof listenInputs._directoryPeople === "string" ? listenInputs._directoryPeople : "";
+      const directoryRows = directoryRaw.trim().startsWith("[") ? safeJsonParse<unknown[]>(directoryRaw, []) : [];
+      for (const row of directoryRows) {
+        if (!isRecord(row)) continue;
+        if (typeof row.movementId === "string" && row.movementId && row.movementId !== "listen") continue;
+        const name = typeof row.name === "string" ? row.name.trim() : "";
+        if (!name) continue;
+        const role = typeof row.role === "string" ? row.role.trim() : "";
+        kitRosterSeed.push(`knownStakeholder — ${[name, role].filter(Boolean).join(" · ")}${row.roleResolved === true ? " · confirmed by the operator" : ""}`);
       }
     }
     const objective = typeof inner.objective === "string"

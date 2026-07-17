@@ -20,7 +20,7 @@ import {
   listFlowTracks, trackAcceptance, trackPace,
 } from "@/v3/components/flow/flowTracks";
 import { readFlowGovernance, flowAgentTier } from "@/v3/components/flow/flowGovernance";
-import { resolveMovementStakeholders, deliveryRoleDirectory, readDirectoryPeople, validateProgramRole, readRoleBindings, knownProgramRoles, unresolvedCoverageNames, kitPersonaDirectory, readSuggestedVoices } from "@/v3/components/flow/flowStakeholders";
+import { resolveMovementStakeholders, deliveryRoleDirectory, readDirectoryPeople, validateProgramRole, readRoleBindings, knownProgramRoles, unresolvedCoverageNames, kitPersonaDirectory, readSuggestedVoices, readListenPlan, listenPlanWrite, dismissedListenRoles } from "@/v3/components/flow/flowStakeholders";
 import { programAreas, GENERAL_AREA, readRoleAliases, roleAliasKey } from "@/v3/components/flow/flowAreas";
 import FrameCoveragePlan from "@/v3/components/flow/FrameCoveragePlan";
 import { stakeholderEmail } from "@/v3/components/flow/flowMeetings";
@@ -970,23 +970,56 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
   // operator maps it (or accepts it as a new programme role) right here.
   const unresolvedRoles = useMemo(() => readDirectoryPeople(program).filter((entry) => !entry.roleResolved), [program]);
   const roleOptions = useMemo(() => knownProgramRoles(program).sort((a, b) => a.localeCompare(b)), [program]);
-  const patchDirectoryPerson = async (id: string, patch: Record<string, unknown> | null, action: string, detail: string) => {
+  // Resolving who Listen will hear is PLAN-level scope, not just a directory
+  // patch. Every resolution rides the same fingerprinted `listenPlan` write the
+  // Listen-plan editor uses (listenPlanWrite + planRev stamps) in ONE atomic
+  // call, so the Discovery Kit goes stale and regenerates against the resolved
+  // cast. The directory overlay alone is fingerprint-safe by design — writing
+  // only it left the kit permanently blind to accepted roles: "Keep as a new
+  // role" changed nothing on the kit, and regeneration couldn't either.
+  const savePlanAndDirectory = async (
+    busyKey: string,
+    nextPeople: unknown[],
+    planRoles: (roles: string[]) => string[],
+    attest: { action: string; detail?: string },
+    listenExtra?: Record<string, string>,
+  ) => {
     if (!onSaveInputs) return;
-    const people = readDirectoryPeople(program);
-    const next = patch === null
-      ? people.filter((entry) => entry.id !== id)
-      : people.map((entry) => (entry.id === id ? { ...entry, ...patch } : entry));
-    setDisputeBusy(id);
+    const plan = readListenPlan(program);
+    const { frame, planRev } = listenPlanWrite({ ...plan, roles: [...new Set(planRoles(plan.roles))] });
+    setDisputeBusy(busyKey);
     try {
-      await onSaveInputs("listen", { _directoryPeople: JSON.stringify(next) }, { attest: { action, detail } });
+      await onSaveInputs("frame", frame, { attest, extraInputs: {
+        listen: { planRev, _directoryPeople: JSON.stringify(nextPeople), ...(listenExtra ?? {}) },
+        envision: { planRev },
+        show: { planRev },
+      } });
     } finally { setDisputeBusy(null); }
   };
+  const patchDirectoryPerson = (id: string, patch: Record<string, unknown>, planRole: string, action: string, detail: string) =>
+    savePlanAndDirectory(
+      id,
+      readDirectoryPeople(program).map((entry) => (entry.id === id ? { ...entry, ...patch } : entry)),
+      (roles) => roles.some((r) => r.trim().toLowerCase() === planRole.trim().toLowerCase()) ? roles : [...roles, planRole],
+      { action, detail },
+    );
   const mapRole = (id: string, name: string, role: string) =>
-    patchDirectoryPerson(id, { role, roleResolved: true }, `Role clarified — ${name} → ${role}`, role);
+    patchDirectoryPerson(id, { role, roleResolved: true }, role, `Role clarified — ${name} → ${role}`, role);
   const acceptRole = (id: string, name: string, role: string) =>
-    patchDirectoryPerson(id, { roleResolved: true }, `Role accepted as new — ${name} (${role})`, `"${role}" is now a recognised programme role`);
-  const removeDirectoryPerson = (id: string, name: string) =>
-    patchDirectoryPerson(id, null, `Person removed — ${name}`, "added in error");
+    patchDirectoryPerson(id, { roleResolved: true }, role, `Role accepted as new — ${name} (${role})`, `"${role}" is now a recognised programme role`);
+  const removeDirectoryPerson = (id: string, name: string, role: string) => {
+    // Mirror the plan editor's remove: drop the entry, dismiss the name AND the
+    // role so kit regeneration won't resurrect either as a placeholder.
+    const keys = [name, role].map((s) => s.trim().toLowerCase()).filter(Boolean);
+    const dismissed = new Set([...dismissedListenRoles(program), ...keys]);
+    return savePlanAndDirectory(
+      id,
+      readDirectoryPeople(program).filter((entry) => entry.id !== id),
+      (roles) => roles.filter((r) => !keys.includes(r.trim().toLowerCase())),
+      { action: `Person removed — ${name}`, detail: "added in error" },
+      { _dismissedListenRoles: JSON.stringify([...dismissed]) },
+    );
+  };
 
   // Names written into the kit coverage map that aren't people on the
   // programme — an Inbox item to resolve. Adding routes them into the
@@ -998,11 +1031,12 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
     const role = domain || "Contributor";
     const resolved = validateProgramRole(program, role).known;
     const entry = { id: `dp-${Date.now().toString(36)}-${name.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 8)}`, name, role, movementId: "listen", roleResolved: resolved };
-    setDisputeBusy(name);
-    try {
-      await onSaveInputs("listen", { _directoryPeople: JSON.stringify([...readDirectoryPeople(program), entry]) },
-        { attest: { action: `Person added from coverage — ${name}`, detail: resolved ? role : `${role} — needs clarification` } });
-    } finally { setDisputeBusy(null); }
+    await savePlanAndDirectory(
+      name,
+      [...readDirectoryPeople(program), entry],
+      (roles) => roles.some((r) => r.trim().toLowerCase() === name.trim().toLowerCase()) ? roles : [...roles, name],
+      { action: `Person added from coverage — ${name}`, detail: resolved ? role : `${role} — needs clarification` },
+    );
   };
   const dismissCoverageName = async (name: string) => {
     if (!onSaveInputs) return;
@@ -1345,7 +1379,7 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
                 ) : null}
                 {onSaveInputs ? (
                   <button type="button" className="v3fs-btn quiet" disabled={disputeBusy === person.id}
-                    onClick={() => void removeDirectoryPerson(person.id, person.name)}>Remove</button>
+                    onClick={() => void removeDirectoryPerson(person.id, person.name, person.role)}>Remove</button>
                 ) : null}
               </div>
             </article>

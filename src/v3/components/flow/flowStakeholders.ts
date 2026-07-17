@@ -572,6 +572,54 @@ export function readDirectoryPeople(program: ProgramSummary): DirectoryPerson[] 
   } catch { return []; }
 }
 
+/**
+ * The operator's Listen-plan overlay, stored on Frame as `listenPlan` — a
+ * FINGERPRINTED field, deliberately: any change to who Listen will hear or
+ * what it covers stales the Discovery Kit so it regenerates against the new
+ * scope. Shared by the Listen-plan editor AND the Inbox resolutions
+ * (add-from-coverage, role accept/map, remove) so both paths move the kit's
+ * fingerprint the same way — the Inbox path once wrote only the
+ * fingerprint-safe directory overlay, and the kit never noticed.
+ */
+export interface ListenPlanOverlay {
+  roles: string[];
+  areas: string[];
+  coverage: Record<string, string[]>;
+  dismissedAreas: string[];
+}
+export function readListenPlan(program: ProgramSummary): ListenPlanOverlay {
+  const raw = readMovementInputs(program, "frame").listenPlan;
+  const empty: ListenPlanOverlay = { roles: [], areas: [], coverage: {}, dismissedAreas: [] };
+  if (typeof raw !== "string" || !raw.trim()) return empty;
+  try {
+    const p = JSON.parse(raw) as Record<string, unknown>;
+    const cov: Record<string, string[]> = {};
+    if (p.coverage && typeof p.coverage === "object" && !Array.isArray(p.coverage)) {
+      for (const [k, v] of Object.entries(p.coverage as Record<string, unknown>)) {
+        if (Array.isArray(v)) cov[k] = v.map(String).map((s) => s.trim()).filter(Boolean);
+      }
+    }
+    const strs = (v: unknown) => Array.isArray(v) ? v.map(String).map((s) => s.trim()).filter(Boolean) : [];
+    return { roles: strs(p.roles), areas: strs(p.areas), coverage: cov, dismissedAreas: strs(p.dismissedAreas) };
+  } catch { return empty; }
+}
+/** The plan's revision stamp — written as `planRev` (a NON-underscore key)
+ * into the Listen/Envision/Show buckets so their artifacts stale too. */
+export function listenPlanRev(plan: ListenPlanOverlay): string {
+  let h = 0;
+  const s = JSON.stringify(plan);
+  for (let i = 0; i < s.length; i += 1) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return h.toString(16);
+}
+/** The single write shape every plan mutation uses: the fingerprinted frame
+ * field with confirmation re-opened, plus the rev for the downstream stamps. */
+export function listenPlanWrite(plan: ListenPlanOverlay): { frame: Record<string, string>; planRev: string } {
+  return {
+    frame: { listenPlan: JSON.stringify(plan), _listenCoverageConfirmed: "" },
+    planRev: listenPlanRev(plan),
+  };
+}
+
 const normRole = (role: string): string => role.trim().toLowerCase().replace(/\s*\([^)]*\)\s*/g, " ").replace(/\/+/g, " ").replace(/\s+/g, " ").trim();
 const roleTokens = (role: string): Set<string> =>
   new Set((normRole(role).match(/[a-z]{3,}/g) ?? []).filter((t) => !["the", "and", "for", "lead", "owner", "sme"].includes(t)));
