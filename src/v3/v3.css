@@ -8532,3 +8532,7 @@ select.v3fs-dir-in {cursor:pointer}
 .v3fs-nb-overview {align-self:flex-start;margin:4px 0 10px;font-size:12.5px;color:var(--v3-accent);cursor:pointer;
   border:1px solid var(--fs-line);border-radius:9px;padding:7px 12px;background:var(--fs-card);font-weight:600}
 .v3fs-nb-overview:hover {background:color-mix(in srgb, var(--v3-accent) 8%, transparent)}
+
+/* Program-level Focus hero on Frame · Ship · Evolve (next chrome only) — the
+   workstream phases carry their own Focus card inside the area board. */
+.v3fs-nb.v3fs-nb-solo {margin:8px 0 4px}

@@ -276,6 +276,24 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
     .filter((e): e is { p: ProgramSummary; anchor: NonNullable<ReturnType<typeof readDrillAnchor>> } => !!e.anchor),
     [relatedPrograms]);
 
+  // Next chrome: a program-level Focus hero for the non-workstream phases
+  // (Frame · Ship · Evolve). The workstream phases carry their own Focus card
+  // inside the area board, so this fills the gap — every phase's landing reads
+  // as guided rather than a wall of cards, from the first screen.
+  const programFocus = (() => {
+    if (!next) return null;
+    const isProgramLevel = active === "frame" || active === "ship" || active === "evolve";
+    if (!isProgramLevel) return null;
+    const row = rows.find((r) => r.movement.id === active);
+    if (!row) return null;
+    const checks = [...gateChecklist(program, row.movement, row.artifacts), ...gateAugmentations(program, row.movement.id)]
+      .filter((c) => !c.advisory);
+    const readiness = gateReadiness(program, row.movement, row.artifacts, checks);
+    const done = program.gateReviews?.[active]?.status === "approved";
+    const met = checks.filter((c) => c.done).length;
+    return { name: row.movement.displayName, done, met, total: checks.length, detail: readiness.detail };
+  })();
+
   return (
     <div className="v3fs-flow v3fs-flow-spine">
       {/* The horizontal spine — every movement's state at a glance; click to
@@ -374,6 +392,26 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
               </button>
             ))}
           </span>
+        </div>
+      ) : null}
+      {programFocus ? (
+        <div className="v3fs-nb v3fs-nb-solo">
+          <div className="v3fs-nb-focus">
+            <div className="v3fs-nb-fmark" aria-hidden="true">{programFocus.done ? "✓" : "◆"}</div>
+            <div className="v3fs-nb-ftext">
+              <div className="v3fs-nb-flabel">{programFocus.name} · do this next</div>
+              <h2 className="v3fs-nb-ftitle">
+                {programFocus.done
+                  ? `${programFocus.name} is demonstrated — you can move to the next phase.`
+                  : `Continue in ${programFocus.name}${programFocus.total ? ` — ${programFocus.met} of ${programFocus.total} gate criteria met.` : "."}`}
+              </h2>
+              <div className="v3fs-nb-fsub">
+                {programFocus.done
+                  ? "The gate is recorded. The full workspace is below."
+                  : (programFocus.detail || "Pick up where you left off — the workspace is below.")}
+              </div>
+            </div>
+          </div>
         </div>
       ) : null}
       {rows.filter(({ movement }) => movement.id === active).map(({ movement, artifacts, evidence }, index) => {
