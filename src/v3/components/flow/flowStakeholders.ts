@@ -921,6 +921,11 @@ export function readSuggestedVoices(program: ProgramSummary): SuggestedVoice[] {
  * name dropped onto the People page becomes a real collection card rather than
  * a row that never gets asked anything. */
 const DIRECTORY_OPENERS: Record<string, string> = {
+  // Frame has an opener so people ASKED A QUESTION from the charter or the
+  // Discovery Kit (who get a frame directory entry) resolve onto Frame's
+  // Discovery board — without one, directoryStakeholdersFor returns [] and
+  // their card (and pending questions) never appear.
+  frame: "From where you sit, what should this programme change first — and what would success look like for your area?",
   listen: "Walk us through your part of the process — what do you pick up, from whom, and what do you hand off when you're done?",
   envision: "For your part of this, what must be true — technically and operationally — for it to work, and where are the risks?",
   show: "Watch your part of the workflow run in the prototype — does it do what you described, and would you sign off on it?",
