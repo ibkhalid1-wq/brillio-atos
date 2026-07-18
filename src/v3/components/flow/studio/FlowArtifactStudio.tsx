@@ -380,6 +380,45 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
         </details>
       ) : null;
 
+  // Ask a question — the derived document's ONE editing path (also offered on
+  // the editable Transformation Charter): ask the person who owns the answer.
+  // The question travels on their link and regenerates the document when
+  // answered. Only roles with a NAMED individual are offered; asking someone
+  // not yet on this movement's Discovery adds their card. Rendered BELOW the
+  // document body.
+  const askPanel = (!canEdit || artifact.id === "charter") && artifact.movementId !== "envision" && artifact.movementId !== "show" && onSaveInputs && askRoster.length ? (
+    <div className="v3fs-artask">
+      <div className="v3fs-artask-h">
+        <span className="v3fs-artask-l">Ask a question</span>
+      </div>
+      <div className="v3fs-artask-b">
+        <label className="v3fs-artask-row">
+          <span>Who to ask</span>
+          <select className="v3fs-artask-who" value={askTarget} onChange={(e) => { setAskWho(e.target.value); setAskDone(""); }} aria-label="Who to ask">
+            {askRoster.map((s, i) => (
+              <option key={`${s.name}-${i}`} value={s.name}>{`${s.name}${s.role ? ` · ${s.role}` : ""}`}</option>
+            ))}
+          </select>
+        </label>
+        {askExisting.length ? (
+          <ul className="v3fs-artask-q">
+            {askExisting.map((q, i) => <li key={i}>{q}</li>)}
+          </ul>
+        ) : null}
+        <div className="v3fs-artask-add">
+          <input value={askText} onChange={(e) => setAskText(e.target.value)}
+            placeholder={`Your question for ${askTarget || "the owner"}…`}
+            aria-label="Your question"
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void addAsk(); } }} />
+          <button type="button" className="v3fs-btn" disabled={askBusy || !askText.trim() || !askTarget} onClick={() => void addAsk()}>
+            {askBusy ? "Sending…" : "＋ Ask"}
+          </button>
+        </div>
+        {askDone ? <div className="v3fs-artask-done">✓ Sent to {askDone} — travels on their link until answered.</div> : null}
+      </div>
+    </div>
+  ) : null;
+
   return (
     <>
       {embedded ? null : <div className="v3fs-doc-backdrop" onClick={onClose} aria-hidden="true" />}
@@ -453,44 +492,6 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
             {onRegenerate ? (
               <button type="button" className="v3fs-btn" onClick={() => { onRegenerate(); onClose(); }}>Regenerate</button>
             ) : null}
-          </div>
-        ) : null}
-        {/* Ask a question — the DERIVED document's ONE editing path: ask the
-            person who owns the answer. The question travels on their link and
-            regenerates the document when answered. Only roles with a NAMED
-            individual are offered; asking someone not yet on this movement's
-            Discovery adds their card. Editable design-team artifacts are
-            authored directly, so they don't show this. */}
-        {!canEdit && artifact.movementId !== "envision" && artifact.movementId !== "show" && onSaveInputs && askRoster.length ? (
-          <div className="v3fs-artask">
-            <div className="v3fs-artask-h">
-              <span className="v3fs-artask-l">Ask a question</span>
-            </div>
-            <div className="v3fs-artask-b">
-              <label className="v3fs-artask-row">
-                <span>Who to ask</span>
-                <select className="v3fs-artask-who" value={askTarget} onChange={(e) => { setAskWho(e.target.value); setAskDone(""); }} aria-label="Who to ask">
-                  {askRoster.map((s, i) => (
-                    <option key={`${s.name}-${i}`} value={s.name}>{`${s.name}${s.role ? ` · ${s.role}` : ""}`}</option>
-                  ))}
-                </select>
-              </label>
-              {askExisting.length ? (
-                <ul className="v3fs-artask-q">
-                  {askExisting.map((q, i) => <li key={i}>{q}</li>)}
-                </ul>
-              ) : null}
-              <div className="v3fs-artask-add">
-                <input value={askText} onChange={(e) => setAskText(e.target.value)}
-                  placeholder={`Your question for ${askTarget || "the owner"}…`}
-                  aria-label="Your question"
-                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void addAsk(); } }} />
-                <button type="button" className="v3fs-btn" disabled={askBusy || !askText.trim() || !askTarget} onClick={() => void addAsk()}>
-                  {askBusy ? "Sending…" : "＋ Ask"}
-                </button>
-              </div>
-              {askDone ? <div className="v3fs-artask-done">✓ Sent to {askDone} — travels on their link until answered.</div> : null}
-            </div>
           </div>
         ) : null}
         {regenPending ? (
@@ -616,6 +617,7 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
                   ))}
                 </>
               )}
+              {askPanel}
               {draft || blocks.length > 0 ? (
                 <details className="v3fs-disc v3fs-disc-sm v3fs-dv-colophon">
                   <summary>

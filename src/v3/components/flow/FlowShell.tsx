@@ -138,9 +138,10 @@ type FlowView = "today" | "flow" | "library" | "people" | "pulse" | "mission" | 
  * (Search, Portfolio, Copilot, Help) live in the top bar instead — the rail
  * answers "where am I in THIS programme", the top bar "where can I go in the
  * app". ("mission" keeps its internal id; the person-facing name is Control.) */
+// Grounding is HIDDEN from the rail (still reachable via the ⌘K workbench).
 const DOCK_ZONES: Array<Array<[FlowView, string]>> = [
   [["today", "Inbox"], ["flow", "Flow"], ["library", "Library"], ["people", "People"], ["pulse", "Pulse"]],
-  [["mission", "Control"], ["grounding", "Grounding"]],
+  [["mission", "Control"]],
 ];
 const DOCK_ORDER: FlowView[] = DOCK_ZONES.flat().map(([id]) => id);
 
@@ -345,7 +346,6 @@ function FlowHelp({ onClose }: { onClose: () => void }) {
               <li><b>People</b> — everyone across the programme and who covers what.</li>
               <li><b>Pulse</b> — the steering read and the board pack.</li>
               <li><b>Control</b> — agents, budgets, guardrails, and the audit trail.</li>
-              <li><b>Grounding</b> — the standards and vocabulary the ontology is built on.</li>
             </ul>
           </section>
           <section>
