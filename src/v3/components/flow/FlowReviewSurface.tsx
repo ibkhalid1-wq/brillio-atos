@@ -127,9 +127,9 @@ function coverageLabel(review: ReviewPayload): string {
   return `${arr.slice(0, -1).join(", ")}, and ${arr[arr.length - 1]}`;
 }
 
-function OntologyAtlasSurface({ review, stakeholder, programme, objective, submitting, error, onSubmit, draftKey, returning }: {
+function OntologyAtlasSurface({ review, stakeholder, programme, objective, submitting, error, onSubmit, draftKey, returning, afterIntro }: {
   review: OntologyAtlasReview; stakeholder: string; programme?: string; objective?: string; submitting: boolean; error: string | null;
-  onSubmit: (answers: string) => void; draftKey?: string; returning?: boolean;
+  onSubmit: (answers: string) => void; draftKey?: string; returning?: boolean; afterIntro?: React.ReactNode;
 }) {
   const [termComments, setTermComments] = usePersistentState<Record<string, string>>(draftKey, "oaTerms", {});
   const [workflowComments, setWorkflowComments] = usePersistentState<Record<string, string>>(draftKey, "oaWf", {});
@@ -147,6 +147,7 @@ function OntologyAtlasSurface({ review, stakeholder, programme, objective, submi
   return (
     <>
       <ReviewHeader stakeholder={stakeholder} programme={programme} objective={objective} intro={review.intro} areaLabel={coverageLabel(review)} returning={returning} />
+      {afterIntro}
       <AreaChips areas={areas} active={area} onPick={setArea} />
       <div className="v3fs-rvw">
         {shownTerms.length ? (
@@ -209,9 +210,9 @@ function OntologyAtlasSurface({ review, stakeholder, programme, objective, submi
   );
 }
 
-function ListenWorkflowSurface({ review, stakeholder, programme, objective, submitting, error, onSubmit, draftKey, returning }: {
+function ListenWorkflowSurface({ review, stakeholder, programme, objective, submitting, error, onSubmit, draftKey, returning, afterIntro }: {
   review: ListenWorkflowReview; stakeholder: string; programme?: string; objective?: string; submitting: boolean; error: string | null;
-  onSubmit: (answers: string) => void; draftKey?: string; returning?: boolean;
+  onSubmit: (answers: string) => void; draftKey?: string; returning?: boolean; afterIntro?: React.ReactNode;
 }) {
   const [wfSteps, setWfSteps] = usePersistentState<FlowNode[][]>(draftKey, "lwSteps",
     review.workflows.map((w) => w.steps.map((s) => ({
@@ -309,6 +310,7 @@ function ListenWorkflowSurface({ review, stakeholder, programme, objective, subm
   return (
     <>
       <ReviewHeader stakeholder={stakeholder} programme={programme} objective={objective} intro={review.intro} areaLabel={coverageLabel(review)} returning={returning} />
+      {afterIntro}
       <AreaChips areas={areas} active={area} onPick={setArea} />
       <div className="v3fs-rvw">
         <div className="v3fs-rvw-section-h"><span className="v3fs-rvw-step-ic" aria-hidden="true">⇄</span>Your workflow — fix it, add steps, or mark what doesn&rsquo;t happen</div>
@@ -426,7 +428,7 @@ function ListenWorkflowSurface({ review, stakeholder, programme, objective, subm
   );
 }
 
-export default function FlowReviewSurface({ review, stakeholder, submitting, error, onSubmit, draftKey, programme, objective, returning }: {
+export default function FlowReviewSurface({ review, stakeholder, submitting, error, onSubmit, draftKey, programme, objective, returning, afterIntro }: {
   review: ReviewPayload; stakeholder: string; submitting: boolean; error: string | null;
   onSubmit: (answers: string) => void;
   /** Persist the respondent's edits to their device under this key so they can
@@ -437,9 +439,12 @@ export default function FlowReviewSurface({ review, stakeholder, submitting, err
   objective?: string;
   /** They've responded before — the opener says "Welcome back" instead of "Hi". */
   returning?: boolean;
+  /** Rendered right after the greeting/intro — e.g. the "request a meeting"
+   * offer, which belongs below "what we need from you", not above the greeting. */
+  afterIntro?: React.ReactNode;
 }) {
   if (review.kind === "listen-workflow") {
-    return <ListenWorkflowSurface review={review} stakeholder={stakeholder} programme={programme} objective={objective} submitting={submitting} error={error} onSubmit={onSubmit} draftKey={draftKey} returning={returning} />;
+    return <ListenWorkflowSurface review={review} stakeholder={stakeholder} programme={programme} objective={objective} submitting={submitting} error={error} onSubmit={onSubmit} draftKey={draftKey} returning={returning} afterIntro={afterIntro} />;
   }
-  return <OntologyAtlasSurface review={review} stakeholder={stakeholder} programme={programme} objective={objective} submitting={submitting} error={error} onSubmit={onSubmit} draftKey={draftKey} returning={returning} />;
+  return <OntologyAtlasSurface review={review} stakeholder={stakeholder} programme={programme} objective={objective} submitting={submitting} error={error} onSubmit={onSubmit} draftKey={draftKey} returning={returning} afterIntro={afterIntro} />;
 }

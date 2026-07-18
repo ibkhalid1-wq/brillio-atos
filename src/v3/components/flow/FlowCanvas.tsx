@@ -431,7 +431,7 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
         if (next && nextPhase && !nextWork) {
           return (
             <Fragment key={movement.id}>
-              <FlowNextBoard program={program} phase={nextPhase} onOpenWork={() => setNextWork(true)} />
+              <FlowNextBoard program={program} phase={nextPhase} onOpenWork={() => setNextWork(true)} onSaveInputs={onSaveInputs} />
             </Fragment>
           );
         }

@@ -17,7 +17,7 @@ import { loopState, changeRequests, type AreaLoop } from "@/v3/components/flow/f
 import { areaAccent, areaMonogram, stakeholderCollection } from "@/v3/components/flow/CollectBoard";
 import { resolveMovementStakeholders } from "@/v3/components/flow/flowStakeholders";
 import { listInterviewPacks } from "@/v3/components/flow/flowPortal";
-import { movementEvidence, flowMovements } from "@/v3/components/flow/flowShellData";
+import { movementEvidence, flowMovements, readMovementInputs } from "@/v3/components/flow/flowShellData";
 
 /** Per-area "heard" from the roster — a stakeholder is filed under their primary
  * area and counted heard via the same signal the People board uses. More honest
@@ -50,10 +50,11 @@ const initials = (name: string): string => {
   return ((w[0]?.[0] ?? "") + (w[1]?.[0] ?? "")).toUpperCase() || (name.slice(0, 2).toUpperCase());
 };
 
-export default function FlowNextBoard({ program, phase, onOpenWork }: {
+export default function FlowNextBoard({ program, phase, onOpenWork, onSaveInputs }: {
   program: ProgramSummary;
   phase: Phase;
   onOpenWork: () => void;
+  onSaveInputs?: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
 }) {
   const [focusArea, setFocusArea] = useState<string | null>(null);
   const rows = areaProgress(program);
@@ -133,13 +134,13 @@ export default function FlowNextBoard({ program, phase, onOpenWork }: {
 
       {focusArea
         ? <FocusedArea program={program} phase={phase} area={focusArea} rows={rows} ls={ls} ah={ah} onBack={() => setFocusArea(null)} onOpenWork={onOpenWork} />
-        : <Board program={program} phase={phase} rows={rows} ls={ls} ah={ah} onFocus={setFocusArea} onOpenWork={onOpenWork} />}
+        : <Board program={program} phase={phase} rows={rows} ls={ls} ah={ah} onFocus={setFocusArea} onOpenWork={onOpenWork} onSaveInputs={onSaveInputs} />}
     </div>
   );
 }
 
 // ── The parallel board: one lane per area ──────────────────────────────────
-function Board({ program, phase, rows, ls, ah, onFocus, onOpenWork }: {
+function Board({ program, phase, rows, ls, ah, onFocus, onOpenWork, onSaveInputs }: {
   program: ProgramSummary;
   phase: Phase;
   rows: ReturnType<typeof areaProgress>;
@@ -147,6 +148,7 @@ function Board({ program, phase, rows, ls, ah, onFocus, onOpenWork }: {
   ah: (area: string) => { heard: number; total: number; ready: boolean; names: string[] };
   onFocus: (area: string) => void;
   onOpenWork: () => void;
+  onSaveInputs?: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
 }) {
   if (phase === "listen") {
     return (
@@ -185,6 +187,7 @@ function Board({ program, phase, rows, ls, ah, onFocus, onOpenWork }: {
         <div>All areas’ prototypes <b>merge into one build</b> before Ship — <b>{ls.areasConverged} of {ls.areasTotal || rows.length}</b> converged. Design once, validate per area.</div>
         <button type="button" className="v3fs-nb-merge-btn" onClick={onOpenWork}>Open the design workspace →</button>
       </div>
+      <ExternalBuildPanel program={program} ls={ls} onSaveInputs={onSaveInputs} />
       {(rows.length ? rows.map((r) => r.area) : ls.areas.map((a) => a.area)).map((area) => {
         const P = byArea.get(area);
         // A lane is only truly "not started" when NO prototype exists yet (still
@@ -351,5 +354,77 @@ function FocusedArea({ program, phase, area, rows, ls, ah, onBack, onOpenWork }:
         </div>
       </div>
     </>
+  );
+}
+
+// ── Build outside the app: link an external prototype + generate an AI build
+// prompt from the pilots' feedback. The URL is saved to show.prototypeLocation,
+// which the flow-portal edge already serves as the pilots' "Open the prototype".
+function ExternalBuildPanel({ program, ls, onSaveInputs }: {
+  program: ProgramSummary;
+  ls: ReturnType<typeof loopState>;
+  onSaveInputs?: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
+}) {
+  const stored = String(readMovementInputs(program, "show").prototypeLocation ?? "");
+  const [url, setUrl] = useState(stored);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [prompt, setPrompt] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  void ls;
+
+  const save = async () => {
+    if (!onSaveInputs) return;
+    setSaving(true); setSaved(false);
+    try {
+      await onSaveInputs("show", { prototypeLocation: url.trim() }, {
+        attest: { action: url.trim() ? `Linked external prototype — ${url.trim()}` : "Cleared external prototype link" },
+      });
+      setSaved(true);
+    } finally { setSaving(false); }
+  };
+
+  const reqs = changeRequests(program);
+  const genPrompt = () => {
+    const lines: string[] = [];
+    lines.push(`Update the "${program.name}" prototype to address the pilot feedback below. Keep everything that already works; change only what the feedback calls out, and keep the product's domain language consistent.`);
+    lines.push("");
+    if (reqs.length) {
+      lines.push("Feedback to address:");
+      reqs.forEach((c, i) => lines.push(`${i + 1}. [${c.area}] ${c.stakeholder}${c.blocking ? " — BLOCKING objection" : ""}: ${c.ask || c.verdict}`));
+    } else {
+      lines.push("No open change requests yet — the pilots haven't asked for changes. Use this once their feedback lands.");
+    }
+    lines.push("");
+    lines.push("Return the updated build; preserve the existing structure and styling unless the feedback requires otherwise.");
+    setPrompt(lines.join("\n"));
+    setCopied(false);
+  };
+  const copyPrompt = async () => {
+    if (!prompt) return;
+    try { await navigator.clipboard.writeText(prompt); setCopied(true); } catch { /* clipboard denied — the box is selectable */ }
+  };
+
+  return (
+    <div className="v3fs-nb-ext">
+      <div className="v3fs-nb-ext-eyebrow">Build outside the app</div>
+      <p className="v3fs-nb-ext-sub">Prototype in your own tool (v0, Cursor, Figma Make…) and link it here — the pilots’ “Open the prototype” points at your build.</p>
+      <div className="v3fs-nb-ext-row">
+        <input className="v3fs-nb-ext-in" type="url" value={url} placeholder="https://your-prototype.example.com"
+          onChange={(e) => { setUrl(e.target.value); setSaved(false); }} aria-label="External prototype URL" />
+        <button type="button" className="v3fs-nb-open" disabled={!onSaveInputs || saving || url.trim() === stored} onClick={() => void save()}>{saving ? "Saving…" : "Save link"}</button>
+        {url.trim() ? <a className="v3fs-nb-open ghost" href={url.trim()} target="_blank" rel="noreferrer">Open ↗</a> : null}
+      </div>
+      {saved ? <p className="v3fs-nb-ext-ok">✓ Linked — the pilots now open this build.</p> : null}
+      <div className="v3fs-nb-ext-prompt">
+        <button type="button" className="v3fs-nb-open ghost" onClick={genPrompt}>✳ Generate build prompt from feedback{reqs.length ? ` (${reqs.length})` : ""}</button>
+        {prompt !== null ? (
+          <>
+            <textarea className="v3fs-nb-ext-ta" readOnly value={prompt} onFocus={(e) => e.currentTarget.select()} rows={Math.min(14, prompt.split("\n").length + 1)} />
+            <button type="button" className="v3fs-nb-open" onClick={() => void copyPrompt()}>{copied ? "✓ Copied" : "Copy prompt"}</button>
+          </>
+        ) : null}
+      </div>
+    </div>
   );
 }

@@ -492,12 +492,12 @@ export default function FlowRespond({ token }: { token: string }) {
               {state.pack.followUp ? <FollowUpBanner stakeholder={greetName}
                 submissions={state.pack.submissions ?? []}
                 changes={state.pack.priorReview ? reviewDiff(state.pack.priorReview, shownReview) : undefined} /> : null}
-              <MeetingRequestBar kind="listen" sent={meetingSent} submitting={submitting}
-                onRequest={(pref) => void requestMeeting(pref, "listen")} />
               <FlowReviewSurface review={shownReview} stakeholder={greetName}
                 programme={state.pack.programme} objective={state.pack.objective}
                 returning={!!state.pack.followUp}
                 submitting={submitting} error={error} draftKey={reviewDraftKey}
+                afterIntro={<MeetingRequestBar kind="listen" sent={meetingSent} submitting={submitting}
+                  onRequest={(pref) => void requestMeeting(pref, "listen")} />}
                 onSubmit={(answers) => void submit({ answers: [answers, demoRunBlock].filter(Boolean).join("\n\n") })} />
               {/* ENVISION carries the STORYBOARD: once an experience design
                   exists, the transformation review is followed by a walk of
