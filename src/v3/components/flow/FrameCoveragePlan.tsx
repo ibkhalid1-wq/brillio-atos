@@ -14,8 +14,9 @@
  */
 import { useMemo, useState, useRef, useEffect } from "react";
 import type { ProgramSummary } from "@/new/types";
-import { resolveMovementStakeholders, readDirectoryPeople, validateProgramRole, dismissedListenRoles, readListenPlan, listenPlanWrite, type ListenPlanOverlay } from "@/v3/components/flow/flowStakeholders";
-import { programAreas, GENERAL_AREA, stakeholderPrimaryArea, roleAliasKey, displayRole } from "@/v3/components/flow/flowAreas";
+import { readDirectoryPeople, validateProgramRole, readListenPlan, type ListenPlanOverlay } from "@/v3/components/flow/flowStakeholders";
+import { listenCoverageRoles, listenCoverageAreas, listenAreaCoverage, makeListenPlanWriter } from "@/v3/components/flow/listenCoverage";
+import { roleAliasKey, displayRole } from "@/v3/components/flow/flowAreas";
 import { areaAccent } from "@/v3/components/flow/CollectBoard";
 import { readMovementInputs } from "@/v3/components/flow/flowShellData";
 import { TranscribeButton } from "@/v3/components/flow/flowCapture";
@@ -43,57 +44,13 @@ export default function FrameCoveragePlan({ program, onSaveInputs }: {
   const editRef = useRef<HTMLInputElement | null>(null);
   useEffect(() => { if (edit && editRef.current) { editRef.current.focus(); editRef.current.select(); } }, [edit]);
 
-  const directoryNames = useMemo(
-    () => new Set(readDirectoryPeople(program).filter((p) => p.movementId === "listen").map((p) => p.name.trim().toLowerCase())),
-    [program],
-  );
-
-  const roles = useMemo(() => {
-    const seen = new Map<string, { label: string; name?: string; added: boolean }>();
-    for (const person of resolveMovementStakeholders(program, "listen")) {
-      const key = (person.role || person.name).trim().toLowerCase();
-      if (!key || seen.has(key)) continue;
-      seen.set(key, {
-        label: person.role || person.name,
-        name: person.isRole ? undefined : person.name,
-        added: directoryNames.has(person.name.trim().toLowerCase()),
-      });
-    }
-    return [...seen.values()];
-  }, [program, directoryNames]);
-
+  // People, areas and coverage all come from the ONE shared model shared with
+  // the reimagined Discovery Kit matrix (listenCoverage.ts) — a coverage-rule
+  // change lands in one place, and the two editors can never disagree.
   const plan = useMemo(() => readListenPlan(program), [program]);
-  const areaNorm = (a: string) => a.trim().toLowerCase();
-  const areas = useMemo(() => {
-    const dismissed = new Set(plan.dismissedAreas.map(areaNorm));
-    const derived = programAreas(program).filter((a) => a && a !== GENERAL_AREA);
-    const seen = new Set(derived.map((a) => a.toLowerCase()));
-    const extra = plan.areas.filter((a) => !seen.has(a.toLowerCase()));
-    // Operator-dismissed areas leave the plan entirely.
-    return [...derived.map((a) => ({ label: a, added: false })), ...extra.map((a) => ({ label: a, added: true }))]
-      .filter((a) => !dismissed.has(areaNorm(a.label)));
-  }, [program, plan.areas, plan.dismissedAreas]);
-
-  // The RELATIONSHIP between the two panels: which roles cover each area. Each
-  // role's primary area is resolved once, then token-matched to the plan areas
-  // (so "Vertical Sales" covers "Sales" and "Sales & Marketing"). An area no one
-  // covers is flagged — the gap the plan exists to close.
-  const areaTokens = (a: string) => new Set(
-    a.toLowerCase().split(/[^a-z0-9]+/).filter((t) => t && !["and", "the", "of", "amp"].includes(t)));
-  const rolePrimary = useMemo(
-    () => roles.map((r) => ({ label: r.label, area: stakeholderPrimaryArea(program, r.name || r.label, r.label) })),
-    [program, roles],
-  );
-  const areaCoverage = useMemo(() => areas.map((a) => {
-    // An area the operator has hand-curated uses its EXPLICIT list (even if
-    // empty — a deliberate "no one"); otherwise fall back to the title-inferred
-    // match. `explicit` drives whether the row shows remove-controls.
-    const explicit = plan.coverage[a.label];
-    if (explicit) return { area: a.label, roles: explicit, explicit: true, added: a.added };
-    const at = areaTokens(a.label);
-    const covering = rolePrimary.filter((rp) => [...areaTokens(rp.area)].some((t) => at.has(t))).map((rp) => rp.label);
-    return { area: a.label, roles: [...new Set(covering)], explicit: false, added: a.added };
-  }), [areas, rolePrimary, plan.coverage]);
+  const roles = useMemo(() => listenCoverageRoles(program), [program]);
+  const areas = useMemo(() => listenCoverageAreas(program, plan), [program, plan]);
+  const areaCoverage = useMemo(() => listenAreaCoverage(program, plan, roles, areas), [program, plan, roles, areas]);
   // The current covering roles of an area (explicit or inferred) — the base for
   // an edit, so unassigning from an inferred area materialises it correctly.
   const areaRolesNow = (area: string): string[] => areaCoverage.find((a) => a.area === area)?.roles ?? [];
@@ -109,61 +66,25 @@ export default function FrameCoveragePlan({ program, onSaveInputs }: {
   const confirmed = confirmedAt.length > 0;
   const addedRoles = roles.filter((r) => r.added).length;
 
-  // Persist a plan change to the fingerprinted `listenPlan` field — this is what
-  // stales the Discovery Kit — and re-open confirmation, since the scope moved.
-  // Accepts a PARTIAL overlay merged onto the current plan, so a coverage edit
-  // never has to restate roles/areas (and vice-versa). It ALSO stamps a
-  // `planRev` into the Listen, Envision and Show buckets: a non-underscore key,
-  // so it shifts each movement's input fingerprint and marks their artifacts
-  // stale — the Listen model and the whole Prototype now require regeneration
-  // against the new plan. The edge re-stamps it on regen, clearing the flag.
-  // ONE atomic write. The Frame bucket carries the new plan + reset confirmation;
-  // the planRev stamp rides into Listen/Envision/Show via `extraInputs` so all
-  // four buckets land in a SINGLE optimistic-version check. (Sequential writes
-  // raced their own predecessor's version → ConflictError flood.) `listenExtra`
-  // lets a caller fold Listen-bucket inputs — directory people, dismissals — into
-  // the same write instead of a separate racing call.
-  const writePlan = async (next: Partial<ListenPlanOverlay>, listenExtra?: Record<string, string>) => {
-    const merged: ListenPlanOverlay = { roles: plan.roles, areas: plan.areas, coverage: plan.coverage, dismissedAreas: plan.dismissedAreas, ...next };
-    const { frame, planRev } = listenPlanWrite(merged);
-    await onSaveInputs?.(
-      "frame",
-      frame,
-      { silent: true, extraInputs: {
-        listen: { planRev, ...(listenExtra ?? {}) },
-        envision: { planRev },
-        show: { planRev },
-      } },
-    );
-  };
-  // Rewrite every coverage list (used when a role is renamed or removed so the
-  // explicit assignments follow it).
+  // The plan-overlay writer is shared with the Discovery Kit matrix
+  // (listenCoverage.ts): it persists a PARTIAL overlay merged onto the current
+  // plan and stamps `planRev` into Listen/Envision/Show so the Discovery Kit and
+  // Prototype stale for regeneration — ONE atomic write per edit.
+  const writer = useMemo(() => makeListenPlanWriter(program, onSaveInputs), [program, onSaveInputs]);
+  // Rewrite every coverage list (used when a role is renamed so the explicit
+  // assignments follow it).
   const remapCoverageRoles = (fn: (roles: string[]) => string[]): Record<string, string[]> =>
     Object.fromEntries(Object.entries(plan.coverage).map(([area, list]) => [area, fn(list)]));
   // Assign / unassign a role to an area — the direct edit of the relationship.
   // The first edit of a derived row materialises its inferred set, then curates.
-  const setAreaRoles = (area: string, nextRoles: string[]) =>
-    void writePlan({ coverage: { ...plan.coverage, [area]: [...new Set(nextRoles)] } });
-
-  const dirEntry = (role: string) => ({
-    id: `dp-${Date.now().toString(36)}-${role.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 8)}`,
-    name: role, role, email: undefined, movementId: "listen", roleResolved: validateProgramRole(program, role).known,
-  });
+  const setAreaRoles = (area: string, nextRoles: string[]) => void writer.setAreaRoles(area, nextRoles);
 
   const addRole = async (raw: string) => {
     const role = raw.trim();
     if (!role || busy || !onSaveInputs) return;
     if (roles.some((r) => r.label.trim().toLowerCase() === role.toLowerCase())) { setRoleInput(""); return; }
     setBusy(true);
-    try {
-      // Single write: the new directory person rides the same call as the plan
-      // update (via listenExtra), so they never race each other's version check.
-      await writePlan(
-        { roles: [...plan.roles, role], areas: plan.areas },
-        { _directoryPeople: JSON.stringify([...readDirectoryPeople(program), dirEntry(role)]) },
-      );
-      setRoleInput("");
-    } finally { setBusy(false); }
+    try { await writer.addRole(role); setRoleInput(""); } finally { setBusy(false); }
   };
 
   // Rename a role. A rename is COSMETIC — it must not fire the plan's stale
@@ -210,30 +131,10 @@ export default function FrameCoveragePlan({ program, onSaveInputs }: {
   const removeRole = async (label: string, name?: string) => {
     if (busy || !onSaveInputs) return;
     setBusy(true);
-    try {
-      const key = label.trim().toLowerCase();
-      // Drop any operator-added directory person by this name…
-      const dir = readDirectoryPeople(program).filter((p) => !(p.movementId === "listen" && p.name.trim().toLowerCase() === key));
-      // …AND dismiss the role, so a SEEDED role (from the kit or ontology — e.g.
-      // "Customer Success Manager") also leaves the cast and regeneration won't
-      // resurrect it. Dismiss both its role label and its person name.
-      const dismissed = new Set(dismissedListenRoles(program));
-      dismissed.add(key);
-      if (name && name.trim()) dismissed.add(name.trim().toLowerCase());
-      // Single write: the Listen dismissal/directory drop rides writePlan's own
-      // call (via listenExtra) alongside the planRev cascade — removing a role
-      // moves scope, so the downstream artifacts SHOULD stale.
-      await writePlan(
-        {
-          roles: plan.roles.filter((r) => r.trim().toLowerCase() !== key),
-          coverage: remapCoverageRoles((list) => list.filter((r) => r.trim().toLowerCase() !== key)),
-        },
-        {
-          _directoryPeople: JSON.stringify(dir),
-          _dismissedListenRoles: JSON.stringify([...dismissed]),
-        },
-      );
-    } finally { setBusy(false); }
+    // Shared writer drops the operator-added directory person AND dismisses the
+    // role (label + person name), so a SEEDED role leaves the cast too and
+    // regeneration won't resurrect it, alongside the planRev stale cascade.
+    try { await writer.removeRole({ label, name }); } finally { setBusy(false); }
   };
 
   const addArea = async (raw: string) => {
@@ -241,8 +142,7 @@ export default function FrameCoveragePlan({ program, onSaveInputs }: {
     if (!area || busy || !onSaveInputs) return;
     if (areas.some((a) => a.label.trim().toLowerCase() === area.toLowerCase())) { setAreaInput(""); return; }
     setBusy(true);
-    try { await writePlan({ roles: plan.roles, areas: [...plan.areas, area] }); setAreaInput(""); }
-    finally { setBusy(false); }
+    try { await writer.addArea(area); setAreaInput(""); } finally { setBusy(false); }
   };
 
   const renameArea = async (from: string, to: string) => {
@@ -254,20 +154,17 @@ export default function FrameCoveragePlan({ program, onSaveInputs }: {
       // The coverage map is keyed by the area's LABEL — follow the rename.
       const cov = { ...plan.coverage };
       if (Object.prototype.hasOwnProperty.call(cov, from)) { cov[next] = cov[from]; delete cov[from]; }
-      await writePlan({ areas: plan.areas.map((a) => (a.trim().toLowerCase() === key ? next : a)), coverage: cov });
+      await writer.writePlan({ areas: plan.areas.map((a) => (a.trim().toLowerCase() === key ? next : a)), coverage: cov });
     } finally { setBusy(false); setEdit(null); }
   };
 
   const removeArea = async (label: string) => {
     if (busy || !onSaveInputs) return;
     setBusy(true);
-    const cov = { ...plan.coverage };
-    delete cov[label];
-    // Drop from the operator-added list AND record it as dismissed, so an
-    // ontology-DERIVED area can be deleted too (it won't re-derive into the plan).
-    const dismissed = [...new Set([...plan.dismissedAreas, label.trim()])];
-    try { await writePlan({ areas: plan.areas.filter((a) => a.trim().toLowerCase() !== label.trim().toLowerCase()), coverage: cov, dismissedAreas: dismissed }); }
-    finally { setBusy(false); }
+    // Shared writer drops the area from the operator-added list, records it as
+    // dismissed (so an ontology-DERIVED area can be deleted too), and clears its
+    // coverage entry.
+    try { await writer.removeArea(label); } finally { setBusy(false); }
   };
 
   const setConfirmed = (value: string) =>

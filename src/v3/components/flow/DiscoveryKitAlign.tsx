@@ -12,9 +12,9 @@
  */
 import { useState } from "react";
 import type { ProgramSummary } from "@/new/types";
-import { programAreas, GENERAL_AREA, stakeholderPrimaryArea } from "@/v3/components/flow/flowAreas";
 import { areaAccent, areaMonogram, stakeholderCollection } from "@/v3/components/flow/CollectBoard";
-import { resolveMovementStakeholders, readDirectoryPeople, dismissedListenRoles, validateProgramRole, readListenPlan, listenPlanWrite, type MovementStakeholder } from "@/v3/components/flow/flowStakeholders";
+import { resolveMovementStakeholders, readListenPlan, type MovementStakeholder } from "@/v3/components/flow/flowStakeholders";
+import { listenCoverageRoles, listenCoverageAreas, listenAreaCoverage, makeListenPlanWriter } from "@/v3/components/flow/listenCoverage";
 import { listInterviewPacks } from "@/v3/components/flow/flowPortal";
 import { movementEvidence, flowMovements } from "@/v3/components/flow/flowShellData";
 
@@ -22,8 +22,6 @@ const initials = (name: string): string => {
   const w = name.split(/[^A-Za-z0-9]+/).filter(Boolean);
   return ((w[0]?.[0] ?? "") + (w[1]?.[0] ?? "")).toUpperCase() || name.slice(0, 2).toUpperCase();
 };
-const areaTokens = (a: string): Set<string> =>
-  new Set(a.toLowerCase().split(/[^a-z0-9]+/).filter((t) => t && !["and", "the", "of", "amp"].includes(t)));
 
 type SaveInputs = (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; extraInputs?: Record<string, Record<string, string>> }) => Promise<void> | void;
 
@@ -35,96 +33,59 @@ export default function DiscoveryKitAlign({ program, onSaveInputs }: { program: 
   const editable = !!onSaveInputs;
 
   const plan = readListenPlan(program);
-  const areaNorm = (a: string) => a.trim().toLowerCase();
-  const directoryNames = new Set(readDirectoryPeople(program).filter((p) => p.movementId === "listen").map((p) => p.name.trim().toLowerCase()));
+  const writer = makeListenPlanWriter(program, onSaveInputs);
 
-  // People — one row per role/person (deduped), tagged whether operator-added.
-  const peopleSeen = new Map<string, { label: string; name?: string; added: boolean; s: MovementStakeholder }>();
-  for (const person of resolveMovementStakeholders(program, "listen")) {
-    const key = (person.role || person.name).trim().toLowerCase();
-    if (!key || peopleSeen.has(key)) continue;
-    peopleSeen.set(key, { label: person.role || person.name, name: person.isRole ? undefined : person.name, added: directoryNames.has(person.name.trim().toLowerCase()), s: person });
-  }
-  const people = [...peopleSeen.values()];
-
-  // Areas — derived (from the ontology) + operator-added, minus dismissed.
-  const dismissed = new Set(plan.dismissedAreas.map(areaNorm));
-  const derivedAreas = programAreas(program).filter((a) => a && a !== GENERAL_AREA);
-  const seenA = new Set(derivedAreas.map((a) => a.toLowerCase()));
-  const shown = [...derivedAreas.map((a) => ({ label: a, added: false })), ...plan.areas.filter((a) => !seenA.has(a.toLowerCase())).map((a) => ({ label: a, added: true }))]
-    .filter((a) => !dismissed.has(areaNorm(a.label)));
-
-  // Coverage: explicit list wins; else the title-inferred match.
-  const rolePrimary = people.map((r) => ({ label: r.label, area: stakeholderPrimaryArea(program, r.name || r.label, r.label) }));
-  const areaCoverage = shown.map((a) => {
-    const explicit = plan.coverage[a.label];
-    if (explicit) return { area: a.label, roles: explicit };
-    const at = areaTokens(a.label);
-    const covering = rolePrimary.filter((rp) => [...areaTokens(rp.area)].some((t) => at.has(t))).map((rp) => rp.label);
-    return { area: a.label, roles: [...new Set(covering)] };
-  });
+  // People, areas and coverage all come from the ONE shared model.
+  const people = listenCoverageRoles(program);
+  const shown = listenCoverageAreas(program, plan);
+  const areaCoverage = listenAreaCoverage(program, plan, people, shown);
   const areaRolesNow = (area: string): string[] => areaCoverage.find((a) => a.area === area)?.roles ?? [];
   const covers = (roleLabel: string, area: string): boolean => areaRolesNow(area).includes(roleLabel);
 
-  // Heard footer — of the people covering an area, how many are heard.
+  // Heard footer — of the people covering an area, how many are heard. Resolve
+  // the stakeholder record by role/name key so stakeholderCollection (the same
+  // source the collect board and People page use) can score it.
   const listen = flowMovements().find((m) => m.id === "listen");
   const ev = listen ? movementEvidence(program, listen) : [];
   const packs = listInterviewPacks(program);
-  const heardByLabel = new Map(people.map((p) => [p.label, stakeholderCollection("listen", p.s, packs, ev).heard] as const));
+  const sByLabel = new Map<string, MovementStakeholder>();
+  for (const s of resolveMovementStakeholders(program, "listen")) {
+    const key = (s.role || s.name).trim().toLowerCase();
+    if (key && !sByLabel.has(key)) sByLabel.set(key, s);
+  }
+  const heardByLabel = new Map(people.map((p) => {
+    const s = sByLabel.get(p.label.trim().toLowerCase());
+    return [p.label, s ? stakeholderCollection("listen", s, packs, ev).heard : false] as const;
+  }));
   const footer = shown.map((a) => {
     const covering = areaRolesNow(a.label);
     const heard = covering.filter((l) => heardByLabel.get(l)).length;
     return { area: a.label, total: covering.length, heard };
   });
 
-  // ── writes ──────────────────────────────────────────────────────────────
-  const writePlan = async (next: Partial<typeof plan>, listenExtra?: Record<string, string>) => {
-    if (!onSaveInputs) return;
-    const merged = { roles: plan.roles, areas: plan.areas, coverage: plan.coverage, dismissedAreas: plan.dismissedAreas, ...next };
-    const { frame, planRev } = listenPlanWrite(merged);
-    await onSaveInputs("frame", frame, { silent: true, extraInputs: { listen: { planRev, ...(listenExtra ?? {}) }, envision: { planRev }, show: { planRev } } });
-  };
-  const toggleCell = async (roleLabel: string, area: string) => {
+  // ── writes — thin wrappers over the shared writer, adding busy + input UX ──
+  const guard = async (fn: () => Promise<void> | void) => {
     if (busy || !editable) return; setBusy(true);
-    try {
-      const now = areaRolesNow(area);
-      const next = now.includes(roleLabel) ? now.filter((r) => r !== roleLabel) : [...now, roleLabel];
-      await writePlan({ coverage: { ...plan.coverage, [area]: [...new Set(next)] } });
-    } finally { setBusy(false); }
+    try { await fn(); } finally { setBusy(false); }
   };
-  const addArea = async () => {
-    const a = areaInput.trim();
-    if (!a || busy || !editable) return;
-    if (shown.some((x) => x.label.toLowerCase() === a.toLowerCase())) { setAreaInput(""); return; }
-    setBusy(true);
-    try { await writePlan({ areas: [...plan.areas, a], dismissedAreas: plan.dismissedAreas.filter((d) => areaNorm(d) !== areaNorm(a)) }); setAreaInput(""); } finally { setBusy(false); }
-  };
-  const removeArea = async (area: string) => {
-    if (busy || !editable) return; setBusy(true);
-    try { await writePlan({ dismissedAreas: [...new Set([...plan.dismissedAreas, area])], areas: plan.areas.filter((x) => x.toLowerCase() !== area.toLowerCase()) }); } finally { setBusy(false); }
-  };
-  const dirEntry = (role: string) => ({
-    id: `dp-${Date.now().toString(36)}-${role.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 8)}`,
-    name: role, role, email: undefined, movementId: "listen", roleResolved: validateProgramRole(program, role).known,
+  const toggleCell = (roleLabel: string, area: string) => guard(() => {
+    const now = areaRolesNow(area);
+    return writer.setAreaRoles(area, now.includes(roleLabel) ? now.filter((r) => r !== roleLabel) : [...now, roleLabel]);
   });
-  const addRole = async () => {
+  const addArea = () => {
+    const a = areaInput.trim();
+    if (!a) return Promise.resolve();
+    if (shown.some((x) => x.label.toLowerCase() === a.toLowerCase())) { setAreaInput(""); return Promise.resolve(); }
+    return guard(async () => { await writer.addArea(a); setAreaInput(""); });
+  };
+  const removeArea = (area: string) => guard(() => writer.removeArea(area));
+  const addRole = () => {
     const role = roleInput.trim();
-    if (!role || busy || !editable) return;
-    if (people.some((r) => r.label.toLowerCase() === role.toLowerCase())) { setRoleInput(""); return; }
-    setBusy(true);
-    try { await writePlan({ roles: [...plan.roles, role] }, { _directoryPeople: JSON.stringify([...readDirectoryPeople(program), dirEntry(role)]) }); setRoleInput(""); } finally { setBusy(false); }
+    if (!role) return Promise.resolve();
+    if (people.some((r) => r.label.toLowerCase() === role.toLowerCase())) { setRoleInput(""); return Promise.resolve(); }
+    return guard(async () => { await writer.addRole(role); setRoleInput(""); });
   };
-  const removeRole = async (r: { label: string; name?: string }) => {
-    if (busy || !editable) return; setBusy(true);
-    try {
-      const key = r.label.trim().toLowerCase();
-      const dropName = (r.name || r.label).trim().toLowerCase();
-      const dir = readDirectoryPeople(program).filter((p) => p.name.trim().toLowerCase() !== dropName);
-      const dm = new Set(dismissedListenRoles(program)); dm.add(key); if (r.name) dm.add(dropName);
-      const cov = Object.fromEntries(Object.entries(plan.coverage).map(([area, list]) => [area, (list as string[]).filter((x) => x !== r.label)]));
-      await writePlan({ roles: plan.roles.filter((x) => x.toLowerCase() !== key), coverage: cov }, { _directoryPeople: JSON.stringify(dir), _dismissedListenRoles: JSON.stringify([...dm]) });
-    } finally { setBusy(false); }
-  };
+  const removeRole = (r: { label: string; name?: string }) => guard(() => writer.removeRole(r));
 
   const gridCols = `230px repeat(${shown.length}, minmax(96px, 1fr))${editable ? " 44px" : ""}`;
   const spanners = people.filter((p) => shown.filter((a) => covers(p.label, a.label)).length > 1);

@@ -28,7 +28,8 @@ import DiscoveryKitAlign from "@/v3/components/flow/DiscoveryKitAlign";
 import { stakeholderEmail } from "@/v3/components/flow/flowMeetings";
 import { readMetricRegistry, metricConsistency } from "@/v3/components/flow/flowMetricRegistry";
 import { routeAttachedDocument, buildRoutedBlocks, type DocRoute } from "@/v3/components/flow/flowDocRouting";
-import { listPortalInbox, movementValidationCoverage } from "@/v3/components/flow/flowPortal";
+import { listPortalInbox, movementValidationCoverage, listInterviewPacks } from "@/v3/components/flow/flowPortal";
+import { stakeholderCollection } from "@/v3/components/flow/CollectBoard";
 import { governedExceptionsForInbox, readGovernedExceptions, withResolvedException } from "@/v3/components/flow/flowExceptions";
 import { approvalEvidenceEntries, listApprovalResponses } from "@/v3/components/flow/flowApprovals";
 import { listSnapshots, type BlobSnapshot } from "@/v3/lib/blobSnapshots";
@@ -2170,14 +2171,16 @@ const peopleIdentity = (value: string): string =>
 function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { program: ProgramSummary; onSaveInputs?: FlowShellProps["onSaveInputs"]; onRenamePerson?: FlowShellProps["onRenamePerson"]; onGoInbox?: () => void }) {
   const [q, setQ] = useState("");
   const query = q.trim().toLowerCase();
-  const evidence = useMemo(
-    () => flowMovements().flatMap((m) => movementEvidence(program, m)),
-    [program],
-  );
   // The FULL Listen roster — including role placeholders ("Recruitment
   // Operations Staff — TBC"): a role awaiting a person is still someone the
   // programme must collect from, so it appears here with a bind-name input
   // instead of silently vanishing from the People page.
+  // "Heard" uses the SAME source as the collect board and the People matrix —
+  // stakeholderCollection over Listen evidence + packs — so the three surfaces
+  // never disagree (a naive name-substring match false-positived on collisions
+  // and ignored open follow-ups).
+  const listenEvidence = useMemo(() => { const m = flowMovements().find((x) => x.id === "listen"); return m ? movementEvidence(program, m) : []; }, [program]);
+  const listenPacks = useMemo(() => listInterviewPacks(program), [program]);
   const roster = useMemo(() => resolveMovementStakeholders(program, "listen")
     .map((entry) => ({
       where: "Listen roster",
@@ -2185,8 +2188,8 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
       name: entry.isRole ? "" : entry.name,
       role: entry.role || entry.name,
       email: entry.isRole ? null : stakeholderEmail(program, entry.name),
-      heard: !entry.isRole && evidence.some((e) => e.who.toLowerCase().includes(entry.name.trim().toLowerCase())),
-    })), [program, evidence]);
+      heard: !entry.isRole && stakeholderCollection("listen", entry, listenPacks, listenEvidence).heard,
+    })), [program, listenPacks, listenEvidence]);
   const roles = useMemo(() => deliveryRoleDirectory(program).map((entry) => ({
     where: entry.movementId.charAt(0).toUpperCase() + entry.movementId.slice(1),
     name: entry.bound?.name ?? "", role: entry.role,
