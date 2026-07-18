@@ -8536,3 +8536,68 @@ select.v3fs-dir-in {cursor:pointer}
 /* Program-level Focus hero on Frame · Ship · Evolve (next chrome only) — the
    workstream phases carry their own Focus card inside the area board. */
 .v3fs-nb.v3fs-nb-solo {margin:8px 0 4px}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Discovery Kit alignment — people × areas matrix (next chrome). Shares the
+   --v3/--fs tokens; flips with the theme.
+   ══════════════════════════════════════════════════════════════════════════ */
+.v3fs-dka {background:var(--fs-card);border:1px solid var(--fs-line);border-radius:16px;padding:18px 20px;box-shadow:var(--fs-pop)}
+.v3fs-dka-h {display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap}
+.v3fs-dka-eyebrow {font-family:var(--v3-font-mono, ui-monospace);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--v3-accent-2)}
+.v3fs-dka-title {margin:3px 0 0;font-size:1.22rem;font-weight:750;letter-spacing:-.01em;color:var(--v3-text-primary)}
+.v3fs-dka-sub {margin:6px 0 0;font-size:12.5px;color:var(--v3-text-muted);max-width:62ch}
+.v3fs-dka-views {margin-left:auto;display:flex;gap:3px;background:color-mix(in srgb, var(--v3-accent) 8%, transparent);border-radius:10px;padding:3px}
+.v3fs-dka-views button {border:0;background:transparent;border-radius:8px;padding:7px 13px;font-size:12.5px;font-weight:650;color:var(--v3-text-muted);cursor:pointer}
+.v3fs-dka-views button.on {background:var(--fs-card);color:var(--v3-accent);box-shadow:0 1px 3px rgba(23,22,43,.12)}
+
+.v3fs-dka-empty {margin-top:16px;padding:22px;text-align:center;font-size:13px;color:var(--v3-text-muted);border:1px dashed var(--fs-line);border-radius:12px}
+
+/* matrix */
+.v3fs-dka-matrixwrap {overflow-x:auto;margin-top:16px}
+.v3fs-dka-matrix {display:grid;min-width:560px;border:1px solid var(--fs-line);border-radius:12px;overflow:hidden;background:var(--fs-card)}
+.v3fs-dka-corner {grid-column:1;font-family:var(--v3-font-mono, ui-monospace);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--v3-text-muted);
+  padding:12px 14px;display:flex;align-items:center;background:color-mix(in srgb, var(--v3-accent) 4%, transparent);border-bottom:1px solid var(--fs-line)}
+.v3fs-dka-ahdr {display:flex;flex-direction:column;align-items:center;gap:3px;text-align:center;justify-content:center;padding:11px 8px;
+  background:color-mix(in srgb, var(--v3-accent) 4%, transparent);border-bottom:1px solid var(--fs-line);border-left:1px solid var(--fs-line)}
+.v3fs-dka-ahdr .mono {width:24px;height:24px;border-radius:7px;display:grid;place-items:center;font-size:9.5px;font-weight:700;
+  background:color-mix(in srgb, var(--acc, var(--v3-accent)) 16%, transparent);color:var(--acc, var(--v3-accent))}
+.v3fs-dka-ahdr .an {font-weight:650;font-size:11.5px;color:var(--v3-text-primary);line-height:1.15}
+.v3fs-dka-person {grid-column:1;display:flex;align-items:center;gap:10px;padding:11px 14px;border-top:1px solid var(--fs-line);min-width:0}
+.v3fs-dka-person.spans {background:linear-gradient(90deg, color-mix(in srgb, var(--v3-accent) 7%, transparent), transparent)}
+.v3fs-dka-person .av {width:30px;height:30px;border-radius:9px;flex:none;display:grid;place-items:center;font-size:11px;font-weight:700;
+  background:color-mix(in srgb, var(--v3-accent) 13%, transparent);color:var(--v3-accent)}
+.v3fs-dka-person .who {display:flex;flex-direction:column;min-width:0}
+.v3fs-dka-person .nm {font-weight:650;font-size:13px;color:var(--v3-text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.v3fs-dka-person .rl {font-size:11px;color:var(--v3-text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.v3fs-dka-person .spanbadge {margin-left:auto;font-family:var(--v3-font-mono, ui-monospace);font-size:9px;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--v3-accent);background:color-mix(in srgb, var(--v3-accent) 12%, transparent);border-radius:20px;padding:2px 7px;white-space:nowrap}
+.v3fs-dka-cell {display:grid;place-items:center;padding:11px 8px;border-top:1px solid var(--fs-line);border-left:1px solid var(--fs-line)}
+.v3fs-dka-dot {width:20px;height:20px;border-radius:50%;border:1.6px solid var(--fs-line);display:grid;place-items:center}
+.v3fs-dka-dot.on {background:var(--v3-accent);border-color:var(--v3-accent)}
+.v3fs-dka-dot.on::after {content:"";width:7px;height:7px;border-radius:50%;background:#fff}
+.v3fs-dka-foot {padding:11px 14px;background:color-mix(in srgb, var(--v3-accent) 4%, transparent);border-top:1px solid var(--fs-line)}
+.v3fs-dka-foot.lbl {grid-column:1;font-family:var(--v3-font-mono, ui-monospace);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--v3-text-muted);display:flex;align-items:center}
+.v3fs-dka-foot.cov {display:flex;flex-direction:column;align-items:center;gap:5px;border-left:1px solid var(--fs-line)}
+.v3fs-dka-foot.cov .n {font-weight:700;font-size:12.5px;font-variant-numeric:tabular-nums;color:var(--v3-text-primary)}
+.v3fs-dka-foot.cov.full .n {color:var(--color-success)}
+.v3fs-dka-foot.cov .bar {width:74%;height:5px;border-radius:20px;overflow:hidden;background:color-mix(in srgb, var(--v3-accent) 14%, transparent)}
+.v3fs-dka-foot.cov .bar i {display:block;height:100%;border-radius:20px;background:var(--v3-accent)}
+
+/* by-person */
+.v3fs-dka-byperson {margin-top:16px;display:flex;flex-direction:column;gap:9px}
+.v3fs-dka-pcard {display:flex;align-items:center;gap:12px;flex-wrap:wrap;border:1px solid var(--fs-line);border-radius:12px;padding:12px 14px}
+.v3fs-dka-pcard .av {width:32px;height:32px;border-radius:9px;flex:none;display:grid;place-items:center;font-size:12px;font-weight:700;
+  background:color-mix(in srgb, var(--v3-accent) 13%, transparent);color:var(--v3-accent)}
+.v3fs-dka-pcard .who {display:flex;flex-direction:column}
+.v3fs-dka-pcard .nm {font-weight:650;font-size:13.5px;color:var(--v3-text-primary)}
+.v3fs-dka-pcard .rl {font-size:11.5px;color:var(--v3-text-muted)}
+.v3fs-dka-pcard .areas {margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}
+.v3fs-dka-pcard .achip {font-size:11.5px;font-weight:600;border-radius:20px;padding:4px 11px;
+  color:var(--acc, var(--v3-accent));background:color-mix(in srgb, var(--acc, var(--v3-accent)) 12%, transparent)}
+.v3fs-dka-pcard .achip.none {color:var(--v3-text-muted);background:color-mix(in srgb, var(--v3-text-muted) 12%, transparent)}
+
+.v3fs-dka-note {margin-top:15px;display:flex;gap:11px;align-items:flex-start;background:color-mix(in srgb, var(--v3-accent) 5%, transparent);border:1px solid color-mix(in srgb, var(--v3-accent) 20%, transparent);border-radius:12px;padding:12px 14px}
+.v3fs-dka-note .ic {width:28px;height:28px;border-radius:8px;flex:none;display:grid;place-items:center;font-size:14px;background:color-mix(in srgb, var(--v3-accent) 13%, transparent);color:var(--v3-accent)}
+.v3fs-dka-note p {margin:0;font-size:12.5px;color:var(--v3-text-primary);line-height:1.5}
+.v3fs-dka-note b {color:var(--v3-accent)}
+.v3fs-dka-hint {margin:12px 2px 0;font-size:11px;color:var(--v3-text-muted);line-height:1.5}

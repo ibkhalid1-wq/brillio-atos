@@ -8,6 +8,7 @@ import ProductOwnerCockpit from "@/v3/components/flow/ProductOwnerCockpit";
 import ListenCockpit from "@/v3/components/flow/ListenCockpit";
 import { loopState } from "@/v3/components/flow/flowLoop";
 import FlowNextBoard from "@/v3/components/flow/FlowNextBoard";
+import DiscoveryKitAlign from "@/v3/components/flow/DiscoveryKitAlign";
 // The artifact studio pulls React Flow and every WYSIWYG editor — a heavy
 // chunk only needed when a document is opened. Lazy-load it so it never
 // weighs on the initial Flow render.
@@ -412,6 +413,11 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
               </div>
             </div>
           </div>
+        </div>
+      ) : null}
+      {next && active === "frame" ? (
+        <div className="v3fs-nb v3fs-nb-solo">
+          <DiscoveryKitAlign program={program} />
         </div>
       ) : null}
       {rows.filter(({ movement }) => movement.id === active).map(({ movement, artifacts, evidence }, index) => {
