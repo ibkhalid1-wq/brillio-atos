@@ -309,9 +309,33 @@ export function kitGaps(program: ProgramSummary, movementId: string, opts?: { ga
   // sponsor's follow-up script (and its async link) automatically.
   if (movementId === "frame") {
     // A persona nobody can speak for is the sponsor's to place: who faces
-    // them, who owns their part of the workflow?
+    // them, who owns their part of the workflow? The kit document's
+    // spokenForBy is STATIC (it moves on regeneration) — so the check also
+    // consults the LIVE record: the Discovery-Kit matrix's explicit coverage
+    // (listenPlan.coverage) and the operator-added people (_directoryPeople).
+    // Mapping an area to a role, or adding a person for it, clears the ask
+    // immediately — no regeneration needed.
+    const tokens = (label: string): string[] => label.toLowerCase().split(/[^a-z0-9]+/)
+      .map((token) => token.replace(/s$/, "")).filter((token) => token.length >= 3);
+    const liveCovered = new Set<string>();
+    try {
+      const plan = JSON.parse(String(readMovementInputs(program, "frame").listenPlan ?? "{}")) as Record<string, unknown>;
+      const coverage = plan && typeof plan.coverage === "object" && plan.coverage ? plan.coverage as Record<string, unknown> : {};
+      for (const [area, who] of Object.entries(coverage)) {
+        if (Array.isArray(who) && who.length) for (const token of tokens(area)) liveCovered.add(token);
+      }
+    } catch { /* no plan overlay */ }
+    try {
+      const dir = JSON.parse(String(readMovementInputs(program, "listen")._directoryPeople ?? "[]")) as unknown[];
+      for (const entry of dir) {
+        if (entry && typeof entry === "object") {
+          for (const token of tokens(`${String((entry as Record<string, unknown>).role ?? "")} ${String((entry as Record<string, unknown>).name ?? "")}`)) liveCovered.add(token);
+        }
+      }
+    } catch { /* no directory */ }
+    const spokenForLive = (personaName: string): boolean => tokens(personaName).some((token) => liveCovered.has(token));
     const personas = kitPersonas(program) ?? [];
-    for (const persona of personas.filter((entry) => entry.unrepresented || entry.spokenForBy.length === 0)) {
+    for (const persona of personas.filter((entry) => (entry.unrepresented || entry.spokenForBy.length === 0) && !spokenForLive(entry.name))) {
       gaps.push(`Who can speak for the ${persona.name}${persona.kind === "external" ? " — the person who faces them, if they can't be in the room" : ""}?`);
     }
     for (const row of readContradictions(program, true)) {
