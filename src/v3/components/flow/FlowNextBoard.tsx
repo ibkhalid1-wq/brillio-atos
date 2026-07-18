@@ -66,7 +66,15 @@ export default function FlowNextBoard({ program, phase, onOpenWork }: {
         _need: need,
       };
     }
-    return { mark: "◎", title: `${ls.areasConverged}/${ls.areasTotal} areas signed off — awaiting verdicts.`, sub: "Each area converges on its own; the build merges once all clear.", cta: "Open the workspace" };
+    // A prototype exists but no verdicts are in yet — validation hasn't begun.
+    const firstArea = (rows.find((r) => r.listenReady) ?? rows[0])?.area;
+    return {
+      mark: "◎",
+      title: "The prototype is built — gather pilot verdicts to start validating.",
+      sub: "Validate one area at a time on the board; each area converges on its own before the build merges for Ship.",
+      cta: firstArea ? `Validate ${firstArea}` : "Open the workspace",
+      area: firstArea,
+    };
   })();
 
   const goFocus = () => { if ((focus as { area?: string }).area) setFocusArea((focus as { area?: string }).area!); else onOpenWork(); };
@@ -135,25 +143,35 @@ function Board({ program, phase, rows, ls, onFocus }: {
       <div className="v3fs-nb-merge"><span className="v3fs-nb-merge-ic" aria-hidden="true">⤷</span><div>All areas’ prototypes <b>merge into one build</b> before Ship — <b>{ls.areasConverged} of {ls.areasTotal || rows.length}</b> converged. Each area builds &amp; validates its own slice first.</div></div>
       {(rows.length ? rows.map((r) => r.area) : ls.areas.map((a) => a.area)).map((area) => {
         const P = byArea.get(area);
-        if (!P || P.total === 0) {
+        // A lane is only truly "not started" when NO prototype exists yet (still
+        // in design). Once a build exists, every area is in validation — even
+        // with zero verdicts it's "awaiting verdicts", not "not started".
+        if (!ls.hasPrototype) {
           const lp = rows.find((r) => r.area === area);
           return (
             <div key={area} className="v3fs-nb-lane idle">
               <div className="v3fs-nb-lname" style={{ "--acc": areaAccent(area) } as React.CSSProperties}><span className="v3fs-nb-mono" aria-hidden="true">{areaMonogram(area)}</span><span>{area}</span></div>
-              <div className="v3fs-nb-lstat"><div className="v3fs-nb-b"><span className="v3fs-nb-k">Status</span><span className="v3fs-nb-v idle">{lp && lp.listenReady ? "Ready — no verdicts yet" : "Still in Listen — prototype not started"}</span></div></div>
+              <div className="v3fs-nb-lstat"><div className="v3fs-nb-b"><span className="v3fs-nb-k">Status</span><span className="v3fs-nb-v idle">{lp && lp.listenReady ? "Ready — prototype in design" : `Still in Listen — ${lp?.heard.length ?? 0}/${lp?.personas.length ?? 0} heard`}</span></div></div>
               <button type="button" className="v3fs-nb-focusbtn" onClick={() => onFocus(area)}>Focus →</button>
             </div>
           );
         }
+        const accepted = P?.accepted ?? 0;
+        const changes = (P?.objections ?? 0) + (P?.changes ?? 0);
+        const pending = P?.pending ?? 0;
+        const total = P?.total ?? 0;
+        const converged = P?.converged ?? false;
         return (
           <div key={area} className="v3fs-nb-lane">
             <div className="v3fs-nb-lname" style={{ "--acc": areaAccent(area) } as React.CSSProperties}><span className="v3fs-nb-mono" aria-hidden="true">{areaMonogram(area)}</span><span>{area}</span></div>
             <div className="v3fs-nb-lstat">
               <div className="v3fs-nb-b"><span className="v3fs-nb-k">Round</span><span className="v3fs-nb-v">Round {ls.round}</span></div>
-              <div className="v3fs-nb-b"><span className="v3fs-nb-k">Verdicts</span><span className="v3fs-nb-v v3fs-nb-vd"><span className="vd ok">{P.accepted} ✓</span><span className="vd no">{P.objections + P.changes} ✕</span><span className="vd wait">{P.pending} ⧗</span></span></div>
+              <div className="v3fs-nb-b"><span className="v3fs-nb-k">Verdicts</span>{total === 0
+                ? <span className="v3fs-nb-v idle">awaiting verdicts</span>
+                : <span className="v3fs-nb-v v3fs-nb-vd"><span className="vd ok">{accepted} ✓</span><span className="vd no">{changes} ✕</span><span className="vd wait">{pending} ⧗</span></span>}</div>
             </div>
-            {P.converged ? <span className="v3fs-nb-tag close">signed off</span> : area === closest ? <span className="v3fs-nb-tag close">closest</span> : <span className="v3fs-nb-tag mid">iterating</span>}
-            <button type="button" className="v3fs-nb-focusbtn" onClick={() => onFocus(area)}>Focus →</button>
+            {converged ? <span className="v3fs-nb-tag close">signed off</span> : total === 0 ? <span className="v3fs-nb-tag mid">to validate</span> : area === closest ? <span className="v3fs-nb-tag close">closest</span> : <span className="v3fs-nb-tag mid">iterating</span>}
+            <button type="button" className="v3fs-nb-focusbtn" onClick={() => onFocus(area)}>Validate →</button>
           </div>
         );
       })}
@@ -219,21 +237,27 @@ function FocusedArea({ program, phase, area, rows, ls, onBack, onOpenWork }: {
     );
   }
 
-  // Prototype focused
+  // Prototype focused. Validation lives HERE on the board (verdicts + change
+  // requests per area); the workspace is design-only.
   const P: AreaLoop | undefined = ls.areas.find((x) => x.area === area);
   const reqs = changeRequests(program).filter((c) => c.area === area);
-  if (!P || P.total === 0) {
+  if (!ls.hasPrototype) {
     const r = rows.find((x) => x.area === area);
     return (
       <>
         {back}
         <div className="v3fs-nb-gatebox">
-          <b>Prototype hasn’t started for {area}.</b>
-          {r && r.listenReady ? "This area is fully heard — its build begins as Design assembles the prototype." : `This area is still in Listen — ${r?.heard.length ?? 0} of ${r?.personas.length ?? 0} heard. Its build begins once the picture is complete.`}
+          <b>The prototype is still in design.</b>
+          {r && r.listenReady ? "This area is fully heard — Design is assembling the build. Validation opens here once there’s a prototype to try." : `This area is still in Listen — ${r?.heard.length ?? 0} of ${r?.personas.length ?? 0} heard. Its build begins once the picture is complete.`}
+          <div className="v3fs-nb-gate-act"><button type="button" className="v3fs-nb-open" onClick={onOpenWork}>Open the design workspace →</button></div>
         </div>
       </>
     );
   }
+  const accepted = P?.accepted ?? 0;
+  const changes = (P?.objections ?? 0) + (P?.changes ?? 0);
+  const pending = P?.pending ?? 0;
+  const total = P?.total ?? 0;
   return (
     <>
       {back}
@@ -242,19 +266,24 @@ function FocusedArea({ program, phase, area, rows, ls, onBack, onOpenWork }: {
           <p className="v3fs-nb-ztag">This area · Prototype</p>
           <div className="v3fs-nb-prog"><span className="big">Round {ls.round}</span></div>
           <ul className="v3fs-nb-produces">
-            <li><span className={`ic ${ls.hasPrototype ? "ok" : "dot"}`}>{ls.hasPrototype ? "✓" : "○"}</span> Clickable prototype</li>
-            <li><span className={`ic ${P.pending === 0 ? "ok" : "wip"}`}>{P.pending === 0 ? "✓" : "●"}</span> Pilot verdicts</li>
+            <li><span className="ic ok">✓</span> Clickable prototype</li>
+            <li><span className={`ic ${total > 0 && pending === 0 ? "ok" : "wip"}`}>{total > 0 && pending === 0 ? "✓" : "●"}</span> Pilot verdicts</li>
           </ul>
           <div className="v3fs-nb-ready"><b>Ready when</b> the sponsor and a majority of this area’s pilots approve. Then it merges toward Ship.</div>
+          <div className="v3fs-nb-gate-act"><button type="button" className="v3fs-nb-open ghost" onClick={onOpenWork}>Open the design workspace →</button></div>
         </div>
         <div className="v3fs-nb-zone">
-          <p className="v3fs-nb-ztag">The work · verdicts</p>
-          <div className="v3fs-nb-worksum">
-            <div className="v3fs-nb-ws"><span className="n ok">{P.accepted}</span><span className="l">approved</span></div>
-            <div className="v3fs-nb-ws"><span className="n no">{P.objections + P.changes}</span><span className="l">change{P.objections + P.changes === 1 ? "" : "s"}</span></div>
-            <div className="v3fs-nb-ws"><span className="n wait">{P.pending}</span><span className="l">pending</span></div>
-          </div>
-          <button type="button" className="v3fs-nb-open" onClick={onOpenWork}>Open the validation board →</button>
+          <p className="v3fs-nb-ztag">Validate · verdicts</p>
+          {total === 0 ? (
+            <p className="v3fs-nb-hint" style={{ marginTop: 0 }}>No verdicts yet — pilots weigh in from their demo links. Their responses land here as you gather them.</p>
+          ) : (
+            <div className="v3fs-nb-worksum">
+              <div className="v3fs-nb-ws"><span className="n ok">{accepted}</span><span className="l">approved</span></div>
+              <div className="v3fs-nb-ws"><span className="n no">{changes}</span><span className="l">change{changes === 1 ? "" : "s"}</span></div>
+              <div className="v3fs-nb-ws"><span className="n wait">{pending}</span><span className="l">pending</span></div>
+            </div>
+          )}
+          <p className="v3fs-nb-hint">Validation happens here on the board — one area at a time.</p>
         </div>
         <div className="v3fs-nb-zone">
           <p className="v3fs-nb-ztag">The record · change requests</p>

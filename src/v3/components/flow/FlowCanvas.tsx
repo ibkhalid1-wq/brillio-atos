@@ -144,6 +144,9 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
   // flips true once the operator drops into the full workspace for a phase.
   const [nextWork, setNextWork] = useState(false);
   useEffect(() => { setRailFocus(null); setRailRead(null); setRailHover(false); setNextWork(false); }, [active]);
+  // Reimagined chrome: the Prototype workspace is DESIGN-only (validation lives
+  // on the area board), so the loop never rests on the Validate (show) body.
+  useEffect(() => { if (next && active === "show") setActive("envision"); }, [next, active]);
   // Hover-intent: the rail collapses on a GRACE DELAY, not on the first pixel
   // the pointer strays — and re-entering cancels the collapse. Pinning keeps
   // hover alive through the layout shift so the panel never flaps.
@@ -621,7 +624,11 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
                   (loop state per area) with the Design/Validate cockpit folded
                   under it, so it reads as a single surface — not two competing
                   dashboards. The stage tabs + studios below open on demand. */}
-              {movement.id === "envision" || movement.id === "show" ? (
+              {/* The Design/Validate switch is the classic-chrome loop control. In
+                  the reimagined chrome the workspace is DESIGN-only — validation
+                  moves to the area board (operator goes back to Prototype → an
+                  area to validate), so the switch is hidden here. */}
+              {(movement.id === "envision" || movement.id === "show") && !next ? (
                 <div className="v3fs-loopswitch" role="tablist" aria-label="Design or Validate">
                   <button type="button" role="tab" aria-selected={active === "envision"}
                     className={`v3fs-loopswitch-b${active === "envision" ? " on" : ""}`} onClick={() => setActive("envision")}>

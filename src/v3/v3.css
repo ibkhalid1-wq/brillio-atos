@@ -8639,3 +8639,8 @@ select.v3fs-dir-in {cursor:pointer}
 .v3fs-gp-d {font-size:11px;color:var(--v3-text-muted);line-height:1.35}
 .v3fs-gp-note {font-size:12px;color:var(--v3-text-muted);margin:13px 0 0;line-height:1.5}
 .v3fs-gp-note b {color:var(--v3-accent)}
+
+/* Focused prototype: design-workspace link + gatebox action */
+.v3fs-nb-gate-act {margin-top:13px}
+.v3fs-nb-open.ghost {background:transparent;color:var(--v3-accent);border:1px solid var(--v3-accent)}
+.v3fs-nb-open.ghost:hover {background:color-mix(in srgb, var(--v3-accent) 8%, transparent);filter:none}
