@@ -88,7 +88,6 @@ export default function DiscoveryKitAlign({ program, onSaveInputs }: { program: 
   const removeRole = (r: { label: string; name?: string }) => guard(() => writer.removeRole(r));
 
   const gridCols = `230px repeat(${shown.length}, minmax(96px, 1fr))${editable ? " 44px" : ""}`;
-  const spanners = people.filter((p) => shown.filter((a) => covers(p.label, a.label)).length > 1);
 
   return (
     <div className={`v3fs-dka${busy ? " busy" : ""}`}>
@@ -174,13 +173,6 @@ export default function DiscoveryKitAlign({ program, onSaveInputs }: { program: 
             <input value={areaInput} onChange={(e) => setAreaInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void addArea(); }} placeholder="Add an area…" aria-label="Add an area" />
             <button type="button" className="v3fs-nb-open sm" disabled={busy || !areaInput.trim()} onClick={() => void addArea()}>+ Area</button>
           </div>
-        </div>
-      ) : null}
-
-      {spanners.length ? (
-        <div className="v3fs-dka-note">
-          <span className="ic" aria-hidden="true">✉</span>
-          <p><b>Asked once.</b> {spanners.slice(0, 3).map((p) => (p.name || p.label).split(" ")[0]).join(", ")}{spanners.length > 3 ? ` and ${spanners.length - 3} more` : ""} each span multiple areas — one interview covers everything they touch, counting toward every area they cover.</p>
         </div>
       ) : null}
 

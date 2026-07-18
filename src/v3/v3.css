@@ -8539,10 +8539,6 @@ select.v3fs-dir-in {cursor:pointer}
   color:var(--acc, var(--v3-accent));background:color-mix(in srgb, var(--acc, var(--v3-accent)) 12%, transparent)}
 .v3fs-dka-pcard .achip.none {color:var(--v3-text-muted);background:color-mix(in srgb, var(--v3-text-muted) 12%, transparent)}
 
-.v3fs-dka-note {margin-top:15px;display:flex;gap:11px;align-items:flex-start;background:color-mix(in srgb, var(--v3-accent) 5%, transparent);border:1px solid color-mix(in srgb, var(--v3-accent) 20%, transparent);border-radius:12px;padding:12px 14px}
-.v3fs-dka-note .ic {width:28px;height:28px;border-radius:8px;flex:none;display:grid;place-items:center;font-size:14px;background:color-mix(in srgb, var(--v3-accent) 13%, transparent);color:var(--v3-accent)}
-.v3fs-dka-note p {margin:0;font-size:12.5px;color:var(--v3-text-primary);line-height:1.5}
-.v3fs-dka-note b {color:var(--v3-accent)}
 .v3fs-dka-hint {margin:12px 2px 0;font-size:11px;color:var(--v3-text-muted);line-height:1.5}
 
 /* ── "Request a meeting instead" bar on the stakeholder linked pages ── */
