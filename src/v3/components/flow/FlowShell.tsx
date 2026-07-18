@@ -11,7 +11,7 @@ import EvidenceReader from "@/v3/components/flow/EvidenceReader";
 import {
   flowMovements, movementEvidence, movementArtifacts, gateChecklist, gateReadiness, listenCoverage,
   demoAcceptance, daysToFirstDemo, wordsOfEvidence, readContradictions, parseGridRows, readMovementInputs,
-  contradictionLogWithout, autoBuildEnabled, listRebuildActionItems,
+  contradictionLogWithout, autoBuildEnabled,
 } from "@/v3/components/flow/flowShellData";
 import {
   listOpenFlowDecisions, listFlowAttestations, describeDecisionChanges,
@@ -515,10 +515,9 @@ export default function FlowShell(props: FlowShellProps) {
   const openDisputeCount = useMemo(() => readContradictions(program, true).length, [program]);
   const unresolvedRoleCount = useMemo(() => readDirectoryPeople(program).filter((entry) => !entry.roleResolved).length, [program]);
   const coverageNameCount = useMemo(() => unresolvedCoverageNames(program).length, [program]);
-  // Rebuilds owed count toward the Inbox badge too, so an operator with auto-build
-  // off sees stale artifacts as pending work without hunting the movement tabs.
-  const rebuildCount = useMemo(() => listRebuildActionItems(program).length, [program]);
-  const waitingCount = openDecisions.length + portalInbox.length + approvalResponseCount + openDisputeCount + unresolvedRoleCount + coverageNameCount + rebuildCount;
+  // Rebuilds owed do NOT count here: stale documents live on the ribbon (the
+  // movement's "Regeneration required" bar + amber tabs), not in the Inbox.
+  const waitingCount = openDecisions.length + portalInbox.length + approvalResponseCount + openDisputeCount + unresolvedRoleCount + coverageNameCount;
   // "Where to go next" — the single rail item the operator should visit now.
   // Waiting decisions/inbox items pull them to the Inbox; otherwise the work
   // continues on Flow. The pointer is persistent (it always shows the next
@@ -796,7 +795,6 @@ export default function FlowShell(props: FlowShellProps) {
         {view === "today" ? (
           <FlowToday program={program} programs={props.programs} onSelectProgram={props.onSelectProgram} onResolveDecision={props.onResolveDecision} onSaveInputs={props.onSaveInputs}
             onIngestPortalItem={props.onIngestPortalItem} onDismissPortalItem={props.onDismissPortalItem} onRecordApproval={props.onRecordApproval}
-            onRunAgent={props.onRunAgent} runningAgentIds={props.runningAgentIds}
             onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} />
         ) : view === "flow" ? (
           <FlowCanvas program={program} programs={props.programs} runningAgentIds={props.runningAgentIds} regenActiveIds={props.regenActiveIds} onEnqueueRegen={props.onEnqueueRegen} agentErrors={props.agentErrors} relatedPrograms={[...(drillParent ? [drillParent] : []), ...listChildDrilldowns(program, props.programs).map((c) => c.child)]} onSelectProgram={props.onSelectProgram} onComment={props.onComment} onRunAgent={props.onRunAgent} onSaveInputs={props.onSaveInputs} onMintPacks={props.onMintPacks} onMintDemoInvites={props.onMintDemoInvites} onCompileShipLanes={props.onCompileShipLanes} onToggleShipItem={props.onToggleShipItem} onSetShipLane={props.onSetShipLane} onScheduleFollowUp={props.onScheduleFollowUp} onMintFollowUp={props.onMintFollowUp} onMintReview={props.onMintReview} onRecordShowPass={props.onRecordShowPass} onSaveArtifactDoc={props.onSaveArtifactDoc} onRecordGate={props.onRecordGate} onReopenGate={props.onReopenGate} onRunAgentAndWait={props.onRunAgentAndWait} onSendForApproval={props.onSendForApproval} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }}
@@ -929,7 +927,7 @@ function DecisionCard({ program, decision, movementLabel, busy, onResolve }: {
   );
 }
 
-function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIngestPortalItem, onDismissPortalItem, onRecordApproval, onGoFlow, onSaveInputs, onRunAgent, runningAgentIds }: {
+function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIngestPortalItem, onDismissPortalItem, onRecordApproval, onGoFlow, onSaveInputs }: {
   program: ProgramSummary;
   programs?: ProgramSummary[];
   onSelectProgram?: (id: string) => void;
@@ -939,15 +937,9 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
   onRecordApproval?: FlowShellProps["onRecordApproval"];
   onGoFlow: () => void;
   onSaveInputs?: FlowShellProps["onSaveInputs"];
-  onRunAgent?: FlowShellProps["onRunAgent"];
-  runningAgentIds?: Set<string>;
 }) {
   const movements = useMemo(() => flowMovements(), []);
   const open = listOpenFlowDecisions(program);
-  // Rebuilds the operator owes, surfaced here only when auto-build is OFF — a
-  // regeneration is an agent run, so confirming one fires onRunAgent, not the
-  // blob-writing decision path. Derived, so an item vanishes once its agent runs.
-  const rebuilds = useMemo(() => listRebuildActionItems(program), [program]);
   const feed = listFlowAttestations(program);
   const inbox = listPortalInbox(program);
   const approvals = listApprovalResponses(program);
@@ -1225,7 +1217,7 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
           ))}
         </div>
       ) : null}
-      {open.length === 0 && inbox.length === 0 && approvals.length === 0 && disputes.length === 0 && unresolvedRoles.length === 0 && coverageNames.length === 0 && exceptions.length === 0 && rebuilds.length === 0 ? (
+      {open.length === 0 && inbox.length === 0 && approvals.length === 0 && disputes.length === 0 && unresolvedRoles.length === 0 && coverageNames.length === 0 && exceptions.length === 0 ? (
         <div className="v3fs-quiet">
           <div className="v3fs-quiet-mark" aria-hidden="true">◈</div>
           {attention.length ? (
@@ -1253,37 +1245,15 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
         <section className="v3fs-inbox" aria-label="Waiting on you" ref={inboxRef}>
           <div className="v3fs-ph">
             <h3>Waiting on you</h3>
-            <span>{(() => { const n = open.length + inbox.length + approvals.length + disputes.length + unresolvedRoles.length + coverageNames.length + exceptions.length + rebuilds.length; return `${n} item${n === 1 ? "" : "s"}`; })()}</span>
+            <span>{(() => { const n = open.length + inbox.length + approvals.length + disputes.length + unresolvedRoles.length + coverageNames.length + exceptions.length; return `${n} item${n === 1 ? "" : "s"}`; })()}</span>
           </div>
           {open.map((decision) => (
             <DecisionCard key={decision.id} program={program} decision={decision} movementLabel={label(decision.movementId)}
               busy={busyId === decision.id} onResolve={resolve} />
           ))}
-          {rebuilds.length ? (
-            <article className="v3fs-dec v3fs-rebuild">
-              <div className="v3fs-dec-top">
-                <span className="v3fs-tag reb">rebuild</span>
-                <span className="v3fs-dec-mv">Auto-build is off — these wait for you</span>
-              </div>
-              <h3 className="v3fs-dec-t">{rebuilds.length} artifact{rebuilds.length === 1 ? "" : "s"} to rebuild</h3>
-              <p className="v3fs-dec-s">Evidence has moved on since these were generated. Rebuilding runs the agent that regenerates each — nothing changes on the record until you do.</p>
-              <ul className="v3fs-rebuild-list">
-                {rebuilds.map((r) => {
-                  const running = !!runningAgentIds?.has(r.agentId);
-                  return (
-                    <li key={r.id}>
-                      <span className="v3fs-rebuild-mv">{r.movementLabel}</span>
-                      <span className="v3fs-rebuild-t">{r.title}</span>
-                      <button type="button" className="v3fs-btn pri" disabled={!onRunAgent || running}
-                        onClick={() => onRunAgent?.(r.agentId, r.movementId)}>
-                        {running ? "Rebuilding…" : "Rebuild"}
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </article>
-          ) : null}
+          {/* Stale documents do NOT queue here — regeneration lives on the
+              ribbon: each movement's "Regeneration required" bar, amber tabs,
+              and per-tab Regenerate. The Inbox stays decisions-and-responses. */}
           {inbox.map((item, ii) => (
             <article key={`inbox-${item.id || ii}`} className="v3fs-dec v3fs-evitem">
               <div className="v3fs-dec-top">
