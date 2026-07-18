@@ -8612,12 +8612,11 @@ select.v3fs-dir-in {cursor:pointer}
 .v3fs-dka-addrow {display:flex;gap:7px;align-items:center;flex:1;min-width:220px}
 .v3fs-dka-addrow input {flex:1;min-width:120px;border:1px solid var(--fs-line);border-radius:9px;padding:8px 11px;font-size:12.5px;font-family:inherit;color:var(--v3-text-primary);background:var(--fs-card);outline:0}
 .v3fs-dka-addrow input:focus {border-color:var(--v3-accent)}
-/* Confirm-the-plan footer (ported from the retired Listen coverage plan).
-   NOT .v3fs-dka-foot — that class is the matrix's coverage-footer CELLS, and a
-   later flex/margin rule on the same name leaked onto them. */
-.v3fs-dka-confirm {display:flex;align-items:center;gap:12px;justify-content:space-between;flex-wrap:wrap;margin-top:14px;padding-top:13px;border-top:1px solid var(--fs-line)}
-.v3fs-dka-confirm-note {font-size:11.5px;color:var(--v3-text-muted);flex:1;min-width:220px}
-.v3fs-dka-confirm-r {display:inline-flex;align-items:center;gap:9px}
+/* Confirm-the-plan control — header right column, under the view toggle.
+   The button shows only while unconfirmed plan edits exist. (NOT .v3fs-dka-foot
+   — that class is the matrix's coverage-footer CELLS.) */
+.v3fs-dka-hr {display:flex;flex-direction:column;align-items:flex-end;gap:9px}
+.v3fs-dka-confirmed {display:inline-flex;align-items:center;gap:9px}
 .v3fs-dka-confnote {font-size:12px;font-weight:650;color:var(--color-success)}
 
 /* Ontology + atlas modal */

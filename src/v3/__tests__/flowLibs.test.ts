@@ -16,7 +16,7 @@ import { routeAttachedDocument, buildRoutedBlocks } from "@/v3/components/flow/f
 import { retroAttributionProposal, negatedClaimProposal } from "@/v3/components/flow/flowWatchers";
 import { rankEvidence, isNoiseEvidence, scoreEvidence } from "@/v3/components/flow/flowEvidenceRank";
 import { resolveMovementStakeholders, deliveryRoleDirectory, validateProgramRole, knownProgramRoles, readDirectoryPeople, unresolvedCoverageNames, knownPeopleNames, stripAskAddressee } from "@/v3/components/flow/flowStakeholders";
-import { mintFollowUpPack, mintReviewPack, listInterviewPacks, visibleLinks, movementValidationCoverage } from "@/v3/components/flow/flowPortal";
+import { mintFollowUpPack, mintReviewPack, mintInterviewPacks, listInterviewPacks, visibleLinks, movementValidationCoverage } from "@/v3/components/flow/flowPortal";
 import { reviewDiff, type ReviewPayload } from "@/v3/components/flow/flowReviews";
 import { trackAcceptance, trackBlockers, recordShowPass, listFlowTracks, type FlowTrack } from "@/v3/components/flow/flowTracks";
 import { setShipLane, toggleShipItem, listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
@@ -3057,5 +3057,32 @@ describe("Discovery Kit coverage names that aren't people → Inbox", () => {
     expect(unresolvedCoverageNames(dismissed).map((x) => x.name)).not.toContain("Team Ops");
     // knownPeopleNames includes roster + sponsor.
     expect(knownPeopleNames(p).has("raj mamodia")).toBe(true);
+  });
+});
+
+describe("operator asks stay VERBATIM (2026-07-18 pin)", () => {
+  const ASK = "Ask EXACTLY this — \"quotes\", 100% sic, per-cent & ampersand, don't touch it";
+  it("mintFollowUpPack stores the ask exact and FIRST — the 8-question cap can never cut it", () => {
+    const p = programme({});
+    const script = ["s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8"]; // a full script
+    const blob = mintFollowUpPack(p, { movementId: "frame", who: "Prakash T M", questions: [ASK, ...script], captureField: "sponsorConversation" }, "you")!;
+    const packs = blob.flowInterviewPacks as Array<Record<string, unknown>>;
+    const pack = packs.find((pk) => pk.stakeholder === "Prakash T M")!;
+    const qs = pack.questions as string[];
+    expect(qs[0]).toBe(ASK); // byte-identical, leading
+    expect(qs).toHaveLength(8); // cap holds — the SCRIPT tail is what gets cut
+  });
+  it("the agenda refresh never touches a Follow-up pack — the ask carrier is frozen", () => {
+    const p = programme({
+      flowInterviewPacks: [{
+        id: "pack-x", stakeholder: "Prakash T M", role: "Follow-up",
+        intro: "i", questions: [ASK], token: "tok", createdAt: "2026-07-18T00:00:00Z", askUpdatedAt: "2026-07-18T00:00:00Z",
+      }],
+      discoveryKit: { interviews: [{ stakeholder: "Prakash T M", role: "GTM Sales", agenda: [{ questions: ["a completely different kit question"] }] }] },
+    });
+    // The refresh path skips Follow-up packs entirely; with nothing else to
+    // create, the transform reports "no change" — the ask is untouched.
+    expect(mintInterviewPacks(p, "you")).toBeNull();
+    expect(listInterviewPacks(p)[0].questions).toEqual([ASK]);
   });
 });

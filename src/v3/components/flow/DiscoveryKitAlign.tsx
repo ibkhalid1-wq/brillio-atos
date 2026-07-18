@@ -97,9 +97,31 @@ export default function DiscoveryKitAlign({ program, onSaveInputs }: { program: 
           <h2 className="v3fs-dka-title">Areas &amp; people — who covers what</h2>
           <p className="v3fs-dka-sub">Click a cell to change who covers an area. Add or remove an area or a role below. A person who spans areas is interviewed once and their evidence flows to every area they cover.</p>
         </div>
-        <div className="v3fs-dka-views" role="tablist" aria-label="View">
-          <button type="button" role="tab" aria-selected={view === "matrix"} className={view === "matrix" ? "on" : ""} onClick={() => setView("matrix")}>Matrix</button>
-          <button type="button" role="tab" aria-selected={view === "person"} className={view === "person" ? "on" : ""} onClick={() => setView("person")}>By person</button>
+        <div className="v3fs-dka-hr">
+          <div className="v3fs-dka-views" role="tablist" aria-label="View">
+            <button type="button" role="tab" aria-selected={view === "matrix"} className={view === "matrix" ? "on" : ""} onClick={() => setView("matrix")}>Matrix</button>
+            <button type="button" role="tab" aria-selected={view === "person"} className={view === "person" ? "on" : ""} onClick={() => setView("person")}>By person</button>
+          </div>
+          {/* Confirm ceremony, under the view toggle. The button appears ONLY
+              when there are unconfirmed plan edits (the overlay exists and the
+              confirmation is open — every matrix write re-opens it via the
+              shared plan writer). Confirming clears the Listen gate and, with
+              Auto-build on, triggers ONE rebuild over the final plan. */}
+          {editable ? (() => {
+            const confirmedAt = String(readMovementInputs(program, "frame")._listenCoverageConfirmed ?? "").trim();
+            const hasPlanEdits = !!String(readMovementInputs(program, "frame").listenPlan ?? "").trim();
+            const setConfirmed = (value: string) => void onSaveInputs?.("frame", { _listenCoverageConfirmed: value }, { silent: true });
+            if (confirmedAt) return (
+              <span className="v3fs-dka-confirmed">
+                <span className="v3fs-dka-confnote">✓ Confirmed {new Date(confirmedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
+                <button type="button" className="v3fs-nb-open ghost sm" disabled={busy} onClick={() => setConfirmed("")}>Re-open</button>
+              </span>
+            );
+            if (hasPlanEdits) return (
+              <button type="button" className="v3fs-nb-open sm" disabled={busy} title="Clears the Listen gate; with Auto-build on, triggers one rebuild over the final plan" onClick={() => setConfirmed(new Date().toISOString())}>Confirm the Listen plan</button>
+            );
+            return null;
+          })() : null}
         </div>
       </div>
 
@@ -176,26 +198,6 @@ export default function DiscoveryKitAlign({ program, onSaveInputs }: { program: 
         </div>
       ) : null}
 
-      {/* The confirm ceremony (ported from the retired Listen coverage plan):
-          confirming clears the Listen gate; ANY matrix edit re-opens it, because
-          the shared plan writer resets _listenCoverageConfirmed on every write. */}
-      {editable ? (() => {
-        const confirmedAt = String(readMovementInputs(program, "frame")._listenCoverageConfirmed ?? "").trim();
-        const setConfirmed = (value: string) => void onSaveInputs?.("frame", { _listenCoverageConfirmed: value }, { silent: true });
-        return (
-          <div className="v3fs-dka-confirm">
-            <span className="v3fs-dka-confirm-note">Confirming clears the Listen gate and (with Auto-build on) triggers ONE rebuild over the final plan; any later edit re-opens it.</span>
-            {confirmedAt ? (
-              <span className="v3fs-dka-confirm-r">
-                <span className="v3fs-dka-confnote">✓ Confirmed {new Date(confirmedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
-                <button type="button" className="v3fs-nb-open ghost sm" disabled={busy} onClick={() => setConfirmed("")}>Re-open</button>
-              </span>
-            ) : (
-              <button type="button" className="v3fs-nb-open sm" disabled={busy} onClick={() => setConfirmed(new Date().toISOString())}>Confirm the Listen plan</button>
-            )}
-          </div>
-        );
-      })() : null}
     </div>
   );
 }
