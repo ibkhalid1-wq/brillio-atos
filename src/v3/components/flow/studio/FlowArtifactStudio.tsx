@@ -215,31 +215,49 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
   // regenerates the document. This panel raises that question against the
   // movement's own roster, storing it as an operator ask (fingerprint-safe)
   // that travels on that person's link — the SAME channel the collect board uses.
-  const askRoster = useMemo(
-    () => resolveMovementStakeholders(program, artifact.movementId).filter((s) => (s.name || s.role).trim()),
-    [program, artifact.movementId],
-  );
+  // Every role with a NAMED individual, across ALL movements (deduped by
+  // person) — a question needs a person to travel to; an unbound role
+  // placeholder has no link to carry it. Each entry remembers the movement
+  // whose roster carries the person, so the ask is stored on THAT movement
+  // and rides their existing link.
+  const askRoster = useMemo(() => {
+    const ordered = [artifact.movementId, ...flowMovements().map((m) => m.id).filter((id) => id !== artifact.movementId)];
+    const seen = new Set<string>();
+    const out: Array<{ name: string; role: string; movementId: string }> = [];
+    for (const movementId of ordered) {
+      for (const s of resolveMovementStakeholders(program, movementId)) {
+        if (s.isRole || !s.name.trim()) continue;
+        if (s.name.trim().toLowerCase() === (s.role || "").trim().toLowerCase()) continue;
+        const key = s.name.trim().toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push({ name: s.name, role: s.role || "", movementId });
+      }
+    }
+    return out;
+  }, [program, artifact.movementId]);
   const [askWho, setAskWho] = useState("");
   const [askText, setAskText] = useState("");
   const [askBusy, setAskBusy] = useState(false);
   const [askDone, setAskDone] = useState("");
-  const askTarget = askWho || (askRoster[0] ? (askRoster[0].name || askRoster[0].role) : "");
+  const askEntry = askRoster.find((s) => s.name === askWho) ?? askRoster[0];
+  const askTarget = askEntry?.name ?? "";
   const askExisting = useMemo(
-    () => (askTarget ? operatorAsksFor(program, artifact.movementId, askTarget) : []),
-    [program, artifact.movementId, askTarget],
+    () => (askEntry ? operatorAsksFor(program, askEntry.movementId, askEntry.name) : []),
+    [program, askEntry],
   );
   const addAsk = async () => {
     const q = askText.trim();
-    if (!q || !askTarget || !onSaveInputs) return;
+    if (!q || !askEntry || !onSaveInputs) return;
     setAskBusy(true);
     try {
-      const all = readOperatorAsks(program, artifact.movementId);
-      const key = askTarget.trim().toLowerCase();
+      const all = readOperatorAsks(program, askEntry.movementId);
+      const key = askEntry.name.trim().toLowerCase();
       const next = [...(all[key] ?? [])];
       if (!next.some((existing) => existing.toLowerCase() === q.toLowerCase())) next.push(q);
       all[key] = next;
-      await onSaveInputs(artifact.movementId, { _operatorAsks: JSON.stringify(all) }, {
-        attest: { action: `Question raised for ${askTarget}`, detail: q.slice(0, 120) },
+      await onSaveInputs(askEntry.movementId, { _operatorAsks: JSON.stringify(all) }, {
+        attest: { action: `Question raised for ${askEntry.name}`, detail: q.slice(0, 120) },
       });
       setAskText("");
       setAskDone(askTarget);
@@ -421,24 +439,24 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
             ) : null}
           </div>
         ) : null}
-        {/* Request a change — the DERIVED document's ONE editing path: ask the
+        {/* Ask a question — the DERIVED document's ONE editing path: ask the
             person who owns the answer. The question travels on their link and
-            regenerates the document when answered. Editable design-team artifacts
-            are authored directly, so they don't show this. */}
+            regenerates the document when answered. Only roles with a NAMED
+            individual are offered. Editable design-team artifacts are authored
+            directly, so they don't show this. */}
         {!canEdit && artifact.movementId !== "envision" && artifact.movementId !== "show" && onSaveInputs && askRoster.length ? (
           <details className="v3fs-artask">
             <summary>
-              <span className="v3fs-artask-l">✎ Request a change</span>
-              <span className="v3fs-artask-hint">Derived document — to change it, ask the stakeholder who owns the answer.</span>
+              <span className="v3fs-artask-l">? Ask a question</span>
+              <span className="v3fs-artask-hint">Derived document — ask the person who owns the answer; their reply arrives as evidence and updates it.</span>
             </summary>
             <div className="v3fs-artask-b">
               <label className="v3fs-artask-row">
-                <span>Ask</span>
+                <span>Who to ask</span>
                 <select className="v3fs-artask-who" value={askTarget} onChange={(e) => { setAskWho(e.target.value); setAskDone(""); }} aria-label="Who to ask">
-                  {askRoster.map((s, i) => {
-                    const value = s.name || s.role;
-                    return <option key={`${value}-${i}`} value={value}>{s.name ? `${s.name}${s.role ? ` · ${s.role}` : ""}` : s.role}</option>;
-                  })}
+                  {askRoster.map((s, i) => (
+                    <option key={`${s.name}-${i}`} value={s.name}>{`${s.name}${s.role ? ` · ${s.role}` : ""}`}</option>
+                  ))}
                 </select>
               </label>
               {askExisting.length ? (
@@ -448,7 +466,7 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
               ) : null}
               <div className="v3fs-artask-add">
                 <input value={askText} onChange={(e) => setAskText(e.target.value)}
-                  placeholder={`Ask ${askTarget || "the owner"} what should change…`}
+                  placeholder={`Your question for ${askTarget || "the owner"}…`}
                   aria-label="Your question"
                   onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void addAsk(); } }} />
                 <button type="button" className="v3fs-btn" disabled={askBusy || !askText.trim() || !askTarget} onClick={() => void addAsk()}>
