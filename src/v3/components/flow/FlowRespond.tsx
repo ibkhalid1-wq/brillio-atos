@@ -533,8 +533,6 @@ export default function FlowRespond({ token }: { token: string }) {
                 {state.pack.openingQuote ? <blockquote className="v3fs-portal-quote">{state.pack.openingQuote}</blockquote> : null}
                 {state.pack.scenario ? <p className="v3fs-portal-intro">{state.pack.scenario}</p> : null}
               </header>
-              <MeetingRequestBar kind="prototype" sent={meetingSent} submitting={submitting}
-                onRequest={(pref) => void requestMeeting(pref, "prototype")} />
               <div className="v3fs-portal-qs">
                 {state.pack.pilotHtml ? (
                   // The built prototype IS the experience — use it, then give a
@@ -567,6 +565,8 @@ export default function FlowRespond({ token }: { token: string }) {
                     ) : null}
                   </>
                 )}
+                <MeetingRequestBar kind="prototype" sent={meetingSent} submitting={submitting}
+                  onRequest={(pref) => void requestMeeting(pref, "prototype")} />
                 <div className="v3fs-portal-q">
                   <span>{state.pack.acceptanceAsk || "Does this run your workflow the way you need it to?"}</span>
                   <div className="v3fs-portal-verdicts" role="radiogroup" aria-label="Your verdict">

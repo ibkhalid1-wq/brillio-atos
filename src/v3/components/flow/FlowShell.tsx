@@ -346,13 +346,14 @@ function FlowHelp({ onClose }: { onClose: () => void }) {
           <section>
             <h3>The rail</h3>
             <ul className="v3fs-help-list">
-              <li><b>Search</b> — jump to any programme, or find evidence and artifacts (⌘K or /).</li>
+              <li><b>Search</b> — jump to any programme, or find evidence and artifacts (⌘K or /). Portfolio opens from the breadcrumb up top.</li>
               <li><b>Inbox</b> — responses and decisions waiting on your judgment.</li>
               <li><b>Flow</b> — the live programme, movement by movement.</li>
               <li><b>Library</b> — every conversation and generated artifact.</li>
+              <li><b>People</b> — everyone across the programme and who covers what.</li>
               <li><b>Pulse</b> — the steering read and the board pack.</li>
               <li><b>Control</b> — agents, budgets, guardrails, and the audit trail.</li>
-              <li><b>Portfolio</b> — every programme and its engagements.</li>
+              <li><b>Grounding</b> — the standards and vocabulary the ontology is built on.</li>
             </ul>
           </section>
           <section>
