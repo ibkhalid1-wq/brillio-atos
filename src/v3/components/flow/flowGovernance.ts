@@ -33,7 +33,9 @@ export interface GateApprovalIntegrity {
 export function gateApprovalIntegrity(program: ProgramSummary, movementId: string, checks: GateCheckItem[]): GateApprovalIntegrity {
   const approved = program.gateReviews?.[movementId]?.status === "approved";
   if (!approved) return { approved: false, defensible: true, unmet: 0 };
-  const unmet = checks.filter((c) => !c.done).length;
+  // Advisory items never block recording (write-time filters them the same
+  // way), so an open advisory must not brand a legitimate approval a forgery.
+  const unmet = checks.filter((c) => !c.done && !c.advisory).length;
   return {
     approved: true,
     defensible: unmet === 0,

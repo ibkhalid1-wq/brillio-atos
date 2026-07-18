@@ -2059,7 +2059,13 @@ export default function AppShellV3() {
     // Hard freeze: once a phase clears its stage gate its inputs are locked, so no
     // save (manual or import) can mutate them. The UI already hides the editors;
     // this is the authoritative server-bound chokepoint that enforces it.
-    if (activeProgram.gateReviews?.[phaseId]?.status === "approved") {
+    // Underscore keys are exempt: they are fingerprint-safe operator-workflow
+    // state (asks, question curation, confirmations) that never feeds a
+    // generated document — asking a follow-up question must not require
+    // reopening a demonstrated gate.
+    const allUnderscore = Object.keys(inputs).every((k) => k.startsWith("_"))
+      && Object.values(opts?.extraInputs ?? {}).every((bucket) => Object.keys(bucket).every((k) => k.startsWith("_")));
+    if (activeProgram.gateReviews?.[phaseId]?.status === "approved" && !allUnderscore) {
       pushV3Toast("Phase gate approved — inputs are locked. Reopen the gate to edit.", { tone: "warning", duration: 4000 });
       return;
     }

@@ -320,7 +320,10 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
             const isLive = movement.id === frontier && !isDone;
             const isLoop = !!movement.movement?.isLoop;
             const isOn = movement.id === active;
-            const stateLabel = generating ? "Generating" : isDone ? "Demonstrated" : isLive ? "In progress" : isLoop ? "Continuous" : "Upcoming";
+            // "Demonstrated" is the GATE ceremony's word — on the spine a
+            // finished movement reads as plain completion ("Frame —
+            // Demonstrated" confused more than it informed).
+            const stateLabel = generating ? "Generating" : isDone ? (movement.id === "ship" ? "Shipped" : "Complete") : isLive ? "In progress" : isLoop ? "Continuous" : "Upcoming";
             const stepChecks = [...gateChecklist(program, movement, artifacts), ...gateAugmentations(program, movement.id)];
             const stepReadiness = gateReadiness(program, movement, artifacts, stepChecks);
             const stepDone = stepChecks.filter((c) => c.done).length;
@@ -489,7 +492,7 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
             ? { glyph: "●", text: "", tone: "warn" }
             : { glyph: "✓", text: hasPeople ? `all ${sumWord}` : `${evidence.length} on record`, tone: "ok" };
         const gateState = isDone
-          ? { glyph: "✓", text: "demonstrated", tone: "ok" }
+          ? { glyph: "✓", text: "passed", tone: "ok" }
           : readiness.kind === "ready"
             ? { glyph: "⚑", text: "ready", tone: "ok" }
             : blockingChecks.length
@@ -535,7 +538,7 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
                 <>
                   <h2>{movement.displayName}</h2>
                   <span className={`v3fs-state ${generating ? "gen" : isDone ? "done" : isLive ? "live" : isLoop ? "loop" : "wait"}`}>
-                    {generating ? "Generating" : isDone ? "Demonstrated" : isLive ? "In progress" : isLoop ? "Continuous" : "Upcoming"}
+                    {generating ? "Generating" : isDone ? (movement.id === "ship" ? "Shipped" : "Complete") : isLive ? "In progress" : isLoop ? "Continuous" : "Upcoming"}
                   </span>
                 </>
               )}
@@ -1040,7 +1043,8 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
                           onSaveDoc={onSaveArtifactDoc}
                           onOpenInbox={onOpenInbox}
                           header={movement.id === "frame" && artifact.id === "discovery-kit"
-                            ? <DiscoveryKitAlign program={program} onSaveInputs={onSaveInputs} />
+                            ? <DiscoveryKitAlign program={program} onSaveInputs={isDone ? undefined : onSaveInputs}
+                                locked={isDone} onOpenGate={() => setGateModalFor(movement.id)} />
                             : undefined}
                         />
                       </Suspense>

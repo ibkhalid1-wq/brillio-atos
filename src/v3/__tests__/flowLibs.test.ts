@@ -2998,6 +2998,12 @@ describe("gateApprovalIntegrity — read-time backstop for forged approvals (F-0
     expect(r.unmet).toBe(2);
     expect(r.reason).toContain("not met");
   });
+  it("open ADVISORY items never brand an approval a forgery — write-time lets them through, so read-time must too", () => {
+    const advisory = { id: "adv", label: "adv", done: false, group: "evidence", advisory: true } as unknown as import("@/v3/components/flow/flowShellData").GateCheckItem;
+    const r = gateApprovalIntegrity(prog("approved"), "frame", [check(true, "a"), advisory]);
+    expect(r.defensible).toBe(true);
+    expect(r.unmet).toBe(0);
+  });
 });
 
 describe("People directory — operator-added roles validate against the programme", () => {
