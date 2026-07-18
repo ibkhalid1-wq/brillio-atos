@@ -1043,7 +1043,7 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
                           onSaveDoc={onSaveArtifactDoc}
                           onOpenInbox={onOpenInbox}
                           header={movement.id === "frame" && artifact.id === "discovery-kit"
-                            ? <DiscoveryKitAlign program={program} onSaveInputs={isDone ? undefined : onSaveInputs}
+                            ? <DiscoveryKitAlign program={program} onSaveInputs={onSaveInputs}
                                 locked={isDone} onOpenGate={() => setGateModalFor(movement.id)} />
                             : undefined}
                         />
@@ -1193,7 +1193,10 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
                       <button type="button" className="v3fs-editor-x" aria-label="Close structured inputs"
                         onClick={() => toggle(setEditing, movement.id)}>✕</button>
                     </div>
-                    <PhaseInputsPanel program={program} phaseId={movement.id} onSave={onSaveInputs} locked={isDone} />
+                    {/* Not locked when the gate is approved: the save chokepoint
+                        auto-reopens the gate on a substantive edit (attested),
+                        announced by its own toast. */}
+                    <PhaseInputsPanel program={program} phaseId={movement.id} onSave={onSaveInputs} />
                   </div>
                 ) : null}
               </div>

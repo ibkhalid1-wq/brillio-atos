@@ -28,9 +28,10 @@ type SaveInputs = (phaseId: string, inputs: Record<string, string>, opts?: { sil
 export default function DiscoveryKitAlign({ program, onSaveInputs, locked, onOpenGate }: {
   program: ProgramSummary;
   onSaveInputs?: SaveInputs;
-  /** The movement's gate is approved — inputs frozen. The matrix renders
-   * read-only with an explicit notice (a silently-failing click reads as a
-   * bug), and the notice routes to the gate, where Reopen lives. */
+  /** The movement's gate is approved. The matrix stays EDITABLE — the save
+   * chokepoint auto-reopens the gate on the first substantive change — but
+   * the operator must know that before clicking, so a notice says so and
+   * routes to the gate for the details. */
   locked?: boolean;
   onOpenGate?: () => void;
 }) {
@@ -103,13 +104,11 @@ export default function DiscoveryKitAlign({ program, onSaveInputs, locked, onOpe
         <div>
           <div className="v3fs-dka-eyebrow">Frame · Discovery Kit</div>
           <h2 className="v3fs-dka-title">Areas &amp; people — who covers what</h2>
-          <p className="v3fs-dka-sub">{locked
-            ? "The Frame gate is approved, so this plan is locked with it. A person who spans areas is interviewed once and their evidence flows to every area they cover."
-            : "Click a cell to change who covers an area. Add or remove an area or a role below. A person who spans areas is interviewed once and their evidence flows to every area they cover."}</p>
+          <p className="v3fs-dka-sub">Click a cell to change who covers an area. Add or remove an area or a role below. A person who spans areas is interviewed once and their evidence flows to every area they cover.</p>
           {locked ? (
             <div className="v3fs-dka-lock">
-              <span aria-hidden="true">🔒</span> Gate approved — the coverage plan is locked.
-              {onOpenGate ? <button type="button" className="v3fs-nb-open ghost sm" onClick={onOpenGate}>Reopen from the gate →</button> : null}
+              <span aria-hidden="true">🔓</span> Gate approved — making a change reopens the Frame gate.
+              {onOpenGate ? <button type="button" className="v3fs-nb-open ghost sm" onClick={onOpenGate}>View the gate →</button> : null}
             </div>
           ) : null}
         </div>

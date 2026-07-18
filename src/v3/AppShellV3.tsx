@@ -2056,18 +2056,23 @@ export default function AppShellV3() {
   const handleSavePhaseInputs = useCallback(async (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; clearReviewDefId?: string; staleDefId?: string; attest?: { action: string; detail?: string }; extraInputs?: Record<string, Record<string, string>> }) => {
     if (!activeProgram) return;
     const silent = opts?.silent === true;
-    // Hard freeze: once a phase clears its stage gate its inputs are locked, so no
-    // save (manual or import) can mutate them. The UI already hides the editors;
-    // this is the authoritative server-bound chokepoint that enforces it.
-    // Underscore keys are exempt: they are fingerprint-safe operator-workflow
-    // state (asks, question curation, confirmations) that never feeds a
-    // generated document — asking a follow-up question must not require
-    // reopening a demonstrated gate.
+    // A recorded gate freezes its phase's inputs — but the operator EDITING
+    // them IS the reopen decision, so a substantive save auto-reopens the gate
+    // (attested, exactly like the modal's Reopen) and then lands. Underscore
+    // keys skip even that: they are fingerprint-safe operator-workflow state
+    // (asks, question curation, confirmations) that never feeds a generated
+    // document, so they touch nothing the gate approved.
     const allUnderscore = Object.keys(inputs).every((k) => k.startsWith("_"))
       && Object.values(opts?.extraInputs ?? {}).every((bucket) => Object.keys(bucket).every((k) => k.startsWith("_")));
     if (activeProgram.gateReviews?.[phaseId]?.status === "approved" && !allUnderscore) {
-      pushV3Toast("Phase gate approved — inputs are locked. Reopen the gate to edit.", { tone: "warning", duration: 4000 });
-      return;
+      try {
+        await reopenGate(phaseId, "Inputs changed after the gate was recorded");
+        pushV3Toast("Gate reopened — inputs changed after it was recorded.", { tone: "warning", duration: 4000 });
+      } catch (error) {
+        reportError(error instanceof Error ? error : new Error(String(error)), { action: "auto-reopen-gate" });
+        pushV3Toast("Could not reopen the gate — the change was not saved.", { tone: "error", duration: 4000 });
+        return;
+      }
     }
     // Build the field-level patch (input merge + stale flags + spent-review clear)
     // on top of a given base program. Parameterised by base so a version conflict
@@ -2225,7 +2230,7 @@ export default function AppShellV3() {
       pushV3Toast("Inputs saved. Ready to run agents.", { tone: "success", duration: 2500 });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- refreshPrograms listed deliberately: a programme refresh must rebuild this mutator
-  }, [activeProgram, refreshPrograms, updateProgramData]);
+  }, [activeProgram, refreshPrograms, updateProgramData, reopenGate]);
 
 
   // ── Program save snapshots ──────────────────────────────────────────────────
