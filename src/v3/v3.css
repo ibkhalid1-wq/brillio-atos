@@ -8714,6 +8714,17 @@ select.v3fs-dir-in {cursor:pointer}
 .v3fs-nb-modal-wfs {display:flex;flex-direction:column;gap:9px}
 .v3fs-nb-modal-wf .steps {margin:8px 0 0;padding-left:20px;font-size:12px;color:var(--v3-text-primary);line-height:1.55}
 .v3fs-nb-modal-empty {font-size:12.5px;color:var(--v3-text-muted);padding:6px 0}
+/* Business-map view toggle (Graph | List) — pushed to the right of the header */
+.v3fs-nb-modal-vt {margin-left:auto;display:inline-flex;gap:2px;padding:2px;border:1px solid var(--fs-line);border-radius:8px;background:var(--v3-surface-2, rgba(0,0,0,.02))}
+.v3fs-nb-modal-vt button {font:inherit;font-size:11px;line-height:1;padding:4px 10px;border:0;border-radius:6px;background:transparent;color:var(--v3-text-muted);cursor:pointer}
+.v3fs-nb-modal-vt button.on {background:var(--v3-surface, #fff);color:var(--v3-text-primary);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+/* Read-only ontology graph (entities as nodes, relationships as edges) */
+.v3fs-onto-g-wrap {overflow:auto;border:1px solid var(--fs-line);border-radius:10px;background:var(--v3-surface-2, rgba(0,0,0,.015));padding:8px}
+.v3fs-onto-g {display:block}
+.v3fs-onto-g-edge line {stroke:var(--v3-line-strong, #9aa2b1);stroke-width:1.4}
+.v3fs-onto-g-elabel {font-family:var(--v3-font-mono, ui-monospace);font-size:9.5px;fill:var(--v3-text-muted);letter-spacing:.02em}
+.v3fs-onto-g-name {font-size:12px;font-weight:600;fill:var(--v3-text-primary)}
+.v3fs-onto-g-sor {font-family:var(--v3-font-mono, ui-monospace);font-size:8.5px;letter-spacing:.03em;text-transform:uppercase;fill:var(--v3-text-muted)}
 
 /* Operator question curation — defer / delete / restore on the script */
 .v3fs-ivc-del:hover {color:var(--color-danger, #c0392b)!important}

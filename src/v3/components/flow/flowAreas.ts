@@ -93,6 +93,17 @@ export function ontologyEntities(program: ProgramSummary): Record<string, unknow
   return ontology && Array.isArray(ontology.entities) ? ontology.entities.filter(isRecord) : [];
 }
 
+/** The ontology's relationship edges — the sibling `relations` array the graph
+ * editor (OntologyStudio) and generator use, each `{ from, to, label|type }`
+ * referencing entity names. Separate from any `relationships` some entities
+ * nest inline. */
+export function ontologyRelations(program: ProgramSummary): Record<string, unknown>[] {
+  const raw = (program.rawData ?? {}) as Record<string, unknown>;
+  const inner = isRecord(raw.data) ? raw.data : raw;
+  const ontology = isRecord(inner.domainOntology) ? inner.domainOntology : null;
+  return ontology && Array.isArray(ontology.relations) ? ontology.relations.filter(isRecord) : [];
+}
+
 /** The area a workflow belongs to — explicit `area`, else inferred from its
  * name and actors, else General. */
 export function workflowArea(workflow: Record<string, unknown>): string {
