@@ -8725,6 +8725,47 @@ select.v3fs-dir-in {cursor:pointer}
 .v3fs-onto-g-elabel {font-family:var(--v3-font-mono, ui-monospace);font-size:9.5px;fill:var(--v3-text-muted);letter-spacing:.02em}
 .v3fs-onto-g-name {font-size:12px;font-weight:600;fill:var(--v3-text-primary)}
 .v3fs-onto-g-sor {font-family:var(--v3-font-mono, ui-monospace);font-size:8.5px;letter-spacing:.03em;text-transform:uppercase;fill:var(--v3-text-muted)}
+/* Current-state atlas as a flow — steps as connected, actor-coloured cards */
+.v3fs-nb-modal-flows {display:flex;flex-direction:column;gap:14px}
+.v3fs-wff {border:1px solid var(--fs-line);border-radius:10px;padding:11px 12px;background:var(--v3-surface, #fff)}
+.v3fs-wff-h {display:flex;align-items:baseline;gap:9px;margin-bottom:10px}
+.v3fs-wff-h b {font-size:13px;color:var(--v3-text-primary)}
+.v3fs-wff-owner {display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:var(--v3-text-muted)}
+.v3fs-wff-owner i {width:8px;height:8px;border-radius:50%;display:inline-block}
+.v3fs-wff-track {display:flex;align-items:stretch;gap:0;overflow-x:auto;padding:2px 2px 8px;scroll-snap-type:x proximity}
+.v3fs-wff-cellwrap {display:flex;align-items:center;flex:0 0 auto}
+.v3fs-wff-step {position:relative;width:190px;min-height:78px;display:flex;flex-direction:column;gap:6px;border:1px solid var(--fs-line);border-top:3px solid var(--acc);border-radius:9px;padding:9px 10px;background:var(--v3-surface-2, rgba(0,0,0,.015));scroll-snap-align:start}
+.v3fs-wff-top {display:flex;align-items:center;gap:7px}
+.v3fs-wff-idx {flex:0 0 auto;width:19px;height:19px;border-radius:50%;background:var(--acc);color:#fff;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center}
+.v3fs-wff-actor {font-size:10.5px;font-weight:600;color:var(--acc);letter-spacing:.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.v3fs-wff-act {font-size:12px;line-height:1.4;color:var(--v3-text-primary)}
+.v3fs-wff-meta {display:flex;flex-wrap:wrap;gap:4px;margin-top:auto}
+.v3fs-wff-meta .sys {font-family:var(--v3-font-mono, ui-monospace);font-size:8.5px;letter-spacing:.03em;text-transform:uppercase;color:var(--v3-accent-2);border:1px solid var(--fs-line);border-radius:4px;padding:1px 5px}
+.v3fs-wff-meta .ent {font-size:9.5px;color:var(--v3-text-muted);background:var(--v3-surface,#fff);border:1px solid var(--fs-line);border-radius:4px;padding:1px 5px}
+.v3fs-wff-arrow {flex:0 0 auto;padding:0 6px;font-size:20px;line-height:1;color:var(--v3-line-strong, #9aa2b1);font-weight:700}
+/* Listen focus page — 2-zone row + roster panel + next-questions panel */
+.v3fs-nb-zones.two {grid-template-columns:1fr 1fr}
+@media(max-width:720px){.v3fs-nb-zones.two{grid-template-columns:1fr}}
+.v3fs-nb-panel2 {border:1px solid var(--fs-line);border-radius:12px;padding:13px 15px;margin-top:14px;background:var(--v3-surface, #fff)}
+.v3fs-nb-panel2-h {display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:10px}
+.v3fs-nb-panel2-h b {font-size:13px;color:var(--v3-text-primary)}
+.v3fs-nb-panel2-h span {font-size:11px;color:var(--v3-text-muted)}
+.v3fs-nb-roster {list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.v3fs-nb-roster li {display:flex;align-items:center;gap:11px;padding:9px 2px;border-top:1px solid var(--fs-line)}
+.v3fs-nb-roster li:first-child {border-top:0}
+.v3fs-nb-roster li.busy {opacity:.55}
+.v3fs-nb-roster .av {flex:0 0 auto;width:30px;height:30px;border-radius:50%;background:color-mix(in srgb, var(--acc) 16%, transparent);color:var(--acc);font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center}
+.v3fs-nb-roster .who {display:flex;flex-direction:column;gap:1px;min-width:0;flex:1 1 auto}
+.v3fs-nb-roster .who .rl {font-size:12.5px;font-weight:600;color:var(--v3-text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.v3fs-nb-roster .who .nm {font-size:11px;color:var(--v3-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.v3fs-nb-roster .who .nm em {font-style:italic}
+.v3fs-nb-hchip {flex:0 0 auto;font-size:10px;font-weight:600;letter-spacing:.02em;padding:2px 8px;border-radius:20px}
+.v3fs-nb-hchip.ok {color:var(--v3-good, #1f9d6b);background:color-mix(in srgb, var(--v3-good, #1f9d6b) 12%, transparent)}
+.v3fs-nb-hchip.wait {color:var(--v3-text-muted);background:var(--v3-surface-2, rgba(0,0,0,.04))}
+.v3fs-nb-roster .acts {flex:0 0 auto;display:flex;align-items:center;gap:6px}
+.v3fs-nb-roster .acts.done {font-size:11px;color:var(--v3-text-muted)}
+.v3fs-nb-sched {font:inherit;font-size:11px;padding:3px 6px;border:1px solid var(--fs-line);border-radius:6px;background:var(--v3-surface,#fff);color:var(--v3-text-primary)}
+.v3fs-nb-qs {margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:12.5px;line-height:1.45;color:var(--v3-text-primary)}
 
 /* Operator question curation — defer / delete / restore on the script */
 .v3fs-ivc-del:hover {color:var(--color-danger, #c0392b)!important}

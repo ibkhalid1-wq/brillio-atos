@@ -16,8 +16,9 @@ import { areaProgress, areaHasModel, hasMultipleAreas, stakeholderPrimaryArea, o
 import { loopState, changeRequests, type AreaLoop } from "@/v3/components/flow/flowLoop";
 import { areaAccent, areaMonogram, stakeholderCollection } from "@/v3/components/flow/CollectBoard";
 import { resolveMovementStakeholders } from "@/v3/components/flow/flowStakeholders";
-import { listInterviewPacks } from "@/v3/components/flow/flowPortal";
-import { movementEvidence, flowMovements, readMovementInputs } from "@/v3/components/flow/flowShellData";
+import { listInterviewPacks, portalLinkFor } from "@/v3/components/flow/flowPortal";
+import { meetingKit } from "@/v3/components/flow/flowMeetings";
+import { movementEvidence, flowMovements, readMovementInputs, stakeholderEmail } from "@/v3/components/flow/flowShellData";
 import { layeredPositions } from "@/v3/components/flow/studio/graphKit";
 
 /** Per-area "heard" from the roster — a stakeholder is filed under their primary
@@ -51,14 +52,16 @@ const initials = (name: string): string => {
   return ((w[0]?.[0] ?? "") + (w[1]?.[0] ?? "")).toUpperCase() || (name.slice(0, 2).toUpperCase());
 };
 
-export default function FlowNextBoard({ program, phase, onOpenWork, onSaveInputs }: {
+export default function FlowNextBoard({ program, phase, onOpenWork, onSaveInputs, onScheduleFollowUp, onMintFollowUp }: {
   program: ProgramSummary;
   phase: Phase;
   onOpenWork: () => void;
   onSaveInputs?: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
+  onScheduleFollowUp?: (movementId: string, who: string, date: string) => Promise<void>;
+  onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string; unnamed?: boolean }) => Promise<string | null>;
 }) {
   const [focusArea, setFocusArea] = useState<string | null>(null);
-  const [ontoModal, setOntoModal] = useState<{ area: string | null } | null>(null);
+  const [ontoModal, setOntoModal] = useState<{ area: string | null; section?: "map" | "atlas" } | null>(null);
   const rows = areaProgress(program);
   const ls = loopState(program);
   const multi = hasMultipleAreas(program);
@@ -144,9 +147,9 @@ export default function FlowNextBoard({ program, phase, onOpenWork, onSaveInputs
       </div>
 
       {focusArea
-        ? <FocusedArea program={program} phase={phase} area={focusArea} rows={rows} ls={ls} ah={ah} onBack={() => setFocusArea(null)} onOpenWork={onOpenWork} onOpenOntology={(area) => setOntoModal({ area })} />
+        ? <FocusedArea program={program} phase={phase} area={focusArea} rows={rows} ls={ls} ah={ah} onBack={() => setFocusArea(null)} onOpenWork={onOpenWork} onOpenOntology={(area, section) => setOntoModal({ area, section })} onScheduleFollowUp={onScheduleFollowUp} onMintFollowUp={onMintFollowUp} />
         : <Board program={program} phase={phase} rows={rows} ls={ls} ah={ah} onFocus={setFocusArea} onOpenWork={onOpenWork} onSaveInputs={onSaveInputs} onOpenOntology={(area) => setOntoModal({ area })} />}
-      {ontoModal ? <OntologyAtlasModal program={program} area={ontoModal.area} onClose={() => setOntoModal(null)} /> : null}
+      {ontoModal ? <OntologyAtlasModal program={program} area={ontoModal.area} section={ontoModal.section} onClose={() => setOntoModal(null)} /> : null}
     </div>
   );
 }
@@ -243,7 +246,7 @@ function Board({ program, phase, rows, ls, ah, onFocus, onOpenWork, onSaveInputs
 }
 
 // ── Focused area: the three-zone workspace overview ────────────────────────
-function FocusedArea({ program, phase, area, rows, ls, ah, onBack, onOpenWork, onOpenOntology }: {
+function FocusedArea({ program, phase, area, rows, ls, ah, onBack, onOpenWork, onOpenOntology, onScheduleFollowUp, onMintFollowUp }: {
   program: ProgramSummary;
   phase: Phase;
   area: string;
@@ -252,8 +255,13 @@ function FocusedArea({ program, phase, area, rows, ls, ah, onBack, onOpenWork, o
   ah: (area: string) => { heard: number; total: number; ready: boolean; names: string[] };
   onBack: () => void;
   onOpenWork: () => void;
-  onOpenOntology: (area: string | null) => void;
+  onOpenOntology: (area: string | null, section?: "map" | "atlas") => void;
+  onScheduleFollowUp?: (movementId: string, who: string, date: string) => Promise<void>;
+  onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string; unnamed?: boolean }) => Promise<string | null>;
 }) {
+  const [rowBusy, setRowBusy] = useState<string | null>(null);
+  const [copied, setCopied] = useState<string | null>(null);
+  const [schedFor, setSchedFor] = useState<string | null>(null);
   const back = (
     <div className="v3fs-nb-backrow">
       <button type="button" className="v3fs-nb-back" onClick={onBack}>← All areas</button>
@@ -268,10 +276,57 @@ function FocusedArea({ program, phase, area, rows, ls, ah, onBack, onOpenWork, o
     const pct = a.total ? Math.round((100 * a.heard) / a.total) : 0;
     const entities = r?.entities ?? 0;
     const workflows = r?.workflows ?? 0;
+
+    // The roster for THIS area — who we hear, their role, heard-state, link and
+    // email — resolved through the same identity the People board and collect
+    // card use, so the role NAMES show (not just heard people).
+    const listenMv = flowMovements().find((m) => m.id === "listen");
+    const ev = listenMv ? movementEvidence(program, listenMv) : [];
+    const packs = listInterviewPacks(program);
+    const packFor = (name: string, role: string) => packs.find((p) => {
+      const nm = (name || role).trim().toLowerCase();
+      return p.stakeholder.trim().toLowerCase() === nm || (!!role && p.role.trim().toLowerCase() === role.trim().toLowerCase());
+    });
+    const roster = resolveMovementStakeholders(program, "listen")
+      .filter((sh) => stakeholderPrimaryArea(program, sh.name, sh.role) === area)
+      .map((sh) => {
+        const pack = packFor(sh.name, sh.role || sh.name);
+        return {
+          key: `${sh.role || sh.name}|${sh.name}`,
+          isRole: sh.isRole,
+          role: sh.role || sh.name,
+          name: sh.isRole ? "" : sh.name,
+          heard: !sh.isRole && stakeholderCollection("listen", sh, packs, ev).heard,
+          email: sh.isRole ? null : stakeholderEmail(program, sh.name),
+          pack,
+        };
+      });
+    // The next questions for this area — the open interview script for the people
+    // still to be heard, deduped and capped.
+    const nextQuestions = [...new Set(
+      roster.filter((x) => !x.heard).flatMap((x) => x.pack?.questions ?? []).map((q) => q.trim()).filter(Boolean),
+    )].slice(0, 8);
+    const captureField = meetingKit(program, "listen")?.captureField ?? "interviewTranscripts";
+    const canReach = !!(onMintFollowUp || onScheduleFollowUp);
+
+    const copyLink = async (row: typeof roster[number]) => {
+      setRowBusy(row.key);
+      try {
+        let link = row.pack ? portalLinkFor(program.id, row.pack) : null;
+        if (!link && onMintFollowUp) link = await onMintFollowUp({ movementId: "listen", who: row.name || row.role, questions: nextQuestions, captureField, unnamed: row.isRole });
+        if (link) { await navigator.clipboard.writeText(link); setCopied(row.key); }
+      } finally { setRowBusy(null); }
+    };
+    const schedule = async (row: typeof roster[number], date: string) => {
+      if (!date || !onScheduleFollowUp) return;
+      setRowBusy(row.key);
+      try { await onScheduleFollowUp("listen", row.name || row.role, date); setSchedFor(null); } finally { setRowBusy(null); }
+    };
+
     return (
       <>
         {back}
-        <div className="v3fs-nb-zones">
+        <div className="v3fs-nb-zones two">
           <div className="v3fs-nb-zone">
             <p className="v3fs-nb-ztag">This area · Listen</p>
             <div className="v3fs-nb-prog"><span className="big">{a.heard}</span><span className="of">/ {a.total} heard</span></div>
@@ -284,30 +339,65 @@ function FocusedArea({ program, phase, area, rows, ls, ah, onBack, onOpenWork, o
           </div>
           <div className="v3fs-nb-zone">
             <p className="v3fs-nb-ztag">The work · what we’ve mapped</p>
-            {/* The two Listen artifacts, made explicit — this is where the
-                ontology (business map) and the current-state atlas live. */}
+            {/* The two Listen artifacts open DISTINCT views — the business-map
+                graph, and the current-state atlas flow. */}
             <div className="v3fs-nb-doccard">
               <div className="v3fs-nb-doc">
                 <div><div className="dt">Business map <span className="code">ontology</span></div><div className="dd">{entities > 0 ? `${entities} ${entities === 1 ? "entity" : "entities"} · ${map ? "confirmed" : "drafting"}` : "not started yet"}</div></div>
-                <button type="button" className="v3fs-nb-open ghost sm" onClick={() => onOpenOntology(area)}>Open →</button>
+                <button type="button" className="v3fs-nb-open ghost sm" onClick={() => onOpenOntology(area, "map")}>Graph →</button>
               </div>
               <div className="v3fs-nb-doc">
                 <div><div className="dt">How it works today <span className="code">current-state atlas</span></div><div className="dd">{workflows > 0 ? `${workflows} workflow${workflows === 1 ? "" : "s"} mapped` : "not started yet"}</div></div>
-                <button type="button" className="v3fs-nb-open ghost sm" onClick={() => onOpenOntology(area)}>Open →</button>
+                <button type="button" className="v3fs-nb-open ghost sm" onClick={() => onOpenOntology(area, "atlas")}>Flow →</button>
               </div>
             </div>
-            <p className="v3fs-nb-hint">Opens {area}’s business map and atlas here. To edit them, use the full workspace.</p>
-          </div>
-          <div className="v3fs-nb-zone">
-            <p className="v3fs-nb-ztag">The record · heard</p>
-            <ul className="v3fs-nb-rec">
-              {a.names.map((who) => (
-                <li key={who}><span className="av">{initials(who)}</span><div><div className="who">{who}</div><div className="what">Listen evidence on record</div></div></li>
-              ))}
-              {!a.names.length ? <li className="empty">No one heard in this area yet.</li> : null}
-            </ul>
+            <p className="v3fs-nb-hint">The map is the {area} ontology; how-it-works-today is its workflow flow. To edit them, use the full workspace.</p>
           </div>
         </div>
+
+        {/* Who we're hearing — the roster for this area, with role names, heard
+            state, and the reach actions (send link · schedule) per person. */}
+        <div className="v3fs-nb-panel2">
+          <div className="v3fs-nb-panel2-h"><b>Who we’re hearing in {area}</b><span>{a.heard} of {a.total} heard</span></div>
+          {roster.length ? (
+            <ul className="v3fs-nb-roster">
+              {roster.map((row) => (
+                <li key={row.key} className={rowBusy === row.key ? "busy" : ""}>
+                  <span className="av" style={{ "--acc": areaAccent(row.role) } as React.CSSProperties}>{initials(row.name || row.role)}</span>
+                  <span className="who">
+                    <span className="rl">{row.role}</span>
+                    <span className="nm">{row.name || <em>unnamed — name them in the workspace</em>}</span>
+                  </span>
+                  <span className={`v3fs-nb-hchip ${row.heard ? "ok" : "wait"}`}>{row.heard ? "Heard" : "Awaiting"}</span>
+                  {canReach && !row.heard ? (
+                    <span className="acts">
+                      {onMintFollowUp ? <button type="button" className="v3fs-nb-open ghost sm" disabled={rowBusy === row.key} onClick={() => void copyLink(row)}>{copied === row.key ? "Link copied ✓" : "Copy link"}</button> : null}
+                      {onScheduleFollowUp ? <button type="button" className="v3fs-nb-open ghost sm" disabled={rowBusy === row.key} onClick={() => setSchedFor(schedFor === row.key ? null : row.key)}>Schedule</button> : null}
+                      {schedFor === row.key ? (
+                        <input type="date" className="v3fs-nb-sched" aria-label={`Meeting date for ${row.name || row.role}`} onChange={(e) => void schedule(row, e.target.value)} />
+                      ) : null}
+                    </span>
+                  ) : row.heard ? <span className="acts done">on record</span> : null}
+                </li>
+              ))}
+            </ul>
+          ) : <p className="v3fs-nb-hint" style={{ marginTop: 0 }}>No one is assigned to {area} yet — map who covers it in the Discovery Kit.</p>}
+        </div>
+
+        {/* The next questions — the open script for this area. */}
+        {nextQuestions.length ? (
+          <div className="v3fs-nb-panel2">
+            <div className="v3fs-nb-panel2-h"><b>Next questions</b><span>{nextQuestions.length} still to ask · {area}</span></div>
+            <ol className="v3fs-nb-qs">
+              {nextQuestions.map((q, i) => <li key={i}>{q}</li>)}
+            </ol>
+          </div>
+        ) : a.heard >= a.total && a.total > 0 ? null : (
+          <div className="v3fs-nb-panel2">
+            <div className="v3fs-nb-panel2-h"><b>Next questions</b></div>
+            <p className="v3fs-nb-hint" style={{ marginTop: 0 }}>No open questions yet — they appear here once the discovery scripts are generated for this area.</p>
+          </div>
+        )}
       </>
     );
   }
@@ -556,17 +646,70 @@ function OntologyGraph({ program, entities }: { program: ProgramSummary; entitie
   );
 }
 
+// ── A single workflow as a polished left-to-right flow: each step a card, the
+// actor colour-coded so hand-offs between roles read at a glance, connected by
+// chevrons. Horizontally scrollable — a modern current-state-atlas view.
+function WorkflowFlow({ workflow }: { workflow: Record<string, unknown> }) {
+  const s = (v: unknown): string => (v == null ? "" : String(v)).trim();
+  const steps = (Array.isArray(workflow.steps) ? workflow.steps : []).map((st) => {
+    const r = (st ?? {}) as Record<string, unknown>;
+    return {
+      actor: s(r.actor),
+      action: s(r.action) || s(r.step) || s(r.beat) || s(r.name) || s(r.description),
+      system: s(r.system) || s(r.systemOfRecord),
+      entities: Array.isArray(r.entities) ? r.entities.map(s).filter(Boolean) : [],
+    };
+  }).filter((st) => st.actor || st.action);
+  const owner = s(workflow.owner);
+  return (
+    <div className="v3fs-wff">
+      <div className="v3fs-wff-h">
+        <b>{s(workflow.name) || "Workflow"}</b>
+        {owner ? <span className="v3fs-wff-owner"><i style={{ background: areaAccent(owner) }} aria-hidden="true" />{owner}</span> : null}
+      </div>
+      {steps.length ? (
+        <div className="v3fs-wff-track">
+          {steps.map((st, j) => (
+            <div key={j} className="v3fs-wff-cellwrap">
+              <div className="v3fs-wff-step" style={{ "--acc": st.actor ? areaAccent(st.actor) : "var(--v3-line-strong,#9aa2b1)" } as React.CSSProperties}>
+                <div className="v3fs-wff-top">
+                  <span className="v3fs-wff-idx">{j + 1}</span>
+                  {st.actor ? <span className="v3fs-wff-actor">{st.actor}</span> : null}
+                </div>
+                <div className="v3fs-wff-act">{st.action || "—"}</div>
+                {st.system || st.entities.length ? (
+                  <div className="v3fs-wff-meta">
+                    {st.system ? <span className="sys">{st.system}</span> : null}
+                    {st.entities.slice(0, 3).map((e, k) => <span key={k} className="ent">{e}</span>)}
+                  </div>
+                ) : null}
+              </div>
+              {j < steps.length - 1 ? <span className="v3fs-wff-arrow" aria-hidden="true">›</span> : null}
+            </div>
+          ))}
+        </div>
+      ) : <p className="v3fs-nb-modal-empty">No steps mapped for this workflow.</p>}
+    </div>
+  );
+}
+
 // ── The area-scoped (or complete) ontology + current-state atlas, read-only.
 // Opened from the Listen board's "See the complete ontology" and each focused
 // area's business-map / atlas cards.
-function OntologyAtlasModal({ program, area, onClose }: { program: ProgramSummary; area: string | null; onClose: () => void }) {
+function OntologyAtlasModal({ program, area, section, onClose }: { program: ProgramSummary; area: string | null; section?: "map" | "atlas"; onClose: () => void }) {
   const s = (v: unknown): string => (v == null ? "" : String(v)).trim();
   const entities = ontologyEntities(program).filter((e) => !area || entityArea(e, program) === area);
   const workflows = atlasWorkflows(program).filter((w) => !area || workflowArea(w) === area);
+  // Which sections to show — a focus-page card deep-links to just one (so the
+  // business-map button and the "how it works today" button open DIFFERENT
+  // views, not the same combined modal); "See the complete ontology" shows both.
+  const showMap = section !== "atlas";
+  const showAtlas = section !== "map";
   // Default to the graph — the operator asked to SEE the map — with a List
   // toggle for the definitions/relationships text (which also carries links to
   // entities outside this view that the graph can't draw).
   const [mapView, setMapView] = useState<"graph" | "list">("graph");
+  const [atlasView, setAtlasView] = useState<"flow" | "list">("flow");
   const stepText = (step: unknown): string => {
     if (!step || typeof step !== "object") return s(step);
     const r = step as Record<string, unknown>;
@@ -580,11 +723,16 @@ function OntologyAtlasModal({ program, area, onClose }: { program: ProgramSummar
         <div className="v3fs-nb-modal-h">
           <div>
             <div className="v3fs-nb-modal-eyebrow">{area ? `${area} · Listen` : "Every area · Listen"}</div>
-            <h2 className="v3fs-nb-modal-title">{area ? `${area} — business map & how it works today` : "The complete ontology & current-state atlas"}</h2>
+            <h2 className="v3fs-nb-modal-title">{
+              section === "map" ? (area ? `${area} — business map` : "The complete business map")
+                : section === "atlas" ? (area ? `${area} — how it works today` : "How it works today")
+                : (area ? `${area} — business map & how it works today` : "The complete ontology & current-state atlas")
+            }</h2>
           </div>
           <button type="button" className="v3fs-nb-modal-x" aria-label="Close" onClick={onClose}>✕</button>
         </div>
         <div className="v3fs-nb-modal-b">
+          {showMap ? (
           <section className="v3fs-nb-modal-sec">
             <div className="v3fs-nb-modal-sh">
               <b>Business map</b><span className="code">ontology · {entities.length} {entities.length === 1 ? "entity" : "entities"}</span>
@@ -611,9 +759,23 @@ function OntologyAtlasModal({ program, area, onClose }: { program: ProgramSummar
               </div>
             ) : <p className="v3fs-nb-modal-empty">No entities mapped {area ? "for this area" : "yet"}.</p>}
           </section>
+          ) : null}
+          {showAtlas ? (
           <section className="v3fs-nb-modal-sec">
-            <div className="v3fs-nb-modal-sh"><b>How it works today</b><span className="code">current-state atlas · {workflows.length} {workflows.length === 1 ? "workflow" : "workflows"}</span></div>
-            {workflows.length ? (
+            <div className="v3fs-nb-modal-sh">
+              <b>How it works today</b><span className="code">current-state atlas · {workflows.length} {workflows.length === 1 ? "workflow" : "workflows"}</span>
+              {workflows.length ? (
+                <span className="v3fs-nb-modal-vt" role="tablist" aria-label="Atlas view">
+                  <button type="button" role="tab" aria-selected={atlasView === "flow"} className={atlasView === "flow" ? "on" : ""} onClick={() => setAtlasView("flow")}>Flow</button>
+                  <button type="button" role="tab" aria-selected={atlasView === "list"} className={atlasView === "list" ? "on" : ""} onClick={() => setAtlasView("list")}>List</button>
+                </span>
+              ) : null}
+            </div>
+            {workflows.length && atlasView === "flow" ? (
+              <div className="v3fs-nb-modal-flows">
+                {workflows.map((w, i) => <WorkflowFlow key={i} workflow={w} />)}
+              </div>
+            ) : workflows.length ? (
               <div className="v3fs-nb-modal-wfs">
                 {workflows.map((w, i) => {
                   const steps = Array.isArray(w.steps) ? (w.steps as unknown[]) : [];
@@ -627,6 +789,7 @@ function OntologyAtlasModal({ program, area, onClose }: { program: ProgramSummar
               </div>
             ) : <p className="v3fs-nb-modal-empty">No workflows mapped {area ? "for this area" : "yet"}.</p>}
           </section>
+          ) : null}
         </div>
       </div>
     </div>
