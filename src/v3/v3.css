@@ -8486,7 +8486,11 @@ select.v3fs-dir-in {cursor:pointer}
    the people column can stick while the grid scrolls. The border/radius live
    HERE — overflow:hidden on the grid itself would capture the stickiness. */
 .v3fs-dka-matrixwrap {overflow:auto;max-height:min(64vh, 640px);margin-top:16px;border:1px solid var(--fs-line);border-radius:12px}
-.v3fs-dka-matrix {display:grid;min-width:560px;background:var(--fs-card)}
+/* min-width:max-content makes the grid's own border box span its TRACKS.
+   Without it the grid box stays at the wrap's width and the tracks overflow
+   it — and position:sticky clamps cells inside the grid box, so the pinned
+   left column would slide away over the last stretch of horizontal scroll. */
+.v3fs-dka-matrix {display:grid;min-width:max-content;background:var(--fs-card)}
 .v3fs-dka-corner {grid-column:1;font-family:var(--v3-font-mono, ui-monospace);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--v3-text-muted);
   padding:12px 14px;display:flex;align-items:center;background:color-mix(in srgb, var(--v3-accent) 4%, var(--fs-card));border-bottom:1px solid var(--fs-line);
   position:sticky;top:0;left:0;z-index:5}
@@ -8495,7 +8499,10 @@ select.v3fs-dir-in {cursor:pointer}
   position:sticky;top:0;z-index:4}
 .v3fs-dka-ahdr .mono {width:24px;height:24px;border-radius:7px;display:grid;place-items:center;font-size:9.5px;font-weight:700;
   background:color-mix(in srgb, var(--acc, var(--v3-accent)) 16%, transparent);color:var(--acc, var(--v3-accent))}
-.v3fs-dka-ahdr .an {font-weight:650;font-size:11.5px;color:var(--v3-text-primary);line-height:1.15}
+/* max-width keeps long area names WRAPPING under the grid's max-content
+   sizing (min-width:max-content would otherwise let each column grow to its
+   unwrapped header width). */
+.v3fs-dka-ahdr .an {font-weight:650;font-size:11.5px;color:var(--v3-text-primary);line-height:1.15;max-width:104px}
 .v3fs-dka-person {grid-column:1;display:flex;align-items:center;gap:10px;padding:11px 14px;border-top:1px solid var(--fs-line);min-width:0;
   position:sticky;left:0;z-index:3;background:var(--fs-card)}
 .v3fs-dka-person.spans {background:linear-gradient(90deg, color-mix(in srgb, var(--v3-accent) 7%, transparent), transparent), var(--fs-card)}
