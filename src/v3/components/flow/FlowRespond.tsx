@@ -434,6 +434,33 @@ export default function FlowRespond({ token }: { token: string }) {
     }
   };
 
+  // "Request a meeting instead" — the stakeholder can skip the form and ask for
+  // a live session. It posts through the same flow-portal channel as a response
+  // note (so the operator sees the ask in the record) but keeps the link open,
+  // so they can still answer below if they change their mind.
+  const [meetingSent, setMeetingSent] = useState(false);
+  const requestMeeting = async (preferred: string, kind: "listen" | "prototype") => {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const note = kind === "prototype"
+        ? `⧉ Requested a live walkthrough of the prototype instead of self-serving — preferred time: ${preferred}. Please demo it live and capture my feedback.`
+        : `⧉ Requested a meeting instead of the form — preferred time: ${preferred}. Please schedule a short call and turn the conversation into my input.`;
+      const response = await fetch(`${FUNCTIONS_BASE}/flow-portal`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, answers: note, meetingRequested: true, meetingPreferred: preferred }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(typeof body.error === "string" ? body.error : "Could not send that request.");
+      setMeetingSent(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not send that request.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <div className="v3-shell v3fs-shell">
       <div className="v3fs-app">
@@ -465,6 +492,8 @@ export default function FlowRespond({ token }: { token: string }) {
               {state.pack.followUp ? <FollowUpBanner stakeholder={greetName}
                 submissions={state.pack.submissions ?? []}
                 changes={state.pack.priorReview ? reviewDiff(state.pack.priorReview, shownReview) : undefined} /> : null}
+              <MeetingRequestBar kind="listen" sent={meetingSent} submitting={submitting}
+                onRequest={(pref) => void requestMeeting(pref, "listen")} />
               <FlowReviewSurface review={shownReview} stakeholder={greetName}
                 programme={state.pack.programme} objective={state.pack.objective}
                 returning={!!state.pack.followUp}
@@ -503,6 +532,8 @@ export default function FlowRespond({ token }: { token: string }) {
                 {state.pack.openingQuote ? <blockquote className="v3fs-portal-quote">{state.pack.openingQuote}</blockquote> : null}
                 {state.pack.scenario ? <p className="v3fs-portal-intro">{state.pack.scenario}</p> : null}
               </header>
+              <MeetingRequestBar kind="prototype" sent={meetingSent} submitting={submitting}
+                onRequest={(pref) => void requestMeeting(pref, "prototype")} />
               <div className="v3fs-portal-qs">
                 {state.pack.pilotHtml ? (
                   // The built prototype IS the experience — use it, then give a
@@ -931,6 +962,66 @@ function RespondRecap({ stakeholder, submissions, kind }: {
             </li>
           ))}
         </ul>
+      ) : null}
+    </div>
+  );
+}
+
+/** "Request a meeting instead" — an offer atop the form/prototype so a
+ * stakeholder who'd rather talk can ask for a live session in two taps. The ask
+ * is recorded through the same channel as a response, so the operator sees it;
+ * the link stays open, so they can still self-serve if they change their mind. */
+function MeetingRequestBar({ kind, sent, submitting, onRequest }: {
+  kind: "listen" | "prototype";
+  sent: boolean;
+  submitting: boolean;
+  onRequest: (preferred: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [slot, setSlot] = useState<string>("");
+  const SLOTS = ["Tue AM", "Wed PM", "Thu AM", "Just reach out"];
+  const proto = kind === "prototype";
+
+  if (sent) {
+    return (
+      <div className="v3fs-mrq done" role="status">
+        <span className="v3fs-mrq-tick" aria-hidden="true">✓</span>
+        <p>
+          <b>{proto ? "Walkthrough requested." : "Meeting requested."}</b>{" "}
+          {proto
+            ? "We’ll set up a live demo and capture your feedback — no need to give a verdict here unless you want to."
+            : "We’ll be in touch to schedule, and turn the conversation into your input — so you don’t have to write anything. You can still answer below if you like."}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="v3fs-mrq">
+      <div className="v3fs-mrq-row">
+        <span className="v3fs-mrq-ic" aria-hidden="true">📅</span>
+        <div className="v3fs-mrq-t">
+          <b>{proto ? "Want to walk through it together?" : "Prefer to talk it through?"}</b>
+          <span>{proto ? "Request a short session and we’ll demo it live and capture your feedback." : "Skip the form — request a short call and we’ll capture it for you."}</span>
+        </div>
+        <button type="button" className="v3fs-mrq-req" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+          Request a meeting
+        </button>
+      </div>
+      {open ? (
+        <div className="v3fs-mrq-panel">
+          <div className="v3fs-mrq-hint">When suits you? Pick any — or we’ll reach out to find a time.</div>
+          <div className="v3fs-mrq-slots" role="radiogroup" aria-label="Preferred time">
+            {SLOTS.map((s) => (
+              <button key={s} type="button" role="radio" aria-checked={slot === s}
+                className={`v3fs-mrq-slot${slot === s ? " on" : ""}`} onClick={() => setSlot(s)}>{s}</button>
+            ))}
+          </div>
+          <button type="button" className="v3fs-mrq-send" disabled={submitting}
+            onClick={() => onRequest(slot || "Just reach out")}>
+            {submitting ? "Sending…" : proto ? "Request the session" : "Request the meeting"}
+          </button>
+        </div>
       ) : null}
     </div>
   );

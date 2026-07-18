@@ -8601,3 +8601,24 @@ select.v3fs-dir-in {cursor:pointer}
 .v3fs-dka-note p {margin:0;font-size:12.5px;color:var(--v3-text-primary);line-height:1.5}
 .v3fs-dka-note b {color:var(--v3-accent)}
 .v3fs-dka-hint {margin:12px 2px 0;font-size:11px;color:var(--v3-text-muted);line-height:1.5}
+
+/* ── "Request a meeting instead" bar on the stakeholder linked pages ── */
+.v3fs-mrq {margin:16px 0;border:1px solid color-mix(in srgb, var(--v3-accent) 24%, var(--fs-line));background:color-mix(in srgb, var(--v3-accent) 5%, transparent);border-radius:13px;padding:14px 16px}
+.v3fs-mrq-row {display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.v3fs-mrq-ic {width:34px;height:34px;border-radius:10px;flex:none;display:grid;place-items:center;font-size:16px;background:color-mix(in srgb, var(--v3-accent) 13%, transparent)}
+.v3fs-mrq-t {display:flex;flex-direction:column;min-width:0}
+.v3fs-mrq-t b {font-size:13.5px;font-weight:650;color:var(--v3-text-primary)}
+.v3fs-mrq-t span {font-size:12px;color:var(--v3-text-muted);margin-top:1px}
+.v3fs-mrq-req {margin-left:auto;border:1px solid var(--v3-accent);color:var(--v3-accent);background:var(--fs-card);border-radius:10px;padding:9px 15px;font-size:13px;font-weight:650;cursor:pointer;white-space:nowrap}
+.v3fs-mrq-req:hover {background:color-mix(in srgb, var(--v3-accent) 8%, transparent)}
+.v3fs-mrq-panel {margin-top:13px;padding-top:13px;border-top:1px solid color-mix(in srgb, var(--v3-accent) 18%, var(--fs-line))}
+.v3fs-mrq-hint {font-size:12px;color:var(--v3-text-muted)}
+.v3fs-mrq-slots {display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.v3fs-mrq-slot {border:1px solid var(--fs-line);background:var(--fs-card);border-radius:9px;padding:8px 13px;font-size:12.5px;cursor:pointer;color:var(--v3-text-primary)}
+.v3fs-mrq-slot.on {border-color:var(--v3-accent);background:color-mix(in srgb, var(--v3-accent) 10%, transparent);color:var(--v3-accent);font-weight:650}
+.v3fs-mrq-send {margin-top:4px;background:var(--v3-accent);color:#fff;border:0;border-radius:10px;padding:10px 17px;font-size:13px;font-weight:650;cursor:pointer}
+.v3fs-mrq-send:disabled {opacity:.55;cursor:default}
+.v3fs-mrq.done {display:flex;gap:11px;align-items:flex-start;border-color:color-mix(in srgb, var(--color-success) 34%, var(--fs-line));background:color-mix(in srgb, var(--color-success) 8%, transparent)}
+.v3fs-mrq-tick {width:26px;height:26px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:13px;font-weight:700;background:var(--color-success);color:#fff}
+.v3fs-mrq.done p {margin:0;font-size:12.5px;color:var(--v3-text-primary);line-height:1.5}
+.v3fs-mrq.done b {color:var(--color-success)}
