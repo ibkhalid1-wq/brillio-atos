@@ -52,7 +52,7 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
   /** Open a different artifact's document (chips in studios drill through). */
   onOpenArtifact?: (artifactId: string) => void;
   /** Save a movement's inputs (role bindings from the kit studio). */
-  onSaveInputs?: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
+  onSaveInputs?: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string }; extraInputs?: Record<string, Record<string, string>> }) => Promise<void>;
 }) {
   const entry = STUDIO_REGISTRY[artifact.id];
   const storedDoc = useMemo(
@@ -256,15 +256,22 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
     try {
       const movementId = artifact.movementId;
       const inputs: Record<string, string> = {};
+      const extraInputs: Record<string, Record<string, string>> = {};
       const onBoard = resolveMovementStakeholders(program, movementId)
         .some((s) => !s.isRole && s.name.trim().toLowerCase() === askEntry.name.trim().toLowerCase());
       if (!onBoard) {
-        const dir = readDirectoryPeople(program);
-        inputs._directoryPeople = JSON.stringify([...dir, {
+        // The directory is ONE store that lives in the LISTEN bucket
+        // (readDirectoryPeople reads listen inputs); the ENTRY's movementId
+        // field is what files the person onto THIS movement's Discovery. So
+        // the write must target the listen bucket — folded into this same
+        // save via extraInputs when the artifact isn't a Listen one.
+        const dirJson = JSON.stringify([...readDirectoryPeople(program), {
           id: `dp-${Date.now().toString(36)}-${askEntry.name.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 8)}`,
           name: askEntry.name, role: askEntry.role || "Stakeholder", email: undefined, movementId,
           roleResolved: validateProgramRole(program, askEntry.role || "Stakeholder").known,
         }]);
+        if (movementId === "listen") inputs._directoryPeople = dirJson;
+        else extraInputs.listen = { _directoryPeople: dirJson };
       }
       const all = readOperatorAsks(program, movementId);
       const key = askEntry.name.trim().toLowerCase();
@@ -274,6 +281,7 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
       inputs._operatorAsks = JSON.stringify(all);
       await onSaveInputs(movementId, inputs, {
         attest: { action: `Question raised for ${askEntry.name}`, detail: q.slice(0, 120) },
+        ...(Object.keys(extraInputs).length ? { extraInputs } : {}),
       });
       setAskText("");
       setAskDone(askTarget);
