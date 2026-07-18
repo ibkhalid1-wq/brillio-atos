@@ -8718,6 +8718,10 @@ select.v3fs-dir-in {cursor:pointer}
 .v3fs-nb-modal-vt {margin-left:auto;display:inline-flex;gap:2px;padding:2px;border:1px solid var(--fs-line);border-radius:8px;background:var(--v3-surface-2, rgba(0,0,0,.02))}
 .v3fs-nb-modal-vt button {font:inherit;font-size:11px;line-height:1;padding:4px 10px;border:0;border-radius:6px;background:transparent;color:var(--v3-text-muted);cursor:pointer}
 .v3fs-nb-modal-vt button.on {background:var(--v3-surface, #fff);color:var(--v3-text-primary);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+/* "Open in workspace" — jumps to the editable artifact page in the workspace */
+.v3fs-nb-modal-edit {margin-left:8px;align-self:center;font:inherit;font-size:11px;font-weight:600;padding:4px 11px;border:1px solid var(--v3-accent, #4f46e5);border-radius:7px;background:transparent;color:var(--v3-accent, #4f46e5);cursor:pointer;white-space:nowrap}
+.v3fs-nb-modal-edit:hover {background:color-mix(in srgb, var(--v3-accent, #4f46e5) 8%, transparent)}
+.v3fs-nb-modal-sh:not(:has(.v3fs-nb-modal-vt)) .v3fs-nb-modal-edit {margin-left:auto}
 /* Read-only ontology graph (entities as nodes, relationships as edges) */
 .v3fs-onto-g-wrap {overflow:auto;border:1px solid var(--fs-line);border-radius:10px;background:var(--v3-surface-2, rgba(0,0,0,.015));padding:8px}
 .v3fs-onto-g {display:block}

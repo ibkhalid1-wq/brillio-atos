@@ -52,10 +52,11 @@ const initials = (name: string): string => {
   return ((w[0]?.[0] ?? "") + (w[1]?.[0] ?? "")).toUpperCase() || (name.slice(0, 2).toUpperCase());
 };
 
-export default function FlowNextBoard({ program, phase, onOpenWork, onSaveInputs, onScheduleFollowUp, onMintFollowUp }: {
+export default function FlowNextBoard({ program, phase, onOpenWork, onOpenWorkspace, onSaveInputs, onScheduleFollowUp, onMintFollowUp }: {
   program: ProgramSummary;
   phase: Phase;
   onOpenWork: () => void;
+  onOpenWorkspace?: (artifactId: string) => void;
   onSaveInputs?: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
   onScheduleFollowUp?: (movementId: string, who: string, date: string) => Promise<void>;
   onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string; unnamed?: boolean }) => Promise<string | null>;
@@ -149,7 +150,7 @@ export default function FlowNextBoard({ program, phase, onOpenWork, onSaveInputs
       {focusArea
         ? <FocusedArea program={program} phase={phase} area={focusArea} rows={rows} ls={ls} ah={ah} onBack={() => setFocusArea(null)} onOpenWork={onOpenWork} onOpenOntology={(area, section) => setOntoModal({ area, section })} onScheduleFollowUp={onScheduleFollowUp} onMintFollowUp={onMintFollowUp} />
         : <Board program={program} phase={phase} rows={rows} ls={ls} ah={ah} onFocus={setFocusArea} onOpenWork={onOpenWork} onSaveInputs={onSaveInputs} onOpenOntology={(area) => setOntoModal({ area })} />}
-      {ontoModal ? <OntologyAtlasModal program={program} area={ontoModal.area} section={ontoModal.section} onClose={() => setOntoModal(null)} /> : null}
+      {ontoModal ? <OntologyAtlasModal program={program} area={ontoModal.area} section={ontoModal.section} onOpenWorkspace={onOpenWorkspace} onClose={() => setOntoModal(null)} /> : null}
     </div>
   );
 }
@@ -696,7 +697,7 @@ function WorkflowFlow({ workflow }: { workflow: Record<string, unknown> }) {
 // ── The area-scoped (or complete) ontology + current-state atlas, read-only.
 // Opened from the Listen board's "See the complete ontology" and each focused
 // area's business-map / atlas cards.
-function OntologyAtlasModal({ program, area, section, onClose }: { program: ProgramSummary; area: string | null; section?: "map" | "atlas"; onClose: () => void }) {
+function OntologyAtlasModal({ program, area, section, onOpenWorkspace, onClose }: { program: ProgramSummary; area: string | null; section?: "map" | "atlas"; onOpenWorkspace?: (artifactId: string) => void; onClose: () => void }) {
   const s = (v: unknown): string => (v == null ? "" : String(v)).trim();
   const entities = ontologyEntities(program).filter((e) => !area || entityArea(e, program) === area);
   const workflows = atlasWorkflows(program).filter((w) => !area || workflowArea(w) === area);
@@ -742,6 +743,7 @@ function OntologyAtlasModal({ program, area, section, onClose }: { program: Prog
                   <button type="button" role="tab" aria-selected={mapView === "list"} className={mapView === "list" ? "on" : ""} onClick={() => setMapView("list")}>List</button>
                 </span>
               ) : null}
+              {onOpenWorkspace ? <button type="button" className="v3fs-nb-modal-edit" onClick={() => { onOpenWorkspace("domain-ontology"); onClose(); }}>Open in workspace →</button> : null}
             </div>
             {entities.length && mapView === "graph" ? (
               <OntologyGraph program={program} entities={entities} />
@@ -770,6 +772,7 @@ function OntologyAtlasModal({ program, area, section, onClose }: { program: Prog
                   <button type="button" role="tab" aria-selected={atlasView === "list"} className={atlasView === "list" ? "on" : ""} onClick={() => setAtlasView("list")}>List</button>
                 </span>
               ) : null}
+              {onOpenWorkspace ? <button type="button" className="v3fs-nb-modal-edit" onClick={() => { onOpenWorkspace("current-state-atlas"); onClose(); }}>Open in workspace →</button> : null}
             </div>
             {workflows.length && atlasView === "flow" ? (
               <div className="v3fs-nb-modal-flows">
