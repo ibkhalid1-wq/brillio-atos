@@ -131,13 +131,17 @@ export function areaMonogram(area: string): string {
  * into columns by collection state (Heard · Awaiting · To reach), each card the
  * person's quote, dated feedback trail (click → transcript), follow-ups,
  * meeting, and link channels. Driven by resolveMovementStakeholders. */
-export function IntervieweeDiscovery({ program, movementId, captureField, areaFilter, docsStale, regenerating, onRegenerateStale, onSaveInputs, onMintFollowUp, onMintReview, onScheduleFollowUp, onSendForApproval, onFocusPerson, onCaptured, onDocumentCaptured }: {
+export function IntervieweeDiscovery({ program, movementId, captureField, areaFilter, laneExtras, docsStale, regenerating, onRegenerateStale, onSaveInputs, onMintFollowUp, onMintReview, onScheduleFollowUp, onSendForApproval, onFocusPerson, onCaptured, onDocumentCaptured }: {
   program: ProgramSummary;
   movementId: string;
   captureField: string;
   /** Area cards on the phase home act as a filter — when non-empty, only these
    * areas' lanes show. Empty = every area. */
   areaFilter?: string[];
+  /** Per-area summary chips/actions for the lane header (map state, "Open the
+   * map →", validation round …) — the area lane IS the phase's area card now,
+   * so the summary and the stakeholder cards live on one surface. */
+  laneExtras?: (area: string) => ReactNode;
   /** A required document trails the evidence — cards offer the regenerate
    * instead of re-asking "still open" items that may already be answered. */
   docsStale?: boolean;
@@ -273,8 +277,11 @@ export function IntervieweeDiscovery({ program, movementId, captureField, areaFi
     const filtered = areaFilter && areaFilter.length
       ? order.filter((a) => [...areaTokens(a)].some((t) => selTokens.has(t)))
       : order;
-    const lanes = filtered.filter((a) => groups.has(a)).map((area) => {
-      const list = groups.get(area)!.slice().sort((a, b) => STATUS_RANK[a.coll.status] - STATUS_RANK[b.coll.status]);
+    // An ontology area with NO people yet still gets a lane — the areas ARE the
+    // phase's cards now, so an uncovered area must stay visible as open work
+    // rather than silently vanishing from Discovery.
+    const lanes = filtered.filter((a) => groups.has(a) || areaRows.has(a)).map((area) => {
+      const list = (groups.get(area) ?? []).slice().sort((a, b) => STATUS_RANK[a.coll.status] - STATUS_RANK[b.coll.status]);
       const heard = list.filter((e) => e.coll.heard && !e.s.questions.length).length;
       const toReach = list.filter((e) => e.coll.status === "toreach").length;
       const waiting = list.filter((e) => e.coll.status === "waiting").length;
@@ -413,11 +420,16 @@ export function IntervieweeDiscovery({ program, movementId, captureField, areaFi
               readyLabel={movementId === "listen" ? "Ready to envision" : movementId === "envision" ? "Ready to show" : "All reviewed"}
               open={laneIsOpen(lane.area, laneDefaultOpen(lane))} onToggle={(o) => setLaneOpen(lane.area, o)}
               toReach={lane.toReach} inviting={inviteBusyArea === lane.area}
+              extras={laneExtras?.(lane.area)}
               onInvite={canInvite && lane.toReach > 0 ? async () => {
                 setInviteBusyArea(lane.area);
                 try { await inviteArea(lane.list); } finally { setInviteBusyArea(null); }
               } : undefined}>
-              {lane.list.map(renderCard)}
+              {lane.list.length ? lane.list.map(renderCard) : (
+                <div className="v3fs-lanes-empty" role="note">
+                  No people filed under {lane.area} yet — add someone on the People page or map a person to it in the Discovery Kit matrix.
+                </div>
+              )}
             </AreaLane>
           ))}
         </div>
@@ -442,7 +454,7 @@ export function IntervieweeDiscovery({ program, movementId, captureField, areaFi
  * state; its body holds that area's stakeholder cards. Collapsible, so a
  * finished area folds away while the operator works the ones still open.
  */
-function AreaLane({ area, row, heard, total, waiting, ready, readyLabel, open, onToggle, toReach, accent, monogram, inviting, onInvite, children }: {
+function AreaLane({ area, row, heard, total, waiting, ready, readyLabel, open, onToggle, toReach, accent, monogram, inviting, onInvite, extras, children }: {
   area: string;
   row?: AreaProgress;
   heard: number;
@@ -462,6 +474,8 @@ function AreaLane({ area, row, heard, total, waiting, ready, readyLabel, open, o
   inviting?: boolean;
   /** Mint the unified link for every not-yet-reached person in this area. */
   onInvite?: () => void | Promise<void>;
+  /** Phase-specific header chips/actions (map state, validation round …). */
+  extras?: ReactNode;
   children: ReactNode;
 }) {
   const done = total > 0 && heard >= total;
@@ -484,6 +498,7 @@ function AreaLane({ area, row, heard, total, waiting, ready, readyLabel, open, o
           </div>
           <span className="v3fs-lane-sum">{total ? <><b>{heard}</b>/{total}</> : "—"}{waiting ? <em> · {waiting} waiting</em> : null}</span>
         </div>
+        {extras ? <span className="v3fs-lane-x">{extras}</span> : null}
         <span className={`v3fs-lane-st${complete ? " ready" : ""}`}>
           <i aria-hidden="true">{complete ? "●" : "◔"}</i>{complete ? readyLabel : "Collecting"}
         </span>

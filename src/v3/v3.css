@@ -7817,7 +7817,7 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 /* AREA lanes lead the board — a stronger, always-tinted header band with a
    larger monogram tile and a bigger area name, so alliances/delivery/etc. read
    as section headers, not rows. */
-.v3fs-lane-h {display:grid;grid-template-columns:auto 1fr auto auto auto;align-items:center;gap:16px;
+.v3fs-lane-h {display:flex;align-items:center;gap:16px;
   padding:15px 22px;cursor:pointer;list-style:none;user-select:none;transition:background .14s ease;
   background:linear-gradient(color-mix(in srgb,var(--lane-accent) 8%,var(--fs-card)),color-mix(in srgb,var(--lane-accent) 4%,var(--fs-card)));
   border-bottom:1px solid color-mix(in srgb,var(--lane-accent) 16%,transparent)}
@@ -7828,7 +7828,16 @@ details[open] > summary .v3fs-disc-c::after {display:none}
   border-radius:12px;background:var(--lane-accent);color:#fff;
   font-size:14px;font-weight:800;letter-spacing:.02em;box-shadow:0 2px 6px -2px color-mix(in srgb,var(--lane-accent) 60%,transparent)}
 .v3fs-lane.ready .v3fs-lane-ic {background:var(--v3-green);color:#fff}
-.v3fs-lane-id {display:flex;flex-direction:column;gap:2px;min-width:0}
+.v3fs-lane-id {display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 auto}
+/* Phase-specific lane-header extras — map state + "Open the map" on Listen,
+   validation round/verdicts on Prototype. Sit between the meter and status. */
+.v3fs-lane-x {display:inline-flex;align-items:center;gap:8px;flex:0 0 auto}
+.v3fs-lanex-chip {font-size:11px;font-weight:700;letter-spacing:.02em;color:var(--v3-amber, #b45309);
+  background:color-mix(in srgb, var(--v3-amber, #b45309) 10%, transparent);border-radius:7px;padding:4px 9px;white-space:nowrap}
+.v3fs-lanex-chip.ok {color:var(--v3-green, #157f3d);background:color-mix(in srgb, var(--v3-green, #157f3d) 10%, transparent)}
+.v3fs-lanex-btn {border:1px solid var(--fs-line);background:var(--v3-surface-2);border-radius:9px;padding:5px 11px;
+  font-size:11.5px;font-weight:700;color:var(--v3-text);cursor:pointer;white-space:nowrap}
+.v3fs-lanex-btn:hover {border-color:color-mix(in srgb, var(--lane-accent) 45%, var(--fs-line))}
 .v3fs-lane-id b {font-size:17px;font-weight:750;letter-spacing:-.02em;color:var(--v3-text);text-transform:none}
 .v3fs-lane-id span {font-size:11px;font-weight:600;color:color-mix(in srgb,var(--lane-accent) 70%,var(--v3-text-muted));letter-spacing:.02em;text-transform:uppercase}
 .v3fs-lane-prog {display:flex;align-items:center;gap:9px;font-size:11px;font-weight:700;color:var(--v3-text-muted);font-variant-numeric:tabular-nums}

@@ -7,7 +7,8 @@ import ShowCockpit from "@/v3/components/flow/ShowCockpit";
 import ProductOwnerCockpit from "@/v3/components/flow/ProductOwnerCockpit";
 import ListenCockpit from "@/v3/components/flow/ListenCockpit";
 import { loopState } from "@/v3/components/flow/flowLoop";
-import AreaLanesStrip from "@/v3/components/flow/AreaLanesStrip";
+import { areaHasModel } from "@/v3/components/flow/flowAreas";
+import OntologyAtlasModal from "@/v3/components/flow/OntologyAtlasModal";
 import ExternalBuildPanel from "@/v3/components/flow/ExternalBuildPanel";
 import DiscoveryKitAlign from "@/v3/components/flow/DiscoveryKitAlign";
 // The artifact studio pulls React Flow and every WYSIWYG editor — a heavy
@@ -121,6 +122,9 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
   // opened from the top-right button (or the movebar gauge). Holds the movement
   // whose gate is open, or null.
   const [gateModalFor, setGateModalFor] = useState<string | null>(null);
+  // The graphical ontology/atlas map, opened from a Listen area lane's
+  // "Open the map →" — the lane headers carry the per-area summary now.
+  const [ontoModal, setOntoModal] = useState<{ area: string | null } | null>(null);
   useEffect(() => {
     if (!gateModalFor) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setGateModalFor(null); };
@@ -646,21 +650,19 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
                     return (
                   <div className={`v3fs-collect-wrap${railPin ? " pinned" : ""}`}>
                     <div className="v3fs-collect-main">
-                      {/* The per-area summary lanes lead Discovery (salvaged from
-                          the reimagined board): Listen shows heard/map/atlas per
-                          area with the graphical ontology one click away;
-                          Prototype shows the validation loop per area plus the
-                          external-build panel (link a build, generate an
-                          improvement prompt from the evidence). */}
-                      {movement.id === "listen" ? (
-                        <AreaLanesStrip program={program} phase="listen"
-                          onOpenWorkspace={(artifactId) => goTab(`art:${artifactId}` as MovementTab)} />
+                      {/* The area lanes in the board below ARE the phase's area
+                          cards: each lane header carries the per-area summary
+                          (map state + "Open the map →" on Listen, validation
+                          round/verdicts on Prototype) and expands to that
+                          area's stakeholder cards — script, asks, link,
+                          meeting invite, transcript capture and attachments. */}
+                      {movement.id === "listen" && ontoModal ? (
+                        <OntologyAtlasModal program={program} area={ontoModal.area}
+                          onOpenWorkspace={(artifactId) => goTab(`art:${artifactId}` as MovementTab)}
+                          onClose={() => setOntoModal(null)} />
                       ) : null}
                       {movement.id === "envision" || movement.id === "show" ? (
-                        <>
-                          <AreaLanesStrip program={program} phase="prototype" />
-                          <ExternalBuildPanel program={program} onSaveInputs={onSaveInputs} />
-                        </>
+                        <ExternalBuildPanel program={program} onSaveInputs={onSaveInputs} />
                       ) : null}
                       {/* The portfolio flywheel: agent designs ACCEPTED in other
                           programmes surface as seeded candidates while this
@@ -681,6 +683,34 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
                       {hasPeople ? (
                         <IntervieweeDiscovery program={program} movementId={movement.id}
                           areaFilter={selAreas}
+                          laneExtras={movement.id === "listen" ? (area) => {
+                            const mapped = areaHasModel(program, area);
+                            return (
+                              <>
+                                <span className={`v3fs-lanex-chip${mapped ? " ok" : ""}`}>{mapped ? "✓ map confirmed" : "● map drafting"}</span>
+                                <button type="button" className="v3fs-lanex-btn"
+                                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOntoModal({ area }); }}>
+                                  Open the map →
+                                </button>
+                              </>
+                            );
+                          } : movement.id === "envision" || movement.id === "show" ? (area) => {
+                            const ls = loopState(program);
+                            const P = ls.areas.find((a) => a.area === area);
+                            if (!ls.hasPrototype) return <span className="v3fs-lanex-chip">prototype in design</span>;
+                            const accepted = P?.accepted ?? 0;
+                            const changes = (P?.objections ?? 0) + (P?.changes ?? 0);
+                            const pending = P?.pending ?? 0;
+                            return (
+                              <>
+                                <span className="v3fs-lanex-chip">Round {ls.round}</span>
+                                {(P?.total ?? 0) === 0
+                                  ? <span className="v3fs-lanex-chip">awaiting verdicts</span>
+                                  : <span className="v3fs-lanex-chip">{accepted} ✓ · {changes} ✕ · {pending} ⧗</span>}
+                                {P?.converged ? <span className="v3fs-lanex-chip ok">signed off</span> : null}
+                              </>
+                            );
+                          } : undefined}
                           captureField={meetingKit(program, movement.id)?.captureField ?? "interviewTranscripts"}
                           docsStale={staleArtifacts.some((a) => !regenActive(a.id))}
                           regenerating={spineRunning || generating}
