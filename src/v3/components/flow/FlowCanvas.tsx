@@ -7,7 +7,8 @@ import ShowCockpit from "@/v3/components/flow/ShowCockpit";
 import ProductOwnerCockpit from "@/v3/components/flow/ProductOwnerCockpit";
 import ListenCockpit from "@/v3/components/flow/ListenCockpit";
 import { loopState } from "@/v3/components/flow/flowLoop";
-import FlowNextBoard from "@/v3/components/flow/FlowNextBoard";
+import AreaLanesStrip from "@/v3/components/flow/AreaLanesStrip";
+import ExternalBuildPanel from "@/v3/components/flow/ExternalBuildPanel";
 import DiscoveryKitAlign from "@/v3/components/flow/DiscoveryKitAlign";
 // The artifact studio pulls React Flow and every WYSIWYG editor — a heavy
 // chunk only needed when a document is opened. Lazy-load it so it never
@@ -37,7 +38,6 @@ import { MOVEMENT_CAPTION, leadTab, type MovementTab } from "@/v3/components/flo
 import { useSpineRunning } from "@/v3/components/flow/flowUpNext";
 import { IntervieweeDiscovery, stakeholderCollection } from "@/v3/components/flow/CollectBoard";
 import MeetingKitCard from "@/v3/components/flow/MeetingKitCard";
-import FrameCoveragePlan from "@/v3/components/flow/FrameCoveragePlan";
 
 interface FlowCanvasProps {
   program: ProgramSummary;
@@ -88,9 +88,6 @@ interface FlowCanvasProps {
   onReopenGate?: (movementId: string, reason: string) => Promise<void>;
   /** Awaitable agent run — the spine runner sequences regenerations with it. */
   onRunAgentAndWait?: (agentId: string, phaseId: string) => Promise<void>;
-  /** The reimagined chrome (?ui=next): the workstream phases (Listen ·
-   * Prototype) open on the parallel-area board instead of the classic body. */
-  next?: boolean;
 }
 
 
@@ -103,7 +100,7 @@ interface FlowCanvasProps {
  * one-line brief, and the ranked "Up next" queue. Nothing locks; editing
  * unfolds in place via the shared inputs panel.
  */
-export default function FlowCanvas({ program, programs, runningAgentIds, regenActiveIds, onEnqueueRegen, agentErrors, onRunAgent, onSaveInputs, onMintPacks, onMintDemoInvites, onCompileShipLanes, onToggleShipItem, onSetShipLane, onScheduleFollowUp, onMintFollowUp, onMintReview, onSaveArtifactDoc, onSendForApproval, onOpenInbox, onRecordShowPass, onRecordGate, onReopenGate, relatedPrograms, onSelectProgram, onComment, next }: FlowCanvasProps) {
+export default function FlowCanvas({ program, programs, runningAgentIds, regenActiveIds, onEnqueueRegen, agentErrors, onRunAgent, onSaveInputs, onMintPacks, onMintDemoInvites, onCompileShipLanes, onToggleShipItem, onSetShipLane, onScheduleFollowUp, onMintFollowUp, onMintReview, onSaveArtifactDoc, onSendForApproval, onOpenInbox, onRecordShowPass, onRecordGate, onReopenGate, relatedPrograms, onSelectProgram, onComment }: FlowCanvasProps) {
   // A regeneration is "active" for an artifact when it's in flight OR queued. All
   // Regenerate controls check this to hide themselves; enqueueRegen is the single
   // ordered/de-duplicated path (falls back to an immediate run if unwired).
@@ -140,12 +137,7 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
   const [railFocus, setRailFocus] = useState<string | null>(null);
   const [railRead, setRailRead] = useState<EvidenceEntry | null>(null);
   // Next chrome: the workstream phases open on the parallel-area board; this
-  // flips true once the operator drops into the full workspace for a phase.
-  const [nextWork, setNextWork] = useState(false);
-  useEffect(() => { setRailFocus(null); setRailRead(null); setRailHover(false); setNextWork(false); }, [active]);
-  // Reimagined chrome: the Prototype workspace is DESIGN-only (validation lives
-  // on the area board), so the loop never rests on the Validate (show) body.
-  useEffect(() => { if (next && active === "show") setActive("envision"); }, [next, active]);
+  useEffect(() => { setRailFocus(null); setRailRead(null); setRailHover(false); }, [active]);
   // Hover-intent: the rail collapses on a GRACE DELAY, not on the first pixel
   // the pointer strays — and re-entering cancels the collapse. Pinning keeps
   // hover alive through the layout shift so the panel never flaps.
@@ -280,24 +272,6 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
     .filter((e): e is { p: ProgramSummary; anchor: NonNullable<ReturnType<typeof readDrillAnchor>> } => !!e.anchor),
     [relatedPrograms]);
 
-  // Next chrome: a program-level Focus hero for the non-workstream phases
-  // (Frame · Ship · Evolve). The workstream phases carry their own Focus card
-  // inside the area board, so this fills the gap — every phase's landing reads
-  // as guided rather than a wall of cards, from the first screen.
-  const programFocus = (() => {
-    if (!next) return null;
-    const isProgramLevel = active === "frame" || active === "ship" || active === "evolve";
-    if (!isProgramLevel) return null;
-    const row = rows.find((r) => r.movement.id === active);
-    if (!row) return null;
-    const checks = [...gateChecklist(program, row.movement, row.artifacts), ...gateAugmentations(program, row.movement.id)]
-      .filter((c) => !c.advisory);
-    const readiness = gateReadiness(program, row.movement, row.artifacts, checks);
-    const done = program.gateReviews?.[active]?.status === "approved";
-    const met = checks.filter((c) => c.done).length;
-    return { name: row.movement.displayName, done, met, total: checks.length, detail: readiness.detail };
-  })();
-
   return (
     <div className="v3fs-flow v3fs-flow-spine">
       {/* The horizontal spine — every movement's state at a glance; click to
@@ -398,43 +372,8 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
           </span>
         </div>
       ) : null}
-      {programFocus ? (
-        <div className="v3fs-nb v3fs-nb-solo">
-          <div className="v3fs-nb-focus">
-            <div className="v3fs-nb-fmark" aria-hidden="true">{programFocus.done ? "✓" : "◆"}</div>
-            <div className="v3fs-nb-ftext">
-              <div className="v3fs-nb-flabel">{programFocus.name} · do this next</div>
-              <h2 className="v3fs-nb-ftitle">
-                {programFocus.done
-                  ? `${programFocus.name} is demonstrated — you can move to the next phase.`
-                  : `Continue in ${programFocus.name}${programFocus.total ? ` — ${programFocus.met} of ${programFocus.total} gate criteria met.` : "."}`}
-              </h2>
-              <div className="v3fs-nb-fsub">
-                {programFocus.done
-                  ? "The gate is recorded. The full workspace is below."
-                  : (programFocus.detail || "Pick up where you left off — the workspace is below.")}
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
       {rows.filter(({ movement }) => movement.id === active).map(({ movement, artifacts, evidence }, index) => {
         void index;
-        // Next chrome: the workstream phases (Listen · Prototype) open on the
-        // reimagined parallel-area board — the Focus card picks the next move
-        // across areas, then each area's three-zone workspace opens on tap.
-        // "Open the workspace" flips into the classic body below for editing.
-        const nextPhase: "listen" | "prototype" | null =
-          movement.id === "listen" ? "listen"
-            : (movement.id === "envision" || movement.id === "show") ? "prototype"
-              : null;
-        if (next && nextPhase && !nextWork) {
-          return (
-            <Fragment key={movement.id}>
-              <FlowNextBoard program={program} phase={nextPhase} onOpenWork={() => setNextWork(true)} onOpenWorkspace={(artifactId) => { setMovementTab((prev) => ({ ...prev, listen: `art:${artifactId}` as MovementTab })); setNextWork(true); }} onSaveInputs={onSaveInputs} onScheduleFollowUp={onScheduleFollowUp} onMintFollowUp={onMintFollowUp} />
-            </Fragment>
-          );
-        }
         const isOpen = true;
         const isDone = program.gateReviews?.[movement.id]?.status === "approved";
         const generating = artifacts.some((a) => runningAgentIds.has(a.id));
@@ -560,9 +499,6 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
 
         return (
           <Fragment key={movement.id}>
-          {next && nextPhase && nextWork ? (
-            <button type="button" className="v3fs-nb-overview" onClick={() => setNextWork(false)}>← Back to the area board</button>
-          ) : null}
           <article
             className={["v3fs-ch open", isDone ? "done" : "", isLive ? "live" : ""].filter(Boolean).join(" ")}
           >
@@ -617,11 +553,9 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
                   (loop state per area) with the Design/Validate cockpit folded
                   under it, so it reads as a single surface — not two competing
                   dashboards. The stage tabs + studios below open on demand. */}
-              {/* The Design/Validate switch is the classic-chrome loop control. In
-                  the reimagined chrome the workspace is DESIGN-only — validation
-                  moves to the area board (operator goes back to Prototype → an
-                  area to validate), so the switch is hidden here. */}
-              {(movement.id === "envision" || movement.id === "show") && !next ? (
+              {/* The Design/Validate switch — the loop control between the two
+                  Prototype bodies. */}
+              {movement.id === "envision" || movement.id === "show" ? (
                 <div className="v3fs-loopswitch" role="tablist" aria-label="Design or Validate">
                   <button type="button" role="tab" aria-selected={active === "envision"}
                     className={`v3fs-loopswitch-b${active === "envision" ? " on" : ""}`} onClick={() => setActive("envision")}>
@@ -683,6 +617,22 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
                     return (
                   <div className={`v3fs-collect-wrap${railPin ? " pinned" : ""}`}>
                     <div className="v3fs-collect-main">
+                      {/* The per-area summary lanes lead Discovery (salvaged from
+                          the reimagined board): Listen shows heard/map/atlas per
+                          area with the graphical ontology one click away;
+                          Prototype shows the validation loop per area plus the
+                          external-build panel (link a build, generate an
+                          improvement prompt from the evidence). */}
+                      {movement.id === "listen" ? (
+                        <AreaLanesStrip program={program} phase="listen"
+                          onOpenWorkspace={(artifactId) => goTab(`art:${artifactId}` as MovementTab)} />
+                      ) : null}
+                      {movement.id === "envision" || movement.id === "show" ? (
+                        <>
+                          <AreaLanesStrip program={program} phase="prototype" />
+                          <ExternalBuildPanel program={program} onSaveInputs={onSaveInputs} />
+                        </>
+                      ) : null}
                       {/* The portfolio flywheel: agent designs ACCEPTED in other
                           programmes surface as seeded candidates while this
                           one envisions — proven patterns, not blank paper. */}
@@ -1064,9 +1014,7 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
                           onSaveDoc={onSaveArtifactDoc}
                           onOpenInbox={onOpenInbox}
                           header={movement.id === "frame" && artifact.id === "discovery-kit"
-                            ? (next
-                                ? <DiscoveryKitAlign program={program} onSaveInputs={onSaveInputs} />
-                                : <FrameCoveragePlan program={program} onSaveInputs={onSaveInputs} />)
+                            ? <DiscoveryKitAlign program={program} onSaveInputs={onSaveInputs} />
                             : undefined}
                         />
                       </Suspense>

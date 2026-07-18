@@ -16,7 +16,7 @@ import { areaAccent, areaMonogram, stakeholderCollection } from "@/v3/components
 import { resolveMovementStakeholders, readListenPlan, type MovementStakeholder } from "@/v3/components/flow/flowStakeholders";
 import { listenCoverageRoles, listenCoverageAreas, listenAreaCoverage, makeListenPlanWriter } from "@/v3/components/flow/listenCoverage";
 import { listInterviewPacks } from "@/v3/components/flow/flowPortal";
-import { movementEvidence, flowMovements } from "@/v3/components/flow/flowShellData";
+import { movementEvidence, flowMovements, readMovementInputs } from "@/v3/components/flow/flowShellData";
 
 const initials = (name: string): string => {
   const w = name.split(/[^A-Za-z0-9]+/).filter(Boolean);
@@ -183,6 +183,27 @@ export default function DiscoveryKitAlign({ program, onSaveInputs }: { program: 
           <p><b>Asked once.</b> {spanners.slice(0, 3).map((p) => (p.name || p.label).split(" ")[0]).join(", ")}{spanners.length > 3 ? ` and ${spanners.length - 3} more` : ""} each span multiple areas — one interview covers everything they touch, counting toward every area they cover.</p>
         </div>
       ) : null}
+
+      {/* The confirm ceremony (ported from the retired Listen coverage plan):
+          confirming clears the Listen gate; ANY matrix edit re-opens it, because
+          the shared plan writer resets _listenCoverageConfirmed on every write. */}
+      {editable ? (() => {
+        const confirmedAt = String(readMovementInputs(program, "frame")._listenCoverageConfirmed ?? "").trim();
+        const setConfirmed = (value: string) => void onSaveInputs?.("frame", { _listenCoverageConfirmed: value }, { silent: true });
+        return (
+          <div className="v3fs-dka-foot">
+            <span className="v3fs-dka-foot-note">Confirming clears the Listen gate; any later edit re-opens it and refreshes the kit.</span>
+            {confirmedAt ? (
+              <span className="v3fs-dka-foot-r">
+                <span className="v3fs-dka-confnote">✓ Confirmed {new Date(confirmedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
+                <button type="button" className="v3fs-nb-open ghost sm" disabled={busy} onClick={() => setConfirmed("")}>Re-open</button>
+              </span>
+            ) : (
+              <button type="button" className="v3fs-nb-open sm" disabled={busy} onClick={() => setConfirmed(new Date().toISOString())}>Confirm the Listen plan</button>
+            )}
+          </div>
+        );
+      })() : null}
     </div>
   );
 }

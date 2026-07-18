@@ -4616,10 +4616,6 @@ body:has(.v3fs-pack) .v3fs-appbar:focus-within {transform:none}
 .v3fs-appbar button.v3fs-appbar-cp:hover {background:var(--v3-accent-2);color:#fff}
 /* ── Reimagined chrome (?ui=next): rail folded into the ⌘K Workbench ── */
 .v3fs-appbar-wb kbd {font-family:var(--mono, ui-monospace);font-size:11px;color:var(--v3-text-muted);border:1px solid var(--fs-line);border-radius:5px;padding:0 5px}
-.v3fs-appbar-exitnext {font-size:11.5px;font-weight:650;color:var(--v3-accent)!important;border-color:color-mix(in srgb, var(--v3-accent) 40%, var(--fs-line))}
-.v3fs-appbar-exitnext:hover {border-color:var(--v3-accent);background:color-mix(in srgb, var(--v3-accent) 8%, transparent)}
-.v3fs-appbar-exitnext.on {color:#fff!important;background:var(--v3-accent);border-color:var(--v3-accent)}
-.v3fs-appbar-exitnext.on:hover {filter:brightness(1.08)}
 /* The dock is a floating pill, not a column — with it gone the content is
    already full-width and centred, so next chrome needs no layout reflow. */
 /* Content clears the fixed bar (sponsor lens has no bar, keeps its own top). */
@@ -8430,32 +8426,14 @@ select.v3fs-dir-in {cursor:pointer}
 .v3fs-shell .adam-heading-lg,
 .v3fs-shell .adam-heading-xl {color:var(--v3-text-primary)}
 
+
 /* ══════════════════════════════════════════════════════════════════════════
-   FlowNextBoard — the reimagined workstream phase home (?ui=next only).
-   Focus card → parallel per-area board → three-zone focused workspace.
-   Reads the same --v3/--fs tokens so it flips with the theme automatically.
+   Area lanes strip — per-area summary leading the Discovery tab (salvaged
+   from the retired reimagined board). Reads the same --v3/--fs tokens.
    ══════════════════════════════════════════════════════════════════════════ */
-.v3fs-nb {display:flex;flex-direction:column;gap:14px;margin:6px 0 8px}
-.v3fs-nb b {font-weight:650;color:var(--v3-text-primary)}
-
-/* Focus — the single next move across areas */
-.v3fs-nb-focus {display:flex;gap:16px;align-items:center;flex-wrap:wrap;
-  background:var(--fs-card);border:1px solid var(--fs-line);border-radius:16px;padding:17px 20px;box-shadow:var(--fs-pop)}
-.v3fs-nb-fmark {width:42px;height:42px;border-radius:12px;flex:none;display:grid;place-items:center;font-size:19px;
-  background:color-mix(in srgb, var(--v3-accent) 12%, transparent);color:var(--v3-accent)}
-.v3fs-nb-ftext {flex:1;min-width:240px}
-.v3fs-nb-flabel {font-family:var(--v3-font-mono, ui-monospace);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--v3-accent-2);margin-bottom:5px}
-.v3fs-nb-ftitle {margin:0;font-size:1.12rem;line-height:1.24;letter-spacing:-.01em;font-weight:750;color:var(--v3-text-primary);text-wrap:balance}
-.v3fs-nb-fsub {color:var(--v3-text-muted);font-size:13px;margin-top:4px}
-.v3fs-nb-primary {background:var(--v3-accent);color:#fff;border:0;border-radius:11px;padding:11px 16px;font-size:13px;font-weight:650;cursor:pointer;white-space:nowrap;transition:filter .12s}
-.v3fs-nb-primary:hover {filter:brightness(1.08)}
-
-/* Board note + merge banner */
+.v3fs-nb-strip {display:flex;flex-direction:column;gap:11px;margin:2px 0 14px}
+.v3fs-nb-strip b {font-weight:650;color:var(--v3-text-primary)}
 .v3fs-nb-note {font-size:12.5px;color:var(--v3-text-muted);margin:2px 2px 0}
-.v3fs-nb-merge {display:flex;align-items:center;gap:11px;font-size:12.5px;color:var(--v3-text-muted);
-  background:color-mix(in srgb, var(--v3-accent) 7%, transparent);border:1px solid color-mix(in srgb, var(--v3-accent) 24%, transparent);border-radius:12px;padding:10px 14px}
-.v3fs-nb-merge-ic {color:var(--v3-accent);font-size:15px;flex:none}
-.v3fs-nb-merge b {color:var(--v3-accent)}
 
 /* Lanes — one area per row */
 .v3fs-nb-lane {display:flex;align-items:center;gap:14px;flex-wrap:wrap;
@@ -8485,57 +8463,8 @@ select.v3fs-dir-in {cursor:pointer}
 .v3fs-nb-focusbtn {margin-left:auto;border:1px solid var(--v3-accent);color:var(--v3-accent);background:transparent;border-radius:9px;padding:8px 13px;font-size:12.5px;font-weight:650;cursor:pointer;white-space:nowrap;transition:background .12s}
 .v3fs-nb-focusbtn:hover {background:color-mix(in srgb, var(--v3-accent) 8%, transparent)}
 
-/* Focused area — three-zone workspace */
-.v3fs-nb-backrow {display:flex;align-items:center;gap:12px;margin:2px 2px 0}
-.v3fs-nb-back {font-size:12.5px;color:var(--v3-accent);cursor:pointer;border:1px solid var(--fs-line);border-radius:8px;padding:6px 11px;background:var(--fs-card);font-weight:600}
-.v3fs-nb-back:hover {background:color-mix(in srgb, var(--v3-accent) 8%, transparent)}
-.v3fs-nb-title {font-weight:700;font-size:15px;color:var(--v3-text-primary);display:flex;align-items:baseline;gap:9px;border-left:3px solid var(--acc, var(--v3-accent));padding-left:10px}
-.v3fs-nb-dom {font-family:var(--v3-font-mono, ui-monospace);font-size:10px;color:var(--v3-text-muted);text-transform:uppercase;letter-spacing:.06em;font-weight:500}
-.v3fs-nb-zones {display:grid;grid-template-columns:1fr;gap:14px}
-@media(min-width:900px){.v3fs-nb-zones{grid-template-columns:236px 1fr 250px}}
-.v3fs-nb-zone {background:var(--fs-card);border:1px solid var(--fs-line);border-radius:14px;padding:15px 16px;min-width:0}
-.v3fs-nb-ztag {font-family:var(--v3-font-mono, ui-monospace);font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--v3-text-muted);margin:0 0 11px;font-weight:600}
-.v3fs-nb-prog {display:flex;align-items:baseline;gap:9px;margin-bottom:8px}
-.v3fs-nb-prog .big {font-size:1.6rem;font-weight:800;color:var(--v3-accent);letter-spacing:-.03em;font-variant-numeric:tabular-nums}
-.v3fs-nb-prog .of {font-size:12px;color:var(--v3-text-muted)}
-.v3fs-nb-produces {list-style:none;padding:0;margin:11px 0 0;display:flex;flex-direction:column;gap:8px;font-size:12.5px;color:var(--v3-text-primary)}
-.v3fs-nb-produces li {display:flex;gap:9px;align-items:baseline}
-.v3fs-nb-produces .ic {flex:none;font-weight:700}
-.v3fs-nb-produces .ic.ok {color:var(--color-success)}
-.v3fs-nb-produces .ic.wip {color:var(--v3-amber)}
-.v3fs-nb-produces .ic.dot {color:var(--v3-text-muted)}
-.v3fs-nb-ready {margin-top:12px;padding-top:11px;border-top:1px solid var(--fs-line);font-size:11.5px;color:var(--v3-text-muted);line-height:1.5}
-.v3fs-nb-worksum {display:flex;gap:16px;flex-wrap:wrap;margin-bottom:14px}
-.v3fs-nb-ws {display:flex;flex-direction:column;gap:2px}
-.v3fs-nb-ws .n {font-size:1.4rem;font-weight:800;color:var(--v3-accent);letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1}
-.v3fs-nb-ws .n.ok {color:var(--color-success)}
-.v3fs-nb-ws .n.no {color:var(--v3-amber)}
-.v3fs-nb-ws .n.wait {color:var(--v3-text-muted)}
-.v3fs-nb-ws .l {font-size:11px;color:var(--v3-text-muted)}
 .v3fs-nb-open {border:0;background:var(--v3-accent);color:#fff;border-radius:10px;padding:10px 15px;font-size:12.5px;font-weight:650;cursor:pointer;transition:filter .12s}
 .v3fs-nb-open:hover {filter:brightness(1.08)}
-.v3fs-nb-hint {font-size:11px;color:var(--v3-text-muted);margin:9px 0 0}
-.v3fs-nb-rec {list-style:none;padding:0;margin:0}
-.v3fs-nb-rec li {padding:9px 0;border-bottom:1px solid var(--fs-line);display:flex;gap:10px;align-items:flex-start}
-.v3fs-nb-rec li:last-child {border-bottom:0}
-.v3fs-nb-rec li.empty {color:var(--v3-text-muted);font-size:12px;border-bottom:0;padding:6px 0}
-.v3fs-nb-rec .av {width:26px;height:26px;border-radius:7px;flex:none;display:grid;place-items:center;font-size:10.5px;font-weight:700;
-  background:color-mix(in srgb, var(--v3-accent) 13%, transparent);color:var(--v3-accent)}
-.v3fs-nb-rec .who {font-weight:600;font-size:12.5px;color:var(--v3-text-primary)}
-.v3fs-nb-rec .what {font-size:11.5px;color:var(--v3-text-muted);margin-top:1px;line-height:1.4}
-.v3fs-nb-block {font-family:var(--v3-font-mono, ui-monospace);font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:var(--v3-amber);font-weight:700}
-.v3fs-nb-gatebox {border:1px dashed color-mix(in srgb, var(--v3-accent) 30%, transparent);border-radius:12px;
-  background:color-mix(in srgb, var(--v3-accent) 4%, transparent);padding:22px;text-align:center;color:var(--v3-text-muted);font-size:13px;line-height:1.55}
-.v3fs-nb-gatebox b {color:var(--v3-text-primary);display:block;margin-bottom:5px;font-size:14px}
-
-/* Back-to-board chip shown above the classic body once opened */
-.v3fs-nb-overview {align-self:flex-start;margin:4px 0 10px;font-size:12.5px;color:var(--v3-accent);cursor:pointer;
-  border:1px solid var(--fs-line);border-radius:9px;padding:7px 12px;background:var(--fs-card);font-weight:600}
-.v3fs-nb-overview:hover {background:color-mix(in srgb, var(--v3-accent) 8%, transparent)}
-
-/* Program-level Focus hero on Frame · Ship · Evolve (next chrome only) — the
-   workstream phases carry their own Focus card inside the area board. */
-.v3fs-nb.v3fs-nb-solo {margin:8px 0 4px}
 
 /* ══════════════════════════════════════════════════════════════════════════
    Discovery Kit alignment — people × areas matrix (next chrome). Shares the
@@ -8640,21 +8569,9 @@ select.v3fs-dir-in {cursor:pointer}
 .v3fs-gp-note {font-size:12px;color:var(--v3-text-muted);margin:13px 0 0;line-height:1.5}
 .v3fs-gp-note b {color:var(--v3-accent)}
 
-/* Focused prototype: design-workspace link + gatebox action */
-.v3fs-nb-gate-act {margin-top:13px}
 .v3fs-nb-open.ghost {background:transparent;color:var(--v3-accent);border:1px solid var(--v3-accent)}
 .v3fs-nb-open.ghost:hover {background:color-mix(in srgb, var(--v3-accent) 8%, transparent);filter:none}
 
-/* Prototype board: open-design-workspace button in the merge banner */
-.v3fs-nb-merge-btn {margin-left:auto;border:1px solid var(--v3-accent);color:var(--v3-accent);background:var(--fs-card);border-radius:9px;padding:7px 12px;font-size:12px;font-weight:650;cursor:pointer;white-space:nowrap}
-.v3fs-nb-merge-btn:hover {background:color-mix(in srgb, var(--v3-accent) 8%, transparent)}
-/* Listen focused: explicit ontology + atlas doc cards */
-.v3fs-nb-doccard {display:flex;flex-direction:column;gap:8px}
-.v3fs-nb-doc {display:flex;align-items:center;gap:10px;border:1px solid var(--fs-line);border-radius:10px;padding:10px 12px}
-.v3fs-nb-doc .dt {font-weight:650;font-size:12.5px;color:var(--v3-text-primary)}
-.v3fs-nb-doc .dt .code {font-family:var(--v3-font-mono, ui-monospace);font-size:9px;letter-spacing:.04em;text-transform:uppercase;color:var(--v3-accent-2);font-weight:500;margin-left:5px}
-.v3fs-nb-doc .dd {font-size:11px;color:var(--v3-text-muted);margin-top:2px}
-.v3fs-nb-doc .v3fs-nb-open {margin-left:auto}
 .v3fs-nb-open.sm {padding:6px 11px;font-size:11.5px}
 
 /* Prototype board: "Build outside the app" — external URL + AI build prompt */
@@ -8687,6 +8604,11 @@ select.v3fs-dir-in {cursor:pointer}
 .v3fs-dka-addrow {display:flex;gap:7px;align-items:center;flex:1;min-width:220px}
 .v3fs-dka-addrow input {flex:1;min-width:120px;border:1px solid var(--fs-line);border-radius:9px;padding:8px 11px;font-size:12.5px;font-family:inherit;color:var(--v3-text-primary);background:var(--fs-card);outline:0}
 .v3fs-dka-addrow input:focus {border-color:var(--v3-accent)}
+/* Confirm-the-plan footer (ported from the retired Listen coverage plan) */
+.v3fs-dka-foot {display:flex;align-items:center;gap:12px;justify-content:space-between;flex-wrap:wrap;margin-top:14px;padding-top:13px;border-top:1px solid var(--fs-line)}
+.v3fs-dka-foot-note {font-size:11.5px;color:var(--v3-text-muted);flex:1;min-width:220px}
+.v3fs-dka-foot-r {display:inline-flex;align-items:center;gap:9px}
+.v3fs-dka-confnote {font-size:12px;font-weight:650;color:var(--color-success)}
 
 /* Listen board: complete-ontology button row */
 .v3fs-nb-listenhead {display:flex;gap:12px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap}
@@ -8747,29 +8669,6 @@ select.v3fs-dir-in {cursor:pointer}
 .v3fs-wff-meta .sys {font-family:var(--v3-font-mono, ui-monospace);font-size:8.5px;letter-spacing:.03em;text-transform:uppercase;color:var(--v3-accent-2);border:1px solid var(--fs-line);border-radius:4px;padding:1px 5px}
 .v3fs-wff-meta .ent {font-size:9.5px;color:var(--v3-text-muted);background:var(--v3-surface,#fff);border:1px solid var(--fs-line);border-radius:4px;padding:1px 5px}
 .v3fs-wff-arrow {flex:0 0 auto;padding:0 6px;font-size:20px;line-height:1;color:var(--v3-line-strong, #9aa2b1);font-weight:700}
-/* Listen focus page — 2-zone row + roster panel + next-questions panel */
-.v3fs-nb-zones.two {grid-template-columns:1fr 1fr}
-@media(max-width:720px){.v3fs-nb-zones.two{grid-template-columns:1fr}}
-.v3fs-nb-panel2 {border:1px solid var(--fs-line);border-radius:12px;padding:13px 15px;margin-top:14px;background:var(--v3-surface, #fff)}
-.v3fs-nb-panel2-h {display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:10px}
-.v3fs-nb-panel2-h b {font-size:13px;color:var(--v3-text-primary)}
-.v3fs-nb-panel2-h span {font-size:11px;color:var(--v3-text-muted)}
-.v3fs-nb-roster {list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
-.v3fs-nb-roster li {display:flex;align-items:center;gap:11px;padding:9px 2px;border-top:1px solid var(--fs-line)}
-.v3fs-nb-roster li:first-child {border-top:0}
-.v3fs-nb-roster li.busy {opacity:.55}
-.v3fs-nb-roster .av {flex:0 0 auto;width:30px;height:30px;border-radius:50%;background:color-mix(in srgb, var(--acc) 16%, transparent);color:var(--acc);font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center}
-.v3fs-nb-roster .who {display:flex;flex-direction:column;gap:1px;min-width:0;flex:1 1 auto}
-.v3fs-nb-roster .who .rl {font-size:12.5px;font-weight:600;color:var(--v3-text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.v3fs-nb-roster .who .nm {font-size:11px;color:var(--v3-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.v3fs-nb-roster .who .nm em {font-style:italic}
-.v3fs-nb-hchip {flex:0 0 auto;font-size:10px;font-weight:600;letter-spacing:.02em;padding:2px 8px;border-radius:20px}
-.v3fs-nb-hchip.ok {color:var(--v3-good, #1f9d6b);background:color-mix(in srgb, var(--v3-good, #1f9d6b) 12%, transparent)}
-.v3fs-nb-hchip.wait {color:var(--v3-text-muted);background:var(--v3-surface-2, rgba(0,0,0,.04))}
-.v3fs-nb-roster .acts {flex:0 0 auto;display:flex;align-items:center;gap:6px}
-.v3fs-nb-roster .acts.done {font-size:11px;color:var(--v3-text-muted)}
-.v3fs-nb-sched {font:inherit;font-size:11px;padding:3px 6px;border:1px solid var(--fs-line);border-radius:6px;background:var(--v3-surface,#fff);color:var(--v3-text-primary)}
-.v3fs-nb-qs {margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:12.5px;line-height:1.45;color:var(--v3-text-primary)}
 
 /* Operator question curation — defer / delete / restore on the script */
 .v3fs-ivc-del:hover {color:var(--color-danger, #c0392b)!important}

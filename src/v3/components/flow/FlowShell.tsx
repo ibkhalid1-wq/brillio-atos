@@ -23,7 +23,6 @@ import {
 import { readFlowGovernance, flowAgentTier } from "@/v3/components/flow/flowGovernance";
 import { resolveMovementStakeholders, deliveryRoleDirectory, readDirectoryPeople, validateProgramRole, readRoleBindings, knownProgramRoles, unresolvedCoverageNames, kitPersonaDirectory, readSuggestedVoices, readListenPlan, listenPlanWrite, dismissedListenRoles } from "@/v3/components/flow/flowStakeholders";
 import { programAreas, GENERAL_AREA, readRoleAliases, roleAliasKey } from "@/v3/components/flow/flowAreas";
-import FrameCoveragePlan from "@/v3/components/flow/FrameCoveragePlan";
 import DiscoveryKitAlign from "@/v3/components/flow/DiscoveryKitAlign";
 import { stakeholderEmail } from "@/v3/components/flow/flowMeetings";
 import { readMetricRegistry, metricConsistency } from "@/v3/components/flow/flowMetricRegistry";
@@ -43,14 +42,6 @@ import {
 } from "@/v3/components/flow/flowDrilldown";
 
 interface FlowShellProps {
-  /** Shell chrome. "next" is the reimagined navigation (rail folded into a
-   * ⌘K workbench, plain-language top bar) shown behind the ?ui=next toggle;
-   * "classic" (default) is today's rail. Both wrap the SAME view components. */
-  chrome?: "classic" | "next";
-  /** Leave the reimagined chrome — flips the app back to the classic rail. */
-  onExitNextChrome?: () => void;
-  /** Enter the reimagined chrome from the classic rail (the visible toggle). */
-  onEnterNextChrome?: () => void;
   program: ProgramSummary;
   programs: ProgramSummary[];
   runningAgentIds: Set<string>;
@@ -486,13 +477,8 @@ export default function FlowShell(props: FlowShellProps) {
   // Land where the work is: Today only when something waits on the user's
   // judgment (decisions / quarantined evidence); the canvas otherwise, where
   // the spine pointer takes over. Today stays one badge-tap away.
-  // Reimagined chrome (?ui=next): the rail folds into a ⌘K workbench and the
-  // shell leads with the work. The classic rail is unchanged when off.
-  const next = props.chrome === "next";
   const [view, setView] = useState<FlowView>(() =>
-    // Next chrome always opens on the work (Flow); classic opens on the Inbox
-    // when something is waiting, else the work.
-    !next && listOpenFlowDecisions(program).length + listPortalInbox(program).length + governedExceptionsForInbox(program).length > 0 ? "today" : "flow",
+    listOpenFlowDecisions(program).length + listPortalInbox(program).length + governedExceptionsForInbox(program).length > 0 ? "today" : "flow",
   );
   // A freshly-created programme should open on the work — the shell bumps this
   // nonce after setup saves so we jump to the canvas regardless of the view the
@@ -619,9 +605,7 @@ export default function FlowShell(props: FlowShellProps) {
   }
 
   return (
-    <div className={`v3fs-app${next ? " v3fs-uinext" : ""}`}>
-      {/* The left rail is kept in both chromes — the reimagining lives in the
-          phase content (Focus card + area board), not the navigation. */}
+    <div className="v3fs-app">
       <nav className="v3fs-dock" aria-label="Primary">
         <button type="button" className="v3fs-brand" data-tip="Switch programme" onClick={() => setSwitcherOpen((v) => !v)} aria-label="Switch programme" aria-expanded={switcherOpen}>
           {(program.name || "F").slice(0, 1).toUpperCase()}
@@ -717,18 +701,6 @@ export default function FlowShell(props: FlowShellProps) {
           <button type="button" className="v3fs-appbar-cp" title="Copilot" aria-label="Copilot" onClick={props.onOpenCopilot}>
             <DockIcon id="copilot" /><span>Copilot</span>
           </button>
-          {next && props.onExitNextChrome ? (
-            <button type="button" className="v3fs-appbar-nav v3fs-appbar-exitnext on" title="You're in the reimagined UI — click to switch back to the classic navigation" aria-label="Exit reimagined UI"
-              onClick={props.onExitNextChrome}>
-              <span>◆ Reimagined</span>
-            </button>
-          ) : null}
-          {!next && props.onEnterNextChrome ? (
-            <button type="button" className="v3fs-appbar-nav v3fs-appbar-exitnext" title="Preview the reimagined UI (?ui=next)" aria-label="Try the reimagined UI"
-              onClick={props.onEnterNextChrome}>
-              <span>◇ Try Reimagined</span>
-            </button>
-          ) : null}
         </div>
       </header>
       {searchOpen ? (
@@ -827,12 +799,12 @@ export default function FlowShell(props: FlowShellProps) {
             onRunAgent={props.onRunAgent} runningAgentIds={props.runningAgentIds}
             onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} />
         ) : view === "flow" ? (
-          <FlowCanvas program={program} programs={props.programs} runningAgentIds={props.runningAgentIds} regenActiveIds={props.regenActiveIds} onEnqueueRegen={props.onEnqueueRegen} agentErrors={props.agentErrors} relatedPrograms={[...(drillParent ? [drillParent] : []), ...listChildDrilldowns(program, props.programs).map((c) => c.child)]} onSelectProgram={props.onSelectProgram} onComment={props.onComment} onRunAgent={props.onRunAgent} onSaveInputs={props.onSaveInputs} onMintPacks={props.onMintPacks} onMintDemoInvites={props.onMintDemoInvites} onCompileShipLanes={props.onCompileShipLanes} onToggleShipItem={props.onToggleShipItem} onSetShipLane={props.onSetShipLane} onScheduleFollowUp={props.onScheduleFollowUp} onMintFollowUp={props.onMintFollowUp} onMintReview={props.onMintReview} onRecordShowPass={props.onRecordShowPass} onSaveArtifactDoc={props.onSaveArtifactDoc} onRecordGate={props.onRecordGate} onReopenGate={props.onReopenGate} onRunAgentAndWait={props.onRunAgentAndWait} onSendForApproval={props.onSendForApproval} next={next} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }}
+          <FlowCanvas program={program} programs={props.programs} runningAgentIds={props.runningAgentIds} regenActiveIds={props.regenActiveIds} onEnqueueRegen={props.onEnqueueRegen} agentErrors={props.agentErrors} relatedPrograms={[...(drillParent ? [drillParent] : []), ...listChildDrilldowns(program, props.programs).map((c) => c.child)]} onSelectProgram={props.onSelectProgram} onComment={props.onComment} onRunAgent={props.onRunAgent} onSaveInputs={props.onSaveInputs} onMintPacks={props.onMintPacks} onMintDemoInvites={props.onMintDemoInvites} onCompileShipLanes={props.onCompileShipLanes} onToggleShipItem={props.onToggleShipItem} onSetShipLane={props.onSetShipLane} onScheduleFollowUp={props.onScheduleFollowUp} onMintFollowUp={props.onMintFollowUp} onMintReview={props.onMintReview} onRecordShowPass={props.onRecordShowPass} onSaveArtifactDoc={props.onSaveArtifactDoc} onRecordGate={props.onRecordGate} onReopenGate={props.onReopenGate} onRunAgentAndWait={props.onRunAgentAndWait} onSendForApproval={props.onSendForApproval} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }}
           />
         ) : view === "people" ? (
           <FlowPeople program={program} onSaveInputs={props.onSaveInputs} onRenamePerson={props.onRenamePerson} onGoInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }} />
         ) : view === "library" ? (
-          <FlowLibrary program={program} programs={props.programs} onSelectProgram={props.onSelectProgram} onSaveInputs={props.onSaveInputs} onTagClaim={props.onTagClaim} onComment={props.onComment} onSaveArtifactDoc={props.onSaveArtifactDoc} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }} onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} next={next} />
+          <FlowLibrary program={program} programs={props.programs} onSelectProgram={props.onSelectProgram} onSaveInputs={props.onSaveInputs} onTagClaim={props.onTagClaim} onComment={props.onComment} onSaveArtifactDoc={props.onSaveArtifactDoc} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }} onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} />
         ) : view === "mission" ? (
           <FlowMission
             aiStatus={props.aiStatus}
@@ -2670,7 +2642,7 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
   );
 }
 
-function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagClaim, onComment, onSaveArtifactDoc, onOpenInbox, onGoFlow, next }: { program: ProgramSummary; programs: ProgramSummary[]; onSelectProgram: (id: string) => void; onSaveInputs?: FlowShellProps["onSaveInputs"]; onTagClaim?: FlowShellProps["onTagClaim"]; onComment?: FlowShellProps["onComment"]; onSaveArtifactDoc: FlowShellProps["onSaveArtifactDoc"]; onOpenInbox?: () => void; onGoFlow?: () => void; next?: boolean }) {
+function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagClaim, onComment, onSaveArtifactDoc, onOpenInbox, onGoFlow }: { program: ProgramSummary; programs: ProgramSummary[]; onSelectProgram: (id: string) => void; onSaveInputs?: FlowShellProps["onSaveInputs"]; onTagClaim?: FlowShellProps["onTagClaim"]; onComment?: FlowShellProps["onComment"]; onSaveArtifactDoc: FlowShellProps["onSaveArtifactDoc"]; onOpenInbox?: () => void; onGoFlow?: () => void }) {
   const claims = listClaimTags(program);
   const tagTargets = useMemo(() => claimTargets(program), [program]);
   const [claimHighlight, setClaimHighlight] = useState<string | undefined>(undefined);
@@ -3037,7 +3009,7 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
       </div>
       {docFor ? <Suspense fallback={null}><FlowArtifactStudio program={program} artifact={docFor} onClose={() => setDocFor(null)} onSaveDoc={onSaveArtifactDoc} onSaveInputs={onSaveInputs} onComment={onComment} onOpenInbox={onOpenInbox}
         header={docFor.id === "discovery-kit"
-          ? (next ? <DiscoveryKitAlign program={program} onSaveInputs={onSaveInputs} /> : <FrameCoveragePlan program={program} onSaveInputs={onSaveInputs} />)
+          ? <DiscoveryKitAlign program={program} onSaveInputs={onSaveInputs} />
           : undefined}
         onOpenArtifact={(artifactId) => {
           for (const m of flowMovements()) {

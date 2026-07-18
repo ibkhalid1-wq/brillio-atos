@@ -1,9 +1,8 @@
 /**
  * listenCoverage — the ONE source of the people×areas coverage model and its
- * edits, shared by the classic Listen coverage plan (FrameCoveragePlan) and the
- * reimagined Discovery Kit matrix (DiscoveryKitAlign). Both used to derive roles,
- * areas and coverage — and write the `listenPlan` overlay — with byte-identical
- * logic in two files; a coverage-rule change now lands in one place.
+ * edits, consumed by the Discovery Kit matrix (DiscoveryKitAlign — the sole
+ * coverage editor since the reimagined-chrome merge retired FrameCoveragePlan).
+ * A coverage-rule change lands in one place.
  *
  * A leaf module: it depends on flowAreas + flowStakeholders, neither depends on
  * it, so there is no import cycle.
