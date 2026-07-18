@@ -36,7 +36,7 @@ import PrototypeCommandBar from "@/v3/components/flow/PrototypeCommandBar";
 import { openPrototypeInBrowser } from "@/v3/components/flow/studio/PrototypeStudio";
 import { MOVEMENT_CAPTION, leadTab, type MovementTab } from "@/v3/components/flow/flowStages";
 import { useSpineRunning } from "@/v3/components/flow/flowUpNext";
-import { IntervieweeDiscovery, stakeholderCollection } from "@/v3/components/flow/CollectBoard";
+import { IntervieweeDiscovery, stakeholderCollection, directoryCardRetired } from "@/v3/components/flow/CollectBoard";
 import MeetingKitCard from "@/v3/components/flow/MeetingKitCard";
 
 interface FlowCanvasProps {
@@ -395,12 +395,17 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
         const coverage = movement.id === "listen" ? listenCoverage(program) : null;
         // "Where am I" summary: heard / artifacts current / gate — computed
         // once so the operator reads the movement's state before scrolling.
-        const sumStakeholders = resolveMovementStakeholders(program, movement.id);
         // ONE source of truth for "heard": the same stakeholderCollection the
         // People board uses (evidence attribution + responded links + provided
-        // documents) — so the tab badge, the caption and the board never disagree.
+        // documents) — so the tab badge, the caption and the board never
+        // disagree. Same for retirement: the board drops question-less
+        // directory cards, so the chip must not count them either.
         const sumPacks = listInterviewPacks(program);
-        const evaluated = sumStakeholders.map((s) => stakeholderCollection(movement.id, s, sumPacks, evidence));
+        const sumLive = resolveMovementStakeholders(program, movement.id)
+          .map((s) => ({ s, coll: stakeholderCollection(movement.id, s, sumPacks, evidence) }))
+          .filter(({ s, coll }) => !directoryCardRetired(program, movement.id, s, coll.heard));
+        const sumStakeholders = sumLive.map((x) => x.s);
+        const evaluated = sumLive.map((x) => x.coll);
         const unheard = sumStakeholders.filter((_, i) => !evaluated[i].heard);
         const sumHeard = sumStakeholders.length - unheard.length;
         // A heard person with OPEN questions still owes a round — pending script

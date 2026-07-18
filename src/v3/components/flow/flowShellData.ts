@@ -578,6 +578,14 @@ export function falsifiedGap(program: ProgramSummary, gap: string): boolean {
         }
       } catch { /* malformed bindings — skip */ }
     }
+    // A role the operator DISMISSED from the Listen roster is settled too —
+    // the demand to name it died with the role (e.g. Customer Success remapped
+    // to Vertical Sales leaves the stored gap asking for a role that no longer
+    // exists, which no amount of naming could ever satisfy).
+    try {
+      const dis = JSON.parse(String(readMovementInputs(program, "listen")._dismissedListenRoles ?? "[]"));
+      if (Array.isArray(dis)) for (const r of dis) for (const t of tok(String(r ?? ""))) named.add(t);
+    } catch { /* malformed dismissals — skip */ }
     const roles = naming[1].split(/,|\band\b/).map((r) => r.trim()).filter(Boolean);
     if (roles.length && roles.every((r) => { const ts = tok(r); return ts.length > 0 && ts.some((t) => named.has(t)); })) return true;
   }

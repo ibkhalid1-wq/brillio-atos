@@ -68,6 +68,26 @@ export function stakeholderCollection(
 }
 type StakeholderCollection = ReturnType<typeof stakeholderCollection>;
 
+/** A directory-added person whose card has NOTHING left — every script
+ * question and operator ask deleted, nothing deferred for later, nothing
+ * heard — is RETIRED: off the board and out of the Discovery chip. ONE rule,
+ * shared by the board (which cards render) and the canvas (what the chip
+ * counts), so the tab colour can never disagree with the board. Roster
+ * voices (kit/charter roles) never retire; a retired card returns the moment
+ * evidence lands or a new question is raised. */
+export function directoryCardRetired(program: ProgramSummary, movementId: string, s: MovementStakeholder, heard: boolean): boolean {
+  if (!s.id.startsWith("dir-") || heard) return false;
+  const key = (s.name || s.role).trim().toLowerCase();
+  const map = (k: string): string[] => {
+    const raw = readMovementInputs(program, movementId)[k];
+    try { const p = typeof raw === "string" ? JSON.parse(raw) : {}; const v = (p as Record<string, unknown>)?.[key]; return Array.isArray(v) ? v.map(String) : []; } catch { return []; }
+  };
+  const dismissed = new Set(map("_dismissedAsks"));
+  return !s.questions.some((q) => !dismissed.has(q))
+    && !operatorAsksFor(program, movementId, s.name || s.role).some((q) => !dismissed.has(q))
+    && map("_deferredAsks").length === 0;
+}
+
 const COLLECT_COLUMNS: Array<{ key: CollectStatus; label: string }> = [
   { key: "approved", label: "Approved" },
   { key: "pending-approval", label: "Pending approval" },
@@ -177,30 +197,14 @@ export function IntervieweeDiscovery({ program, movementId, captureField, areaFi
       items,
     });
   }
-  // A directory-added person whose card has NOTHING left — every script
-  // question and operator ask deleted, nothing deferred for later, nothing
-  // heard — leaves the board: deleting a person's last question retires their
-  // card. Roster voices (kit/charter roles) always stay; a retired directory
-  // card returns the moment evidence lands or a new question is raised.
-  const curationMap = (key: string): Record<string, string[]> => {
-    const raw = readMovementInputs(program, movementId)[key];
-    try { const p = typeof raw === "string" ? JSON.parse(raw) : {}; return p && typeof p === "object" ? p as Record<string, string[]> : {}; } catch { return {}; }
-  };
-  const deferredAll = curationMap("_deferredAsks");
-  const dismissedAll = curationMap("_dismissedAsks");
-  const hasOpenBusiness = (s: MovementStakeholder): boolean => {
-    const k = (s.name || s.role).trim().toLowerCase();
-    const dismissed = new Set(dismissedAll[k] ?? []);
-    return s.questions.some((q) => !dismissed.has(q))
-      || operatorAsksFor(program, movementId, s.name || s.role).some((q) => !dismissed.has(q))
-      || (deferredAll[k]?.length ?? 0) > 0;
-  };
+  // Deleting a person's last question retires their card — see
+  // directoryCardRetired, the one rule this board shares with the canvas chip.
   const evaluated = stakeholders
     .map((s) => ({
       s,
       coll: stakeholderCollection(movementId, s, packs, evidence, approvalByName.get(s.name.trim().toLowerCase())),
     }))
-    .filter(({ s, coll }) => !s.id.startsWith("dir-") || coll.heard || hasOpenBusiness(s));
+    .filter(({ s, coll }) => !directoryCardRetired(program, movementId, s, coll.heard));
   // Resolve each stakeholder's ontology-grounded primary area ONCE — the single
   // source for the by-area gate, the lane grouping, and each card's area chip.
   const primaryAreaOf = new Map(evaluated.map((e) => [e.s.id, stakeholderPrimaryArea(program, e.s.name, e.s.role)] as const));
