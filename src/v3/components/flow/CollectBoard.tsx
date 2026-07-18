@@ -650,6 +650,41 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
     setAskBusy(true);
     try { await saveOperatorAsks(operatorAsks.filter((existing) => existing !== q)); } finally { setAskBusy(false); }
   };
+  // The operator can DEFER (keep, but off the link — ask on a later round) or
+  // DELETE (drop) any interview question — the generated script rows and their
+  // own asks alike. Stored per person under _deferredAsks / _dismissedAsks
+  // (underscore ⇒ fingerprint-safe: curating the script never re-runs the kit).
+  const readAskMap = (key: string): string[] => {
+    const raw = readMovementInputs(program, movementId)[key];
+    try { const p = typeof raw === "string" ? JSON.parse(raw) : {}; const v = (p as Record<string, unknown>)?.[askKey]; return Array.isArray(v) ? v.map(String) : []; } catch { return []; }
+  };
+  const deferredAsks = useMemo(() => readAskMap("_deferredAsks"), [program, movementId, askKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const dismissedAsks = useMemo(() => readAskMap("_dismissedAsks"), [program, movementId, askKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const writeAskMap = async (key: string, next: string[], action: string) => {
+    const raw = readMovementInputs(program, movementId)[key];
+    let all: Record<string, string[]> = {};
+    try { const p = typeof raw === "string" ? JSON.parse(raw) : {}; if (p && typeof p === "object") all = p as Record<string, string[]>; } catch { /* reset */ }
+    if (next.length) all[askKey] = next; else delete all[askKey];
+    await onSaveInputs(movementId, { [key]: JSON.stringify(all) }, { attest: { action, detail: next[next.length - 1]?.slice(0, 120) } });
+  };
+  const deferAsk = async (q: string) => {
+    setAskBusy(true);
+    try {
+      await writeAskMap("_deferredAsks", [...new Set([...deferredAsks, q])], `Question deferred for ${name || role}`);
+      if (operatorAsks.includes(q)) await saveOperatorAsks(operatorAsks.filter((x) => x !== q));
+    } finally { setAskBusy(false); }
+  };
+  const restoreAsk = async (q: string) => {
+    setAskBusy(true);
+    try { await writeAskMap("_deferredAsks", deferredAsks.filter((x) => x !== q), `Question restored for ${name || role}`); } finally { setAskBusy(false); }
+  };
+  const dismissAsk = async (q: string) => {
+    setAskBusy(true);
+    try {
+      await writeAskMap("_dismissedAsks", [...new Set([...dismissedAsks, q])], `Question deleted for ${name || role}`);
+      if (operatorAsks.includes(q)) await saveOperatorAsks(operatorAsks.filter((x) => x !== q));
+    } finally { setAskBusy(false); }
+  };
   // Questions to mint a LINK with. Usually the displayed script, but the Frame
   // sponsor's script collapses to [] once the mandate is on record while their
   // card still offers a confirmation link — linkQuestions keeps that non-empty
@@ -658,7 +693,11 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
   const linkQuestions = useMemo(() => [...new Set([
     ...(stakeholder.linkQuestions?.length ? stakeholder.linkQuestions : questions),
     ...operatorAsks,
-  ])], [stakeholder.linkQuestions, questions, operatorAsks]);
+  ])].filter((q) => !dismissedAsks.includes(q) && !deferredAsks.includes(q)),
+    [stakeholder.linkQuestions, questions, operatorAsks, dismissedAsks, deferredAsks]);
+  // The script the operator SEES — deleted rows gone, deferred rows moved out.
+  const shownQuestions = useMemo(() => questions.filter((q) => !dismissedAsks.includes(q) && !deferredAsks.includes(q)),
+    [questions, dismissedAsks, deferredAsks]);
   const { pack, heard, status } = coll;
   const first = name.split(" ")[0] || "they";
   const email = stakeholderEmail(program, name);
@@ -1006,11 +1045,11 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
                 ) : null}
               </div>
             </div>
-          ) : questions.length ? (
+          ) : (shownQuestions.length || deferredAsks.length) ? (
             <div className="v3fs-ivc-sec">
               <div className="v3fs-ivc-sec-h">{heard ? "Still open — ask on the next round" : "Their script"}
                 {heard ? <span className="v3fs-ivc-sec-note">these are unresolved gaps &amp; disputes; they clear when the artifact is regenerated or the dispute resolved</span> : null}</div>
-              <ul className="v3fs-ivc-q">{questions.map((q, i) => {
+              <ul className="v3fs-ivc-q">{shownQuestions.map((q, i) => {
                 const disputed = q.match(/disagree[^"]*"(.{8,140}?)"/i)?.[1];
                 const source = disputed
                   ? flowMovements().flatMap((m) => movementEvidence(program, m)).find((entry) => entry.text && locateQuote(entry.text, disputed))
@@ -1031,9 +1070,24 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
                         {resolveBusy === disputed ? "Resolving…" : "✓ mark resolved"}
                       </button>
                     ) : null}
+                    <button type="button" className="v3fs-a v3fs-ivc-evlink" disabled={askBusy}
+                      title="Defer — keep this question, but off the link; ask it on a later round" onClick={() => void deferAsk(q)}>&#9202; later</button>
+                    <button type="button" className="v3fs-a v3fs-ivc-evlink v3fs-ivc-del" disabled={askBusy}
+                      title="Delete this question — drop it from the script" onClick={() => void dismissAsk(q)}>✕ delete</button>
                   </li>
                 );
               })}</ul>
+              {deferredAsks.length ? (
+                <div className="v3fs-ivc-deferred">
+                  <div className="v3fs-ivc-deferred-h">Deferred · {deferredAsks.length} — hidden from {first}, kept for later</div>
+                  <ul className="v3fs-ivc-q">{deferredAsks.map((q, i) => (
+                    <li key={i} className="deferred">{q}
+                      <button type="button" className="v3fs-a v3fs-ivc-evlink" disabled={askBusy} title="Restore to the script" onClick={() => void restoreAsk(q)}>↩ restore</button>
+                      <button type="button" className="v3fs-a v3fs-ivc-evlink v3fs-ivc-del" disabled={askBusy} title="Delete for good" onClick={() => void dismissAsk(q)}>✕ delete</button>
+                    </li>
+                  ))}</ul>
+                </div>
+              ) : null}
             </div>
           ) : null}
 
