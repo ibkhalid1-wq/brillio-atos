@@ -617,7 +617,8 @@ export default function FlowShell(props: FlowShellProps) {
 
   return (
     <div className={`v3fs-app${next ? " v3fs-uinext" : ""}`}>
-      {next ? null : (
+      {/* The left rail is kept in both chromes — the reimagining lives in the
+          phase content (Focus card + area board), not the navigation. */}
       <nav className="v3fs-dock" aria-label="Primary">
         <button type="button" className="v3fs-brand" data-tip="Switch programme" onClick={() => setSwitcherOpen((v) => !v)} aria-label="Switch programme" aria-expanded={switcherOpen}>
           {(program.name || "F").slice(0, 1).toUpperCase()}
@@ -657,7 +658,6 @@ export default function FlowShell(props: FlowShellProps) {
         {/* Sponsor view stays reachable from Pulse and the command palette —
             it earns no standing dock slot. */}
       </nav>
-      )}
 
       {/* The app bar — ONE slim strip, not floating islands. Portfolio sits
           left as the "up and out" of the current programme; the centre is a
@@ -707,12 +707,6 @@ export default function FlowShell(props: FlowShellProps) {
           <kbd>⌘K</kbd>
         </button>
         <div className="v3fs-appbar-r">
-          {next ? (
-            <button type="button" className="v3fs-appbar-nav v3fs-appbar-wb" title="Workbench — Inbox, Library, People, Overview, Standards, Settings (⌘K)" aria-label="Workbench"
-              onClick={() => setSearchOpen(true)}>
-              <span aria-hidden="true">⌘</span><span>Workbench</span><kbd>K</kbd>
-            </button>
-          ) : null}
           <button type="button" className="v3fs-appbar-nav" title="Help — how ATOS Flow works" aria-label="Help"
             onClick={() => setHelpOpen(true)}>
             <DockIcon id="help" /><span>Help</span>
@@ -735,7 +729,7 @@ export default function FlowShell(props: FlowShellProps) {
         </div>
       </header>
       {searchOpen ? (
-        <FlowSearch programs={props.programs} program={program} workbench={next}
+        <FlowSearch programs={props.programs} program={program}
           onSelectProgram={(id) => { props.onSelectProgram(id); setSearchOpen(false); }}
           onGoView={(v) => { setView(v); window.scrollTo({ top: 0 }); setSearchOpen(false); }}
           onCreateProgram={() => { setSearchOpen(false); props.onCreateProgram(); }}
