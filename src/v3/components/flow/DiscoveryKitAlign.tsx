@@ -191,10 +191,10 @@ export default function DiscoveryKitAlign({ program, onSaveInputs }: { program: 
         const confirmedAt = String(readMovementInputs(program, "frame")._listenCoverageConfirmed ?? "").trim();
         const setConfirmed = (value: string) => void onSaveInputs?.("frame", { _listenCoverageConfirmed: value }, { silent: true });
         return (
-          <div className="v3fs-dka-foot">
-            <span className="v3fs-dka-foot-note">Confirming clears the Listen gate; any later edit re-opens it and refreshes the kit.</span>
+          <div className="v3fs-dka-confirm">
+            <span className="v3fs-dka-confirm-note">Confirming clears the Listen gate; any later edit re-opens it and refreshes the kit.</span>
             {confirmedAt ? (
-              <span className="v3fs-dka-foot-r">
+              <span className="v3fs-dka-confirm-r">
                 <span className="v3fs-dka-confnote">✓ Confirmed {new Date(confirmedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
                 <button type="button" className="v3fs-nb-open ghost sm" disabled={busy} onClick={() => setConfirmed("")}>Re-open</button>
               </span>

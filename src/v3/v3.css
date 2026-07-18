@@ -8482,17 +8482,23 @@ select.v3fs-dir-in {cursor:pointer}
 .v3fs-dka-empty {margin-top:16px;padding:22px;text-align:center;font-size:13px;color:var(--v3-text-muted);border:1px dashed var(--fs-line);border-radius:12px}
 
 /* matrix */
-.v3fs-dka-matrixwrap {overflow-x:auto;margin-top:16px}
-.v3fs-dka-matrix {display:grid;min-width:560px;border:1px solid var(--fs-line);border-radius:12px;overflow:hidden;background:var(--fs-card)}
+/* The wrap is the scrollport (both axes, capped height) so the header row and
+   the people column can stick while the grid scrolls. The border/radius live
+   HERE — overflow:hidden on the grid itself would capture the stickiness. */
+.v3fs-dka-matrixwrap {overflow:auto;max-height:min(64vh, 640px);margin-top:16px;border:1px solid var(--fs-line);border-radius:12px}
+.v3fs-dka-matrix {display:grid;min-width:560px;background:var(--fs-card)}
 .v3fs-dka-corner {grid-column:1;font-family:var(--v3-font-mono, ui-monospace);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--v3-text-muted);
-  padding:12px 14px;display:flex;align-items:center;background:color-mix(in srgb, var(--v3-accent) 4%, transparent);border-bottom:1px solid var(--fs-line)}
+  padding:12px 14px;display:flex;align-items:center;background:color-mix(in srgb, var(--v3-accent) 4%, var(--fs-card));border-bottom:1px solid var(--fs-line);
+  position:sticky;top:0;left:0;z-index:5}
 .v3fs-dka-ahdr {display:flex;flex-direction:column;align-items:center;gap:3px;text-align:center;justify-content:center;padding:11px 8px;
-  background:color-mix(in srgb, var(--v3-accent) 4%, transparent);border-bottom:1px solid var(--fs-line);border-left:1px solid var(--fs-line)}
+  background:color-mix(in srgb, var(--v3-accent) 4%, var(--fs-card));border-bottom:1px solid var(--fs-line);border-left:1px solid var(--fs-line);
+  position:sticky;top:0;z-index:4}
 .v3fs-dka-ahdr .mono {width:24px;height:24px;border-radius:7px;display:grid;place-items:center;font-size:9.5px;font-weight:700;
   background:color-mix(in srgb, var(--acc, var(--v3-accent)) 16%, transparent);color:var(--acc, var(--v3-accent))}
 .v3fs-dka-ahdr .an {font-weight:650;font-size:11.5px;color:var(--v3-text-primary);line-height:1.15}
-.v3fs-dka-person {grid-column:1;display:flex;align-items:center;gap:10px;padding:11px 14px;border-top:1px solid var(--fs-line);min-width:0}
-.v3fs-dka-person.spans {background:linear-gradient(90deg, color-mix(in srgb, var(--v3-accent) 7%, transparent), transparent)}
+.v3fs-dka-person {grid-column:1;display:flex;align-items:center;gap:10px;padding:11px 14px;border-top:1px solid var(--fs-line);min-width:0;
+  position:sticky;left:0;z-index:3;background:var(--fs-card)}
+.v3fs-dka-person.spans {background:linear-gradient(90deg, color-mix(in srgb, var(--v3-accent) 7%, transparent), transparent), var(--fs-card)}
 .v3fs-dka-person .av {width:30px;height:30px;border-radius:9px;flex:none;display:grid;place-items:center;font-size:11px;font-weight:700;
   background:color-mix(in srgb, var(--v3-accent) 13%, transparent);color:var(--v3-accent)}
 .v3fs-dka-person .who {display:flex;flex-direction:column;min-width:0}
@@ -8505,7 +8511,8 @@ select.v3fs-dir-in {cursor:pointer}
 .v3fs-dka-dot.on {background:var(--v3-accent);border-color:var(--v3-accent)}
 .v3fs-dka-dot.on::after {content:"";width:7px;height:7px;border-radius:50%;background:#fff}
 .v3fs-dka-foot {padding:11px 14px;background:color-mix(in srgb, var(--v3-accent) 4%, transparent);border-top:1px solid var(--fs-line)}
-.v3fs-dka-foot.lbl {grid-column:1;font-family:var(--v3-font-mono, ui-monospace);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--v3-text-muted);display:flex;align-items:center}
+.v3fs-dka-foot.lbl {grid-column:1;font-family:var(--v3-font-mono, ui-monospace);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--v3-text-muted);display:flex;align-items:center;
+  position:sticky;left:0;z-index:3;background:color-mix(in srgb, var(--v3-accent) 4%, var(--fs-card))}
 .v3fs-dka-foot.cov {display:flex;flex-direction:column;align-items:center;gap:5px;border-left:1px solid var(--fs-line)}
 .v3fs-dka-foot.cov .n {font-weight:700;font-size:12.5px;font-variant-numeric:tabular-nums;color:var(--v3-text-primary)}
 .v3fs-dka-foot.cov.full .n {color:var(--color-success)}
@@ -8589,8 +8596,9 @@ select.v3fs-dir-in {cursor:pointer}
 /* Discovery Kit matrix — editable controls */
 .v3fs-dka.busy {opacity:.75;pointer-events:none}
 .v3fs-dka-ahdr .an .added {font-family:var(--v3-font-mono, ui-monospace);font-size:8px;letter-spacing:.04em;text-transform:uppercase;color:var(--color-success);font-style:normal}
-.v3fs-dka-ahdr {position:relative}
-.v3fs-dka-ahdr.addcol {background:transparent;border-left:0}
+/* (no position:relative here — the header is position:sticky, which already
+   provides the containing block for the absolutely-positioned remove button) */
+.v3fs-dka-ahdr.addcol {background:var(--fs-card);border-left:0}
 .v3fs-dka-x {border:0;background:transparent;color:var(--v3-text-muted);cursor:pointer;font-size:14px;line-height:1;padding:2px 4px;border-radius:5px}
 .v3fs-dka-x:hover {color:var(--color-danger, #c0392b);background:color-mix(in srgb, var(--color-danger, #c0392b) 12%, transparent)}
 .v3fs-dka-ahdr .v3fs-dka-x {position:absolute;top:3px;right:3px;font-size:12px}
@@ -8604,10 +8612,12 @@ select.v3fs-dir-in {cursor:pointer}
 .v3fs-dka-addrow {display:flex;gap:7px;align-items:center;flex:1;min-width:220px}
 .v3fs-dka-addrow input {flex:1;min-width:120px;border:1px solid var(--fs-line);border-radius:9px;padding:8px 11px;font-size:12.5px;font-family:inherit;color:var(--v3-text-primary);background:var(--fs-card);outline:0}
 .v3fs-dka-addrow input:focus {border-color:var(--v3-accent)}
-/* Confirm-the-plan footer (ported from the retired Listen coverage plan) */
-.v3fs-dka-foot {display:flex;align-items:center;gap:12px;justify-content:space-between;flex-wrap:wrap;margin-top:14px;padding-top:13px;border-top:1px solid var(--fs-line)}
-.v3fs-dka-foot-note {font-size:11.5px;color:var(--v3-text-muted);flex:1;min-width:220px}
-.v3fs-dka-foot-r {display:inline-flex;align-items:center;gap:9px}
+/* Confirm-the-plan footer (ported from the retired Listen coverage plan).
+   NOT .v3fs-dka-foot — that class is the matrix's coverage-footer CELLS, and a
+   later flex/margin rule on the same name leaked onto them. */
+.v3fs-dka-confirm {display:flex;align-items:center;gap:12px;justify-content:space-between;flex-wrap:wrap;margin-top:14px;padding-top:13px;border-top:1px solid var(--fs-line)}
+.v3fs-dka-confirm-note {font-size:11.5px;color:var(--v3-text-muted);flex:1;min-width:220px}
+.v3fs-dka-confirm-r {display:inline-flex;align-items:center;gap:9px}
 .v3fs-dka-confnote {font-size:12px;font-weight:650;color:var(--color-success)}
 
 /* Listen board: complete-ontology button row */
