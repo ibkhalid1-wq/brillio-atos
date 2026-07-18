@@ -23,7 +23,7 @@ import {
   type ArtifactCardModel, type EvidenceEntry,
 } from "@/v3/components/flow/flowShellData";
 import { gateAugmentations } from "@/v3/components/flow/flowCrossValidation";
-import { meetingKit } from "@/v3/components/flow/flowMeetings";
+import { meetingKit, askableMovementGaps } from "@/v3/components/flow/flowMeetings";
 import { listInterviewPacks, listDemoInvites, portalLinkFor } from "@/v3/components/flow/flowPortal";
 import { resolveMovementStakeholders, operatorAsksFor } from "@/v3/components/flow/flowStakeholders";
 import { readDrillAnchor } from "@/v3/components/flow/flowDrilldown";
@@ -472,10 +472,16 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
         const gaugePct = blockingChecks.length ? Math.round((100 * sumChecksDone) / blockingChecks.length) : (readiness.tone === "green" ? 100 : 0);
         // Stage chips read as a sentence — glyph + meaning per stage ("● 3
         // waiting → ⟳ 2 stale → ◔ 8/11"), so the bar IS the loop's state.
+        // Presence, not a count: the chip shows a COLOUR state ("●" warn) when
+        // anything is pending — an exact count kept disagreeing with the cards
+        // because card-level follow-up gaps (the sponsor's open script, from
+        // kitGaps) aren't per-stakeholder questions. askableMovementGaps IS
+        // that script, so the chip and the cards read one truth.
+        const followUpOpen = askableMovementGaps(program, movement.id).length > 0;
         const collectState = !hasPeople && !evidence.length
           ? { glyph: "○", text: "", tone: "dim" }
-          : sumWaiting.length
-            ? { glyph: "●", text: `${sumWaiting.length} waiting`, tone: "warn" }
+          : (sumWaiting.length || followUpOpen)
+            ? { glyph: "●", text: "", tone: "warn" }
             : { glyph: "✓", text: hasPeople ? `all ${sumWord}` : `${evidence.length} on record`, tone: "ok" };
         const gateState = isDone
           ? { glyph: "✓", text: "demonstrated", tone: "ok" }

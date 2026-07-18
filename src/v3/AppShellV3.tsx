@@ -2340,6 +2340,24 @@ export default function AppShellV3() {
   useEffect(() => {
     const p = activeProgram;
     if (!p || !hasSubstantiveProgramData(p.rawData) || runningAgentIds.size > 0) return;
+    // TRAILING DEBOUNCE: an operator making several edits in a session must not
+    // fire one regeneration cascade per edit. Every change resets this timer;
+    // the rebuild runs only after a quiet window, over the FINAL state (the
+    // closure is the latest render's — earlier timers were cleaned up).
+    const AUTO_BUILD_QUIET_MS = 90_000;
+    const timer = window.setTimeout(() => {
+    // CONFIRM-GATED PLAN REBUILDS: while the operator is editing the Discovery-
+    // Kit matrix, the plan is a DRAFT — every edit re-opens confirmation, and
+    // planRev restales the kit + Listen/Envision/Show on each write. So while
+    // an EDITED plan sits unconfirmed, auto-rebuilds for those movements wait;
+    // pressing "Confirm the Listen plan" (which writes the confirmation) fires
+    // ONE rebuild pass over the final plan. First generations still run, and a
+    // programme that never touched the matrix (no listenPlan overlay) is
+    // unaffected. Manual Regenerate always works regardless.
+    const frameInputs = readMovementInputs(p, "frame");
+    const planDraftOpen = !!String(frameInputs.listenPlan ?? "").trim()
+      && !String(frameInputs._listenCoverageConfirmed ?? "").trim();
+    const PLAN_MOVEMENTS = new Set(["frame", "listen", "envision", "show"]);
     for (const movement of flowMovements()) {
       if (p.gateReviews?.[movement.id]?.status === "approved") continue; // locked — inputs frozen
       const arts = movementArtifacts(p, movement);
@@ -2349,7 +2367,8 @@ export default function AppShellV3() {
       // this effect regenerate stale artifacts AND first-generate impacted ones
       // whose inputs have arrived — so nothing fires model calls unprompted.
       const auto = autoBuildEnabled(p);
-      const stale = auto ? arts.filter((a) => a.present && a.stale) : [];
+      const holdForConfirm = planDraftOpen && PLAN_MOVEMENTS.has(movement.id);
+      const stale = auto && !holdForConfirm ? arts.filter((a) => a.present && a.stale) : [];
       const firstBuild = auto
         ? arts.filter((a) => !a.present && artifactInputsReady(p, movement.id, a.id))
         : [];
@@ -2365,6 +2384,8 @@ export default function AppShellV3() {
       })();
       break; // one movement per pass; the refresh re-fires this for the next
     }
+    }, AUTO_BUILD_QUIET_MS);
+    return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeProgram, runningAgentIds]);
 

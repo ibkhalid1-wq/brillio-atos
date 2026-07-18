@@ -184,7 +184,7 @@ export default function DiscoveryKitAlign({ program, onSaveInputs }: { program: 
         const setConfirmed = (value: string) => void onSaveInputs?.("frame", { _listenCoverageConfirmed: value }, { silent: true });
         return (
           <div className="v3fs-dka-confirm">
-            <span className="v3fs-dka-confirm-note">Confirming clears the Listen gate; any later edit re-opens it and refreshes the kit.</span>
+            <span className="v3fs-dka-confirm-note">Confirming clears the Listen gate and (with Auto-build on) triggers ONE rebuild over the final plan; any later edit re-opens it.</span>
             {confirmedAt ? (
               <span className="v3fs-dka-confirm-r">
                 <span className="v3fs-dka-confnote">✓ Confirmed {new Date(confirmedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
