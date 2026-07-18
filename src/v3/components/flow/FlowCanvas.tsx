@@ -17,7 +17,7 @@ const FlowArtifactStudio = lazy(() => import("@/v3/components/flow/studio/FlowAr
 import type { ArtifactEditInput } from "@/v3/components/flow/studio/FlowArtifactStudio";
 import EvidenceReader from "@/v3/components/flow/EvidenceReader";
 import {
-  flowMovements, frontierMovementId, movementEvidence, movementArtifacts,
+  flowMovements, frontierMovementId, movementEvidence, movementArtifacts, readMovementInputs,
   gateReadiness, gateChecklist, listenCoverage, movementFacts, demoAcceptance,
   attestHeardRoster, artifactOpenGaps,
   type ArtifactCardModel, type EvidenceEntry,
@@ -25,7 +25,7 @@ import {
 import { gateAugmentations } from "@/v3/components/flow/flowCrossValidation";
 import { meetingKit } from "@/v3/components/flow/flowMeetings";
 import { listInterviewPacks, listDemoInvites, portalLinkFor } from "@/v3/components/flow/flowPortal";
-import { resolveMovementStakeholders } from "@/v3/components/flow/flowStakeholders";
+import { resolveMovementStakeholders, operatorAsksFor } from "@/v3/components/flow/flowStakeholders";
 import { readDrillAnchor } from "@/v3/components/flow/flowDrilldown";
 import { gateApprovalIntegrity } from "@/v3/components/flow/flowGovernance";
 import { listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
@@ -403,6 +403,21 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
         const evaluated = sumStakeholders.map((s) => stakeholderCollection(movement.id, s, sumPacks, evidence));
         const unheard = sumStakeholders.filter((_, i) => !evaluated[i].heard);
         const sumHeard = sumStakeholders.length - unheard.length;
+        // A heard person with OPEN questions still owes a round — pending script
+        // questions plus operator asks (minus the deferred/deleted ones), the
+        // same curation the collect card applies. The Discovery chip must not
+        // read "all heard" while anyone has a question outstanding.
+        const askCuration = (key: string, mapKey: string): string[] => {
+          const raw = readMovementInputs(program, movement.id)[mapKey];
+          try { const p = typeof raw === "string" ? JSON.parse(raw) : {}; const v = (p as Record<string, unknown>)?.[key]; return Array.isArray(v) ? v.map(String) : []; } catch { return []; }
+        };
+        const sumWaiting = sumStakeholders.filter((s, i) => {
+          if (!evaluated[i].heard) return true;
+          const key = (s.name || s.role).trim().toLowerCase();
+          const curated = new Set([...askCuration(key, "_deferredAsks"), ...askCuration(key, "_dismissedAsks")].map((q) => q.toLowerCase()));
+          const openAsks = operatorAsksFor(program, movement.id, s.name || s.role).filter((q) => !curated.has(q.toLowerCase()));
+          return s.questions.length + openAsks.length > 0;
+        });
         const sumWord = movement.id === "show" ? "reviewed" : movement.id === "listen" || movement.id === "frame" ? "heard" : "consulted";
         const sumDocsCurrent = artifacts.filter((a) => a.present && !a.stale && a.gaps === 0).length;
         const sumChecksDone = blockingChecks.filter((c) => c.done).length;
@@ -459,8 +474,8 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
         // waiting → ⟳ 2 stale → ◔ 8/11"), so the bar IS the loop's state.
         const collectState = !hasPeople && !evidence.length
           ? { glyph: "○", text: "", tone: "dim" }
-          : unheard.length
-            ? { glyph: "●", text: `${unheard.length} waiting`, tone: "warn" }
+          : sumWaiting.length
+            ? { glyph: "●", text: `${sumWaiting.length} waiting`, tone: "warn" }
             : { glyph: "✓", text: hasPeople ? `all ${sumWord}` : `${evidence.length} on record`, tone: "ok" };
         const gateState = isDone
           ? { glyph: "✓", text: "demonstrated", tone: "ok" }
