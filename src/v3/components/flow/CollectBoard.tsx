@@ -68,6 +68,24 @@ export function stakeholderCollection(
 }
 type StakeholderCollection = ReturnType<typeof stakeholderCollection>;
 
+type SaveInputsFn = (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
+
+/** A stakeholder's OUTSTANDING question count: visible script questions
+ * (minus deleted), open operator asks (minus curation), plus anything
+ * deferred for a later round. The one measure behind card retirement, the
+ * Discovery chip, and the outstanding-only board filter. */
+export function openQuestionCount(program: ProgramSummary, movementId: string, s: MovementStakeholder): number {
+  const key = (s.name || s.role).trim().toLowerCase();
+  const map = (k: string): string[] => {
+    const raw = readMovementInputs(program, movementId)[k];
+    try { const p = typeof raw === "string" ? JSON.parse(raw) : {}; const v = (p as Record<string, unknown>)?.[key]; return Array.isArray(v) ? v.map(String) : []; } catch { return []; }
+  };
+  const dismissed = new Set(map("_dismissedAsks"));
+  return s.questions.filter((q) => !dismissed.has(q)).length
+    + operatorAsksFor(program, movementId, s.name || s.role).filter((q) => !dismissed.has(q)).length
+    + map("_deferredAsks").length;
+}
+
 /** A directory-added person whose card has NOTHING left — every script
  * question and operator ask deleted, nothing deferred for later, nothing
  * heard — is RETIRED: off the board and out of the Discovery chip. ONE rule,
@@ -77,15 +95,76 @@ type StakeholderCollection = ReturnType<typeof stakeholderCollection>;
  * evidence lands or a new question is raised. */
 export function directoryCardRetired(program: ProgramSummary, movementId: string, s: MovementStakeholder, heard: boolean): boolean {
   if (!s.id.startsWith("dir-") || heard) return false;
-  const key = (s.name || s.role).trim().toLowerCase();
-  const map = (k: string): string[] => {
-    const raw = readMovementInputs(program, movementId)[k];
-    try { const p = typeof raw === "string" ? JSON.parse(raw) : {}; const v = (p as Record<string, unknown>)?.[key]; return Array.isArray(v) ? v.map(String) : []; } catch { return []; }
+  return openQuestionCount(program, movementId, s) === 0;
+}
+
+/** "Ask a question" — leads the Listen and Prototype Discovery tabs. The
+ * question routes to a stakeholder ON THIS MOVEMENT (Listen asks go to
+ * Listen's people, Prototype asks to Prototype's) — stored VERBATIM in the
+ * movement's `_operatorAsks`, riding the person's link until answered. */
+function AskQuestionCard({ program, movementId, onSaveInputs }: {
+  program: ProgramSummary;
+  movementId: string;
+  onSaveInputs: SaveInputsFn;
+}) {
+  const roster = useMemo(() =>
+    resolveMovementStakeholders(program, movementId)
+      .filter((s) => !s.isRole && s.name.trim()
+        && s.name.trim().toLowerCase() !== (s.role || "").trim().toLowerCase()),
+    [program, movementId]);
+  const [who, setWho] = useState("");
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState("");
+  const entry = roster.find((s) => s.name === who) ?? roster[0];
+  const target = entry?.name ?? "";
+  const existing = useMemo(
+    () => (entry ? operatorAsksFor(program, movementId, entry.name) : []),
+    [program, movementId, entry],
+  );
+  if (!roster.length) return null;
+  const add = async () => {
+    const q = text.trim();
+    if (!q || !entry) return;
+    setBusy(true);
+    try {
+      const all = readOperatorAsks(program, movementId);
+      const key = entry.name.trim().toLowerCase();
+      const next = [...(all[key] ?? [])];
+      if (!next.some((x) => x.toLowerCase() === q.toLowerCase())) next.push(q);
+      all[key] = next;
+      await onSaveInputs(movementId, { _operatorAsks: JSON.stringify(all) }, {
+        attest: { action: `Question raised for ${entry.name}`, detail: q.slice(0, 120) },
+      });
+      setText("");
+      setDone(target);
+    } finally { setBusy(false); }
   };
-  const dismissed = new Set(map("_dismissedAsks"));
-  return !s.questions.some((q) => !dismissed.has(q))
-    && !operatorAsksFor(program, movementId, s.name || s.role).some((q) => !dismissed.has(q))
-    && map("_deferredAsks").length === 0;
+  return (
+    <div className="v3fs-artask">
+      <div className="v3fs-artask-h"><span className="v3fs-artask-l">Ask a question</span></div>
+      <div className="v3fs-artask-b">
+        <label className="v3fs-artask-row">
+          <span>Who to ask</span>
+          <select className="v3fs-artask-who" value={target} onChange={(e) => { setWho(e.target.value); setDone(""); }} aria-label="Who to ask">
+            {roster.map((s, i) => (
+              <option key={`${s.name}-${i}`} value={s.name}>{`${s.name}${s.role ? ` · ${s.role}` : ""}`}</option>
+            ))}
+          </select>
+        </label>
+        {existing.length ? <ul className="v3fs-artask-q">{existing.map((q, i) => <li key={i}>{q}</li>)}</ul> : null}
+        <div className="v3fs-artask-add">
+          <input value={text} onChange={(e) => setText(e.target.value)}
+            placeholder={`Your question for ${target || "the owner"}…`} aria-label="Your question"
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void add(); } }} />
+          <button type="button" className="v3fs-btn" disabled={busy || !text.trim() || !target} onClick={() => void add()}>
+            {busy ? "Sending…" : "＋ Ask"}
+          </button>
+        </div>
+        {done ? <div className="v3fs-artask-done">✓ Sent to {done} — travels on their link until answered.</div> : null}
+      </div>
+    </div>
+  );
 }
 
 const COLLECT_COLUMNS: Array<{ key: CollectStatus; label: string }> = [
@@ -214,8 +293,10 @@ export function IntervieweeDiscovery({ program, movementId, captureField, areaFi
   const primaryAreaOf = new Map(evaluated.map((e) => [e.s.id, stakeholderPrimaryArea(program, e.s.name, e.s.role)] as const));
   const heardCount = evaluated.filter((e) => e.coll.heard && !e.s.questions.length).length;
   const word = movementId === "show" ? "reviewed" : movementId === "listen" || movementId === "frame" ? "heard" : "consulted";
+  // Only cards with OUTSTANDING questions render — the board is the question
+  // worklist, not a directory (the People page holds the full roster).
   const columns = COLLECT_COLUMNS
-    .map((c) => ({ ...c, items: evaluated.filter((e) => e.coll.status === c.key) }))
+    .map((c) => ({ ...c, items: evaluated.filter((e) => e.coll.status === c.key && openQuestionCount(program, movementId, e.s) > 0) }))
     .filter((c) => c.items.length);
   // Default: the solo card (Frame's sponsor) opens; a roster board stays
   // closed for scanning. `openIdsState` overrides once the operator toggles.
@@ -277,16 +358,17 @@ export function IntervieweeDiscovery({ program, movementId, captureField, areaFi
     const filtered = areaFilter && areaFilter.length
       ? order.filter((a) => [...areaTokens(a)].some((t) => selTokens.has(t)))
       : order;
-    // An ontology area with NO people yet still gets a lane — the areas ARE the
-    // phase's cards now, so an uncovered area must stay visible as open work
-    // rather than silently vanishing from Discovery.
-    const lanes = filtered.filter((a) => groups.has(a) || areaRows.has(a)).map((area) => {
-      const list = (groups.get(area) ?? []).slice().sort((a, b) => STATUS_RANK[a.coll.status] - STATUS_RANK[b.coll.status]);
+    // The board shows OUTSTANDING work: only cards with open questions render,
+    // and an area with none folds away entirely. Lane STATS still read the
+    // full list, so the coverage meter stays honest about the whole area.
+    const lanes = filtered.filter((a) => groups.has(a)).map((area) => {
+      const list = groups.get(area)!.slice().sort((a, b) => STATUS_RANK[a.coll.status] - STATUS_RANK[b.coll.status]);
+      const open = list.filter((e) => openQuestionCount(program, movementId, e.s) > 0);
       const heard = list.filter((e) => e.coll.heard && !e.s.questions.length).length;
       const toReach = list.filter((e) => e.coll.status === "toreach").length;
       const waiting = list.filter((e) => e.coll.status === "waiting").length;
-      return { area, row: areaRows.get(area), list, heard, total: list.length, toReach, waiting };
-    });
+      return { area, row: areaRows.get(area), list, open, heard, total: list.length, toReach, waiting };
+    }).filter((lane) => lane.open.length > 0);
     // Float the areas that still need the operator to the top: General last, then
     // complete areas below in-progress ones, then most-open-work first. The eye
     // lands on what's blocked instead of scrolling past finished lanes.
@@ -356,6 +438,15 @@ export function IntervieweeDiscovery({ program, movementId, captureField, areaFi
 
   return (
     <div className="v3fs-ch-collect">
+      {/* Ask a question leads Listen + Prototype Discovery — the ask routes to
+          a stakeholder ON THIS PHASE and rides their link verbatim. Frame
+          keeps its ask cards on the Charter / Discovery Kit tabs. The
+          Prototype loop's askable people are the SHOW validators (Envision's
+          roster is internal delivery-team personas), so both loop sides route
+          asks to the show movement. */}
+      {(movementId === "listen" || movementId === "envision" || movementId === "show") && onSaveInputs ? (
+        <AskQuestionCard program={program} movementId={movementId === "envision" ? "show" : movementId} onSaveInputs={onSaveInputs} />
+      ) : null}
       <div className="v3fs-collect-h">
         <div className="v3fs-colh ev">{areaOrganized ? "Data collection — by area" : "Stakeholder data collection"}</div>
         {evaluated.length > 1 ? (
@@ -409,9 +500,11 @@ export function IntervieweeDiscovery({ program, movementId, captureField, areaFi
       })() : null}
       {areaOrganized ? (
         <div className="v3fs-lanes">
-          {laneData.length === 0 && areaFilter && areaFilter.length ? (
+          {laneData.length === 0 ? (
             <div className="v3fs-lanes-empty" role="note">
-              No people are filed under {areaFilter.join(" · ")}. Tap the area card again above to clear the filter.
+              {areaFilter && areaFilter.length
+                ? <>No open questions under {areaFilter.join(" · ")}. Tap the area card again above to clear the filter.</>
+                : <>No outstanding questions — every script is settled. Ask a question above to put someone back on the board; the full roster lives on the People page.</>}
             </div>
           ) : null}
           {laneData.map((lane, i) => (
@@ -425,13 +518,13 @@ export function IntervieweeDiscovery({ program, movementId, captureField, areaFi
                 setInviteBusyArea(lane.area);
                 try { await inviteArea(lane.list); } finally { setInviteBusyArea(null); }
               } : undefined}>
-              {lane.list.length ? lane.list.map(renderCard) : (
-                <div className="v3fs-lanes-empty" role="note">
-                  No people filed under {lane.area} yet — add someone on the People page or map a person to it in the Discovery Kit matrix.
-                </div>
-              )}
+              {lane.open.map(renderCard)}
             </AreaLane>
           ))}
+        </div>
+      ) : columns.length === 0 ? (
+        <div className="v3fs-lanes-empty" role="note">
+          No outstanding questions — every script is settled. The full roster lives on the People page.
         </div>
       ) : (
         <div className="v3fs-collect-board" ref={boardRef}>
