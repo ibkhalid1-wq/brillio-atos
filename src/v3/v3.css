@@ -8622,3 +8622,20 @@ select.v3fs-dir-in {cursor:pointer}
 .v3fs-mrq-tick {width:26px;height:26px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:13px;font-weight:700;background:var(--color-success);color:#fff}
 .v3fs-mrq.done p {margin:0;font-size:12.5px;color:var(--v3-text-primary);line-height:1.5}
 .v3fs-mrq.done b {color:var(--color-success)}
+
+/* ── Generation pipeline strip (atos-gen) — Frame, next chrome ── */
+.v3fs-gp {background:var(--fs-card);border:1px solid var(--fs-line);border-radius:16px;padding:18px 20px;box-shadow:var(--fs-pop)}
+.v3fs-gp-h {display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:14px}
+.v3fs-gp-eyebrow {font-family:var(--v3-font-mono, ui-monospace);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--v3-accent-2)}
+.v3fs-gp-title {margin:3px 0 0;font-size:1.05rem;font-weight:700;letter-spacing:-.01em;color:var(--v3-text-primary)}
+.v3fs-gp-prov {margin-left:auto;max-width:40ch;font-size:12px;color:var(--v3-text-muted);text-align:right;line-height:1.45}
+.v3fs-gp-prov b {color:var(--v3-accent);font-variant-numeric:tabular-nums}
+.v3fs-gp-steps {display:flex;gap:8px;flex-wrap:wrap;align-items:stretch}
+.v3fs-gp-step {flex:1;min-width:120px;position:relative;border:1px solid var(--fs-line);border-radius:11px;padding:11px 13px;background:color-mix(in srgb, var(--v3-accent) 3%, transparent);display:flex;flex-direction:column;gap:2px}
+.v3fs-gp-arrow {position:absolute;right:-11px;top:50%;transform:translateY(-50%);color:color-mix(in srgb, var(--v3-accent) 40%, transparent);font-size:13px;z-index:1}
+@media(max-width:640px){.v3fs-gp-arrow{display:none}}
+.v3fs-gp-n {font-family:var(--v3-font-mono, ui-monospace);font-size:10px;letter-spacing:.06em;color:var(--v3-accent-2)}
+.v3fs-gp-nm {font-weight:650;font-size:12.5px;color:var(--v3-text-primary)}
+.v3fs-gp-d {font-size:11px;color:var(--v3-text-muted);line-height:1.35}
+.v3fs-gp-note {font-size:12px;color:var(--v3-text-muted);margin:13px 0 0;line-height:1.5}
+.v3fs-gp-note b {color:var(--v3-accent)}
