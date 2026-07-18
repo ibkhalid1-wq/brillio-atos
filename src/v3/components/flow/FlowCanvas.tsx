@@ -1064,7 +1064,9 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
                           onSaveDoc={onSaveArtifactDoc}
                           onOpenInbox={onOpenInbox}
                           header={movement.id === "frame" && artifact.id === "discovery-kit"
-                            ? <>{next ? <DiscoveryKitAlign program={program} /> : null}<FrameCoveragePlan program={program} onSaveInputs={onSaveInputs} /></>
+                            ? (next
+                                ? <DiscoveryKitAlign program={program} onSaveInputs={onSaveInputs} />
+                                : <FrameCoveragePlan program={program} onSaveInputs={onSaveInputs} />)
                             : undefined}
                         />
                       </Suspense>

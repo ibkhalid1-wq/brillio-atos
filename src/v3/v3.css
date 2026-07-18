@@ -8668,3 +8668,22 @@ select.v3fs-dir-in {cursor:pointer}
 .v3fs-nb-ext-prompt {margin-top:12px;padding-top:12px;border-top:1px solid var(--fs-line);display:flex;flex-direction:column;gap:9px;align-items:flex-start}
 .v3fs-nb-ext-ta {width:100%;border:1px solid var(--fs-line);border-radius:10px;padding:11px 12px;font-family:var(--v3-font-mono, ui-monospace);font-size:12px;line-height:1.5;color:var(--v3-text-primary);background:color-mix(in srgb, var(--v3-accent) 3%, transparent);resize:vertical;outline:0}
 .v3fs-nb-ext-ta:focus {border-color:var(--v3-accent)}
+
+/* Discovery Kit matrix — editable controls */
+.v3fs-dka.busy {opacity:.75;pointer-events:none}
+.v3fs-dka-ahdr .an .added {font-family:var(--v3-font-mono, ui-monospace);font-size:8px;letter-spacing:.04em;text-transform:uppercase;color:var(--color-success);font-style:normal}
+.v3fs-dka-ahdr {position:relative}
+.v3fs-dka-ahdr.addcol {background:transparent;border-left:0}
+.v3fs-dka-x {border:0;background:transparent;color:var(--v3-text-muted);cursor:pointer;font-size:14px;line-height:1;padding:2px 4px;border-radius:5px}
+.v3fs-dka-x:hover {color:var(--color-danger, #c0392b);background:color-mix(in srgb, var(--color-danger, #c0392b) 12%, transparent)}
+.v3fs-dka-ahdr .v3fs-dka-x {position:absolute;top:3px;right:3px;font-size:12px}
+.v3fs-dka-person .v3fs-dka-x {margin-left:auto}
+.v3fs-dka-dot {padding:0;border-radius:50%;width:20px;height:20px;border:1.6px solid var(--fs-line);background:transparent;cursor:default;display:grid;place-items:center}
+.v3fs-dka-dot.editable {cursor:pointer}
+.v3fs-dka-dot.editable:hover {border-color:var(--v3-accent)}
+.v3fs-dka-dot.on {background:var(--v3-accent);border-color:var(--v3-accent)}
+.v3fs-dka-dot.on::after {content:"";width:7px;height:7px;border-radius:50%;background:#fff}
+.v3fs-dka-add {display:flex;gap:14px;flex-wrap:wrap;margin-top:14px;padding-top:13px;border-top:1px solid var(--fs-line)}
+.v3fs-dka-addrow {display:flex;gap:7px;align-items:center;flex:1;min-width:220px}
+.v3fs-dka-addrow input {flex:1;min-width:120px;border:1px solid var(--fs-line);border-radius:9px;padding:8px 11px;font-size:12.5px;font-family:inherit;color:var(--v3-text-primary);background:var(--fs-card);outline:0}
+.v3fs-dka-addrow input:focus {border-color:var(--v3-accent)}
