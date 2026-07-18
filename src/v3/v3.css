@@ -8433,7 +8433,6 @@ select.v3fs-dir-in {cursor:pointer}
    ══════════════════════════════════════════════════════════════════════════ */
 .v3fs-nb-strip {display:flex;flex-direction:column;gap:11px;margin:2px 0 14px}
 .v3fs-nb-strip b {font-weight:650;color:var(--v3-text-primary)}
-.v3fs-nb-note {font-size:12.5px;color:var(--v3-text-muted);margin:2px 2px 0}
 
 /* Lanes — one area per row */
 .v3fs-nb-lane {display:flex;align-items:center;gap:14px;flex-wrap:wrap;
@@ -8623,9 +8622,6 @@ select.v3fs-dir-in {cursor:pointer}
 .v3fs-dka-confirm-r {display:inline-flex;align-items:center;gap:9px}
 .v3fs-dka-confnote {font-size:12px;font-weight:650;color:var(--color-success)}
 
-/* Listen board: complete-ontology button row */
-.v3fs-nb-listenhead {display:flex;gap:12px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap}
-.v3fs-nb-listenhead .v3fs-nb-note {margin:2px 2px 0;flex:1;min-width:260px}
 /* Ontology + atlas modal */
 .v3fs-nb-modal-scrim {position:fixed;inset:0;z-index:400;background:rgba(23,22,43,.5);backdrop-filter:blur(3px);display:grid;place-items:center;padding:24px}
 .v3fs-nb-modal {background:var(--fs-card);border:1px solid var(--fs-line);border-radius:16px;box-shadow:0 24px 60px -24px rgba(23,22,43,.6);width:min(760px,100%);max-height:86vh;display:flex;flex-direction:column;overflow:hidden}

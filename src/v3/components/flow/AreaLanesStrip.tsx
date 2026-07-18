@@ -67,10 +67,6 @@ export default function AreaLanesStrip({ program, phase, onOpenWorkspace }: {
   if (phase === "listen") {
     return (
       <div className="v3fs-nb-strip">
-        <div className="v3fs-nb-listenhead">
-          <p className="v3fs-nb-note">Each area builds its <b>own</b> understanding in parallel — its business map and its “how it works today”. An area is ready for Prototype when it’s fully heard.</p>
-          <button type="button" className="v3fs-nb-open ghost sm" onClick={() => setOntoModal({ area: null })}>◇ See the complete ontology</button>
-        </div>
         {rows.map((r) => {
           const map = areaHasModel(program, r.area);
           const a = ah(r.area);
