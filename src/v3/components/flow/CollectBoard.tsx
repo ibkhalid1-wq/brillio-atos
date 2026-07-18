@@ -177,10 +177,30 @@ export function IntervieweeDiscovery({ program, movementId, captureField, areaFi
       items,
     });
   }
-  const evaluated = stakeholders.map((s) => ({
-    s,
-    coll: stakeholderCollection(movementId, s, packs, evidence, approvalByName.get(s.name.trim().toLowerCase())),
-  }));
+  // A directory-added person whose card has NOTHING left — every script
+  // question and operator ask deleted, nothing deferred for later, nothing
+  // heard — leaves the board: deleting a person's last question retires their
+  // card. Roster voices (kit/charter roles) always stay; a retired directory
+  // card returns the moment evidence lands or a new question is raised.
+  const curationMap = (key: string): Record<string, string[]> => {
+    const raw = readMovementInputs(program, movementId)[key];
+    try { const p = typeof raw === "string" ? JSON.parse(raw) : {}; return p && typeof p === "object" ? p as Record<string, string[]> : {}; } catch { return {}; }
+  };
+  const deferredAll = curationMap("_deferredAsks");
+  const dismissedAll = curationMap("_dismissedAsks");
+  const hasOpenBusiness = (s: MovementStakeholder): boolean => {
+    const k = (s.name || s.role).trim().toLowerCase();
+    const dismissed = new Set(dismissedAll[k] ?? []);
+    return s.questions.some((q) => !dismissed.has(q))
+      || operatorAsksFor(program, movementId, s.name || s.role).some((q) => !dismissed.has(q))
+      || (deferredAll[k]?.length ?? 0) > 0;
+  };
+  const evaluated = stakeholders
+    .map((s) => ({
+      s,
+      coll: stakeholderCollection(movementId, s, packs, evidence, approvalByName.get(s.name.trim().toLowerCase())),
+    }))
+    .filter(({ s, coll }) => !s.id.startsWith("dir-") || coll.heard || hasOpenBusiness(s));
   // Resolve each stakeholder's ontology-grounded primary area ONCE — the single
   // source for the by-area gate, the lane grouping, and each card's area chip.
   const primaryAreaOf = new Map(evaluated.map((e) => [e.s.id, stakeholderPrimaryArea(program, e.s.name, e.s.role)] as const));
@@ -191,7 +211,7 @@ export function IntervieweeDiscovery({ program, movementId, captureField, areaFi
     .filter((c) => c.items.length);
   // Default: the solo card (Frame's sponsor) opens; a roster board stays
   // closed for scanning. `openIdsState` overrides once the operator toggles.
-  const soloId = stakeholders.length === 1 && !evaluated[0]?.coll.heard ? stakeholders[0].id : null;
+  const soloId = evaluated.length === 1 && !evaluated[0].coll.heard ? evaluated[0].s.id : null;
   const openIds = openIdsState ?? new Set(soloId ? [soloId] : []);
   const setCardOpen = (id: string, open: boolean) => setOpenIdsState((prev) => {
     const base = prev ?? new Set(soloId ? [soloId] : []);
@@ -204,8 +224,8 @@ export function IntervieweeDiscovery({ program, movementId, captureField, areaFi
   // starts fully collapsed, so a flag initialised to "not collapsed" mislabelled
   // the button and made the first click a no-op. If anything is open, collapse
   // all; otherwise expand all.
-  const anyOpen = stakeholders.some((s) => openIds.has(s.id));
-  const toggleAll = () => setOpenIdsState(anyOpen ? new Set() : new Set(stakeholders.map((s) => s.id)));
+  const anyOpen = evaluated.some((e) => openIds.has(e.s.id));
+  const toggleAll = () => setOpenIdsState(anyOpen ? new Set() : new Set(evaluated.map((e) => e.s.id)));
   // Listen · Envision · Show organize the board BY AREA once the programme spans
   // more than one — each area is a lane holding its own stakeholder cards, each
   // card carrying ONE link that bundles that person's questions and their
@@ -315,7 +335,7 @@ export function IntervieweeDiscovery({ program, movementId, captureField, areaFi
     heard: evaluated.filter((e) => e.coll.heard && !e.s.questions.length).length,
     waiting: evaluated.filter((e) => e.coll.status === "waiting").length,
     toReach: evaluated.filter((e) => e.coll.status === "toreach" && !e.s.isRole).length,
-    total: stakeholders.length,
+    total: evaluated.length,
   };
   const covPct = (n: number) => (cov.total ? Math.round((n / cov.total) * 100) : 0);
   const inviteAll = async () => {
@@ -327,20 +347,20 @@ export function IntervieweeDiscovery({ program, movementId, captureField, areaFi
     <div className="v3fs-ch-collect">
       <div className="v3fs-collect-h">
         <div className="v3fs-colh ev">{areaOrganized ? "Data collection — by area" : "Stakeholder data collection"}</div>
-        {stakeholders.length > 1 ? (
+        {evaluated.length > 1 ? (
           <div className="v3fs-cov" title={`${cov.heard} heard · ${cov.waiting} waiting on a reply · ${cov.toReach} still to reach`}>
             <div className="v3fs-cov-bar" aria-hidden="true">
               <span className="heard" style={{ width: `${covPct(cov.heard)}%` }} />
               <span className="waiting" style={{ width: `${covPct(cov.waiting)}%` }} />
             </div>
-            <span className="v3fs-cov-count"><b>{heardCount}</b> of {stakeholders.length} {word}</span>
+            <span className="v3fs-cov-count"><b>{heardCount}</b> of {evaluated.length} {word}</span>
           </div>
         ) : (
           <span className="v3fs-collect-count"
             title={movementId === "listen"
               ? "Counted from collected evidence and responded links. The gate's coverage ledger is separate — voices are attested heard or waived in the roster."
               : "Counted from collected evidence and responded links."}>
-            {heardCount} of {stakeholders.length} {word}
+            {heardCount} of {evaluated.length} {word}
           </span>
         )}
         <div className="v3fs-collect-tools">
@@ -350,7 +370,7 @@ export function IntervieweeDiscovery({ program, movementId, captureField, areaFi
               {inviteAllBusy ? "Creating links…" : `✳ Invite ${cov.toReach} not contacted`}
             </button>
           ) : null}
-          {stakeholders.length > 1 ? (
+          {evaluated.length > 1 ? (
             areaOrganized
               ? <button type="button" className="v3fs-btn quiet" onClick={toggleAllAreas}>{anyLaneOpen ? "Collapse all" : "Expand all"}</button>
               : <button type="button" className="v3fs-btn quiet" onClick={toggleAll}>{anyOpen ? "Collapse all" : "Expand all"}</button>

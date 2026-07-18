@@ -2340,12 +2340,6 @@ export default function AppShellV3() {
   useEffect(() => {
     const p = activeProgram;
     if (!p || !hasSubstantiveProgramData(p.rawData) || runningAgentIds.size > 0) return;
-    // TRAILING DEBOUNCE: an operator making several edits in a session must not
-    // fire one regeneration cascade per edit. Every change resets this timer;
-    // the rebuild runs only after a quiet window, over the FINAL state (the
-    // closure is the latest render's — earlier timers were cleaned up).
-    const AUTO_BUILD_QUIET_MS = 90_000;
-    const timer = window.setTimeout(() => {
     // CONFIRM-GATED PLAN REBUILDS: while the operator is editing the Discovery-
     // Kit matrix, the plan is a DRAFT — every edit re-opens confirmation, and
     // planRev restales the kit + Listen/Envision/Show on each write. So while
@@ -2384,8 +2378,6 @@ export default function AppShellV3() {
       })();
       break; // one movement per pass; the refresh re-fires this for the next
     }
-    }, AUTO_BUILD_QUIET_MS);
-    return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeProgram, runningAgentIds]);
 
