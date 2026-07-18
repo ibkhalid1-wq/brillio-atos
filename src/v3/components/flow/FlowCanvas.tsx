@@ -687,7 +687,7 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
                             const mapped = areaHasModel(program, area);
                             return (
                               <>
-                                <span className={`v3fs-lanex-chip${mapped ? " ok" : ""}`}>{mapped ? "✓ map confirmed" : "● map drafting"}</span>
+                                <span className={`v3fs-lanex-chip${mapped ? " ok" : ""}`}>{mapped ? "map confirmed" : "map drafting"}</span>
                                 <button type="button" className="v3fs-lanex-btn"
                                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOntoModal({ area }); }}>
                                   Open the map →

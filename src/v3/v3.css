@@ -7821,33 +7821,63 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-lane:hover::before {top:0;bottom:0}
 .v3fs-lane.ready {border-color:color-mix(in srgb,var(--v3-green) 32%,var(--fs-line))}
 .v3fs-lane.ready::before {background:var(--v3-green)}
-/* AREA lanes lead the board — a stronger, always-tinted header band with a
-   larger monogram tile and a bigger area name, so alliances/delivery/etc. read
-   as section headers, not rows. */
-.v3fs-lane-h {display:flex;align-items:center;gap:16px;
-  padding:15px 22px;cursor:pointer;list-style:none;user-select:none;transition:background .14s ease;
-  background:linear-gradient(color-mix(in srgb,var(--lane-accent) 8%,var(--fs-card)),color-mix(in srgb,var(--lane-accent) 4%,var(--fs-card)));
-  border-bottom:1px solid color-mix(in srgb,var(--lane-accent) 16%,transparent)}
+/* AREA lanes lead the board. The header is a calm, architectural band: the
+   area's identity light washes in from the LEFT (not a flat tint), a duotone
+   monogram tile carries the colour, the name leads with a quiet meta line
+   beneath, coverage reads as an inset meter with tabular numerals, and the
+   phase chips share ONE language — neutral pills with a coloured status dot —
+   so the single accent-fill action ("Open the map →") is unmistakably the
+   thing to click. */
+.v3fs-lane-h {display:flex;align-items:center;gap:14px;
+  padding:16px 20px 16px 22px;cursor:pointer;list-style:none;user-select:none;
+  transition:background .18s ease;
+  background:linear-gradient(105deg,
+    color-mix(in srgb,var(--lane-accent) 9%,var(--fs-card)) 0%,
+    color-mix(in srgb,var(--lane-accent) 3%,var(--fs-card)) 34%,
+    var(--fs-card) 72%);
+  border-bottom:1px solid color-mix(in srgb,var(--lane-accent) 14%,transparent)}
 .v3fs-lane-h::-webkit-details-marker {display:none}
-.v3fs-lane-h:hover {background:color-mix(in srgb,var(--lane-accent) 11%,var(--fs-card))}
+.v3fs-lane-h:hover {background:linear-gradient(105deg,
+    color-mix(in srgb,var(--lane-accent) 13%,var(--fs-card)) 0%,
+    color-mix(in srgb,var(--lane-accent) 5%,var(--fs-card)) 40%,
+    var(--fs-card) 78%)}
 .v3fs-lane:not([open]) > .v3fs-lane-h {border-bottom-color:transparent}
-.v3fs-lane-ic {display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;flex-shrink:0;
-  border-radius:12px;background:var(--lane-accent);color:#fff;
-  font-size:14px;font-weight:800;letter-spacing:.02em;box-shadow:0 2px 6px -2px color-mix(in srgb,var(--lane-accent) 60%,transparent)}
-.v3fs-lane.ready .v3fs-lane-ic {background:var(--v3-green);color:#fff}
-.v3fs-lane-id {display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 auto}
-/* Phase-specific lane-header extras — map state + "Open the map" on Listen,
-   validation round/verdicts on Prototype. Sit between the meter and status. */
-.v3fs-lane-x {display:inline-flex;align-items:center;gap:8px;flex:0 0 auto}
-.v3fs-lanex-chip {font-size:11px;font-weight:700;letter-spacing:.02em;color:var(--v3-amber, #b45309);
-  background:color-mix(in srgb, var(--v3-amber, #b45309) 10%, transparent);border-radius:7px;padding:4px 9px;white-space:nowrap}
-.v3fs-lanex-chip.ok {color:var(--v3-green, #157f3d);background:color-mix(in srgb, var(--v3-green, #157f3d) 10%, transparent)}
-.v3fs-lanex-btn {border:1px solid var(--fs-line);background:var(--v3-surface-2);border-radius:9px;padding:5px 11px;
-  font-size:11.5px;font-weight:700;color:var(--v3-text);cursor:pointer;white-space:nowrap}
-.v3fs-lanex-btn:hover {border-color:color-mix(in srgb, var(--lane-accent) 45%, var(--fs-line))}
-.v3fs-lane-id b {font-size:17px;font-weight:750;letter-spacing:-.02em;color:var(--v3-text);text-transform:none}
-.v3fs-lane-id span {font-size:11px;font-weight:600;color:color-mix(in srgb,var(--lane-accent) 70%,var(--v3-text-muted));letter-spacing:.02em;text-transform:uppercase}
-.v3fs-lane-prog {display:flex;align-items:center;gap:9px;font-size:11px;font-weight:700;color:var(--v3-text-muted);font-variant-numeric:tabular-nums}
+/* Duotone monogram tile: accent text on an accent wash, ringed by a hairline —
+   lighter-touch than a solid block, so six lanes don't read as a paint chart. */
+.v3fs-lane-ic {display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;flex-shrink:0;
+  border-radius:14px;color:var(--lane-accent);
+  background:linear-gradient(160deg,
+    color-mix(in srgb,var(--lane-accent) 16%,var(--v3-surface)),
+    color-mix(in srgb,var(--lane-accent) 8%,var(--v3-surface)));
+  border:1px solid color-mix(in srgb,var(--lane-accent) 30%,transparent);
+  font-size:13.5px;font-weight:800;letter-spacing:.04em;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.6), 0 1px 3px -1px color-mix(in srgb,var(--lane-accent) 35%,transparent);
+  transition:box-shadow .2s ease}
+.v3fs-lane-h:hover .v3fs-lane-ic {box-shadow:inset 0 1px 0 rgba(255,255,255,.6), 0 5px 14px -6px color-mix(in srgb,var(--lane-accent) 55%,transparent)}
+.v3fs-lane.ready .v3fs-lane-ic {color:var(--v3-green);
+  background:linear-gradient(160deg, color-mix(in srgb,var(--v3-green) 14%,var(--v3-surface)), color-mix(in srgb,var(--v3-green) 7%,var(--v3-surface)));
+  border-color:color-mix(in srgb,var(--v3-green) 30%,transparent)}
+.v3fs-lane-id {display:flex;flex-direction:column;gap:3px;min-width:0;flex:1 1 auto}
+.v3fs-lane-id b {font-size:17.5px;font-weight:760;letter-spacing:-.025em;color:var(--v3-text);text-transform:none;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.v3fs-lane-id span {font-size:10.5px;font-weight:650;letter-spacing:.06em;text-transform:uppercase;
+  color:color-mix(in srgb,var(--lane-accent) 55%,var(--v3-text-muted))}
+/* Phase chips + the one action, unified: quiet pills, coloured DOT carries the
+   state (amber drafting · green confirmed), the action alone fills on hover. */
+.v3fs-lane-x {display:inline-flex;align-items:center;gap:7px;flex:0 0 auto}
+.v3fs-lanex-chip {display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:650;letter-spacing:.005em;
+  color:var(--v3-text-secondary);background:color-mix(in srgb,var(--v3-surface) 72%,transparent);
+  border:1px solid color-mix(in srgb,var(--fs-line) 85%,transparent);border-radius:99px;padding:4.5px 11px;white-space:nowrap;
+  font-variant-numeric:tabular-nums}
+.v3fs-lanex-chip::before {content:"";width:6px;height:6px;border-radius:99px;flex-shrink:0;
+  background:var(--v3-amber, #b45309);box-shadow:0 0 0 3px color-mix(in srgb,var(--v3-amber, #b45309) 18%,transparent)}
+.v3fs-lanex-chip.ok::before {background:var(--v3-green, #157f3d);box-shadow:0 0 0 3px color-mix(in srgb,var(--v3-green, #157f3d) 18%,transparent)}
+.v3fs-lanex-btn {display:inline-flex;align-items:center;gap:5px;border:1px solid transparent;
+  background:var(--fs-indigo-wash);border-radius:99px;padding:5.5px 13px;
+  font-size:11.5px;font-weight:680;letter-spacing:-.005em;color:var(--v3-accent-2);cursor:pointer;white-space:nowrap;
+  transition:background var(--v3-transition-fast),color var(--v3-transition-fast)}
+.v3fs-lanex-btn:hover {background:var(--v3-accent-2);color:#fff}
+.v3fs-lane-prog {display:flex;align-items:center;gap:9px;font-size:11px;font-weight:650;color:var(--v3-text-muted);font-variant-numeric:tabular-nums}
 .v3fs-lane-bar {width:72px;height:5px;border-radius:99px;background:color-mix(in srgb,var(--v3-text-muted) 16%,transparent);overflow:hidden}
 .v3fs-lane-bar > span {display:block;height:100%;background:var(--lane-accent);border-radius:99px;transition:width .35s cubic-bezier(.4,0,.2,1)}
 .v3fs-lane.ready .v3fs-lane-bar > span {background:var(--v3-green)}
@@ -7860,7 +7890,9 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-cov-bar, .v3fs-lane-meter {display:flex;height:6px;border-radius:99px;overflow:hidden;
   background:color-mix(in srgb,var(--v3-text-muted) 15%,transparent)}
 .v3fs-cov-bar {width:132px}
-.v3fs-lane-meter {width:72px;height:5px}
+/* Lane meter: wider, inset track — reads as an instrument, not a sliver. */
+.v3fs-lane-meter {width:104px;height:6px;background:color-mix(in srgb,var(--v3-text-muted) 12%,transparent);
+  box-shadow:inset 0 1px 2px rgba(20,20,45,.08)}
 .v3fs-cov-bar > span, .v3fs-lane-meter > span {display:block;height:100%;transition:width .4s cubic-bezier(.22,1,.36,1)}
 .v3fs-cov-bar > .heard, .v3fs-lane-meter > .heard {background:var(--v3-green)}
 .v3fs-cov-bar > .waiting, .v3fs-lane-meter > .waiting {background:color-mix(in srgb,var(--v3-accent-2) 55%,transparent)}
@@ -7882,14 +7914,29 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-ivc-next:focus-visible {outline:2px solid var(--v3-accent-2);outline-offset:2px}
 /* "Collecting" is the calm resting state — indigo-tinted, not an amber alarm.
    Only genuine attention states elsewhere carry amber. */
-.v3fs-lane-st {display:inline-flex;align-items:center;gap:6px;white-space:nowrap;font-size:11px;font-weight:650;
+.v3fs-lane-st {display:inline-flex;align-items:center;gap:6px;white-space:nowrap;font-size:11px;font-weight:660;
   letter-spacing:.01em;padding:5px 12px;border-radius:99px;color:var(--v3-accent-2);
-  background:color-mix(in srgb,var(--v3-accent-2) 9%,transparent)}
+  background:color-mix(in srgb,var(--v3-accent-2) 8%,transparent);
+  border:1px solid color-mix(in srgb,var(--v3-accent-2) 16%,transparent)}
 .v3fs-lane-st i {font-size:7px;font-style:normal;line-height:1;opacity:.9}
-.v3fs-lane-st.ready {color:var(--v3-green);background:color-mix(in srgb,var(--v3-green) 11%,transparent)}
-.v3fs-lane-chev {width:8px;height:8px;border-right:1.5px solid var(--v3-text-muted);border-bottom:1.5px solid var(--v3-text-muted);
-  transform:rotate(-45deg);transition:transform .2s ease;opacity:.5}
-.v3fs-lane[open] .v3fs-lane-chev {transform:rotate(45deg)}
+.v3fs-lane-st.ready {color:var(--v3-green);background:color-mix(in srgb,var(--v3-green) 9%,transparent);
+  border-color:color-mix(in srgb,var(--v3-green) 20%,transparent)}
+/* Circular disclosure affordance — a ringed chevron that turns on open and
+   picks up the accent on hover, so "this expands" is legible at a glance. */
+.v3fs-lane-chev {display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;flex-shrink:0;
+  border-radius:99px;border:1px solid color-mix(in srgb,var(--fs-line) 90%,transparent);
+  background:color-mix(in srgb,var(--v3-surface) 80%,transparent);
+  transition:transform .22s cubic-bezier(.4,0,.2,1),border-color .18s ease,background .18s ease}
+.v3fs-lane-chev::after {content:"";width:7px;height:7px;margin-top:-3px;
+  border-right:1.5px solid var(--v3-text-muted);border-bottom:1.5px solid var(--v3-text-muted);
+  transform:rotate(45deg);transition:border-color .18s ease}
+.v3fs-lane-h:hover .v3fs-lane-chev {border-color:color-mix(in srgb,var(--lane-accent) 40%,var(--fs-line));
+  background:var(--v3-surface)}
+.v3fs-lane-h:hover .v3fs-lane-chev::after {border-color:var(--lane-accent)}
+.v3fs-lane[open] .v3fs-lane-chev {transform:rotate(180deg)}
+@media (prefers-reduced-motion: reduce){
+  .v3fs-lane-chev, .v3fs-lane-ic, .v3fs-lane-meter > span {transition:none}
+}
 /* TREE, not a card wall: an area lane's people stack as a single-column nested
    list (a branch under the area), with a faint guide rail down the left so the
    area → stakeholder hierarchy reads at a glance. Each card is click-to-expand. */
