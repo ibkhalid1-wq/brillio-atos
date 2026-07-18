@@ -384,8 +384,8 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
   // the editable Transformation Charter): ask the person who owns the answer.
   // The question travels on their link and regenerates the document when
   // answered. Only roles with a NAMED individual are offered; asking someone
-  // not yet on this movement's Discovery adds their card. Rendered BELOW the
-  // document body.
+  // not yet on this movement's Discovery adds their card. Rendered at the TOP
+  // of the tab.
   const askPanel = (!canEdit || artifact.id === "charter") && artifact.movementId !== "envision" && artifact.movementId !== "show" && onSaveInputs && askRoster.length ? (
     <div className="v3fs-artask">
       <div className="v3fs-artask-h">
@@ -481,6 +481,7 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
             {embedded ? null : <button type="button" className="v3fs-btn" onClick={onClose} aria-label="Close">Close</button>}
           </div>
         </header>
+        {askPanel}
         {header ? <div className="v3fs-artpanel-header">{header}</div> : null}
         {approval.status === "changes" && approval.comment ? (
           <div className="v3fs-approval-bar changes" role="status">↺ {approval.approver?.name ?? "Approver"} requested changes: &ldquo;{approval.comment}&rdquo;</div>
@@ -617,7 +618,6 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
                   ))}
                 </>
               )}
-              {askPanel}
               {draft || blocks.length > 0 ? (
                 <details className="v3fs-disc v3fs-disc-sm v3fs-dv-colophon">
                   <summary>

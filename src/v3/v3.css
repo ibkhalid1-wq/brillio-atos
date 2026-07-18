@@ -6313,10 +6313,11 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-docview-b .v3fs-stu-field select:disabled{border-bottom:1px solid var(--fs-line);padding-left:2px}
 
 /* ── Request a change: the read-only document's ask-a-stakeholder panel ──── */
-.v3fs-artask{margin:0 26px 4px;border:1px solid var(--fs-line);border-radius:12px;background:color-mix(in srgb,var(--v3-accent) 3%,var(--fs-card))}
-.v3fs-docview .v3fs-artask{margin:0 36px 8px}
-.v3fs-artask-h{display:flex;align-items:baseline;gap:10px;padding:11px 14px;border-bottom:1px solid var(--fs-line)}
-.v3fs-artask-l{font-size:12px;font-weight:700;color:var(--v3-accent-2);letter-spacing:.01em}
+/* Prominent: the card leads the tab — accent border + tint, headline-weight label */
+.v3fs-artask{margin:0 26px 12px;border:1.5px solid color-mix(in srgb,var(--v3-accent) 45%,var(--fs-line));border-radius:12px;background:color-mix(in srgb,var(--v3-accent) 6%,var(--fs-card));box-shadow:0 2px 10px -6px color-mix(in srgb,var(--v3-accent) 40%,transparent)}
+.v3fs-docview .v3fs-artask{margin:0 36px 12px}
+.v3fs-artask-h{display:flex;align-items:baseline;gap:10px;padding:12px 15px;border-bottom:1px solid color-mix(in srgb,var(--v3-accent) 25%,var(--fs-line))}
+.v3fs-artask-l{font-size:14px;font-weight:750;color:var(--v3-accent);letter-spacing:-.01em}
 .v3fs-artask-b{padding:12px 14px;display:flex;flex-direction:column;gap:10px}
 .v3fs-artask-row{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--v3-text-muted)}
 .v3fs-artask-who{flex:1;min-width:0;padding:6px 8px;border:1px solid var(--fs-line);border-radius:8px;background:var(--fs-card);font-size:13px;color:var(--v3-text)}
