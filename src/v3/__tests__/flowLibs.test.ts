@@ -1396,6 +1396,25 @@ describe("meetingKit follow-up — only askable gaps become script questions", (
     expect(cards.filter((card) => card.role === "Sales Lead")).toHaveLength(1); // Dan only, no duplicate
   });
 
+  it("naming a role's person in the People directory binds its Listen placeholder (2026-07-17 regression pin)", async () => {
+    const { resolveMovementStakeholders } = await import("@/v3/components/flow/flowStakeholders");
+    const p = programme({
+      discoveryKit: {
+        interviews: [{ stakeholder: "Alliances — TBC", role: "Alliances", agenda: [] }],
+        personas: [{ name: "Alliances", kind: "internal", spokenForBy: [], unrepresented: true }],
+      },
+      phaseInputs: { listen: { _directoryPeople: JSON.stringify([
+        { id: "dp-1", name: "Jane Doe", role: "Alliances", movementId: "listen", roleResolved: true },
+      ]) } },
+    });
+    const cards = resolveMovementStakeholders(p, "listen");
+    const alliances = cards.find((card) => card.role === "Alliances");
+    expect(alliances, "the Alliances card must exist").toBeTruthy();
+    // Named in People → no longer an unbound "who is this?" placeholder.
+    expect(alliances?.name).toBe("Jane Doe");
+    expect(alliances?.isRole).toBe(false);
+  });
+
   it("coverage-map edits steer discovery-kit regeneration — thin domains become deepen-instructions", async () => {
     const { discoveryKitCoverageGuidance } = await import("@/v3/components/flow/flowMeetings");
     // A clean map steers nothing.

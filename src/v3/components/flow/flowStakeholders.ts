@@ -241,6 +241,16 @@ function kitInterviews(program: ProgramSummary): MovementStakeholder[] {
   // Operations lead is Maya") BECOMES that person here — the one place every
   // downstream reader (collect board, People page, approvals) derives from.
   const listenBindings = readRoleBindings(program, "listen");
+  // A person named for a role in the People DIRECTORY binds its placeholder too
+  // — not just the card's own bind box. Without this, adding "Jane (Alliances)"
+  // in People left the Alliances discovery card still asking "who is this?".
+  const directoryPeople = readDirectoryPeople(program);
+  const directoryNameForRole = (roleLabel: string): string => {
+    const rk = roleLabel.trim().toLowerCase();
+    if (!rk) return "";
+    const hit = directoryPeople.find((p) => p.name?.trim() && p.role?.trim().toLowerCase() === rk);
+    return hit?.name?.trim() ?? "";
+  };
   // DEFERRED questions: a respondent said "not me — ask X". Each routes ONLY
   // to its target's card (matched by name or role, either direction), and is
   // removed from everyone else's script — including the deferrer's.
@@ -324,7 +334,7 @@ function kitInterviews(program: ProgramSummary): MovementStakeholder[] {
   const canRouteByDomain = audienceRoster.some((entry) => entry.coverage && entry.coverage.size > 0);
   const personaCards: MovementStakeholder[] = personaRoles.map((roleName, index) => {
     const bound = listenBindings[roleName];
-    const name = bound?.name ?? "";
+    const name = bound?.name ?? directoryNameForRole(roleName);
     const key = (name || roleName).toLowerCase();
     const myAsks = movementAsks.filter((ask) => {
       const to = deferralByAsk.get(normAsk(ask));
@@ -361,7 +371,7 @@ function kitInterviews(program: ProgramSummary): MovementStakeholder[] {
     const roleLabel = String(interview.role ?? "").trim() || rawName.replace(/\s*[—–−‑-]\s*TBC\s*$/i, "").trim();
     const placeholder = !rawName || tbc;
     const bound = placeholder && roleLabel ? listenBindings[roleLabel] : undefined;
-    const name = placeholder ? (bound?.name ?? "") : rawName;
+    const name = placeholder ? (bound?.name ?? directoryNameForRole(roleLabel)) : rawName;
     const key = name.toLowerCase();
     const isDeferredElsewhere = (ask: string): boolean => {
       const to = deferralByAsk.get(normAsk(ask));
