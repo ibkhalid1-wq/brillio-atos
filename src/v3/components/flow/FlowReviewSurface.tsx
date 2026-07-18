@@ -129,11 +129,12 @@ function coverageLabel(review: ReviewPayload): string {
 
 function OntologyAtlasSurface({ review, stakeholder, programme, objective, submitting, error, onSubmit, draftKey, returning, afterIntro }: {
   review: OntologyAtlasReview; stakeholder: string; programme?: string; objective?: string; submitting: boolean; error: string | null;
-  onSubmit: (answers: string) => void; draftKey?: string; returning?: boolean; afterIntro?: React.ReactNode;
+  onSubmit: (answers: string, extras?: { suggestedVoices?: Array<{ name: string; role: string; note: string }> }) => void; draftKey?: string; returning?: boolean; afterIntro?: React.ReactNode;
 }) {
   const [termComments, setTermComments] = usePersistentState<Record<string, string>>(draftKey, "oaTerms", {});
   const [workflowComments, setWorkflowComments] = usePersistentState<Record<string, string>>(draftKey, "oaWf", {});
   const [overall, setOverall] = usePersistentState(draftKey, "oaOverall", "");
+  const [whoElse, setWhoElse] = usePersistentState(draftKey, "oaWhoElse", "");
   const [area, setArea] = useState(review.recipientArea ?? "");
   const areas = areasOf([...review.terms, ...review.workflows]);
   const touched = useMemo(() =>
@@ -198,11 +199,13 @@ function OntologyAtlasSurface({ review, stakeholder, programme, objective, submi
             placeholder="Anything we've misunderstood, or a term or workflow we've missed entirely?" />
         </section>
       </div>
+      <label className="v3fs-rvw-whoelse">Someone else we should ask?
+        <input value={whoElse} onChange={(e) => setWhoElse(e.target.value)} placeholder="Name or role (optional)" /></label>
       <div className="v3fs-rvw-foot">
         {draftKey && touched ? <p className="v3fs-rvw-saved">✓ Saved on this device — you can close this and come back</p> : null}
         {error ? <p className="v3fs-portal-err">{error}</p> : null}
-        <button type="button" className="v3fs-btn pri v3fs-rvw-send" disabled={submitting || !touched}
-          onClick={() => onSubmit(composeOntologyAtlasAnswers(review, termComments, workflowComments, overall))}>
+        <button type="button" className="v3fs-btn pri v3fs-rvw-send" disabled={submitting || (!touched && !whoElse.trim())}
+          onClick={() => onSubmit(composeOntologyAtlasAnswers(review, termComments, workflowComments, overall), whoElse.trim() ? { suggestedVoices: [{ name: whoElse.trim(), role: "", note: "" }] } : undefined)}>
           {submitting ? "Sending…" : "Send my comments"}
         </button>
       </div>
@@ -212,13 +215,14 @@ function OntologyAtlasSurface({ review, stakeholder, programme, objective, submi
 
 function ListenWorkflowSurface({ review, stakeholder, programme, objective, submitting, error, onSubmit, draftKey, returning, afterIntro }: {
   review: ListenWorkflowReview; stakeholder: string; programme?: string; objective?: string; submitting: boolean; error: string | null;
-  onSubmit: (answers: string) => void; draftKey?: string; returning?: boolean; afterIntro?: React.ReactNode;
+  onSubmit: (answers: string, extras?: { suggestedVoices?: Array<{ name: string; role: string; note: string }> }) => void; draftKey?: string; returning?: boolean; afterIntro?: React.ReactNode;
 }) {
   const [wfSteps, setWfSteps] = usePersistentState<FlowNode[][]>(draftKey, "lwSteps",
     review.workflows.map((w) => w.steps.map((s) => ({
       action: s.action, original: s.action, actor: s.actor, originalActor: s.actor, system: s.system, originalSystem: s.system, entities: s.entities,
     }))));
   const [narration, setNarration] = usePersistentState(draftKey, "lwNarr", "");
+  const [whoElse, setWhoElse] = usePersistentState(draftKey, "lwWhoElse", "");
   const [termNotes, setTermNotes] = usePersistentState<Record<string, string>>(draftKey, "lwTerms", {});
   const [answers, setAnswers] = usePersistentState<Record<string, string>>(draftKey, "lwAns", {});
   const [addedTerms, setAddedTerms] = usePersistentState<Array<{ name: string; note: string }>>(draftKey, "lwAdd", []);
@@ -418,11 +422,13 @@ function ListenWorkflowSurface({ review, stakeholder, programme, objective, subm
         ) : <p className="v3fs-rvw-live-empty">Edit a step, add one, or describe a change — it appears here.</p>}
       </aside>
 
+      <label className="v3fs-rvw-whoelse">Someone else we should ask?
+        <input value={whoElse} onChange={(e) => setWhoElse(e.target.value)} placeholder="Name or role (optional)" /></label>
       <div className="v3fs-rvw-foot">
         {draftKey && proposal.count ? <p className="v3fs-rvw-saved">✓ Saved on this device — you can close this and come back</p> : null}
         {error ? <p className="v3fs-portal-err">{error}</p> : null}
-        <button type="button" className="v3fs-btn pri v3fs-rvw-send" disabled={submitting || !proposal.count}
-          onClick={() => onSubmit(compose())}>{submitting ? "Sending…" : "Send my changes"}</button>
+        <button type="button" className="v3fs-btn pri v3fs-rvw-send" disabled={submitting || (!proposal.count && !whoElse.trim())}
+          onClick={() => onSubmit(compose(), whoElse.trim() ? { suggestedVoices: [{ name: whoElse.trim(), role: "", note: "" }] } : undefined)}>{submitting ? "Sending…" : "Send my changes"}</button>
       </div>
     </>
   );
@@ -430,7 +436,7 @@ function ListenWorkflowSurface({ review, stakeholder, programme, objective, subm
 
 export default function FlowReviewSurface({ review, stakeholder, submitting, error, onSubmit, draftKey, programme, objective, returning, afterIntro }: {
   review: ReviewPayload; stakeholder: string; submitting: boolean; error: string | null;
-  onSubmit: (answers: string) => void;
+  onSubmit: (answers: string, extras?: { suggestedVoices?: Array<{ name: string; role: string; note: string }> }) => void;
   /** Persist the respondent's edits to their device under this key so they can
    * close a long review and return. FlowRespond clears it on submit. */
   draftKey?: string;

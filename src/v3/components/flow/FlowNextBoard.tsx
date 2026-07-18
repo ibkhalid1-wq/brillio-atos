@@ -74,11 +74,15 @@ export default function FlowNextBoard({ program, phase, onOpenWork, onSaveInputs
   // ── The Focus card — "do this next", computed across every area ──────────
   const focus = (() => {
     if (phase === "listen") {
-      const open = rows.filter((r) => { const a = ah(r.area); return a.total > 0 && !a.ready; });
       if (!rows.length) return { mark: "🎧", title: "Listen hasn't started yet.", sub: "Add the people to hear from and send them discovery links.", cta: "Open the workspace" };
-      if (!open.length) return { mark: "🎧", title: "Every area has a complete picture — ready for Prototype.", sub: "All voices heard and the business map confirmed across areas.", cta: "Open the workspace" };
+      // An area is incomplete if it isn't fully heard — including unstaffed areas
+      // (no one assigned yet), which "all heard" must NOT count as done.
+      const staffedOpen = rows.filter((r) => { const a = ah(r.area); return a.total > 0 && !a.ready; });
+      const unstaffed = rows.filter((r) => ah(r.area).total === 0);
+      if (!staffedOpen.length && !unstaffed.length) return { mark: "🎧", title: "Every area has a complete picture — ready for Prototype.", sub: "All voices heard and the business map confirmed across areas.", cta: "Open the workspace" };
+      if (!staffedOpen.length && unstaffed.length) return { mark: "🎧", title: `${unstaffed.length} area${unstaffed.length === 1 ? " has" : "s have"} no one assigned yet — map who covers them.`, sub: "Add people to each area in the Discovery Kit, then send their discovery links.", cta: "Open the workspace" };
       // Closest to done = smallest remaining, ties broken by highest ratio heard.
-      const best = [...open].sort((a, b) => (ah(a.area).total - ah(a.area).heard) - (ah(b.area).total - ah(b.area).heard))[0];
+      const best = [...staffedOpen].sort((a, b) => (ah(a.area).total - ah(a.area).heard) - (ah(b.area).total - ah(b.area).heard))[0];
       const ba = ah(best.area);
       const left = ba.total - ba.heard;
       return {
@@ -92,18 +96,23 @@ export default function FlowNextBoard({ program, phase, onOpenWork, onSaveInputs
     // Prototype
     if (!ls.hasPrototype) return { mark: "◎", title: "Build the prototype to start validating.", sub: "Design assembles one clickable build from the areas' slices, then pilots weigh in.", cta: "Open the workspace" };
     if (ls.converged) return { mark: "◎", title: "Approved — every area signed off and the sponsor accepted.", sub: "The areas' prototypes are ready to merge into one build for Ship.", cta: "Open the workspace" };
+    // Distance to convergence = shortfall to the accepted-majority PLUS pending.
+    const toGo = (a: AreaLoop) => Math.max(0, Math.ceil(a.total / 2) - a.accepted) + a.pending;
     const contending = ls.areas.filter((a) => !a.converged && a.total > 0);
-    const best = [...contending].sort((a, b) => (a.total - a.accepted) - (b.total - b.accepted))[0];
+    const best = [...contending].sort((a, b) => toGo(a) - toGo(b))[0];
     if (best) {
-      const need = Math.max(0, Math.ceil(best.total / 2) - best.accepted) + best.pending;
+      const need = toGo(best);
       return {
         mark: "◎",
-        title: `${best.area} is ${best.pending} verdict${best.pending === 1 ? "" : "s"} from converging — the first area to clear opens the merge.`,
+        title: `${best.area} is ${need} verdict${need === 1 ? "" : "s"} from converging — the first area to clear opens the merge.`,
         sub: `${best.accepted} of ${best.total} pilots approved. ${best.objections + best.changes} change request${best.objections + best.changes === 1 ? "" : "s"} queued for the next round.`,
         cta: `Focus ${best.area}`,
         area: best.area,
-        _need: need,
       };
+    }
+    // Every area with verdicts has signed off — the only thing left is the sponsor.
+    if (ls.areas.some((a) => a.total > 0) && ls.areasTotal > 0 && ls.areasConverged === ls.areasTotal && !ls.sponsorAccepted) {
+      return { mark: "◎", title: "Every area signed off — waiting on the sponsor to accept.", sub: "Once the sponsor accepts on their link, the build merges toward Ship.", cta: "Open the workspace" };
     }
     // A prototype exists but no verdicts are in yet — validation hasn't begun.
     const firstArea = (rows.find((r) => r.listenReady) ?? rows[0])?.area;
@@ -193,7 +202,7 @@ function Board({ program, phase, rows, ls, ah, onFocus, onOpenWork, onSaveInputs
         <div>All areas’ prototypes <b>merge into one build</b> before Ship — <b>{ls.areasConverged} of {ls.areasTotal || rows.length}</b> converged. Design once, validate per area.</div>
         <button type="button" className="v3fs-nb-merge-btn" onClick={onOpenWork}>Open the design workspace →</button>
       </div>
-      <ExternalBuildPanel program={program} ls={ls} onSaveInputs={onSaveInputs} />
+      <ExternalBuildPanel program={program} onSaveInputs={onSaveInputs} />
       {(rows.length ? rows.map((r) => r.area) : ls.areas.map((a) => a.area)).map((area) => {
         const P = byArea.get(area);
         // A lane is only truly "not started" when NO prototype exists yet (still
@@ -367,9 +376,8 @@ function FocusedArea({ program, phase, area, rows, ls, ah, onBack, onOpenWork, o
 // ── Build outside the app: link an external prototype + generate an AI build
 // prompt from the pilots' feedback. The URL is saved to show.prototypeLocation,
 // which the flow-portal edge already serves as the pilots' "Open the prototype".
-function ExternalBuildPanel({ program, ls, onSaveInputs }: {
+function ExternalBuildPanel({ program, onSaveInputs }: {
   program: ProgramSummary;
-  ls: ReturnType<typeof loopState>;
   onSaveInputs?: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
 }) {
   const stored = String(readMovementInputs(program, "show").prototypeLocation ?? "");
@@ -378,7 +386,6 @@ function ExternalBuildPanel({ program, ls, onSaveInputs }: {
   const [saved, setSaved] = useState(false);
   const [prompt, setPrompt] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  void ls;
 
   const save = async () => {
     if (!onSaveInputs) return;

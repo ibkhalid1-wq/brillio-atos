@@ -242,6 +242,7 @@ export default function FlowRespond({ token }: { token: string }) {
   const filledVoices = suggestedVoices.filter((voice) => voice.name.trim());
   const [verdict, setVerdict] = useState<DemoVerdict | null>(draft0.verdict ?? null);
   const [comment, setComment] = useState(draft0.comment ?? "");
+  const [demoWhoElse, setDemoWhoElse] = useState("");
   // Per-phase demo comments, keyed by flow · step — folded into the verdict.
   const [phaseComments, setPhaseComments] = useState<Record<string, string>>(draft0.phaseComments ?? {});
   // Per-beat acceptance taps (✓ runs my workflow / ✗ not quite) — granular
@@ -498,7 +499,7 @@ export default function FlowRespond({ token }: { token: string }) {
                 submitting={submitting} error={error} draftKey={reviewDraftKey}
                 afterIntro={<MeetingRequestBar kind="listen" sent={meetingSent} submitting={submitting}
                   onRequest={(pref) => void requestMeeting(pref, "listen")} />}
-                onSubmit={(answers) => void submit({ answers: [answers, demoRunBlock].filter(Boolean).join("\n\n") })} />
+                onSubmit={(answers, extras) => void submit({ answers: [answers, demoRunBlock].filter(Boolean).join("\n\n"), ...(extras ?? {}) })} />
               {/* ENVISION carries the STORYBOARD: once an experience design
                   exists, the transformation review is followed by a walk of
                   what we intend to build — validated here, while it's still
@@ -580,11 +581,17 @@ export default function FlowRespond({ token }: { token: string }) {
                     ))}
                   </div>
                 </div>
-                <label className="v3fs-portal-q">
-                  <span>{verdict === "accepted" ? "Anything worth noting on the whole workflow? (optional)" : "What should change overall?"}</span>
-                  <textarea value={comment} onChange={(event) => setComment(event.target.value)} rows={3}
-                    placeholder="Add your comment — type, or speak it." />
-                  <DictationButton onText={(spoken) => setComment((current) => joinDictation(current, spoken))} />
+                {verdict && verdict !== "accepted" ? (
+                  <label className="v3fs-portal-q">
+                    <span>What should change overall?</span>
+                    <textarea value={comment} onChange={(event) => setComment(event.target.value)} rows={3}
+                      placeholder="Add your comment — type, or speak it." />
+                    <DictationButton onText={(spoken) => setComment((current) => joinDictation(current, spoken))} />
+                  </label>
+                ) : null}
+                <label className="v3fs-portal-q v3fs-portal-whoelse">
+                  <span>Anyone else who should try it? (optional)</span>
+                  <input value={demoWhoElse} onChange={(event) => setDemoWhoElse(event.target.value)} placeholder="Name or role" />
                 </label>
                 {error ? <div className="v3fs-portal-err">{error}</div> : null}
                 <button type="button" className="v3fs-btn pri v3fs-portal-send"
@@ -604,7 +611,7 @@ export default function FlowRespond({ token }: { token: string }) {
                       phaseLines.length ? `Phase-by-phase:\n${phaseLines.join("\n")}` : "",
                       demoRunBlock]
                       .filter(Boolean).join("\n\n");
-                    void submit({ verdict, comment: full });
+                    void submit({ verdict, comment: full, ...(demoWhoElse.trim() ? { suggestedVoices: [{ name: demoWhoElse.trim(), role: "", note: "" }] } : {}) });
                   }}>
                   {submitting ? "Sending…" : "Record my verdict"}
                 </button>

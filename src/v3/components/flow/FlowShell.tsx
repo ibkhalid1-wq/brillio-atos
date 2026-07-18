@@ -24,6 +24,7 @@ import { readFlowGovernance, flowAgentTier } from "@/v3/components/flow/flowGove
 import { resolveMovementStakeholders, deliveryRoleDirectory, readDirectoryPeople, validateProgramRole, readRoleBindings, knownProgramRoles, unresolvedCoverageNames, kitPersonaDirectory, readSuggestedVoices, readListenPlan, listenPlanWrite, dismissedListenRoles } from "@/v3/components/flow/flowStakeholders";
 import { programAreas, GENERAL_AREA, readRoleAliases, roleAliasKey } from "@/v3/components/flow/flowAreas";
 import FrameCoveragePlan from "@/v3/components/flow/FrameCoveragePlan";
+import DiscoveryKitAlign from "@/v3/components/flow/DiscoveryKitAlign";
 import { stakeholderEmail } from "@/v3/components/flow/flowMeetings";
 import { readMetricRegistry, metricConsistency } from "@/v3/components/flow/flowMetricRegistry";
 import { routeAttachedDocument, buildRoutedBlocks, type DocRoute } from "@/v3/components/flow/flowDocRouting";
@@ -829,7 +830,7 @@ export default function FlowShell(props: FlowShellProps) {
         ) : view === "people" ? (
           <FlowPeople program={program} onSaveInputs={props.onSaveInputs} onRenamePerson={props.onRenamePerson} onGoInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }} />
         ) : view === "library" ? (
-          <FlowLibrary program={program} programs={props.programs} onSelectProgram={props.onSelectProgram} onSaveInputs={props.onSaveInputs} onTagClaim={props.onTagClaim} onComment={props.onComment} onSaveArtifactDoc={props.onSaveArtifactDoc} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }} onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} />
+          <FlowLibrary program={program} programs={props.programs} onSelectProgram={props.onSelectProgram} onSaveInputs={props.onSaveInputs} onTagClaim={props.onTagClaim} onComment={props.onComment} onSaveArtifactDoc={props.onSaveArtifactDoc} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }} onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} next={next} />
         ) : view === "mission" ? (
           <FlowMission
             aiStatus={props.aiStatus}
@@ -2665,7 +2666,7 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
   );
 }
 
-function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagClaim, onComment, onSaveArtifactDoc, onOpenInbox, onGoFlow }: { program: ProgramSummary; programs: ProgramSummary[]; onSelectProgram: (id: string) => void; onSaveInputs?: FlowShellProps["onSaveInputs"]; onTagClaim?: FlowShellProps["onTagClaim"]; onComment?: FlowShellProps["onComment"]; onSaveArtifactDoc: FlowShellProps["onSaveArtifactDoc"]; onOpenInbox?: () => void; onGoFlow?: () => void }) {
+function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagClaim, onComment, onSaveArtifactDoc, onOpenInbox, onGoFlow, next }: { program: ProgramSummary; programs: ProgramSummary[]; onSelectProgram: (id: string) => void; onSaveInputs?: FlowShellProps["onSaveInputs"]; onTagClaim?: FlowShellProps["onTagClaim"]; onComment?: FlowShellProps["onComment"]; onSaveArtifactDoc: FlowShellProps["onSaveArtifactDoc"]; onOpenInbox?: () => void; onGoFlow?: () => void; next?: boolean }) {
   const claims = listClaimTags(program);
   const tagTargets = useMemo(() => claimTargets(program), [program]);
   const [claimHighlight, setClaimHighlight] = useState<string | undefined>(undefined);
@@ -3031,7 +3032,9 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
         })}
       </div>
       {docFor ? <Suspense fallback={null}><FlowArtifactStudio program={program} artifact={docFor} onClose={() => setDocFor(null)} onSaveDoc={onSaveArtifactDoc} onSaveInputs={onSaveInputs} onComment={onComment} onOpenInbox={onOpenInbox}
-        header={docFor.id === "discovery-kit" ? <FrameCoveragePlan program={program} onSaveInputs={onSaveInputs} /> : undefined}
+        header={docFor.id === "discovery-kit"
+          ? (next ? <DiscoveryKitAlign program={program} onSaveInputs={onSaveInputs} /> : <FrameCoveragePlan program={program} onSaveInputs={onSaveInputs} />)
+          : undefined}
         onOpenArtifact={(artifactId) => {
           for (const m of flowMovements()) {
             const hit = movementArtifacts(program, m).find((a) => a.id === artifactId && a.present);
