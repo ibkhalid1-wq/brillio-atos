@@ -287,7 +287,16 @@ export function IntervieweeDiscovery({ program, movementId, captureField, areaFi
   const inviteArea = async (list: typeof evaluated) => {
     for (const { s, coll } of list) {
       if (coll.heard || coll.pack || s.isRole) continue;
-      const linkQs = s.linkQuestions?.length ? s.linkQuestions : s.questions;
+      // Operator asks ride VERBATIM and first (same rule as the card's own
+      // link mint) — this bulk path used to skip them entirely.
+      const inviteAskKey = (s.name || s.role).trim().toLowerCase();
+      const curationOf = (mapKey: string): string[] => {
+        const raw = readMovementInputs(program, movementId)[mapKey];
+        try { const parsed = typeof raw === "string" ? JSON.parse(raw) : {}; const v = (parsed as Record<string, unknown>)?.[inviteAskKey]; return Array.isArray(v) ? v.map(String) : []; } catch { return []; }
+      };
+      const curated = new Set([...curationOf("_deferredAsks"), ...curationOf("_dismissedAsks")].map((q) => q.toLowerCase()));
+      const inviteAsks = operatorAsksFor(program, movementId, s.name || s.role).filter((q) => !curated.has(q.toLowerCase()));
+      const linkQs = [...new Set([...inviteAsks, ...(s.linkQuestions?.length ? s.linkQuestions : s.questions)])];
       const review = projectStakeholderReview(program, movementId, s.name, primaryAreaOf.get(s.id) ?? stakeholderPrimaryArea(program, s.name, s.role), linkQs);
       if (review && onMintReview) {
         await onMintReview({
@@ -690,9 +699,12 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
   // card still offers a confirmation link — linkQuestions keeps that non-empty
   // so "Copy link" never mints a dead, question-less form. Operator-raised
   // questions always ride along so a hand-typed ask reaches the stakeholder.
+  // Operator asks lead: the link mint caps at 8 questions, and asks appended
+  // LAST were silently cut when the generated script was long. Asks are kept
+  // VERBATIM and first, so a hand-typed question always reaches the person.
   const linkQuestions = useMemo(() => [...new Set([
-    ...(stakeholder.linkQuestions?.length ? stakeholder.linkQuestions : questions),
     ...operatorAsks,
+    ...(stakeholder.linkQuestions?.length ? stakeholder.linkQuestions : questions),
   ])].filter((q) => !dismissedAsks.includes(q) && !deferredAsks.includes(q)),
     [stakeholder.linkQuestions, questions, operatorAsks, dismissedAsks, deferredAsks]);
   // The script the operator SEES — deleted rows gone, deferred rows moved out.
