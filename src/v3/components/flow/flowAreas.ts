@@ -79,14 +79,14 @@ export function displayRole(program: ProgramSummary, role: string): string {
   return roleAliasFor(program, role)?.rename || role;
 }
 
-function atlasWorkflows(program: ProgramSummary): Record<string, unknown>[] {
+export function atlasWorkflows(program: ProgramSummary): Record<string, unknown>[] {
   const raw = (program.rawData ?? {}) as Record<string, unknown>;
   const inner = isRecord(raw.data) ? raw.data : raw;
   const atlas = isRecord(inner.currentStateAtlas) ? inner.currentStateAtlas : null;
   return atlas && Array.isArray(atlas.workflows) ? atlas.workflows.filter(isRecord) : [];
 }
 
-function ontologyEntities(program: ProgramSummary): Record<string, unknown>[] {
+export function ontologyEntities(program: ProgramSummary): Record<string, unknown>[] {
   const raw = (program.rawData ?? {}) as Record<string, unknown>;
   const inner = isRecord(raw.data) ? raw.data : raw;
   const ontology = isRecord(inner.domainOntology) ? inner.domainOntology : null;

@@ -12,7 +12,7 @@
  */
 import { useState } from "react";
 import type { ProgramSummary } from "@/new/types";
-import { areaProgress, areaHasModel, hasMultipleAreas, stakeholderPrimaryArea } from "@/v3/components/flow/flowAreas";
+import { areaProgress, areaHasModel, hasMultipleAreas, stakeholderPrimaryArea, ontologyEntities, atlasWorkflows, entityArea, workflowArea } from "@/v3/components/flow/flowAreas";
 import { loopState, changeRequests, type AreaLoop } from "@/v3/components/flow/flowLoop";
 import { areaAccent, areaMonogram, stakeholderCollection } from "@/v3/components/flow/CollectBoard";
 import { resolveMovementStakeholders } from "@/v3/components/flow/flowStakeholders";
@@ -57,6 +57,7 @@ export default function FlowNextBoard({ program, phase, onOpenWork, onSaveInputs
   onSaveInputs?: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
 }) {
   const [focusArea, setFocusArea] = useState<string | null>(null);
+  const [ontoModal, setOntoModal] = useState<{ area: string | null } | null>(null);
   const rows = areaProgress(program);
   const ls = loopState(program);
   const multi = hasMultipleAreas(program);
@@ -133,14 +134,15 @@ export default function FlowNextBoard({ program, phase, onOpenWork, onSaveInputs
       </div>
 
       {focusArea
-        ? <FocusedArea program={program} phase={phase} area={focusArea} rows={rows} ls={ls} ah={ah} onBack={() => setFocusArea(null)} onOpenWork={onOpenWork} />
-        : <Board program={program} phase={phase} rows={rows} ls={ls} ah={ah} onFocus={setFocusArea} onOpenWork={onOpenWork} onSaveInputs={onSaveInputs} />}
+        ? <FocusedArea program={program} phase={phase} area={focusArea} rows={rows} ls={ls} ah={ah} onBack={() => setFocusArea(null)} onOpenWork={onOpenWork} onOpenOntology={(area) => setOntoModal({ area })} />
+        : <Board program={program} phase={phase} rows={rows} ls={ls} ah={ah} onFocus={setFocusArea} onOpenWork={onOpenWork} onSaveInputs={onSaveInputs} onOpenOntology={(area) => setOntoModal({ area })} />}
+      {ontoModal ? <OntologyAtlasModal program={program} area={ontoModal.area} onClose={() => setOntoModal(null)} /> : null}
     </div>
   );
 }
 
 // ── The parallel board: one lane per area ──────────────────────────────────
-function Board({ program, phase, rows, ls, ah, onFocus, onOpenWork, onSaveInputs }: {
+function Board({ program, phase, rows, ls, ah, onFocus, onOpenWork, onSaveInputs, onOpenOntology }: {
   program: ProgramSummary;
   phase: Phase;
   rows: ReturnType<typeof areaProgress>;
@@ -149,11 +151,15 @@ function Board({ program, phase, rows, ls, ah, onFocus, onOpenWork, onSaveInputs
   onFocus: (area: string) => void;
   onOpenWork: () => void;
   onSaveInputs?: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
+  onOpenOntology: (area: string | null) => void;
 }) {
   if (phase === "listen") {
     return (
       <>
-        <p className="v3fs-nb-note">Each area builds its <b>own</b> understanding in parallel — its business map and its “how it works today”. An area is ready for Prototype when it’s fully heard.</p>
+        <div className="v3fs-nb-listenhead">
+          <p className="v3fs-nb-note">Each area builds its <b>own</b> understanding in parallel — its business map and its “how it works today”. An area is ready for Prototype when it’s fully heard.</p>
+          <button type="button" className="v3fs-nb-open ghost sm" onClick={() => onOpenOntology(null)}>◇ See the complete ontology</button>
+        </div>
         {rows.map((r) => {
           const map = areaHasModel(program, r.area);
           const a = ah(r.area);
@@ -227,7 +233,7 @@ function Board({ program, phase, rows, ls, ah, onFocus, onOpenWork, onSaveInputs
 }
 
 // ── Focused area: the three-zone workspace overview ────────────────────────
-function FocusedArea({ program, phase, area, rows, ls, ah, onBack, onOpenWork }: {
+function FocusedArea({ program, phase, area, rows, ls, ah, onBack, onOpenWork, onOpenOntology }: {
   program: ProgramSummary;
   phase: Phase;
   area: string;
@@ -236,6 +242,7 @@ function FocusedArea({ program, phase, area, rows, ls, ah, onBack, onOpenWork }:
   ah: (area: string) => { heard: number; total: number; ready: boolean; names: string[] };
   onBack: () => void;
   onOpenWork: () => void;
+  onOpenOntology: (area: string | null) => void;
 }) {
   const back = (
     <div className="v3fs-nb-backrow">
@@ -272,14 +279,14 @@ function FocusedArea({ program, phase, area, rows, ls, ah, onBack, onOpenWork }:
             <div className="v3fs-nb-doccard">
               <div className="v3fs-nb-doc">
                 <div><div className="dt">Business map <span className="code">ontology</span></div><div className="dd">{entities > 0 ? `${entities} ${entities === 1 ? "entity" : "entities"} · ${map ? "confirmed" : "drafting"}` : "not started yet"}</div></div>
-                <button type="button" className="v3fs-nb-open ghost sm" onClick={onOpenWork}>Open →</button>
+                <button type="button" className="v3fs-nb-open ghost sm" onClick={() => onOpenOntology(area)}>Open →</button>
               </div>
               <div className="v3fs-nb-doc">
                 <div><div className="dt">How it works today <span className="code">current-state atlas</span></div><div className="dd">{workflows > 0 ? `${workflows} workflow${workflows === 1 ? "" : "s"} mapped` : "not started yet"}</div></div>
-                <button type="button" className="v3fs-nb-open ghost sm" onClick={onOpenWork}>Open →</button>
+                <button type="button" className="v3fs-nb-open ghost sm" onClick={() => onOpenOntology(area)}>Open →</button>
               </div>
             </div>
-            <p className="v3fs-nb-hint">The business map and atlas open full-screen in the workspace, where you can edit them.</p>
+            <p className="v3fs-nb-hint">Opens {area}’s business map and atlas here. To edit them, use the full workspace.</p>
           </div>
           <div className="v3fs-nb-zone">
             <p className="v3fs-nb-ztag">The record · heard</p>
@@ -424,6 +431,69 @@ function ExternalBuildPanel({ program, ls, onSaveInputs }: {
             <button type="button" className="v3fs-nb-open" onClick={() => void copyPrompt()}>{copied ? "✓ Copied" : "Copy prompt"}</button>
           </>
         ) : null}
+      </div>
+    </div>
+  );
+}
+
+// ── The area-scoped (or complete) ontology + current-state atlas, read-only.
+// Opened from the Listen board's "See the complete ontology" and each focused
+// area's business-map / atlas cards.
+function OntologyAtlasModal({ program, area, onClose }: { program: ProgramSummary; area: string | null; onClose: () => void }) {
+  const s = (v: unknown): string => (v == null ? "" : String(v)).trim();
+  const entities = ontologyEntities(program).filter((e) => !area || entityArea(e, program) === area);
+  const workflows = atlasWorkflows(program).filter((w) => !area || workflowArea(w) === area);
+  const stepText = (step: unknown): string => {
+    if (!step || typeof step !== "object") return s(step);
+    const r = step as Record<string, unknown>;
+    const actor = s(r.actor);
+    const act = s(r.action) || s(r.step) || s(r.beat) || s(r.name);
+    return [actor, act].filter(Boolean).join(" — ") || s(r.description);
+  };
+  return (
+    <div className="v3fs-nb-modal-scrim" role="dialog" aria-modal="true" aria-label={area ? `${area} business map` : "Complete ontology"} onClick={onClose}>
+      <div className="v3fs-nb-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="v3fs-nb-modal-h">
+          <div>
+            <div className="v3fs-nb-modal-eyebrow">{area ? `${area} · Listen` : "Every area · Listen"}</div>
+            <h2 className="v3fs-nb-modal-title">{area ? `${area} — business map & how it works today` : "The complete ontology & current-state atlas"}</h2>
+          </div>
+          <button type="button" className="v3fs-nb-modal-x" aria-label="Close" onClick={onClose}>✕</button>
+        </div>
+        <div className="v3fs-nb-modal-b">
+          <section className="v3fs-nb-modal-sec">
+            <div className="v3fs-nb-modal-sh"><b>Business map</b><span className="code">ontology · {entities.length} {entities.length === 1 ? "entity" : "entities"}</span></div>
+            {entities.length ? (
+              <div className="v3fs-nb-modal-ents">
+                {entities.map((e, i) => (
+                  <div key={i} className="v3fs-nb-modal-ent">
+                    <div className="v3fs-nb-modal-ent-h"><b>{s(e.name) || "Entity"}</b>{s(e.systemOfRecord) ? <span className="sor">{s(e.systemOfRecord)}</span> : null}</div>
+                    {s(e.definition) ? <p className="def">{s(e.definition)}</p> : null}
+                    {Array.isArray(e.relationships) && e.relationships.length ? (
+                      <p className="rel">{(e.relationships as unknown[]).map((r) => { const rr = r as Record<string, unknown>; return `${s(rr.type) || "relates to"} → ${s(rr.to) || s(rr.target) || s(rr.entity)}`; }).filter((t) => t.trim() !== "relates to → ").slice(0, 6).join(" · ")}</p>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            ) : <p className="v3fs-nb-modal-empty">No entities mapped {area ? "for this area" : "yet"}.</p>}
+          </section>
+          <section className="v3fs-nb-modal-sec">
+            <div className="v3fs-nb-modal-sh"><b>How it works today</b><span className="code">current-state atlas · {workflows.length} {workflows.length === 1 ? "workflow" : "workflows"}</span></div>
+            {workflows.length ? (
+              <div className="v3fs-nb-modal-wfs">
+                {workflows.map((w, i) => {
+                  const steps = Array.isArray(w.steps) ? (w.steps as unknown[]) : [];
+                  return (
+                    <div key={i} className="v3fs-nb-modal-wf">
+                      <div className="v3fs-nb-modal-ent-h"><b>{s(w.name) || "Workflow"}</b>{s(w.owner) ? <span className="sor">{s(w.owner)}</span> : null}</div>
+                      {steps.length ? <ol className="steps">{steps.map((st, j) => <li key={j}>{stepText(st)}</li>)}</ol> : null}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : <p className="v3fs-nb-modal-empty">No workflows mapped {area ? "for this area" : "yet"}.</p>}
+          </section>
+        </div>
       </div>
     </div>
   );
