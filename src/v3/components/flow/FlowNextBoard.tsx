@@ -12,9 +12,36 @@
  */
 import { useState } from "react";
 import type { ProgramSummary } from "@/new/types";
-import { areaProgress, areaHasModel, hasMultipleAreas } from "@/v3/components/flow/flowAreas";
+import { areaProgress, areaHasModel, hasMultipleAreas, stakeholderPrimaryArea } from "@/v3/components/flow/flowAreas";
 import { loopState, changeRequests, type AreaLoop } from "@/v3/components/flow/flowLoop";
-import { areaAccent, areaMonogram } from "@/v3/components/flow/CollectBoard";
+import { areaAccent, areaMonogram, stakeholderCollection } from "@/v3/components/flow/CollectBoard";
+import { resolveMovementStakeholders } from "@/v3/components/flow/flowStakeholders";
+import { listInterviewPacks } from "@/v3/components/flow/flowPortal";
+import { movementEvidence, flowMovements } from "@/v3/components/flow/flowShellData";
+
+/** Per-area "heard" from the roster — a stakeholder is filed under their primary
+ * area and counted heard via the same signal the People board uses. More honest
+ * than matching evidence names to atlas-actor labels (which misses when the
+ * interviewee's name differs from the workflow's actor). */
+function heardByArea(program: ProgramSummary): Map<string, { heard: number; total: number; heardNames: string[] }> {
+  const listen = flowMovements().find((m) => m.id === "listen");
+  const ev = listen ? movementEvidence(program, listen) : [];
+  const packs = listInterviewPacks(program);
+  const map = new Map<string, { heard: number; total: number; heardNames: string[] }>();
+  const seen = new Set<string>();
+  for (const s of resolveMovementStakeholders(program, "listen")) {
+    const k = s.name.trim().toLowerCase();
+    if (!k || seen.has(k)) continue;
+    seen.add(k);
+    const area = stakeholderPrimaryArea(program, s.name, s.role);
+    const heard = stakeholderCollection("listen", s, packs, ev).heard;
+    const cur = map.get(area) ?? { heard: 0, total: 0, heardNames: [] };
+    cur.total += 1;
+    if (heard) { cur.heard += 1; cur.heardNames.push(s.name); }
+    map.set(area, cur);
+  }
+  return map;
+}
 
 type Phase = "listen" | "prototype";
 
@@ -32,20 +59,30 @@ export default function FlowNextBoard({ program, phase, onOpenWork }: {
   const rows = areaProgress(program);
   const ls = loopState(program);
   const multi = hasMultipleAreas(program);
+  // Roster-based heard per area — the honest count (see heardByArea).
+  const heard = heardByArea(program);
+  const ah = (area: string): { heard: number; total: number; ready: boolean; names: string[] } => {
+    const h = heard.get(area);
+    const r = rows.find((x) => x.area === area);
+    const total = h?.total ?? r?.personas.length ?? 0;
+    const hd = h?.heard ?? r?.heard.length ?? 0;
+    return { heard: hd, total, ready: total > 0 && hd >= total, names: h?.heardNames ?? r?.heard ?? [] };
+  };
 
   // ── The Focus card — "do this next", computed across every area ──────────
   const focus = (() => {
     if (phase === "listen") {
-      const open = rows.filter((r) => r.personas.length > 0 && !r.listenReady);
+      const open = rows.filter((r) => { const a = ah(r.area); return a.total > 0 && !a.ready; });
       if (!rows.length) return { mark: "🎧", title: "Listen hasn't started yet.", sub: "Add the people to hear from and send them discovery links.", cta: "Open the workspace" };
       if (!open.length) return { mark: "🎧", title: "Every area has a complete picture — ready for Prototype.", sub: "All voices heard and the business map confirmed across areas.", cta: "Open the workspace" };
       // Closest to done = smallest remaining, ties broken by highest ratio heard.
-      const best = [...open].sort((a, b) => (a.personas.length - a.heard.length) - (b.personas.length - b.heard.length) || (b.heard.length / b.personas.length) - (a.heard.length / a.personas.length))[0];
-      const left = best.personas.length - best.heard.length;
+      const best = [...open].sort((a, b) => (ah(a.area).total - ah(a.area).heard) - (ah(b.area).total - ah(b.area).heard))[0];
+      const ba = ah(best.area);
+      const left = ba.total - ba.heard;
       return {
         mark: "🎧",
         title: `${best.area} is ${left} interview${left === 1 ? "" : "s"} from a complete picture — the most valuable move across ${multi ? "all areas" : "the programme"}.`,
-        sub: `${best.heard.length} of ${best.personas.length} heard. Send the remaining discovery link${left === 1 ? "" : "s"} to close it.`,
+        sub: `${ba.heard} of ${ba.total} heard. Send the remaining discovery link${left === 1 ? "" : "s"} to close it.`,
         cta: `Focus ${best.area}`,
         area: best.area,
       };
@@ -95,19 +132,21 @@ export default function FlowNextBoard({ program, phase, onOpenWork }: {
       </div>
 
       {focusArea
-        ? <FocusedArea program={program} phase={phase} area={focusArea} rows={rows} ls={ls} onBack={() => setFocusArea(null)} onOpenWork={onOpenWork} />
-        : <Board program={program} phase={phase} rows={rows} ls={ls} onFocus={setFocusArea} />}
+        ? <FocusedArea program={program} phase={phase} area={focusArea} rows={rows} ls={ls} ah={ah} onBack={() => setFocusArea(null)} onOpenWork={onOpenWork} />
+        : <Board program={program} phase={phase} rows={rows} ls={ls} ah={ah} onFocus={setFocusArea} onOpenWork={onOpenWork} />}
     </div>
   );
 }
 
 // ── The parallel board: one lane per area ──────────────────────────────────
-function Board({ program, phase, rows, ls, onFocus }: {
+function Board({ program, phase, rows, ls, ah, onFocus, onOpenWork }: {
   program: ProgramSummary;
   phase: Phase;
   rows: ReturnType<typeof areaProgress>;
   ls: ReturnType<typeof loopState>;
+  ah: (area: string) => { heard: number; total: number; ready: boolean; names: string[] };
   onFocus: (area: string) => void;
+  onOpenWork: () => void;
 }) {
   if (phase === "listen") {
     return (
@@ -115,8 +154,9 @@ function Board({ program, phase, rows, ls, onFocus }: {
         <p className="v3fs-nb-note">Each area builds its <b>own</b> understanding in parallel — its business map and its “how it works today”. An area is ready for Prototype when it’s fully heard.</p>
         {rows.map((r) => {
           const map = areaHasModel(program, r.area);
-          const pct = r.personas.length ? Math.round((100 * r.heard.length) / r.personas.length) : 0;
-          const idle = r.personas.length === 0;
+          const a = ah(r.area);
+          const pct = a.total ? Math.round((100 * a.heard) / a.total) : 0;
+          const idle = a.total === 0;
           return (
             <div key={r.area} className={`v3fs-nb-lane${idle ? " idle" : ""}`}>
               <div className="v3fs-nb-lname" style={{ "--acc": areaAccent(r.area) } as React.CSSProperties}>
@@ -124,11 +164,11 @@ function Board({ program, phase, rows, ls, onFocus }: {
                 <span>{r.area}</span>
               </div>
               <div className="v3fs-nb-lstat">
-                <div className="v3fs-nb-b"><span className="v3fs-nb-k">Heard</span><span className="v3fs-nb-v">{r.heard.length} / {r.personas.length || "—"}</span><span className="v3fs-nb-meter"><i style={{ width: `${pct}%` }} /></span></div>
+                <div className="v3fs-nb-b"><span className="v3fs-nb-k">Heard</span><span className="v3fs-nb-v">{a.heard} / {a.total || "—"}</span><span className="v3fs-nb-meter"><i style={{ width: `${pct}%` }} /></span></div>
                 <div className="v3fs-nb-b"><span className="v3fs-nb-k">Business map</span><span className="v3fs-nb-v">{map ? <span className="ok">✓ confirmed</span> : <span className="wip">● drafting</span>}</span></div>
                 <div className="v3fs-nb-b"><span className="v3fs-nb-k">How it works today</span><span className="v3fs-nb-v">{r.workflows > 0 ? <span className="ok">✓ {r.workflows} workflow{r.workflows === 1 ? "" : "s"}</span> : <span className="idle">○ seeded</span>}</span></div>
               </div>
-              <button type="button" className="v3fs-nb-focusbtn" onClick={() => onFocus(r.area)}>{r.listenReady ? "Review" : "Focus"} →</button>
+              <button type="button" className="v3fs-nb-focusbtn" onClick={() => onFocus(r.area)}>{a.ready ? "Review" : "Focus"} →</button>
             </div>
           );
         })}
@@ -140,18 +180,22 @@ function Board({ program, phase, rows, ls, onFocus }: {
   const closest = ls.areas.filter((a) => !a.converged && a.total > 0).sort((a, b) => (a.total - a.accepted) - (b.total - b.accepted))[0]?.area;
   return (
     <>
-      <div className="v3fs-nb-merge"><span className="v3fs-nb-merge-ic" aria-hidden="true">⤷</span><div>All areas’ prototypes <b>merge into one build</b> before Ship — <b>{ls.areasConverged} of {ls.areasTotal || rows.length}</b> converged. Each area builds &amp; validates its own slice first.</div></div>
+      <div className="v3fs-nb-merge">
+        <span className="v3fs-nb-merge-ic" aria-hidden="true">⤷</span>
+        <div>All areas’ prototypes <b>merge into one build</b> before Ship — <b>{ls.areasConverged} of {ls.areasTotal || rows.length}</b> converged. Design once, validate per area.</div>
+        <button type="button" className="v3fs-nb-merge-btn" onClick={onOpenWork}>Open the design workspace →</button>
+      </div>
       {(rows.length ? rows.map((r) => r.area) : ls.areas.map((a) => a.area)).map((area) => {
         const P = byArea.get(area);
         // A lane is only truly "not started" when NO prototype exists yet (still
         // in design). Once a build exists, every area is in validation — even
         // with zero verdicts it's "awaiting verdicts", not "not started".
         if (!ls.hasPrototype) {
-          const lp = rows.find((r) => r.area === area);
+          const a = ah(area);
           return (
             <div key={area} className="v3fs-nb-lane idle">
               <div className="v3fs-nb-lname" style={{ "--acc": areaAccent(area) } as React.CSSProperties}><span className="v3fs-nb-mono" aria-hidden="true">{areaMonogram(area)}</span><span>{area}</span></div>
-              <div className="v3fs-nb-lstat"><div className="v3fs-nb-b"><span className="v3fs-nb-k">Status</span><span className="v3fs-nb-v idle">{lp && lp.listenReady ? "Ready — prototype in design" : `Still in Listen — ${lp?.heard.length ?? 0}/${lp?.personas.length ?? 0} heard`}</span></div></div>
+              <div className="v3fs-nb-lstat"><div className="v3fs-nb-b"><span className="v3fs-nb-k">Status</span><span className="v3fs-nb-v idle">{a.ready ? "Ready — prototype in design" : `Still in Listen — ${a.heard}/${a.total || "—"} heard`}</span></div></div>
               <button type="button" className="v3fs-nb-focusbtn" onClick={() => onFocus(area)}>Focus →</button>
             </div>
           );
@@ -180,12 +224,13 @@ function Board({ program, phase, rows, ls, onFocus }: {
 }
 
 // ── Focused area: the three-zone workspace overview ────────────────────────
-function FocusedArea({ program, phase, area, rows, ls, onBack, onOpenWork }: {
+function FocusedArea({ program, phase, area, rows, ls, ah, onBack, onOpenWork }: {
   program: ProgramSummary;
   phase: Phase;
   area: string;
   rows: ReturnType<typeof areaProgress>;
   ls: ReturnType<typeof loopState>;
+  ah: (area: string) => { heard: number; total: number; ready: boolean; names: string[] };
   onBack: () => void;
   onOpenWork: () => void;
 }) {
@@ -199,37 +244,47 @@ function FocusedArea({ program, phase, area, rows, ls, onBack, onOpenWork }: {
   if (phase === "listen") {
     const r = rows.find((x) => x.area === area);
     const map = areaHasModel(program, area);
-    const pct = r && r.personas.length ? Math.round((100 * r.heard.length) / r.personas.length) : 0;
+    const a = ah(area);
+    const pct = a.total ? Math.round((100 * a.heard) / a.total) : 0;
+    const entities = r?.entities ?? 0;
+    const workflows = r?.workflows ?? 0;
     return (
       <>
         {back}
         <div className="v3fs-nb-zones">
           <div className="v3fs-nb-zone">
             <p className="v3fs-nb-ztag">This area · Listen</p>
-            <div className="v3fs-nb-prog"><span className="big">{r?.heard.length ?? 0}</span><span className="of">/ {r?.personas.length ?? 0} heard</span></div>
+            <div className="v3fs-nb-prog"><span className="big">{a.heard}</span><span className="of">/ {a.total} heard</span></div>
             <span className="v3fs-nb-meter wide"><i style={{ width: `${pct}%` }} /></span>
             <ul className="v3fs-nb-produces">
               <li><span className={`ic ${map ? "ok" : "wip"}`}>{map ? "✓" : "●"}</span> Business map</li>
-              <li><span className={`ic ${(r?.workflows ?? 0) > 0 ? "ok" : "dot"}`}>{(r?.workflows ?? 0) > 0 ? "✓" : "○"}</span> How it works today</li>
+              <li><span className={`ic ${workflows > 0 ? "ok" : "dot"}`}>{workflows > 0 ? "✓" : "○"}</span> How it works today</li>
             </ul>
             <div className="v3fs-nb-ready"><b>Ready when</b> this area is fully heard and its map is confirmed.</div>
           </div>
           <div className="v3fs-nb-zone">
-            <p className="v3fs-nb-ztag">The work</p>
-            <div className="v3fs-nb-worksum">
-              <div className="v3fs-nb-ws"><span className="n">{r?.entities ?? 0}</span><span className="l">entities in the business map</span></div>
-              <div className="v3fs-nb-ws"><span className="n">{r?.workflows ?? 0}</span><span className="l">workflows on the atlas</span></div>
+            <p className="v3fs-nb-ztag">The work · what we’ve mapped</p>
+            {/* The two Listen artifacts, made explicit — this is where the
+                ontology (business map) and the current-state atlas live. */}
+            <div className="v3fs-nb-doccard">
+              <div className="v3fs-nb-doc">
+                <div><div className="dt">Business map <span className="code">ontology</span></div><div className="dd">{entities > 0 ? `${entities} ${entities === 1 ? "entity" : "entities"} · ${map ? "confirmed" : "drafting"}` : "not started yet"}</div></div>
+                <button type="button" className="v3fs-nb-open ghost sm" onClick={onOpenWork}>Open →</button>
+              </div>
+              <div className="v3fs-nb-doc">
+                <div><div className="dt">How it works today <span className="code">current-state atlas</span></div><div className="dd">{workflows > 0 ? `${workflows} workflow${workflows === 1 ? "" : "s"} mapped` : "not started yet"}</div></div>
+                <button type="button" className="v3fs-nb-open ghost sm" onClick={onOpenWork}>Open →</button>
+              </div>
             </div>
-            <button type="button" className="v3fs-nb-open" onClick={onOpenWork}>Open the workspace →</button>
-            <p className="v3fs-nb-hint">Edit the business map, atlas and discovery in the full workspace.</p>
+            <p className="v3fs-nb-hint">The business map and atlas open full-screen in the workspace, where you can edit them.</p>
           </div>
           <div className="v3fs-nb-zone">
             <p className="v3fs-nb-ztag">The record · heard</p>
             <ul className="v3fs-nb-rec">
-              {(r?.heard ?? []).map((who) => (
+              {a.names.map((who) => (
                 <li key={who}><span className="av">{initials(who)}</span><div><div className="who">{who}</div><div className="what">Listen evidence on record</div></div></li>
               ))}
-              {!(r?.heard ?? []).length ? <li className="empty">No one heard in this area yet.</li> : null}
+              {!a.names.length ? <li className="empty">No one heard in this area yet.</li> : null}
             </ul>
           </div>
         </div>

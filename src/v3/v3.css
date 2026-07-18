@@ -8644,3 +8644,15 @@ select.v3fs-dir-in {cursor:pointer}
 .v3fs-nb-gate-act {margin-top:13px}
 .v3fs-nb-open.ghost {background:transparent;color:var(--v3-accent);border:1px solid var(--v3-accent)}
 .v3fs-nb-open.ghost:hover {background:color-mix(in srgb, var(--v3-accent) 8%, transparent);filter:none}
+
+/* Prototype board: open-design-workspace button in the merge banner */
+.v3fs-nb-merge-btn {margin-left:auto;border:1px solid var(--v3-accent);color:var(--v3-accent);background:var(--fs-card);border-radius:9px;padding:7px 12px;font-size:12px;font-weight:650;cursor:pointer;white-space:nowrap}
+.v3fs-nb-merge-btn:hover {background:color-mix(in srgb, var(--v3-accent) 8%, transparent)}
+/* Listen focused: explicit ontology + atlas doc cards */
+.v3fs-nb-doccard {display:flex;flex-direction:column;gap:8px}
+.v3fs-nb-doc {display:flex;align-items:center;gap:10px;border:1px solid var(--fs-line);border-radius:10px;padding:10px 12px}
+.v3fs-nb-doc .dt {font-weight:650;font-size:12.5px;color:var(--v3-text-primary)}
+.v3fs-nb-doc .dt .code {font-family:var(--v3-font-mono, ui-monospace);font-size:9px;letter-spacing:.04em;text-transform:uppercase;color:var(--v3-accent-2);font-weight:500;margin-left:5px}
+.v3fs-nb-doc .dd {font-size:11px;color:var(--v3-text-muted);margin-top:2px}
+.v3fs-nb-doc .v3fs-nb-open {margin-left:auto}
+.v3fs-nb-open.sm {padding:6px 11px;font-size:11.5px}
