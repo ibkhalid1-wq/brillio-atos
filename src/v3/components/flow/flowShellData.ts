@@ -550,6 +550,37 @@ export function frameFactOnRecord(program: ProgramSummary, fact: string, inputFi
 }
 export function falsifiedGap(program: ProgramSummary, gap: string): boolean {
   if (!/\binputs?\b/i.test(gap)) return false; // only field-demand phrasing
+  // A "Name the X, Y and Z stakeholders" gap is SATISFIED once every listed
+  // role has a NAMED individual on the live record (directory people + role
+  // bindings). Naming happens in the UI, not through regeneration — so the
+  // document's stored gap goes stale the moment the operator does the work,
+  // and this check falsifies it dynamically instead of waiting for a rebuild.
+  const naming = gap.match(/name the (.+?) stakeholders?/i);
+  if (naming) {
+    const GENERIC = new Set(["of", "the", "and", "head", "lead", "chief", "officer", "manager", "director", "vp"]);
+    const tok = (s: string): string[] => s.toLowerCase().split(/[^a-z0-9]+/)
+      .map((t) => t.replace(/s$/, "")).filter((t) => t.length >= 2 && !GENERIC.has(t));
+    const named = new Set<string>();
+    for (const m of flowMovements()) {
+      const inputs = readMovementInputs(program, m.id);
+      try {
+        const dir = JSON.parse(String(inputs._directoryPeople ?? "[]"));
+        if (Array.isArray(dir)) for (const e of dir) {
+          if (e && typeof e === "object" && String((e as Record<string, unknown>).name ?? "").trim()) {
+            for (const t of tok(`${String((e as Record<string, unknown>).role ?? "")} ${String((e as Record<string, unknown>).name ?? "")}`)) named.add(t);
+          }
+        }
+      } catch { /* malformed directory — skip */ }
+      try {
+        const rb = JSON.parse(String(inputs._roleBindings ?? "{}"));
+        if (rb && typeof rb === "object") for (const [role, v] of Object.entries(rb as Record<string, unknown>)) {
+          if (v && typeof v === "object" && String((v as Record<string, unknown>).name ?? "").trim()) for (const t of tok(role)) named.add(t);
+        }
+      } catch { /* malformed bindings — skip */ }
+    }
+    const roles = naming[1].split(/,|\band\b/).map((r) => r.trim()).filter(Boolean);
+    if (roles.length && roles.every((r) => { const ts = tok(r); return ts.length > 0 && ts.some((t) => named.has(t)); })) return true;
+  }
   const hit = FIELD_DEMANDS.find((demand) => demand.match.test(gap));
   if (!hit) return false;
   // Satisfied when the fact is on record — in the raw input field OR extracted

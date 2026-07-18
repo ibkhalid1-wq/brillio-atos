@@ -495,11 +495,11 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
         // Regenerate control. The Gate is not a stage — it lives in the
         // top-right button as a modal verdict. For Frame the Listen plan is
         // merged INTO the Discovery Kit tab (not a separate tab).
+        // Colour-only, like the Discovery chip: amber ● when anything is
+        // pending (stale or open gaps), green ✓ when clean, dim ○ when absent.
         const artifactTabState = (a: typeof artifacts[number]): { glyph: string; text: string; tone: string } => {
           if (!a.present) return { glyph: "○", text: "", tone: "dim" };
-          if (a.stale) return { glyph: "⟳", text: "stale", tone: "warn" };
-          const gaps = artifactOpenGaps(program, a.id).length;
-          if (gaps) return { glyph: "!", text: `${gaps} gap${gaps === 1 ? "" : "s"}`, tone: "warn" };
+          if (a.stale || artifactOpenGaps(program, a.id).length) return { glyph: "●", text: "", tone: "warn" };
           return { glyph: "✓", text: "", tone: "ok" };
         };
         const shipPlanState = (() => {
