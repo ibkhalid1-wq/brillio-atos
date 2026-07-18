@@ -593,7 +593,7 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
                   <button type="button" role="tab" aria-selected={active === "envision"}
                     className={`v3fs-loopswitch-b${active === "envision" ? " on" : ""}`} onClick={() => setActive("envision")}>
                     <span className="v3fs-loopswitch-i" aria-hidden="true">✎</span>
-                    <span className="v3fs-loopswitch-t">Design<em>the team shapes the prototype</em></span>
+                    <span className="v3fs-loopswitch-t">Design Workspace<em>the team shapes the prototype</em></span>
                   </button>
                   <button type="button" role="tab" aria-selected={active === "show"}
                     className={`v3fs-loopswitch-b${active === "show" ? " on" : ""}`} onClick={() => setActive("show")}>
