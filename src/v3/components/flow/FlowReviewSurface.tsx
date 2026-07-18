@@ -19,6 +19,15 @@ import {
 import { WorkflowFlow, OntologyMap, type FlowNode } from "@/v3/components/flow/FlowReviewVisuals";
 import { DictationButton, joinDictation } from "@/v3/components/flow/FlowDictation";
 
+/** Paper-clip renderer supplied by the page (FlowRespond) so every review
+ * input shares the one attach pipeline: the file's extracted text lands IN
+ * the field, and the composed submission carries it like typed text. */
+type ClipFn = (key: string, context: string, append: (text: string) => void) => React.ReactNode;
+const appendText = (current: string | undefined, text: string): string => {
+  const base = (current ?? "").trimEnd();
+  return base ? `${base}\n\n${text}` : text;
+};
+
 /** State that persists to the respondent's own device (keyed by the link token
  * plus a field name), so they can close a long review and return without losing
  * their edits. Best-effort — private mode or a full quota just falls back to
@@ -127,9 +136,9 @@ function coverageLabel(review: ReviewPayload): string {
   return `${arr.slice(0, -1).join(", ")}, and ${arr[arr.length - 1]}`;
 }
 
-function OntologyAtlasSurface({ review, stakeholder, programme, objective, submitting, error, onSubmit, draftKey, returning, afterIntro }: {
+function OntologyAtlasSurface({ review, stakeholder, programme, objective, submitting, error, onSubmit, draftKey, returning, afterIntro, clip }: {
   review: OntologyAtlasReview; stakeholder: string; programme?: string; objective?: string; submitting: boolean; error: string | null;
-  onSubmit: (answers: string, extras?: { suggestedVoices?: Array<{ name: string; role: string; note: string }> }) => void; draftKey?: string; returning?: boolean; afterIntro?: React.ReactNode;
+  onSubmit: (answers: string, extras?: { suggestedVoices?: Array<{ name: string; role: string; note: string }> }) => void; draftKey?: string; returning?: boolean; afterIntro?: React.ReactNode; clip?: ClipFn;
 }) {
   const [termComments, setTermComments] = usePersistentState<Record<string, string>>(draftKey, "oaTerms", {});
   const [workflowComments, setWorkflowComments] = usePersistentState<Record<string, string>>(draftKey, "oaWf", {});
@@ -166,6 +175,7 @@ function OntologyAtlasSurface({ review, stakeholder, programme, objective, submi
                   <input className="v3fs-rvw-comment" value={termComments[String(i)] ?? ""}
                     onChange={(e) => setTermComments((p) => ({ ...p, [String(i)]: e.target.value }))}
                     placeholder="Wrong, missing, or named differently? (optional)" />
+                  {clip?.(`rv-term:${i}`, term.name, (text) => setTermComments((p) => ({ ...p, [String(i)]: appendText(p[String(i)], text) })))}
                 </div>
               ))}
             </div>
@@ -187,6 +197,7 @@ function OntologyAtlasSurface({ review, stakeholder, programme, objective, submi
                   <input className="v3fs-rvw-comment" value={workflowComments[String(i)] ?? ""}
                     onChange={(e) => setWorkflowComments((p) => ({ ...p, [String(i)]: e.target.value }))}
                     placeholder="What's different, missing, or out of order? (optional)" />
+                  {clip?.(`rv-wf:${i}`, workflow.name, (text) => setWorkflowComments((p) => ({ ...p, [String(i)]: appendText(p[String(i)], text) })))}
                 </div>
               ))}
             </div>
@@ -197,6 +208,7 @@ function OntologyAtlasSurface({ review, stakeholder, programme, objective, submi
           <textarea className="v3fs-rvw-overall" value={overall} rows={3}
             onChange={(e) => setOverall(e.target.value)}
             placeholder="Anything we've misunderstood, or a term or workflow we've missed entirely?" />
+          {clip?.("rv-overall", "Anything else", (text) => setOverall((cur) => appendText(cur, text)))}
         </section>
       </div>
       <label className="v3fs-rvw-whoelse">Someone else we should ask?
@@ -213,9 +225,9 @@ function OntologyAtlasSurface({ review, stakeholder, programme, objective, submi
   );
 }
 
-function ListenWorkflowSurface({ review, stakeholder, programme, objective, submitting, error, onSubmit, draftKey, returning, afterIntro }: {
+function ListenWorkflowSurface({ review, stakeholder, programme, objective, submitting, error, onSubmit, draftKey, returning, afterIntro, clip }: {
   review: ListenWorkflowReview; stakeholder: string; programme?: string; objective?: string; submitting: boolean; error: string | null;
-  onSubmit: (answers: string, extras?: { suggestedVoices?: Array<{ name: string; role: string; note: string }> }) => void; draftKey?: string; returning?: boolean; afterIntro?: React.ReactNode;
+  onSubmit: (answers: string, extras?: { suggestedVoices?: Array<{ name: string; role: string; note: string }> }) => void; draftKey?: string; returning?: boolean; afterIntro?: React.ReactNode; clip?: ClipFn;
 }) {
   const [wfSteps, setWfSteps] = usePersistentState<FlowNode[][]>(draftKey, "lwSteps",
     review.workflows.map((w) => w.steps.map((s) => ({
@@ -377,6 +389,7 @@ function ListenWorkflowSurface({ review, stakeholder, programme, objective, subm
                     <div className="v3fs-rvw-field">
                       <textarea rows={2} value={answers[String(i)] ?? ""} onChange={(e) => setAnswers((p) => ({ ...p, [String(i)]: e.target.value }))} />
                       <DictationButton compact label="Speak this answer" onText={(spoken) => setAnswers((p) => ({ ...p, [String(i)]: joinDictation(p[String(i)] ?? "", spoken) }))} />
+                      {clip?.(`rv-q:${i}`, q, (text) => setAnswers((p) => ({ ...p, [String(i)]: appendText(p[String(i)], text) })))}
                     </div>
                   </label>
                 ))}
@@ -392,6 +405,7 @@ function ListenWorkflowSurface({ review, stakeholder, programme, objective, subm
           <textarea className="v3fs-rvw-overall" rows={3} value={narration} onChange={(e) => setNarration(e.target.value)}
             placeholder="e.g. Legal actually reviews the quote twice — once before pricing and again before it goes out." />
           <DictationButton label="Speak it" onText={(spoken) => setNarration((cur) => joinDictation(cur, spoken))} />
+          {clip?.("rv-narration", "Anything we missed", (text) => setNarration((cur) => appendText(cur, text)))}
         </section>
       </div>
 
@@ -434,8 +448,10 @@ function ListenWorkflowSurface({ review, stakeholder, programme, objective, subm
   );
 }
 
-export default function FlowReviewSurface({ review, stakeholder, submitting, error, onSubmit, draftKey, programme, objective, returning, afterIntro }: {
+export default function FlowReviewSurface({ review, stakeholder, submitting, error, onSubmit, draftKey, programme, objective, returning, afterIntro, clip }: {
   review: ReviewPayload; stakeholder: string; submitting: boolean; error: string | null;
+  /** Paper-clip renderer for input fields — see ClipFn. */
+  clip?: ClipFn;
   onSubmit: (answers: string, extras?: { suggestedVoices?: Array<{ name: string; role: string; note: string }> }) => void;
   /** Persist the respondent's edits to their device under this key so they can
    * close a long review and return. FlowRespond clears it on submit. */
@@ -450,7 +466,7 @@ export default function FlowReviewSurface({ review, stakeholder, submitting, err
   afterIntro?: React.ReactNode;
 }) {
   if (review.kind === "listen-workflow") {
-    return <ListenWorkflowSurface review={review} stakeholder={stakeholder} programme={programme} objective={objective} submitting={submitting} error={error} onSubmit={onSubmit} draftKey={draftKey} returning={returning} afterIntro={afterIntro} />;
+    return <ListenWorkflowSurface review={review} stakeholder={stakeholder} programme={programme} objective={objective} submitting={submitting} error={error} onSubmit={onSubmit} draftKey={draftKey} returning={returning} afterIntro={afterIntro} clip={clip} />;
   }
-  return <OntologyAtlasSurface review={review} stakeholder={stakeholder} programme={programme} objective={objective} submitting={submitting} error={error} onSubmit={onSubmit} draftKey={draftKey} returning={returning} afterIntro={afterIntro} />;
+  return <OntologyAtlasSurface review={review} stakeholder={stakeholder} programme={programme} objective={objective} submitting={submitting} error={error} onSubmit={onSubmit} draftKey={draftKey} returning={returning} afterIntro={afterIntro} clip={clip} />;
 }

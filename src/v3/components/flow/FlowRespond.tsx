@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ScreenCard } from "@/v3/components/flow/studio/ExperienceDesignStudio";
 import FlowReviewSurface from "@/v3/components/flow/FlowReviewSurface";
 import { projectStakeholderReview, reviewDiff, type ReviewPayload } from "@/v3/components/flow/flowReviews";
@@ -9,6 +9,7 @@ import {
 import { stakeholderPrimaryArea, hasMultipleAreas } from "@/v3/components/flow/flowAreas";
 import type { ProgramSummary } from "@/new/types";
 import { DictationButton, joinDictation } from "@/v3/components/flow/FlowDictation";
+import { usePortalAttach, AttachClip } from "@/v3/components/flow/PortalAttach";
 import PilotApp from "@/v3/components/flow/PilotApp";
 
 /**
@@ -228,9 +229,11 @@ export default function FlowRespond({ token }: { token: string }) {
   // Per-question deferral: "not me — this is for <name>". A deferred question
   // counts as handled here and is routed to that person's card on ingest.
   const [deferrals, setDeferrals] = useState<Record<number, string>>(draft0.deferrals ?? {});
-  const [attachments, setAttachments] = useState<Record<number, Array<{ name: string; sourceKey?: string }>>>({});
-  const [attachBusy, setAttachBusy] = useState<number | null>(null);
-  const [attachNote, setAttachNote] = useState<string | null>(null);
+  // Paper-clip attachments — ONE shared mechanism for every input field on
+  // the page (question answers, the demo comment, "anything else", phase
+  // notes, review fields): extract the file's text into the field, keep the
+  // original as a reference. Keyed per field.
+  const { busyKey: attachBusyKey, note: attachNote, docs: attachments, attach, removeDoc } = usePortalAttach(token);
   const [extra, setExtra] = useState(draft0.extra ?? "");
   // "Who else should we speak with?" — the respondent can name people the tour
   // is missing. Named voices route to the operator to add, closing the gap where
@@ -289,45 +292,20 @@ export default function FlowRespond({ token }: { token: string }) {
     return () => { alive = false; };
   }, [token]);
 
-  const attachFile = async (index: number, file: File) => {
-    setAttachBusy(index);
-    setAttachNote(null);
-    try {
-      const buffer = new Uint8Array(await file.arrayBuffer());
-      let binary = "";
-      for (let i = 0; i < buffer.length; i += 0x8000) {
-        binary += String.fromCharCode(...buffer.subarray(i, i + 0x8000));
-      }
-      const response = await fetch(`${FUNCTIONS_BASE}/flow-portal`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, extract: { file: btoa(binary), mime: file.type || "", filename: file.name, question: (state.phase === "ready" ? state.pack.questions?.[index] : "") || "" } }),
-      });
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok || typeof body.text !== "string") {
-        setAttachNote(typeof body.error === "string" ? body.error : "Could not read that file.");
-        return;
-      }
-      // The extracted content goes straight into the answer field — visible
-      // and editable — so the respondent can see and trust what will be sent.
-      // The original file rides along as a downloadable reference; its text is
-      // NOT re-sent, so the record holds one copy (their answer).
-      const heading = `From "${file.name}"${body.refined === true ? " (the relevant part)" : ""}:`;
-      setAnswers((current) => {
-        const existing = (current[index] ?? "").trimEnd();
-        const insert = `${heading}\n${body.text}`;
-        return { ...current, [index]: existing ? `${existing}\n\n${insert}` : insert };
-      });
-      setAttachments((current) => ({ ...current, [index]: [...(current[index] ?? []), {
-        name: file.name,
-        sourceKey: typeof body.sourceKey === "string" ? body.sourceKey : undefined,
-      }] }));
-    } catch {
-      setAttachNote("Could not read that file.");
-    } finally {
-      setAttachBusy(null);
-    }
-  };
+  // The extracted content goes straight into the field the clip sits on —
+  // visible and editable — so the respondent can see and trust what will be
+  // sent. The original file rides along as a downloadable reference on
+  // submissions that carry documents; its text is NOT re-sent.
+  const appendTo = (setter: (fn: (current: string) => string) => void) => (text: string) =>
+    setter((current) => (current.trimEnd() ? `${current.trimEnd()}\n\n${text}` : text));
+  // A paper-clip bound to a sub-surface field (DemoWalker phase notes, review
+  // surface comments) — the sub-surface names the key/context/append, the
+  // page supplies the one shared attach pipeline.
+  const fieldClip = (key: string, context: string, append: (text: string) => void): ReactNode => (
+    <AttachClip fieldKey={key} context={context} busyKey={attachBusyKey}
+      docs={attachments[key]} onRemove={(i) => removeDoc(key, i)}
+      onFile={(file) => void attach(key, file, context, append)} />
+  );
 
   // Engagement telemetry — lightweight, anonymous-to-content pings so the
   // operator sees where a demo loses people: opened, and the furthest beat
@@ -493,7 +471,7 @@ export default function FlowRespond({ token }: { token: string }) {
               {state.pack.followUp ? <FollowUpBanner stakeholder={greetName}
                 submissions={state.pack.submissions ?? []}
                 changes={state.pack.priorReview ? reviewDiff(state.pack.priorReview, shownReview) : undefined} /> : null}
-              <FlowReviewSurface review={shownReview} stakeholder={greetName}
+              <FlowReviewSurface review={shownReview} stakeholder={greetName} clip={fieldClip}
                 programme={state.pack.programme} objective={state.pack.objective}
                 returning={!!state.pack.followUp}
                 submitting={submitting} error={error} draftKey={reviewDraftKey}
@@ -555,7 +533,7 @@ export default function FlowRespond({ token }: { token: string }) {
                       machines={state.pack.machines} fixtures={state.pack.fixtures} seedScenario={state.pack.seedScenario}
                       onBeatRecord={(record) => setDemoRunRecords((prev) => [...prev, record])}
                       fieldFlags={demoFieldFlags} onToggleFieldFlag={toggleFieldFlag}
-                      runLive={state.pack.liveDemo ? runLiveBeat : undefined} /> : null}
+                      runLive={state.pack.liveDemo ? runLiveBeat : undefined} clip={fieldClip} /> : null}
                     {state.pack.steps?.length ? (
                       <div className="v3fs-portal-steps">
                         {state.pack.steps.map((step, index) => (
@@ -587,6 +565,9 @@ export default function FlowRespond({ token }: { token: string }) {
                     <textarea value={comment} onChange={(event) => setComment(event.target.value)} rows={3}
                       placeholder="Add your comment — type, or speak it." />
                     <DictationButton onText={(spoken) => setComment((current) => joinDictation(current, spoken))} />
+                    <AttachClip fieldKey="demo" context="What should change overall?" busyKey={attachBusyKey}
+                      docs={attachments["demo"]} onRemove={(i) => removeDoc("demo", i)}
+                      onFile={(file) => void attach("demo", file, "What should change overall?", appendTo(setComment))} />
                   </label>
                 ) : null}
                 <label className="v3fs-portal-q v3fs-portal-whoelse">
@@ -662,7 +643,7 @@ export default function FlowRespond({ token }: { token: string }) {
                     machines={state.pack.machines} fixtures={state.pack.fixtures} seedScenario={state.pack.seedScenario}
                     onBeatRecord={(record) => setDemoRunRecords((prev) => [...prev, record])}
                     fieldFlags={demoFieldFlags} onToggleFieldFlag={toggleFieldFlag}
-                    runLive={state.pack.liveDemo ? runLiveBeat : undefined} />
+                    runLive={state.pack.liveDemo ? runLiveBeat : undefined} clip={fieldClip} />
                 ) : null}
                 {state.pack.questions.map((question, index) => (
                   <label key={index} className={`v3fs-portal-card${((answers[index] ?? "").trim() || (attachments[index] ?? []).length || deferrals[index]) ? " done" : ""}${deferrals[index] ? " deferred" : ""}`}>
@@ -701,23 +682,14 @@ export default function FlowRespond({ token }: { token: string }) {
                     ) : null}
                     <DictationButton onText={(spoken) => setAnswers((current) => ({ ...current, [index]: joinDictation(current[index] ?? "", spoken) }))} />
                     <div className="v3fs-portal-att">
-                      {(attachments[index] ?? []).map((doc, docIndex) => (
-                        <span key={docIndex} className="v3fs-portal-att-chip">
-                          {doc.name}
-                          <button type="button" aria-label={`Remove ${doc.name}`} onClick={() =>
-                            setAttachments((current) => ({ ...current, [index]: (current[index] ?? []).filter((_, i) => i !== docIndex) }))
-                          }>×</button>
-                        </span>
-                      ))}
-                      <label className="v3fs-portal-att-add">
-                        {attachBusy === index ? "Reading…" : "⌲ Attach a document"}
-                        <input type="file" hidden disabled={attachBusy !== null}
-                          onChange={(event) => {
-                            const file = event.target.files?.[0];
-                            event.target.value = "";
-                            if (file) void attachFile(index, file);
-                          }} />
-                      </label>
+                      <AttachClip fieldKey={String(index)} context={question} busyKey={attachBusyKey}
+                        docs={attachments[index]} onRemove={(i) => removeDoc(String(index), i)}
+                        label="⌲ Attach a document"
+                        onFile={(file) => void attach(String(index), file, question,
+                          (text) => setAnswers((current) => {
+                            const existing = (current[index] ?? "").trimEnd();
+                            return { ...current, [index]: existing ? `${existing}\n\n${text}` : text };
+                          }))} />
                       {(attachments[index] ?? []).length ? (
                         <span className="v3fs-portal-att-hint">added to your answer above — edit it freely</span>
                       ) : null}
@@ -730,6 +702,9 @@ export default function FlowRespond({ token }: { token: string }) {
                   <span className="v3fs-portal-qt">Anything we didn&rsquo;t ask about that we should know?</span>
                   <textarea value={extra} onChange={(event) => setExtra(event.target.value)} rows={3} maxLength={20000} placeholder="Optional — type, or speak it." />
                   <DictationButton onText={(spoken) => setExtra((current) => joinDictation(current, spoken))} />
+                  <AttachClip fieldKey="extra" context="Anything we didn't ask about" busyKey={attachBusyKey}
+                    docs={attachments["extra"]} onRemove={(i) => removeDoc("extra", i)}
+                    onFile={(file) => void attach("extra", file, "Anything we didn't ask about that we should know?", appendTo(setExtra))} />
                 </label>
                 <div className={`v3fs-portal-card whoelse${filledVoices.length ? " done" : ""}`}>
                   <span className="v3fs-portal-qn"><b aria-hidden="true">☎</b><em aria-hidden="true">✓</em></span>
@@ -770,8 +745,14 @@ export default function FlowRespond({ token }: { token: string }) {
                   disabled={submitting || (composed.trim().length < 20 && Object.values(attachments).every((docs) => !docs.length) && !Object.keys(deferrals).length && !filledVoices.length)}
                   onClick={() => void submit({
                     answers: composed,
-                    documents: Object.entries(attachments).flatMap(([qIndex, docs]) =>
-                      docs.filter((doc) => doc.sourceKey).map((doc) => ({ name: doc.name, question: Number(qIndex) + 1, sourceKey: doc.sourceKey }))),
+                    documents: Object.entries(attachments).flatMap(([key, list]) =>
+                      list.filter((doc) => doc.sourceKey).map((doc) => ({
+                        name: doc.name,
+                        // Question-keyed attachments carry their question number;
+                        // field-keyed ones ("extra", review fields) ride unnumbered.
+                        ...(Number.isFinite(Number(key)) ? { question: Number(key) + 1 } : {}),
+                        sourceKey: doc.sourceKey,
+                      }))),
                     deferrals: Object.entries(deferrals).map(([qIndex, to]) => ({
                       question: state.pack.questions[Number(qIndex)] ?? "", to,
                     })).filter((entry) => entry.question && entry.to),
@@ -1122,9 +1103,12 @@ function PilotFrame({ pilotHtml }: { pilotHtml: string }) {
   );
 }
 
-function DemoWalker({ design, script, recipientArea, phaseComments, onPhaseComment, beatVerdicts, onBeatVerdict, machines, fixtures, seedScenario, onBeatRecord, fieldFlags, onToggleFieldFlag, runLive }: {
+function DemoWalker({ design, script, recipientArea, phaseComments, onPhaseComment, beatVerdicts, onBeatVerdict, machines, fixtures, seedScenario, onBeatRecord, fieldFlags, onToggleFieldFlag, runLive, clip }: {
   design: NonNullable<Pack["design"]>; script?: Pack["script"]; recipientArea?: string;
   phaseComments?: Record<string, string>; onPhaseComment?: (key: string, value: string) => void;
+  /** Paper-clip renderer for a phase-comment field — supplied by the page so
+   * every input shares the one attach pipeline. */
+  clip?: (key: string, context: string, append: (text: string) => void) => ReactNode;
   /** Per-beat acceptance taps — granular signal, so the final verdict is built
    * from what they confirmed beat by beat, not one button at the end. */
   beatVerdicts?: Record<string, string>; onBeatVerdict?: (key: string, value: "ok" | "not") => void;
@@ -1341,6 +1325,10 @@ function DemoWalker({ design, script, recipientArea, phaseComments, onPhaseComme
                 <textarea rows={2} value={phaseComments?.[key] ?? ""}
                   onChange={(event) => onPhaseComment(key, event.target.value)}
                   placeholder="Does this phase run the way you need it to?" />
+                {clip ? clip(`phase:${key}`, `Comment on ${key}`, (text) => {
+                  const cur = (phaseComments?.[key] ?? "").trimEnd();
+                  onPhaseComment(key, cur ? `${cur}\n\n${text}` : text);
+                }) : null}
               </label>
             ) : null}
           </>

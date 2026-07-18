@@ -7583,6 +7583,13 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-portal-att-chip button {border:none;background:none;cursor:pointer;color:var(--v3-text-muted);font-size:13px;padding:0;line-height:1}
 .v3fs-portal-att-add {display:inline-flex;align-items:center;font-size:11.5px;color:var(--v3-accent-2);cursor:pointer;font-weight:650;border:1px dashed color-mix(in srgb, var(--v3-accent-2) 45%, transparent);border-radius:99px;padding:4px 12px;transition:background .15s ease}
 .v3fs-portal-att-add:hover {background:var(--fs-indigo-wash)}
+/* The compact paper-clip beside an input field (every linked-page input
+   carries one) — quiet until hovered, chips inline before it. */
+.v3fs-clip-row {display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px}
+.v3fs-clip {display:inline-flex;align-items:center;justify-content:center;font-size:13px;cursor:pointer;
+  width:26px;height:26px;border-radius:8px;border:1px dashed color-mix(in srgb, var(--v3-accent-2) 40%, transparent);
+  color:var(--v3-accent-2);transition:background .15s ease}
+.v3fs-clip:hover {background:var(--fs-indigo-wash)}
 /* Link-row actions sit as a right-aligned button pair. */
 .v3fs-async-cta {display:flex;gap:6px;flex-shrink:0}
 /* Speak + attach share one pill language inside the question cards. */
