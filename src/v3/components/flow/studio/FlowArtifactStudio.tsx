@@ -12,7 +12,7 @@ import { useFocusTrap } from "@/v3/lib/useFocusTrap";
 import type { ProgramSummary } from "@/new/types";
 import { artifactDocument, falsifiedGap, flowMovements, locateQuote, movementEvidence, type ArtifactCardModel, type EvidenceEntry } from "@/v3/components/flow/flowShellData";
 import { groundingFor, citationGraph, resourceUri, artifactFabioType, SEMANTIC_CONTEXT } from "@/v3/components/flow/flowSemantics";
-import { readRoleBindings, readOperatorAsks, operatorAsksFor, resolveMovementStakeholders, readGapRoutes, gapRouteKey } from "@/v3/components/flow/flowStakeholders";
+import { readRoleBindings, readOperatorAsks, operatorAsksFor, resolveMovementStakeholders, readDirectoryPeople, validateProgramRole, readGapRoutes, gapRouteKey } from "@/v3/components/flow/flowStakeholders";
 import { artifactApprovalState } from "@/v3/components/flow/flowApprovals";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
 import { partitionOntologyViolations } from "@/v3/components/flow/flowOntologyConstraints";
@@ -217,13 +217,11 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
   // that travels on that person's link — the SAME channel the collect board uses.
   // Every role with a NAMED individual, across ALL movements (deduped by
   // person) — a question needs a person to travel to; an unbound role
-  // placeholder has no link to carry it. Each entry remembers the movement
-  // whose roster carries the person, so the ask is stored on THAT movement
-  // and rides their existing link.
+  // placeholder has no link to carry it.
   const askRoster = useMemo(() => {
     const ordered = [artifact.movementId, ...flowMovements().map((m) => m.id).filter((id) => id !== artifact.movementId)];
     const seen = new Set<string>();
-    const out: Array<{ name: string; role: string; movementId: string }> = [];
+    const out: Array<{ name: string; role: string }> = [];
     for (const movementId of ordered) {
       for (const s of resolveMovementStakeholders(program, movementId)) {
         if (s.isRole || !s.name.trim()) continue;
@@ -231,7 +229,7 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
         const key = s.name.trim().toLowerCase();
         if (seen.has(key)) continue;
         seen.add(key);
-        out.push({ name: s.name, role: s.role || "", movementId });
+        out.push({ name: s.name, role: s.role || "" });
       }
     }
     return out;
@@ -243,20 +241,38 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
   const askEntry = askRoster.find((s) => s.name === askWho) ?? askRoster[0];
   const askTarget = askEntry?.name ?? "";
   const askExisting = useMemo(
-    () => (askEntry ? operatorAsksFor(program, askEntry.movementId, askEntry.name) : []),
-    [program, askEntry],
+    () => (askEntry ? operatorAsksFor(program, artifact.movementId, askEntry.name) : []),
+    [program, artifact.movementId, askEntry],
   );
+  // Route the question to the person ON THIS artifact's movement: the ask is
+  // stored on this movement's _operatorAsks, and if the person has no card on
+  // this movement's Discovery yet, a directory entry is added IN THE SAME
+  // WRITE — so the question and the card land together and the ask rides the
+  // link minted from that card.
   const addAsk = async () => {
     const q = askText.trim();
     if (!q || !askEntry || !onSaveInputs) return;
     setAskBusy(true);
     try {
-      const all = readOperatorAsks(program, askEntry.movementId);
+      const movementId = artifact.movementId;
+      const inputs: Record<string, string> = {};
+      const onBoard = resolveMovementStakeholders(program, movementId)
+        .some((s) => !s.isRole && s.name.trim().toLowerCase() === askEntry.name.trim().toLowerCase());
+      if (!onBoard) {
+        const dir = readDirectoryPeople(program);
+        inputs._directoryPeople = JSON.stringify([...dir, {
+          id: `dp-${Date.now().toString(36)}-${askEntry.name.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 8)}`,
+          name: askEntry.name, role: askEntry.role || "Stakeholder", email: undefined, movementId,
+          roleResolved: validateProgramRole(program, askEntry.role || "Stakeholder").known,
+        }]);
+      }
+      const all = readOperatorAsks(program, movementId);
       const key = askEntry.name.trim().toLowerCase();
       const next = [...(all[key] ?? [])];
       if (!next.some((existing) => existing.toLowerCase() === q.toLowerCase())) next.push(q);
       all[key] = next;
-      await onSaveInputs(askEntry.movementId, { _operatorAsks: JSON.stringify(all) }, {
+      inputs._operatorAsks = JSON.stringify(all);
+      await onSaveInputs(movementId, inputs, {
         attest: { action: `Question raised for ${askEntry.name}`, detail: q.slice(0, 120) },
       });
       setAskText("");
@@ -442,14 +458,14 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
         {/* Ask a question — the DERIVED document's ONE editing path: ask the
             person who owns the answer. The question travels on their link and
             regenerates the document when answered. Only roles with a NAMED
-            individual are offered. Editable design-team artifacts are authored
-            directly, so they don't show this. */}
+            individual are offered; asking someone not yet on this movement's
+            Discovery adds their card. Editable design-team artifacts are
+            authored directly, so they don't show this. */}
         {!canEdit && artifact.movementId !== "envision" && artifact.movementId !== "show" && onSaveInputs && askRoster.length ? (
-          <details className="v3fs-artask">
-            <summary>
-              <span className="v3fs-artask-l">? Ask a question</span>
-              <span className="v3fs-artask-hint">Derived document — ask the person who owns the answer; their reply arrives as evidence and updates it.</span>
-            </summary>
+          <div className="v3fs-artask">
+            <div className="v3fs-artask-h">
+              <span className="v3fs-artask-l">Ask a question</span>
+            </div>
             <div className="v3fs-artask-b">
               <label className="v3fs-artask-row">
                 <span>Who to ask</span>
@@ -475,7 +491,7 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
               </div>
               {askDone ? <div className="v3fs-artask-done">✓ Sent to {askDone} — travels on their link until answered.</div> : null}
             </div>
-          </details>
+          </div>
         ) : null}
         {regenPending ? (
           <div className="v3fs-dv-band indigo">
