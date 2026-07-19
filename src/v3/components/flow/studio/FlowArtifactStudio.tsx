@@ -20,7 +20,19 @@ import { listOpenFlowDecisions, listFlowAttestations, docSectionDiff } from "@/v
 import { buildPrototypePrompt } from "@/v3/components/flow/flowBuildPrompt";
 import { listSnapshots } from "@/v3/lib/blobSnapshots";
 import { STUDIO_REGISTRY } from "./studios";
+import SectionCopilotCard from "./SectionCopilotCard";
 import { StudioLockContext, EmptyState } from "./StudioKit";
+
+const SECTION_COPILOT_LABEL: Record<string, string> = {
+  "architecture-strategy": "the architecture strategy",
+  "experience-design": "the experience design",
+  "agentic-blueprint": "the agentic blueprint",
+};
+const SECTION_COPILOT_PLACEHOLDER: Record<string, string> = {
+  "architecture-strategy": "e.g. “add a resilience-first option”, “score cost lower on the hub”, “tighten the recommendation rationale”",
+  "experience-design": "e.g. “add a bulk-approve screen”, “make the theme warmer”, “mark the pricing step to agentify”",
+  "agentic-blueprint": "e.g. “add a human-in-the-loop gate before contract send”, “split the pricing agent in two”",
+};
 import DocumentView from "./DocumentView";
 import EvidenceReader from "@/v3/components/flow/EvidenceReader";
 
@@ -551,9 +563,23 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
                   <span aria-hidden="true">↻</span> Derived from the record — capture a correction as evidence to change it
                 </div>
               ) : null}
-              {/* Only the Prototype Build carries a command line (to refine the
-                  prototype UI); it renders inside PrototypeStudio via
-                  onRefinePrototype. The other design docs are authored directly. */}
+              {/* Copilot command card — refine THIS section with a plain-language
+                  command (type or speak) plus optional reference documents.
+                  Architecture Strategy / Experience Design / Agentic Blueprint;
+                  the Prototype Build has its own command line inside its studio. */}
+              {canEdit && onSaveInputs && onRegenerate
+                && ["architecture-strategy", "experience-design", "agentic-blueprint"].includes(artifact.id) ? (
+                <SectionCopilotCard program={program}
+                  sectionLabel={SECTION_COPILOT_LABEL[artifact.id] ?? "this section"}
+                  placeholder={SECTION_COPILOT_PLACEHOLDER[artifact.id]}
+                  refining={regenerating}
+                  onRefine={async (instruction) => {
+                    const fieldKey = STUDIO_REGISTRY[artifact.id]?.fieldKey;
+                    if (!fieldKey) return;
+                    await onSaveInputs(artifact.movementId, { [`_refine_${fieldKey}`]: instruction }, { silent: true });
+                    onRegenerate();
+                  }} />
+              ) : null}
               {/* Locked when edits are disabled — the studio's own inputs and
                   add/remove/drag affordances go read-only, so a field can't be
                   clicked into or typed (a no-op onChange had let the caret in). */}

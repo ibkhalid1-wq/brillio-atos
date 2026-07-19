@@ -6992,6 +6992,23 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 /* The prototype refine command line — a premium, focused control: a deep
    brand-indigo bar with a spark glyph, a roomy input, and a filled action with
    a keycap. Lifts on focus-within. */
+/* Copilot command card — on the design-team artifact tabs (refine this section). */
+.v3fs-copilotcard {display:flex;flex-direction:column;gap:10px;margin-bottom:16px;padding:14px 16px;border-radius:14px;
+  border:1px solid color-mix(in srgb,var(--v3-accent-2) 22%,var(--fs-line));
+  background:linear-gradient(180deg,color-mix(in srgb,var(--v3-accent-2) 5%,var(--v3-surface)),var(--v3-surface))}
+.v3fs-copilotcard.working {opacity:.85}
+.v3fs-copilotcard-h {display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.v3fs-copilotcard-h b {font-size:13px;font-weight:750;letter-spacing:-.01em;color:var(--v3-text)}
+.v3fs-copilotcard-spark {color:var(--v3-accent-2);font-size:13px}
+.v3fs-copilotcard-sub {font-size:12px;color:var(--v3-text-muted)}
+.v3fs-copilotcard-docs {display:flex;flex-wrap:wrap;gap:6px}
+.v3fs-copilotcard-row {display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.v3fs-copilotcard-in {flex:1 1 260px;min-width:0;border:1px solid var(--fs-line);border-radius:10px;padding:9px 12px;
+  font:inherit;font-size:13px;color:var(--v3-text);background:var(--v3-surface)}
+.v3fs-copilotcard-in:focus {outline:none;border-color:var(--v3-accent-2);box-shadow:0 0 0 3px color-mix(in srgb,var(--v3-accent-2) 14%,transparent)}
+.v3fs-copilotcard-send {flex:0 0 auto;border:0;border-radius:10px;padding:9px 16px;font:inherit;font-size:12.5px;font-weight:700;
+  color:#fff;background:var(--v3-accent-2);cursor:pointer;transition:opacity .15s ease}
+.v3fs-copilotcard-send:disabled {opacity:.5;cursor:not-allowed}
 .v3fs-protocmd {display:flex;align-items:center;gap:10px;padding:9px 10px 9px 14px;border-radius:14px;
   background:linear-gradient(180deg,color-mix(in srgb,var(--v3-accent-b) 92%,#000) 0%,var(--v3-accent-b,#1c1830) 100%);
   border:1px solid color-mix(in srgb,var(--v3-accent-2) 34%,transparent);
