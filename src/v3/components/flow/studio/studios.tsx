@@ -17,7 +17,7 @@ import PrototypeStudio from "./PrototypeStudio";
 import { GapRoutingEditor } from "./GapRoutingEditor";
 import {
   Section, CollapsibleCard, TextField, TextArea, SelectField, ChipsField, StringListEditor, TableEditor,
-  asArray, asRecord, asText, asStrings, useStudioLocked, type StudioProps,
+  asArray, asRecord, asText, asStrings, useStudioLocked, useStudioAuthoring, type StudioProps,
 } from "./StudioKit";
 import { FORMAL_ARTIFACT_FIELD_KEYS } from "@/v3/lib/formalArtifacts";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
@@ -271,6 +271,7 @@ const SEVERITIES = ["high", "medium", "low"];
 
 function AtlasStudio({ doc, onChange, onOpenArtifact, program, gapRoutes, onRouteGap }: StudioProps) {
   const locked = useStudioLocked();
+  const authoring = useStudioAuthoring();
   const patch = patchOf(doc, onChange);
   const pains = useListOps(doc, onChange, "painHeatmap");
   return (
@@ -293,7 +294,7 @@ function AtlasStudio({ doc, onChange, onOpenArtifact, program, gapRoutes, onRout
               {locked ? null : <button type="button" className="v3fs-stu-x" aria-label="Remove" onClick={() => pains.remove(index)}>×</button>}
             </div>
           ))}
-          {locked ? null : <button type="button" className="v3fs-a" onClick={() => pains.add({ area: "", pain: "", severity: "medium", voicedBy: [] })}>＋ Add pain</button>}
+          {locked || !authoring ? null : <button type="button" className="v3fs-a" onClick={() => pains.add({ area: "", pain: "", severity: "medium", voicedBy: [] })}>＋ Add pain</button>}
         </div>
       </Section>
       <Section label="Systems inventory">

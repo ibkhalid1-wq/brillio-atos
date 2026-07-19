@@ -9,7 +9,8 @@
  */
 import React, { useCallback, useMemo, useState } from "react";
 import {
-  TextField, ChipsField, asArray, asRecord, asText, asStrings, useStudioLocked, EmptyState, type StudioProps,
+  TextField, ChipsField, asArray, asRecord, asText, asStrings, useStudioLocked, useStudioAuthoring,
+  curationNote, DismissControl, EmptyState, type StudioProps,
 } from "./StudioKit";
 import { workflowArea, programAreas, GENERAL_AREA } from "@/v3/components/flow/flowAreas";
 
@@ -44,6 +45,7 @@ function painForStep(step: Record<string, unknown>, pains: Array<Record<string, 
 
 export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program }: StudioProps) {
   const locked = useStudioLocked();
+  const authoring = useStudioAuthoring();
   const workflows = useMemo(() => asArray(doc.workflows).map(asRecord), [doc.workflows]);
   const pains = useMemo(() => asArray(doc.painHeatmap).map(asRecord), [doc.painHeatmap]);
   const [active, setActive] = useState(0);
@@ -152,7 +154,7 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program 
             <span className="v3fs-wf-unmapped">not mapped yet</span>
           </div>
         ))}
-        {locked ? null : <button type="button" className="v3fs-a" onClick={addWorkflow}>＋ workflow</button>}
+        {locked || !authoring ? null : <button type="button" className="v3fs-a" onClick={addWorkflow}>＋ workflow</button>}
       </div>
 
       {!workflow ? (
@@ -243,11 +245,16 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program 
               <ChipsField label="Hand-offs" values={asStrings(workflow.handoffs)} onChange={(next) => patchWorkflow({ handoffs: next })} />
               <ChipsField label="Failure modes" values={asStrings(workflow.failureModes)} onChange={(next) => patchWorkflow({ failureModes: next })} />
             </div>
-            {locked ? null : <button type="button" className="v3fs-btn danger" onClick={() => {
-              writeWorkflows(workflows.filter((_, index) => index !== active));
-              setActive(Math.max(0, active - 1));
-              setSelected(null);
-            }}>Remove this workflow</button>}
+            <DismissControl label="Dismiss this workflow" confirmLabel="Dismiss workflow"
+              onDismiss={(reason) => {
+                onChange({
+                  ...doc,
+                  workflows: workflows.filter((_, index) => index !== active),
+                  ...curationNote(doc, `Dismissed workflow “${asText(workflow.name) || `#${active + 1}`}”`, reason),
+                });
+                setActive(Math.max(0, active - 1));
+                setSelected(null);
+              }} />
           </div>
         </>
       )}

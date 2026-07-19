@@ -4,7 +4,7 @@
  * any text and type; lists and tables add/remove rows in place. All
  * controlled — the studio owns the document, primitives report changes up.
  */
-import React from "react";
+import React, { useState } from "react";
 
 /**
  * When true, every studio primitive renders its controls disabled and hides its
@@ -15,6 +15,61 @@ import React from "react";
  */
 export const StudioLockContext = React.createContext(false);
 export const useStudioLocked = (): boolean => React.useContext(StudioLockContext);
+
+/**
+ * Whether the operator may AUTHOR new top-level items from nothing — add a
+ * brand-new entity, workflow, system, pain or event. Distinct from the lock:
+ * a CURATABLE artifact (the Domain Ontology, the Current-State Atlas) is
+ * unlocked for editing — rename, redefine, relate, regroup, dismiss — but is
+ * NOT authorable, because inventing a current-state fact with no evidence
+ * breaks the artifact's grounding. Design-team artifacts (architecture,
+ * experience, blueprint) are fully authorable. Defaults to true so any studio
+ * primitive rendered outside FlowArtifactStudio keeps its add affordance.
+ */
+export const StudioAuthoringContext = React.createContext(true);
+export const useStudioAuthoring = (): boolean => React.useContext(StudioAuthoringContext);
+
+/**
+ * Append a dismissal note to a document's `_curationLog` — an underscore-keyed,
+ * non-rendered provenance trail that travels with the saved doc (the snapshot
+ * ring captures it, and the regeneration hand-edit extractor skips `_` keys, so
+ * it never pollutes the body or the regen prompt). Records WHY a grounded node
+ * was removed so a curation dismissal is auditable, and recoverable via the
+ * snapshot ring.
+ */
+export function curationNote(doc: Record<string, unknown>, action: string, reason: string): Record<string, unknown> {
+  const log = Array.isArray(doc._curationLog) ? doc._curationLog : [];
+  return { _curationLog: [...log, { at: new Date().toISOString(), action, reason }] };
+}
+
+/**
+ * Remove-a-grounded-node control with a mandatory reason. One click reveals a
+ * reason field; the removal only lands once a reason is given, so a dismissal
+ * is never accidental and always carries its rationale onto the trail. Hidden
+ * when the studio is hard-locked.
+ */
+export function DismissControl({ label, confirmLabel, onDismiss }: {
+  label: string; confirmLabel?: string; onDismiss: (reason: string) => void;
+}) {
+  const locked = useStudioLocked();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  if (locked) return null;
+  if (!open) {
+    return <button type="button" className="v3fs-btn danger" onClick={() => setOpen(true)}>{label}</button>;
+  }
+  return (
+    <div className="v3fs-dismiss" role="group" aria-label={label}>
+      <input className="v3fs-dismiss-in" autoFocus value={reason}
+        placeholder="Why is this being removed? (recorded on the trail)"
+        onChange={(e) => setReason(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter" && reason.trim()) { onDismiss(reason.trim()); setOpen(false); setReason(""); } }} />
+      <button type="button" className="v3fs-btn danger" disabled={!reason.trim()}
+        onClick={() => { onDismiss(reason.trim()); setOpen(false); setReason(""); }}>{confirmLabel ?? "Confirm dismiss"}</button>
+      <button type="button" className="v3fs-btn" onClick={() => { setOpen(false); setReason(""); }}>Cancel</button>
+    </div>
+  );
+}
 
 export const asArray = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
 export const asRecord = (value: unknown): Record<string, unknown> =>
@@ -120,6 +175,7 @@ export function StringListEditor({ label, values, onChange, placeholder, addLabe
   label?: string; values: string[]; onChange: (next: string[]) => void; placeholder?: string; addLabel?: string;
 }) {
   const locked = useStudioLocked();
+  const authoring = useStudioAuthoring();
   const set = (index: number, next: string) => onChange(values.map((v, i) => (i === index ? next : v)));
   const remove = (index: number) => onChange(values.filter((_, i) => i !== index));
   return (
@@ -131,7 +187,7 @@ export function StringListEditor({ label, values, onChange, placeholder, addLabe
           {locked ? null : <button type="button" className="v3fs-stu-x" aria-label="Remove" onClick={() => remove(index)}>×</button>}
         </div>
       ))}
-      {locked ? null : <button type="button" className="v3fs-a" onClick={() => onChange([...values, ""])}>＋ {addLabel ?? "Add"}</button>}
+      {locked || !authoring ? null : <button type="button" className="v3fs-a" onClick={() => onChange([...values, ""])}>＋ {addLabel ?? "Add"}</button>}
     </div>
   );
 }
@@ -154,6 +210,7 @@ export function TableEditor({ columns, rows, onChange, addLabel, emptyHint }: {
   emptyHint?: string;
 }) {
   const locked = useStudioLocked();
+  const authoring = useStudioAuthoring();
   const setCell = (index: number, key: string, next: string) =>
     onChange(rows.map((row, i) => (i === index ? { ...row, [key]: next } : row)));
   const remove = (index: number) => onChange(rows.filter((_, i) => i !== index));
@@ -191,7 +248,7 @@ export function TableEditor({ columns, rows, onChange, addLabel, emptyHint }: {
           {locked ? null : <button type="button" className="v3fs-stu-x v3fs-stu-xcol" aria-label="Remove row" onClick={() => remove(index)}>×</button>}
         </div>
       ))}
-      {locked ? null : <button type="button" className="v3fs-a" onClick={add}>＋ {addLabel ?? "Add row"}</button>}
+      {locked || !authoring ? null : <button type="button" className="v3fs-a" onClick={add}>＋ {addLabel ?? "Add row"}</button>}
     </div>
   );
 }

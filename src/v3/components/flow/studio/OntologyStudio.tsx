@@ -14,7 +14,8 @@ import { ROUTED_EDGE_TYPES, layeredPositions, elkGraphLayout } from "./graphKit"
 import "@xyflow/react/dist/style.css";
 import {
   Section, TextField, TextArea, SelectField, ChipsField, TableEditor,
-  asArray, asRecord, asText, asStrings, useStudioLocked, type StudioProps,
+  asArray, asRecord, asText, asStrings, useStudioLocked, useStudioAuthoring,
+  curationNote, DismissControl, type StudioProps,
 } from "./StudioKit";
 
 import { ONTOLOGY_CARDINALITIES } from "@/v3/components/flow/flowOntologyConstraints";
@@ -40,6 +41,7 @@ function seedPositions(ids: string[], relations: Array<Record<string, unknown>>)
 
 export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRouteGap }: StudioProps) {
   const locked = useStudioLocked();
+  const authoring = useStudioAuthoring();
   const entities = useMemo(() => asArray(doc.entities).map(asRecord), [doc.entities]);
   const relations = useMemo(() => asArray(doc.relations).map(asRecord), [doc.relations]);
   const ids = useMemo(() => entities.map(entityId), [entities]);
@@ -318,11 +320,12 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
   const updateEntity = (index: number, changes: Record<string, unknown>) =>
     patch({ entities: entities.map((entity, i) => (i === index ? { ...entity, ...changes } : entity)) });
 
-  const deleteEntity = (index: number) => {
+  const deleteEntity = (index: number, reason: string) => {
     const name = asText(entities[index].name);
     patch({
       entities: entities.filter((_, i) => i !== index),
       relations: relations.filter((relation) => asText(relation.from) !== name && asText(relation.to) !== name),
+      ...curationNote(doc, `Dismissed entity “${name || `#${index + 1}`}”`, reason),
     });
     setSelected(null);
   };
@@ -330,8 +333,13 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
   const updateRelation = (index: number, changes: Record<string, unknown>) =>
     patch({ relations: relations.map((relation, i) => (i === index ? { ...relation, ...changes } : relation)) });
 
-  const deleteRelation = (index: number) => {
-    patch({ relations: relations.filter((_, i) => i !== index) });
+  const deleteRelation = (index: number, reason: string) => {
+    const relation = relations[index];
+    const label = `${asText(relation?.from)} → ${asText(relation?.to)}`;
+    patch({
+      relations: relations.filter((_, i) => i !== index),
+      ...curationNote(doc, `Dismissed relation ${label}`, reason),
+    });
     setSelected(null);
   };
 
@@ -370,7 +378,7 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
         </ReactFlow>
         </div>
         <div className="v3fs-onto-toolbar">
-          {locked ? null : <button type="button" className="v3fs-btn" onClick={addEntity}>＋ Add entity</button>}
+          {locked || !authoring ? null : <button type="button" className="v3fs-btn" onClick={addEntity}>＋ Add entity</button>}
           <button type="button" className="v3fs-btn" onClick={() => void rearrange()} title="Re-apply the routed layout — no overlaps, edges steered around entities, fewest crossings">⌗ Arrange</button>
           {/* The honest inventory: what the DOCUMENT holds, regardless of what
               the viewport or focus mode currently shows. If this reads low,
@@ -422,9 +430,8 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
                 setSelected({ kind: "relation", index: next.length - 1 });
               }} />}
             {locked ? null : <p className="v3fs-onto-hint">…or drag from this entity’s edge dot to another entity on the canvas.</p>}
-            {locked ? null : <button type="button" className="v3fs-btn danger" onClick={() => deleteEntity(selectedEntityIndex)}>
-              Delete entity
-            </button>}
+            <DismissControl label="Dismiss entity" confirmLabel="Dismiss entity"
+              onDismiss={(reason) => deleteEntity(selectedEntityIndex, reason)} />
           </>
         ) : selectedRelation && selected?.kind === "relation" ? (
           <>
@@ -433,9 +440,8 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
               onChange={(next) => updateRelation(selected.index, { relation: next })} />
             <SelectField label="Cardinality" value={asText(selectedRelation.cardinality) || "unknown"} options={CARDINALITIES}
               onChange={(next) => updateRelation(selected.index, { cardinality: next })} />
-            {locked ? null : <button type="button" className="v3fs-btn danger" onClick={() => deleteRelation(selected.index)}>
-              Delete relation
-            </button>}
+            <DismissControl label="Dismiss relation" confirmLabel="Dismiss relation"
+              onDismiss={(reason) => deleteRelation(selected.index, reason)} />
           </>
         ) : selected?.kind === "candidate" ? (() => {
           const candidate = candidates.find((c) => CAND_PREFIX + asText(c.name) === selected.id);

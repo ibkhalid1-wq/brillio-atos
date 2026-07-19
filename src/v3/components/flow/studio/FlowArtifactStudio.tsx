@@ -21,7 +21,8 @@ import { buildPrototypePrompt } from "@/v3/components/flow/flowBuildPrompt";
 import { listSnapshots } from "@/v3/lib/blobSnapshots";
 import { STUDIO_REGISTRY } from "./studios";
 import SectionCopilotCard from "./SectionCopilotCard";
-import { StudioLockContext, EmptyState } from "./StudioKit";
+import { StudioLockContext, StudioAuthoringContext, EmptyState } from "./StudioKit";
+import { artifactEditTier, isArtifactAuthorable } from "@/v3/lib/artifactEditPolicy";
 
 const SECTION_COPILOT_LABEL: Record<string, string> = {
   "architecture-strategy": "the architecture strategy",
@@ -111,9 +112,17 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
   // stays derived and read-only: a change there must arrive as EVIDENCE and
   // land through resynthesis, where the shrink guard, grounding and sign-off
   // all apply.
-  const DESIGN_TEAM_ARTIFACTS = ["architecture-strategy", "experience-design", "agentic-blueprint", "prototype-build"];
-  const editsLocked = !DESIGN_TEAM_ARTIFACTS.includes(artifact.id);
-  const canEdit = !editsLocked && !!entry && !!draft && !!onSaveDoc;
+  // Ownership tiers (operator direction 2026-07-19) live in artifactEditPolicy,
+  // the single source shared with the policy tests:
+  //  - authorable → canEdit (design-team documents; add-new allowed)
+  //  - curatable  → canCurate (ontology/atlas; rename/relate/dismiss, NO add-new)
+  //  - derived    → read-only (change arrives as evidence)
+  // Editing MECHANICS (draft lands, Save shows, studio unlocked) apply to both
+  // authoring and curation; only INVENTION (add-new) is gated to authoring.
+  const hasDraft = !!entry && !!draft && !!onSaveDoc;
+  const canEdit = hasDraft && isArtifactAuthorable(artifact.id);
+  const canCurate = hasDraft && artifactEditTier(artifact.id) === "curatable";
+  const editable = canEdit || canCurate;
   const studioActive = !!entry && !!draft && editing;
 
   // Write-time ontology gate (F-004): while editing the domain ontology, the
@@ -558,9 +567,13 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
             <>
               {/* Derived artifacts read-only: a compact marker, not a paragraph.
                   Design-team artifacts (editable) show nothing here. */}
-              {!canEdit ? (
+              {!editable ? (
                 <div className="v3fs-derived-chip" role="note">
                   <span aria-hidden="true">↻</span> Derived from the record — capture a correction as evidence to change it
+                </div>
+              ) : canCurate ? (
+                <div className="v3fs-derived-chip" role="note">
+                  <span aria-hidden="true">✎</span> Curate the structure directly — rename, relate, regroup, dismiss. New current-state facts still arrive as evidence, and your edits survive regeneration.
                 </div>
               ) : null}
               {/* Copilot command card — refine THIS section with a plain-language
@@ -583,9 +596,10 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
               {/* Locked when edits are disabled — the studio's own inputs and
                   add/remove/drag affordances go read-only, so a field can't be
                   clicked into or typed (a no-op onChange had let the caret in). */}
-              <StudioLockContext.Provider value={!canEdit}>
+              <StudioLockContext.Provider value={!editable}>
+               <StudioAuthoringContext.Provider value={canEdit}>
                 <entry.Component doc={draft}
-                  onChange={canEdit ? (next) => { setDraft(next); setDirty(true); } : () => { /* derived — edits don't land */ }}
+                  onChange={editable ? (next) => { setDraft(next); setDirty(true); } : () => { /* derived — edits don't land */ }}
                   onOpenArtifact={onOpenArtifact} program={program}
                   refining={regenerating}
                   onRefinePrototype={onSaveInputs && onRegenerate ? async (instruction) => {
@@ -615,6 +629,7 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
                       attest: { action: who.trim() ? `Gap redirected to ${who.trim()}` : "Gap redirect cleared", detail: key.slice(0, 120) },
                     });
                   } : undefined} />
+               </StudioAuthoringContext.Provider>
               </StudioLockContext.Provider>
             </>
           ) : (
@@ -636,8 +651,8 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
                   // in the Listen phase — hide that section here so the kit reads
                   // as the plan (coverage + cast), not a duplicate of the scripts.
                   hideKeys={artifact.id === "discovery-kit" ? new Set(["interviews"]) : undefined}
-                  onPatch={canEdit ? (key, value) => { setDraft({ ...draft, [key]: value }); setDirty(true); } : undefined}
-                  onOpenFullEditor={canEdit ? () => setEditing(true) : undefined} />
+                  onPatch={editable ? (key, value) => { setDraft({ ...draft, [key]: value }); setDirty(true); } : undefined}
+                  onOpenFullEditor={editable ? () => setEditing(true) : undefined} />
               ) : (
                 <>
                   {blocks.length === 0 ? <EmptyState icon="📄" title="Not generated yet" hint="Use ✦ Generate above to synthesize this document from the evidence on record." /> : null}
@@ -739,7 +754,7 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
           <EvidenceReader entry={evidenceOpen} highlight={evidenceHighlight ?? undefined}
             onClose={() => { setEvidenceOpen(null); setEvidenceHighlight(null); }} />
         ) : null}
-        {dirty && canEdit ? (
+        {dirty && editable ? (
           <footer className="v3fs-stu-savebar">
             <span>{saveBlocked ? "Fix the flagged constraints to save." : "You’ve edited this document."}</span>
             <div className="v3fs-dec-cta">

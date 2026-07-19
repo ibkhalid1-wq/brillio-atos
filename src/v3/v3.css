@@ -6419,6 +6419,11 @@ details[open] > summary .v3fs-disc-c::after {display:none}
    paragraph. Design-team (editable) artifacts render no marker at all. */
 .v3fs-derived-chip{display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:600;letter-spacing:.005em;color:var(--v3-text-muted);background:var(--fs-line);border-radius:999px;padding:4px 12px;margin:8px 22px 2px}
 .v3fs-derived-chip span{color:var(--v3-accent-2);font-weight:700}
+/* Dismiss-with-reason — a grounded node is removed only with a rationale, which
+   travels onto the trail (recoverable via the snapshot ring). */
+.v3fs-dismiss{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 10px;border:1px solid rgba(220,38,38,.28);background:rgba(220,38,38,.05);border-radius:10px}
+.v3fs-dismiss-in{flex:1 1 220px;min-width:180px;font:inherit;font-size:12px;padding:6px 10px;border:1px solid var(--fs-line);border-radius:8px;background:var(--v3-surface,#fff);color:var(--v3-text)}
+.v3fs-dismiss-in:focus{outline:none;border-color:var(--v3-red,#dc2626)}
 /* ── Experience Design studio: wireframes as skeleton screens ──────────── */
 /* Screens toolbar (filter + add) and per-card remove affordance. */
 .v3fs-wf-screenbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;flex-wrap:wrap}
