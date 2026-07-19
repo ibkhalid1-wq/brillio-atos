@@ -396,14 +396,8 @@ function StrategyStudio({ doc, onChange }: StudioProps) {
           )}
         />
       </Section>
-      <Section label="Recommendation" hint="chosen at a demo, recorded here">
-        <TextField label="Candidate" value={asText(recommendation.candidate)}
-          onChange={(next) => patch({ recommendation: { ...recommendation, candidate: next } })} />
-        <TextArea label="Rationale" rows={2} value={asText(recommendation.rationale)}
-          onChange={(next) => patch({ recommendation: { ...recommendation, rationale: next } })} />
-        <TextArea label="Traded away" rows={2} value={asText(recommendation.tradedAway)}
-          onChange={(next) => patch({ recommendation: { ...recommendation, tradedAway: next } })} />
-      </Section>
+      {/* Recommendation is chosen on the decision board above (the "★ Recommend
+          this option" button on a card) — no separate card at the bottom. */}
       <Section label="Gaps">
         <StringListEditor values={asStrings(doc.gaps)} onChange={(next) => patch({ gaps: next })} addLabel="Add gap" />
       </Section>

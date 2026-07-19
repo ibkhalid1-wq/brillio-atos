@@ -167,7 +167,7 @@ export default function StrategyBoard({ doc, onChange }: StudioProps) {
 
   return (
     <div className="v3fs-strat">
-      {asText(doc.summary) ? <p className="v3fs-strat-summary">{asText(doc.summary)}</p> : null}
+      {/* Options lead — the cards sit at the top, right under the header. */}
       <div className="v3fs-strat-hint">Click an option to see its architecture diagram and full detail.</div>
       <div className="v3fs-strat-board" style={{ gridTemplateColumns: `repeat(${candidates.length}, minmax(210px, 1fr))` }}>
         {candidates.map((candidate, index) => {
@@ -192,6 +192,7 @@ export default function StrategyBoard({ doc, onChange }: StudioProps) {
           );
         })}
       </div>
+      {asText(doc.summary) ? <p className="v3fs-strat-summary">{asText(doc.summary)}</p> : null}
 
       {active ? (() => {
         const name = asText(active.name) || `Candidate ${openIndex! + 1}`;
