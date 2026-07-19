@@ -7557,6 +7557,70 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-strat-col {transition:box-shadow .2s ease,border-color .2s ease,transform .2s ease}
 .v3fs-strat-col:hover {transform:translateY(-2px);box-shadow:0 16px 34px -20px rgba(20,20,45,.3)}
 .v3fs-strat-col.rec {background:color-mix(in srgb,var(--v3-green) 4%,var(--fs-card))}
+/* Each option is now a clickable summary card that toggles the detail below. */
+.v3fs-strat-col {cursor:pointer;text-align:left;font:inherit;width:100%;align-items:stretch}
+.v3fs-strat-col:focus-visible {outline:2px solid var(--v3-accent-2);outline-offset:2px}
+.v3fs-strat-col.open {border-color:var(--v3-accent-2);box-shadow:0 14px 32px -18px color-mix(in srgb,var(--v3-accent-2) 45%,transparent)}
+.v3fs-strat-col.open.rec {border-color:var(--v3-green)}
+.v3fs-strat-toggle {margin-top:2px;font-size:10.5px;font-weight:700;letter-spacing:.02em;color:var(--v3-accent-2)}
+.v3fs-strat-summary {margin:0 0 4px;font-size:13px;line-height:1.6;color:var(--v3-text-secondary)}
+.v3fs-strat-hint {font-size:11px;color:var(--v3-text-muted);margin-bottom:10px}
+/* Detail panel — the expanded option. */
+.v3fs-strat-detail {margin-top:14px;border:1px solid var(--fs-line);border-radius:16px;padding:20px 22px;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--v3-accent-2) 3%,var(--v3-surface)),var(--v3-surface));
+  display:flex;flex-direction:column;gap:16px;animation:v3fs-strat-in .22s ease}
+@keyframes v3fs-strat-in {from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+.v3fs-strat-dh {display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.v3fs-strat-deyebrow {font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--v3-accent-2)}
+.v3fs-strat-dt {margin:2px 0 0;font-size:19px;font-weight:760;letter-spacing:-.02em;color:var(--v3-text)}
+.v3fs-strat-dbadge {font-size:11px;font-weight:750;letter-spacing:.05em;text-transform:uppercase;color:var(--v3-green);
+  background:color-mix(in srgb,var(--v3-green) 12%,transparent);border-radius:99px;padding:5px 12px}
+.v3fs-strat-desc {margin:0;font-size:13.5px;line-height:1.65;color:var(--v3-text-secondary);max-width:80ch}
+.v3fs-strat-block {display:flex;flex-direction:column;gap:8px}
+.v3fs-strat-block-l {font-size:11px;font-weight:750;letter-spacing:.05em;text-transform:uppercase;color:var(--v3-text-muted)}
+.v3fs-strat-block-l.ok {color:var(--v3-green)} .v3fs-strat-block-l.warn {color:var(--v3-amber)}
+.v3fs-strat-block p {margin:0;font-size:13px;line-height:1.6;color:var(--v3-text-secondary)}
+.v3fs-strat-splits {display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media (max-width:640px){.v3fs-strat-splits{grid-template-columns:1fr}}
+/* diagram */
+.v3fs-strat-diagram {border:1px solid var(--fs-line);border-radius:13px;padding:14px 16px;background:var(--v3-surface)}
+.v3fs-strat-diagram-h {font-size:11px;font-weight:750;letter-spacing:.05em;text-transform:uppercase;color:var(--v3-text-muted);margin-bottom:8px}
+.v3fs-arch-svg {width:100%;height:auto;display:block;overflow:visible}
+.v3fs-arch-sys {font-size:11px;font-weight:600;fill:var(--v3-text)}
+.v3fs-arch-meth {font-size:9px;font-weight:600;fill:var(--v3-text-muted)}
+.v3fs-arch-ag {font-size:10px;font-weight:650;fill:var(--v3-accent-2)}
+.v3fs-arch-hub {font-size:12px;font-weight:750;fill:var(--v3-accent-2)}
+.v3fs-arch-hub.on {fill:#fff} .v3fs-arch-hubsub {font-size:9px;font-weight:600;fill:color-mix(in srgb,#fff 80%,transparent)}
+.v3fs-arch-chip {font-size:9px;font-weight:800;fill:#fff}
+.v3fs-arch-cap {font-size:9px;font-weight:600;fill:var(--v3-text-muted)}
+.v3fs-arch-legend {display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;font-size:10.5px;color:var(--v3-text-muted)}
+.v3fs-arch-legend span {display:inline-flex;align-items:center;gap:5px}
+.v3fs-arch-lg {width:11px;height:11px;border-radius:4px;display:inline-block}
+.v3fs-arch-lg.agent {background:var(--v3-accent-2)} .v3fs-arch-lg.sys {background:var(--v3-surface);border:1px solid var(--fs-line)}
+/* score grid + basis */
+.v3fs-strat-scoregrid {display:grid;grid-template-columns:1fr 1fr;gap:10px 24px;align-items:start}
+.v3fs-strat-scoregrid > div {display:flex;flex-direction:column;gap:3px}
+@media (max-width:640px){.v3fs-strat-scoregrid{grid-template-columns:1fr}}
+.v3fs-strat-score.wide {grid-template-columns:130px 1fr 20px;font-size:11.5px}
+.v3fs-strat-basis {margin-top:6px !important;font-size:12px !important;font-style:italic;color:var(--v3-text-muted) !important}
+/* build vs buy */
+.v3fs-strat-bvb {display:flex;flex-direction:column;gap:6px}
+.v3fs-strat-bvb-row {display:grid;grid-template-columns:150px auto 1fr;align-items:baseline;gap:10px;padding:8px 0;border-top:1px solid color-mix(in srgb,var(--fs-line) 60%,transparent)}
+.v3fs-strat-bvb-row:first-child {border-top:0}
+.v3fs-strat-bvb-cap {font-size:12.5px;font-weight:650;color:var(--v3-text)}
+.v3fs-strat-bvb-v {font-size:10px;font-weight:750;letter-spacing:.04em;text-transform:uppercase;border-radius:99px;padding:3px 9px;white-space:nowrap;
+  color:var(--v3-accent-2);background:color-mix(in srgb,var(--v3-accent-2) 12%,transparent)}
+.v3fs-strat-bvb-v.buy {color:var(--v3-green);background:color-mix(in srgb,var(--v3-green) 12%,transparent)}
+.v3fs-strat-bvb-r {font-size:12px;line-height:1.5;color:var(--v3-text-secondary)}
+@media (max-width:640px){.v3fs-strat-bvb-row{grid-template-columns:1fr}}
+/* failure modes */
+.v3fs-strat-fm {display:flex;flex-direction:column;gap:8px}
+.v3fs-strat-fm-row {border:1px solid color-mix(in srgb,var(--fs-line) 70%,transparent);border-radius:10px;padding:10px 12px;background:var(--v3-surface)}
+.v3fs-strat-fm-head {display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.v3fs-strat-fm-mode {font-size:12.5px;font-weight:650;color:var(--v3-text)}
+.v3fs-strat-fm-tag {font-size:10px;font-weight:650;color:var(--v3-text-muted);background:color-mix(in srgb,var(--v3-text-muted) 10%,transparent);border-radius:99px;padding:2px 8px}
+.v3fs-strat-fm-tag.i-high {color:var(--v3-amber);background:color-mix(in srgb,var(--v3-amber) 12%,transparent)}
+.v3fs-strat-fm-mit {margin-top:5px !important;font-size:12px !important;color:var(--v3-text-secondary) !important}
 /* read-only extras — the trade-off accepted and any open questions */
 .v3fs-strat-traded {margin:0;font-size:13px;line-height:1.6;color:var(--v3-text-secondary)}
 .v3fs-strat-gaps {list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
