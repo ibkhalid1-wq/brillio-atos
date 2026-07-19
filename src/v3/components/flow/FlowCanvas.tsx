@@ -667,9 +667,9 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
                           onOpenWorkspace={(artifactId) => goTab(`art:${artifactId}` as MovementTab)}
                           onClose={() => setOntoModal(null)} />
                       ) : null}
-                      {movement.id === "envision" || movement.id === "show" ? (
-                        <ExternalBuildPanel program={program} onSaveInputs={onSaveInputs} />
-                      ) : null}
+                      {/* "Build outside the app" now lives on the Prototype Build
+                          tab (its header), next to the internal build — not on
+                          Discovery. */}
                       {/* The portfolio flywheel: agent designs ACCEPTED in other
                           programmes surface as seeded candidates while this
                           one envisions — proven patterns, not blank paper. */}
@@ -1081,7 +1081,9 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
                           header={movement.id === "frame" && artifact.id === "discovery-kit"
                             ? <DiscoveryKitAlign program={program} onSaveInputs={onSaveInputs}
                                 locked={isDone} onOpenGate={() => setGateModalFor(movement.id)} />
-                            : undefined}
+                            : artifact.id === "prototype-build"
+                              ? <ExternalBuildPanel program={program} onSaveInputs={onSaveInputs} />
+                              : undefined}
                         />
                       </Suspense>
                     </div>
