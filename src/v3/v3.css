@@ -6961,6 +6961,19 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-proto-frame {width:100%;min-height:520px;flex:1;border:1px solid var(--fs-line);border-radius:12px;background:#fff;box-shadow:var(--v3-shadow-xs)}
 /* Prototype tab (Validate) — the built app full-width plus a refine command line. */
 .v3fs-prototab {display:flex;flex-direction:column;gap:12px}
+/* External build — the prototype was made outside the app; show a link to it
+   instead of embedding (external hosts commonly refuse to be iframed). */
+.v3fs-protoext {display:flex;flex-direction:column;gap:8px;padding:26px 28px;border:1px solid var(--fs-line);border-radius:16px;
+  background:linear-gradient(160deg,color-mix(in srgb,var(--v3-accent-2) 5%,var(--v3-surface)),var(--v3-surface))}
+.v3fs-protoext-eyebrow {font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--v3-accent-2)}
+.v3fs-protoext-t {margin:2px 0 0;font-size:18px;font-weight:750;letter-spacing:-.02em;color:var(--v3-text)}
+.v3fs-protoext-sub {margin:0;font-size:13px;color:var(--v3-text-muted);max-width:64ch}
+.v3fs-protoext-urlrow {display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px}
+.v3fs-protoext-url {flex:1 1 320px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-family:var(--v3-font-mono,ui-monospace,monospace);font-size:12.5px;color:var(--v3-accent-2);
+  padding:9px 13px;border:1px solid color-mix(in srgb,var(--v3-accent-2) 22%,var(--fs-line));border-radius:10px;
+  background:var(--v3-surface);text-decoration:none}
+.v3fs-protoext-url:hover {border-color:color-mix(in srgb,var(--v3-accent-2) 45%,var(--fs-line))}
 .v3fs-prototab-head {display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .v3fs-prototab-headtext {display:flex;flex-direction:column;gap:1px;min-width:0}
 .v3fs-prototab-t {font-size:15px;font-weight:700;letter-spacing:-.01em;color:var(--v3-text-primary)}

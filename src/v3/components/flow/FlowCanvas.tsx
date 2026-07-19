@@ -463,12 +463,18 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
         // Under Validate (Show), the built prototype gets its OWN tab — the client
         // opens the running app there rather than an inline collapsible. It reads
         // the same prototype-build doc the delivery team assembled in Design.
+        // When the delivery team built OUTSIDE the app (a linked external URL),
+        // the external build IS the prototype — so the tab shows a link to it,
+        // not the internal generated build.
+        const protoExternalUrl = movement.id === "show"
+          ? String(readMovementInputs(program, "show").prototypeLocation ?? "").trim()
+          : "";
         const protoHtml = (() => {
-          if (movement.id !== "show") return "";
+          if (movement.id !== "show" || protoExternalUrl) return "";
           const pb = readArtifactDoc(program, "prototypeBuild");
           return pb ? String(pb.html ?? "") : "";
         })();
-        const hasProtoTab = movement.id === "show" && !!protoHtml;
+        const hasProtoTab = movement.id === "show" && (!!protoExternalUrl || !!protoHtml);
         const validTabKeys = new Set<string>(["collect", ...artTabKeys, ...(hasProtoTab ? ["proto"] : []), ...(hasShipPlanTab ? ["ship:lanes"] : [])]);
         const defaultTab: MovementTab = leadTab(movement.id) === "paper" && artifacts.length ? `art:${artifacts[0].id}` : "collect";
         const storedTab = movementTab[movement.id];
@@ -1008,7 +1014,7 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
                     language instruction that regenerates the prototype-build. */}
                 {hasProtoTab && tabKey === "proto" ? (
                   <div className="v3fs-arttab">
-                    <PrototypeTab html={protoHtml}
+                    <PrototypeTab html={protoHtml} externalUrl={protoExternalUrl}
                       regenerating={runningAgentIds.has("prototype-build") || spineRunning}
                       onRefine={async (instruction) => {
                         await onSaveInputs("envision", { _prototypeRefine: instruction }, { silent: true });
@@ -1342,11 +1348,35 @@ function TrackPassRecorder({ trackId, person, onRecord }: {
  * stashed on Envision's inputs (`_prototypeRefine`, fingerprint-safe) and the
  * prototype-build agent re-runs — the refined build replaces the current one.
  */
-function PrototypeTab({ html, regenerating, onRefine }: {
+function PrototypeTab({ html, externalUrl, regenerating, onRefine }: {
   html: string;
+  /** When set, the delivery team built OUTSIDE the app — the tab links to that
+   * build instead of embedding the internal one (external hosts commonly
+   * refuse to be iframed, and the external build IS the real prototype). */
+  externalUrl?: string;
   regenerating: boolean;
   onRefine: (instruction: string) => Promise<void> | void;
 }) {
+  const [copied, setCopied] = useState(false);
+  if (externalUrl) {
+    const copy = async () => {
+      try { await navigator.clipboard.writeText(externalUrl); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { /* clipboard denied — the URL is selectable */ }
+    };
+    return (
+      <div className="v3fs-prototab">
+        <div className="v3fs-protoext">
+          <span className="v3fs-protoext-eyebrow">Prototype · built outside the app</span>
+          <h3 className="v3fs-protoext-t">The prototype lives at your linked build</h3>
+          <p className="v3fs-protoext-sub">This programme links an external prototype — stakeholders open it directly at the URL below.</p>
+          <div className="v3fs-protoext-urlrow">
+            <a className="v3fs-protoext-url" href={externalUrl} target="_blank" rel="noreferrer" title={externalUrl}>{externalUrl}</a>
+            <button type="button" className="v3fs-nb-open" onClick={() => void copy()}>{copied ? "✓ Copied" : "Copy link"}</button>
+            <a className="v3fs-nb-open ghost" href={externalUrl} target="_blank" rel="noreferrer">Open ↗</a>
+          </div>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="v3fs-prototab">
       {/* Consistent with the Design-side Prototype Build studio: a header bar
