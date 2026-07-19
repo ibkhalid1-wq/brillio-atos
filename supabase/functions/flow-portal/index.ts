@@ -370,17 +370,27 @@ Deno.serve(async (req: Request) => {
         const area = script ? String(script.area ?? "").trim() : "";
         return area && area !== "General" ? area : "";
       };
+      // The prototype the pilot validates is EITHER an external build (a linked
+      // URL) OR the in-app generated build — never both. When an external URL
+      // is set it wins: send it as demoUrl and SUPPRESS the internal pilotHtml,
+      // so the linked page shows "Open the prototype" pointing at the external
+      // build (which commonly can't be iframed) instead of the internal one.
+      const showPhaseInputs = isRecord(hit.inner.phaseInputs) && isRecord((hit.inner.phaseInputs as Record<string, unknown>).show)
+        ? (hit.inner.phaseInputs as Record<string, Record<string, unknown>>).show
+        : {};
+      const externalProtoUrl = typeof showPhaseInputs.prototypeLocation === "string" ? showPhaseInputs.prototypeLocation.trim() : "";
+      const internalPilotHtml = externalProtoUrl ? "" : (isRecord(hit.inner.prototypeBuild) ? String((hit.inner.prototypeBuild as Record<string, unknown>).html ?? "") : "");
       if (hit.kind === "demo") {
-        const showInputs = isRecord(hit.inner.phaseInputs) && isRecord((hit.inner.phaseInputs as Record<string, unknown>).show)
-          ? (hit.inner.phaseInputs as Record<string, Record<string, unknown>>).show
-          : {};
+        const showInputs = showPhaseInputs;
         const design = designSlice();
         const script = scriptSlice();
         const recipientArea = recipientAreaSlice();
         // The BUILT prototype (the generated clickable app) is the pilot the
         // stakeholder validates — closest to production. When present it renders
-        // as the whole experience; the interpreted walk is the fallback.
-        const pilotHtml = isRecord(hit.inner.prototypeBuild) ? String((hit.inner.prototypeBuild as Record<string, unknown>).html ?? "") : "";
+        // as the whole experience; the interpreted walk is the fallback. An
+        // external build (linked URL) takes over: internalPilotHtml is "" then,
+        // so the page shows the external demoUrl instead.
+        const pilotHtml = internalPilotHtml;
         return jsonResponse({
           ...(design ? { design } : {}),
           ...(script ? { script } : {}),
@@ -503,9 +513,11 @@ Deno.serve(async (req: Request) => {
         ...(interviewScript ? { script: interviewScript } : {}),
         ...(interviewDesign ? runSlice() : {}),
         ...(interviewArea ? { recipientArea: interviewArea } : {}),
-        // A Show follow-up carries the built prototype so the pilot renders in
-        // place of the interpreted walk.
-        ...(isShowPack && isRecord(hit.inner.prototypeBuild) && String((hit.inner.prototypeBuild as Record<string, unknown>).html ?? "") ? { pilotHtml: String((hit.inner.prototypeBuild as Record<string, unknown>).html ?? "") } : {}),
+        // A Show follow-up carries the prototype so the pilot renders in place
+        // of the interpreted walk: the external build's URL when one is linked,
+        // otherwise the in-app build. External wins — never both.
+        ...(isShowPack && externalProtoUrl ? { demoUrl: externalProtoUrl } : {}),
+        ...(isShowPack && internalPilotHtml ? { pilotHtml: internalPilotHtml } : {}),
         // Re-projection inputs (kind + area + the recipient name via `stakeholder`
         // above) and the live slices, so the client rebuilds the current review.
         // A Listen QUESTION pack ships reviewKind "listen-workflow" too, so the

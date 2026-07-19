@@ -633,6 +633,10 @@ export default function FlowRespond({ token }: { token: string }) {
                   // A Show follow-up: the built prototype itself, above the
                   // questions it informs — use it, then answer.
                   <PilotFrame pilotHtml={state.pack.pilotHtml} />
+                ) : state.pack.demoUrl ? (
+                  // Externally-built prototype — link out to it (external hosts
+                  // commonly can't be iframed), then answer below.
+                  <a className="v3fs-btn pri v3fs-portal-send" href={state.pack.demoUrl} target="_blank" rel="noreferrer">▶ Open the prototype</a>
                 ) : state.pack.design ? (
                   <DemoWalker design={state.pack.design} script={state.pack.script}
                     recipientArea={state.pack.recipientArea}
