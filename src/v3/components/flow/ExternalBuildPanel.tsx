@@ -23,16 +23,18 @@ export default function ExternalBuildPanel({ program, onSaveInputs }: {
   const [prompt, setPrompt] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const save = async () => {
+  const persist = async (next: string) => {
     if (!onSaveInputs) return;
     setSaving(true); setSaved(false);
     try {
-      await onSaveInputs("show", { prototypeLocation: url.trim() }, {
-        attest: { action: url.trim() ? `Linked external prototype — ${url.trim()}` : "Cleared external prototype link" },
+      await onSaveInputs("show", { prototypeLocation: next }, {
+        attest: { action: next ? `Linked external prototype — ${next}` : "Cleared external prototype link" },
       });
       setSaved(true);
     } finally { setSaving(false); }
   };
+  const save = () => persist(url.trim());
+  const clear = async () => { setUrl(""); await persist(""); };
 
   const reqs = changeRequests(program);
   const genPrompt = () => {
@@ -78,6 +80,7 @@ export default function ExternalBuildPanel({ program, onSaveInputs }: {
           onChange={(e) => { setUrl(e.target.value); setSaved(false); }} aria-label="External prototype URL" />
         <button type="button" className="v3fs-nb-open" disabled={!onSaveInputs || saving || url.trim() === stored} onClick={() => void save()}>{saving ? "Saving…" : "Save link"}</button>
         {url.trim() ? <a className="v3fs-nb-open ghost" href={url.trim()} target="_blank" rel="noreferrer">Open ↗</a> : null}
+        {stored ? <button type="button" className="v3fs-nb-open ghost" disabled={!onSaveInputs || saving} onClick={() => void clear()} title="Remove the external link — the in-app build studio comes back">Clear</button> : null}
       </div>
       {saved ? <p className="v3fs-nb-ext-ok">✓ Linked — the pilots now open this build.</p> : null}
       <div className="v3fs-nb-ext-prompt">

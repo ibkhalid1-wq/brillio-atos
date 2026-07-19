@@ -1039,6 +1039,23 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
                 {activeArtifact ? (() => {
                   const artifact = activeArtifact;
                   const isFirstArtifact = artifacts[0]?.id === artifact.id;
+                  // Prototype Build with an external link: the external build IS
+                  // the prototype, so hide the in-app build studio (its tabs +
+                  // preview) and show only the link panel + a message. Clearing
+                  // the link brings the studio back.
+                  const buildExternalUrl = artifact.id === "prototype-build"
+                    ? String(readMovementInputs(program, "show").prototypeLocation ?? "").trim() : "";
+                  if (buildExternalUrl) {
+                    return (
+                      <div className="v3fs-arttab" data-artifact={artifact.id}>
+                        <ExternalBuildPanel program={program} onSaveInputs={onSaveInputs} />
+                        <div className="v3fs-protoext-note" role="note">
+                          <span className="v3fs-protoext-note-t">The prototype is built outside the app</span>
+                          <span>Because a link is set, the in-app build studio is hidden — the linked build above is the prototype stakeholders validate. Clear the link to build the prototype in the app instead.</span>
+                        </div>
+                      </div>
+                    );
+                  }
                   return (
                     <div className="v3fs-arttab" data-artifact={artifact.id}>
                       {isFirstArtifact && movement.id === "show" ? (() => {
