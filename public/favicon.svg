@@ -1,6 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
-  <!-- Brillio · ATOS — the wordmark's two green dots on the app's deep-indigo
-       tile, so the mark holds contrast on light and dark tab bars alike. -->
+  <!-- ATOS Flow signature: the flow spine climbing to the demo. Three nodes on
+       the engagement path in the app's evidence grammar — blue (what people
+       said) → lavender-indigo (what ATOS made) → green (what was demonstrated,
+       the gate). On the app's deep-indigo chrome tile. -->
   <defs>
     <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#2E2364"/>
@@ -8,6 +10,8 @@
     </linearGradient>
   </defs>
   <rect width="32" height="32" rx="7.5" fill="url(#tile)"/>
-  <circle cx="10.6" cy="16" r="5.4" fill="#2CC84D"/>
-  <circle cx="21.4" cy="16" r="5.4" fill="#2CC84D"/>
+  <path d="M8 23 L16 16.5 L23.5 9.5" fill="none" stroke="rgba(255,255,255,0.38)" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="8" cy="23" r="3" fill="#5B8DEF"/>
+  <circle cx="16" cy="16.5" r="3.2" fill="#B3A6F7"/>
+  <circle cx="23.5" cy="9.5" r="4.2" fill="#2CC84D"/>
 </svg>
