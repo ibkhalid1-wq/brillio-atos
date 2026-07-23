@@ -3,6 +3,7 @@ import type { ProgramSummary } from "@/new/types";
 import FlowCanvas from "@/v3/components/flow/FlowCanvas";
 import FlowGrounding from "@/v3/components/flow/FlowGrounding";
 import BrilioLogo from "@/v3/components/BrilioLogo";
+import AtosMark from "@/v3/components/AtosMark";
 import { AttachFileButton, copyTextFromAction } from "@/v3/components/flow/flowCapture";
 const FlowArtifactStudio = lazy(() => import("@/v3/components/flow/studio/FlowArtifactStudio"));
 import type { ArtifactEditInput } from "@/v3/components/flow/studio/FlowArtifactStudio";
@@ -654,8 +655,9 @@ export default function FlowShell(props: FlowShellProps) {
           {/* Brand + breadcrumb: Portfolio / (parent) / programme. The trail IS
               the location — the hero no longer repeats it. The programme crumb
               opens the switcher; a drill-down shows its parent as a hop. */}
-          {/* The lockup reads "brillio · ATOS" — the wordmark IS the Brillio half. */}
-          <span className="v3fs-appbar-brandlock"><BrilioLogo className="v3fs-appbar-logo" title="Brillio" /><span className="v3fs-appbar-brand">ATOS</span></span>
+          {/* The lockup reads "[mark] brillio · ATOS" — the network tile is the
+              product mark (same artwork as the favicon), the wordmark is Brillio. */}
+          <span className="v3fs-appbar-brandlock"><AtosMark className="v3fs-appbar-mark" /><BrilioLogo className="v3fs-appbar-logo" title="Brillio" /><span className="v3fs-appbar-brand">ATOS</span></span>
           <nav className="v3fs-appbar-crumbs" aria-label="Breadcrumb">
             <button type="button" className={`v3fs-appbar-nav${view === "portfolio" ? " on" : ""}`}
               title={DOCK_TIPS.portfolio} aria-label="Portfolio"

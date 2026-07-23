@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BrilioLogo from "@/v3/components/BrilioLogo";
+import AtosMark from "@/v3/components/AtosMark";
 import { supabase, isSupabaseConfigured } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import { useAgentRun } from "@/hooks/useAgentRun";
@@ -158,7 +159,12 @@ const MAX_VISIBLE_TOASTS = 3;
 
 
 function BrandLogo() {
-  return <BrilioLogo className="v3-topbar-logo" title="Brillio" />;
+  return (
+    <span className="v3-topbar-brandlock">
+      <AtosMark className="v3-topbar-mark" />
+      <BrilioLogo className="v3-topbar-logo" title="Brillio" />
+    </span>
+  );
 }
 
 function isAuthPath(): boolean {
@@ -2525,7 +2531,7 @@ export default function AppShellV3() {
 
             {/* Hero */}
             <div className="v3-welcome-hero">
-              <div className="v3-welcome-hero-glyph" aria-hidden="true">✦</div>
+              <div className="v3-welcome-hero-glyph" aria-hidden="true"><AtosMark className="v3-welcome-mark" /></div>
               <h1 className="v3-welcome-hero-title">Welcome to Brillio ATOS</h1>
               <p className="v3-welcome-hero-sub">
                 Create a programme and ATOS turns recorded stakeholder conversations into a current-state atlas, an agentic blueprint, and a working system.

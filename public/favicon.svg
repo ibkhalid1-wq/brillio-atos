@@ -1,25 +1,50 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
-  <!-- ATOS as a network: evidence, artifacts and demonstrations as connected
-       nodes. Same grammar — blue (what people said), lavender-indigo (what
-       ATOS made), green (what was demonstrated) as the biggest hub — now with
-       satellites and cross-links so the mark reads as a living graph. -->
+  <!-- ATOS mark: a 3D network sphere — the connected system as a globe. Lit
+       indigo sphere, orbital great-circles as the network fabric, spherical
+       nodes in the evidence grammar (blue = heard, lavender = made, green =
+       demonstrated as the brightest hub). One artwork with the in-app AtosMark. -->
   <defs>
-    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#2E2364"/>
-      <stop offset="1" stop-color="#1A1240"/>
-    </linearGradient>
+    <radialGradient id="globe" cx=".32" cy=".28" r="1.05">
+      <stop offset="0" stop-color="#4A3AA0"/>
+      <stop offset=".45" stop-color="#2C2166"/>
+      <stop offset="1" stop-color="#120C2C"/>
+    </radialGradient>
+    <radialGradient id="nGreen" cx=".35" cy=".3" r=".95">
+      <stop offset="0" stop-color="#8BF0A4"/>
+      <stop offset=".55" stop-color="#2CC84D"/>
+      <stop offset="1" stop-color="#128A32"/>
+    </radialGradient>
+    <radialGradient id="nBlue" cx=".35" cy=".3" r=".95">
+      <stop offset="0" stop-color="#B4CCFF"/>
+      <stop offset=".55" stop-color="#5B8DEF"/>
+      <stop offset="1" stop-color="#3557B0"/>
+    </radialGradient>
+    <radialGradient id="nLav" cx=".35" cy=".3" r=".95">
+      <stop offset="0" stop-color="#E2DBFF"/>
+      <stop offset=".55" stop-color="#B3A6F7"/>
+      <stop offset="1" stop-color="#7E6CCF"/>
+    </radialGradient>
+    <filter id="drop" x="-60%" y="-60%" width="220%" height="220%">
+      <feDropShadow dx="0" dy="1" stdDeviation=".9" flood-color="#080418" flood-opacity=".6"/>
+    </filter>
+    <clipPath id="ball"><circle cx="16" cy="16" r="14.2"/></clipPath>
   </defs>
-  <rect width="32" height="32" rx="7.5" fill="url(#tile)"/>
-  <g stroke="rgba(255,255,255,0.34)" stroke-width="1.6" stroke-linecap="round">
-    <line x1="8.5" y1="23.5" x2="15.5" y2="17"/>
-    <line x1="15.5" y1="17" x2="22.5" y2="10"/>
-    <line x1="9.5" y1="9.5" x2="15.5" y2="17"/>
-    <line x1="9.5" y1="9.5" x2="22.5" y2="10"/>
-    <line x1="15.5" y1="17" x2="23.5" y2="22.5"/>
+  <circle cx="16" cy="16" r="14.2" fill="url(#globe)"/>
+  <g clip-path="url(#ball)" fill="none" stroke="rgba(255,255,255,.28)" stroke-width="1.1">
+    <ellipse cx="16" cy="16" rx="13.6" ry="5.2"/>
+    <ellipse cx="16" cy="16" rx="13.6" ry="5.2" transform="rotate(-58 16 16)"/>
+    <ellipse cx="16" cy="16" rx="13.6" ry="9.6" transform="rotate(24 16 16)"/>
   </g>
-  <circle cx="9.5" cy="9.5" r="2.2" fill="#8FB3FF"/>
-  <circle cx="8.5" cy="23.5" r="2.8" fill="#5B8DEF"/>
-  <circle cx="15.5" cy="17" r="3.1" fill="#B3A6F7"/>
-  <circle cx="23.5" cy="22.5" r="2.2" fill="#B3A6F7"/>
-  <circle cx="22.5" cy="10" r="4.1" fill="#2CC84D"/>
+  <g clip-path="url(#ball)" stroke="rgba(255,255,255,.34)" stroke-width="1" stroke-linecap="round">
+    <line x1="7.2" y1="18.6" x2="15.6" y2="22.2"/>
+    <line x1="15.6" y1="22.2" x2="23.6" y2="11.4"/>
+    <line x1="10.4" y1="8.4" x2="23.6" y2="11.4"/>
+  </g>
+  <g filter="url(#drop)">
+    <circle cx="10.4" cy="8.4" r="2" fill="url(#nBlue)"/>
+    <circle cx="7.2" cy="18.6" r="2.5" fill="url(#nBlue)"/>
+    <circle cx="15.6" cy="22.2" r="2.8" fill="url(#nLav)"/>
+    <circle cx="23.6" cy="11.4" r="3.8" fill="url(#nGreen)"/>
+  </g>
+  <ellipse cx="11.5" cy="8.2" rx="6.5" ry="4" fill="rgba(255,255,255,.14)" transform="rotate(-28 11.5 8.2)"/>
 </svg>
