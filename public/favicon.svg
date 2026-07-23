@@ -1,23 +1,58 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
-  <!-- ATOS mark: the network IS the sphere — nodes at true spherical projections
-       (depth-scaled), edges as surface-curved arcs, shaded ball beneath, green
-       demonstrated hub as the accent. Generated geometry. -->
+  <!-- ATOS — the transformation glyph, futuristic finish. Glassy indigo block
+       (the enterprise as-is) → luminous flow arc with agent sparks → glowing
+       green orb (the demonstrated system). Neon glow + rim light + glass
+       bevels for the modern-3D premium read. -->
   <defs>
-    <radialGradient id="ball" cx=".38" cy=".3" r=".95">
-      <stop offset="0" stop-color="#FFFFFF"/><stop offset=".55" stop-color="#EFECF9"/>
-      <stop offset=".85" stop-color="#D4CDEB"/><stop offset="1" stop-color="#B4A9DB"/>
+    <linearGradient id="sq" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5A48C0"/>
+      <stop offset=".5" stop-color="#332672"/>
+      <stop offset="1" stop-color="#1C1440"/>
+    </linearGradient>
+    <linearGradient id="bevel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="rgba(255,255,255,.55)"/>
+      <stop offset="1" stop-color="rgba(255,255,255,0)"/>
+    </linearGradient>
+    <radialGradient id="orb" cx=".35" cy=".3" r=".95">
+      <stop offset="0" stop-color="#A8F7BB"/>
+      <stop offset=".5" stop-color="#2CC84D"/>
+      <stop offset="1" stop-color="#0B7A2A"/>
     </radialGradient>
-    <radialGradient id="nDark" cx=".35" cy=".3" r=".95">
-      <stop offset="0" stop-color="#6A5BC7"/><stop offset=".5" stop-color="#2E2364"/><stop offset="1" stop-color="#171034"/>
+    <radialGradient id="orbGlow" cx=".5" cy=".5" r=".5">
+      <stop offset="0" stop-color="rgba(44,200,77,.55)"/>
+      <stop offset=".6" stop-color="rgba(44,200,77,.18)"/>
+      <stop offset="1" stop-color="rgba(44,200,77,0)"/>
     </radialGradient>
-    <radialGradient id="nGreen" cx=".35" cy=".3" r=".95">
-      <stop offset="0" stop-color="#95F2AC"/><stop offset=".55" stop-color="#2CC84D"/><stop offset="1" stop-color="#0F8A30"/>
-    </radialGradient>
+    <linearGradient id="arc" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#7B6BE0"/>
+      <stop offset="1" stop-color="#3BE86B"/>
+    </linearGradient>
+    <filter id="soft" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation=".7"/>
+    </filter>
+    <filter id="drop" x="-60%" y="-60%" width="220%" height="220%">
+      <feDropShadow dx="0" dy="1.1" stdDeviation="1" flood-color="#080418" flood-opacity=".45"/>
+    </filter>
   </defs>
-  <ellipse cx="16" cy="29.4" rx="8.2" ry="1.6" fill="rgba(26,18,64,.16)"/>
-  <circle cx="16.0" cy="15.5" r="12.4" fill="url(#ball)"/>
-  <path d="M16.0 3.1 Q14.4 3.1 12.9 3.9 M16.0 3.1 Q18.3 3.7 20.3 5.4 M16.0 3.1 Q14.7 4.7 13.5 7.6 M12.9 3.9 Q13.1 5.3 13.5 7.6 M12.9 3.9 Q10.1 4.4 8.0 6.1 M20.3 5.4 Q20.3 7.7 19.5 11.4 M20.3 5.4 Q23.7 6.6 26.0 9.1 M8.0 6.1 Q6.5 7.7 5.8 9.9 M8.0 6.1 Q10.4 6.3 13.5 7.6 M26.0 9.1 Q26.4 11.9 25.5 15.1 M26.0 9.1 Q23.4 9.7 19.5 11.4 M5.8 9.9 Q6.8 11.5 9.0 13.6 M5.8 9.9 Q4.0 12.7 3.6 15.9 M19.5 11.4 Q23.3 13.0 25.5 15.1 M9.0 13.6 Q5.6 14.7 3.6 15.9 M9.0 13.6 Q6.9 16.7 6.4 19.6 M25.5 15.1 Q27.2 17.1 27.8 18.9 M3.6 15.9 Q4.5 17.9 6.4 19.6 M15.4 17.4 Q13.5 21.1 12.3 23.4 M15.4 17.4 Q18.9 20.0 21.5 21.1 M19.5 11.4 Q18.2 13.8 15.4 17.4 M27.8 18.9 Q25.4 20.4 21.5 21.1 M27.8 18.9 Q26.3 22.4 23.2 24.9 M6.4 19.6 Q7.2 23.2 9.1 25.6 M21.5 21.1 Q22.6 23.4 23.2 24.9 M12.3 23.4 Q10.5 24.9 9.1 25.6 M12.3 23.4 Q14.4 26.0 16.7 27.1 M12.3 23.4 Q14.0 26.3 16.0 27.9 M23.2 24.9 Q20.2 26.8 16.7 27.1 M9.1 25.6 Q12.3 27.6 16.0 27.9 M16.7 27.1 Q16.4 27.6 16.0 27.9" fill="none" stroke="#9A8DE0" stroke-width=".45" opacity=".65" stroke-linecap="round"/>
-  <circle cx="16.0" cy="3.1" r="0.75" fill="url(#nDark)" opacity="0.69"/><circle cx="12.9" cy="3.9" r="0.92" fill="url(#nDark)" opacity="0.79"/><circle cx="20.3" cy="5.4" r="1.09" fill="url(#nDark)" opacity="0.89"/><circle cx="8.0" cy="6.1" r="0.75" fill="url(#nDark)" opacity="0.63"/><circle cx="13.5" cy="7.6" r="1.31" fill="url(#nDark)" opacity="1.00"/><circle cx="26.0" cy="9.1" r="0.97" fill="url(#nDark)" opacity="0.82"/><circle cx="5.8" cy="9.9" r="1.00" fill="url(#nDark)" opacity="0.84"/><circle cx="9.0" cy="13.6" r="1.36" fill="url(#nDark)" opacity="1.00"/><circle cx="25.5" cy="15.1" r="1.23" fill="url(#nDark)" opacity="0.97"/><circle cx="3.6" cy="15.9" r="0.78" fill="url(#nDark)" opacity="0.70"/><circle cx="15.4" cy="17.4" r="1.49" fill="url(#nDark)" opacity="1.00"/><circle cx="27.8" cy="18.9" r="0.85" fill="url(#nDark)" opacity="0.74"/><circle cx="6.4" cy="19.6" r="1.15" fill="url(#nDark)" opacity="0.93"/><circle cx="21.5" cy="21.1" r="1.33" fill="url(#nDark)" opacity="1.00"/><circle cx="12.3" cy="23.4" r="1.28" fill="url(#nDark)" opacity="1.00"/><circle cx="23.2" cy="24.9" r="0.98" fill="url(#nDark)" opacity="0.82"/><circle cx="9.1" cy="25.6" r="0.86" fill="url(#nDark)" opacity="0.75"/><circle cx="16.7" cy="27.1" r="1.00" fill="url(#nDark)" opacity="0.84"/><circle cx="16.0" cy="27.9" r="0.75" fill="url(#nDark)" opacity="0.69"/>
-  <circle cx="19.5" cy="11.4" r="2.2" fill="url(#nGreen)"/>
-  <ellipse cx="18.9" cy="10.7" rx=".75" ry=".5" fill="rgba(255,255,255,.55)"/>
+  <!-- glassy enterprise block -->
+  <g filter="url(#drop)">
+    <rect x="4" y="17.5" width="10.5" height="10.5" rx="3.2" fill="url(#sq)"/>
+  </g>
+  <rect x="4.6" y="18.1" width="9.3" height="4.6" rx="2.4" fill="url(#bevel)" opacity=".5"/>
+  <rect x="4" y="17.5" width="10.5" height="10.5" rx="3.2" fill="none" stroke="rgba(158,141,235,.6)" stroke-width=".5"/>
+  <!-- luminous flow arc: glow pass under crisp pass -->
+  <path d="M9.2 17.5 C9.2 9.5 15.5 5.6 22.6 7.7" fill="none" stroke="url(#arc)" stroke-width="3.4" stroke-linecap="round" opacity=".4" filter="url(#soft)"/>
+  <path d="M9.2 17.5 C9.2 9.5 15.5 5.6 22.6 7.7" fill="none" stroke="url(#arc)" stroke-width="1.7" stroke-linecap="round"/>
+  <!-- agent sparks -->
+  <circle cx="14.3" cy="9.8" r="1.5" fill="#8FB3FF" opacity=".35" filter="url(#soft)"/>
+  <circle cx="14.3" cy="9.8" r="1" fill="#A9C6FF"/>
+  <circle cx="18.8" cy="7.7" r="1.5" fill="#B3A6F7" opacity=".35" filter="url(#soft)"/>
+  <circle cx="18.8" cy="7.7" r="1" fill="#CFC5FF"/>
+  <!-- demonstrated orb: aura, ball, rim light, specular -->
+  <circle cx="23.9" cy="9.3" r="9" fill="url(#orbGlow)"/>
+  <g filter="url(#drop)">
+    <circle cx="23.9" cy="9.3" r="5.1" fill="url(#orb)"/>
+  </g>
+  <path d="M19.4 11.5 A5.1 5.1 0 0 0 27.4 13" fill="none" stroke="rgba(255,255,255,.25)" stroke-width=".7"/>
+  <ellipse cx="22.2" cy="7.4" rx="1.6" ry="1" fill="rgba(255,255,255,.6)"/>
 </svg>
