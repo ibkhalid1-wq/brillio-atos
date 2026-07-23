@@ -1,14 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
-  <!-- ATOS mark: a 3D network sphere — the connected system as a globe. Lit
-       indigo sphere, orbital great-circles as the network fabric, spherical
-       nodes in the evidence grammar (blue = heard, lavender = made, green =
-       demonstrated as the brightest hub). One artwork with the in-app AtosMark. -->
+  <!-- ATOS mark: 3D network sphere, TRANSPARENT background — a wireframe globe
+       (orbital great-circles in mid-indigo, legible on light or dark chrome)
+       with spherical nodes in the evidence grammar: blue = heard, lavender =
+       made, green = demonstrated (the brightest hub). One artwork with the
+       in-app AtosMark. -->
   <defs>
-    <radialGradient id="globe" cx=".32" cy=".28" r="1.05">
-      <stop offset="0" stop-color="#4A3AA0"/>
-      <stop offset=".45" stop-color="#2C2166"/>
-      <stop offset="1" stop-color="#120C2C"/>
-    </radialGradient>
     <radialGradient id="nGreen" cx=".35" cy=".3" r=".95">
       <stop offset="0" stop-color="#8BF0A4"/>
       <stop offset=".55" stop-color="#2CC84D"/>
@@ -25,17 +21,15 @@
       <stop offset="1" stop-color="#7E6CCF"/>
     </radialGradient>
     <filter id="drop" x="-60%" y="-60%" width="220%" height="220%">
-      <feDropShadow dx="0" dy="1" stdDeviation=".9" flood-color="#080418" flood-opacity=".6"/>
+      <feDropShadow dx="0" dy="1" stdDeviation=".9" flood-color="#080418" flood-opacity=".45"/>
     </filter>
-    <clipPath id="ball"><circle cx="16" cy="16" r="14.2"/></clipPath>
   </defs>
-  <circle cx="16" cy="16" r="14.2" fill="url(#globe)"/>
-  <g clip-path="url(#ball)" fill="none" stroke="rgba(255,255,255,.28)" stroke-width="1.1">
+  <g fill="none" stroke="#5D4FB8" stroke-width="1.2" opacity=".85">
+    <circle cx="16" cy="16" r="13.6"/>
     <ellipse cx="16" cy="16" rx="13.6" ry="5.2"/>
     <ellipse cx="16" cy="16" rx="13.6" ry="5.2" transform="rotate(-58 16 16)"/>
-    <ellipse cx="16" cy="16" rx="13.6" ry="9.6" transform="rotate(24 16 16)"/>
   </g>
-  <g clip-path="url(#ball)" stroke="rgba(255,255,255,.34)" stroke-width="1" stroke-linecap="round">
+  <g stroke="#8678D6" stroke-width="1" stroke-linecap="round" opacity=".9">
     <line x1="7.2" y1="18.6" x2="15.6" y2="22.2"/>
     <line x1="15.6" y1="22.2" x2="23.6" y2="11.4"/>
     <line x1="10.4" y1="8.4" x2="23.6" y2="11.4"/>
@@ -46,5 +40,4 @@
     <circle cx="15.6" cy="22.2" r="2.8" fill="url(#nLav)"/>
     <circle cx="23.6" cy="11.4" r="3.8" fill="url(#nGreen)"/>
   </g>
-  <ellipse cx="11.5" cy="8.2" rx="6.5" ry="4" fill="rgba(255,255,255,.14)" transform="rotate(-28 11.5 8.2)"/>
 </svg>
