@@ -1,0 +1,11 @@
+# Per-function deploy settings — the CLI reads this on `supabase functions deploy`,
+# so the flags survive redeploys instead of living in someone's shell history.
+
+# flow-portal is the PUBLIC face of the async evidence loop (see its header):
+# external stakeholders open response/brief links with NO account — the link
+# token is the access. Platform JWT verification must stay OFF or every linked
+# page 401s before the function's own token gate runs ("This link is not valid").
+# It was deployed with --no-verify-jwt originally; a later default deploy
+# re-enabled verification and broke all public links — this pin prevents that.
+[functions.flow-portal]
+verify_jwt = false
