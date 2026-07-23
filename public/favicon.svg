@@ -1,58 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
-  <!-- ATOS — the transformation glyph, futuristic finish. Glassy indigo block
-       (the enterprise as-is) → luminous flow arc with agent sparks → glowing
-       green orb (the demonstrated system). Neon glow + rim light + glass
-       bevels for the modern-3D premium read. -->
+  <!-- ATOS — one flow stroke. A single rising curve from deep indigo (where
+       the enterprise starts) to Brillio green (the demonstrated result).
+       Nothing else. -->
   <defs>
-    <linearGradient id="sq" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#5A48C0"/>
-      <stop offset=".5" stop-color="#332672"/>
-      <stop offset="1" stop-color="#1C1440"/>
+    <linearGradient id="flow" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#332672"/>
+      <stop offset=".55" stop-color="#6A5BC7"/>
+      <stop offset="1" stop-color="#2CC84D"/>
     </linearGradient>
-    <linearGradient id="bevel" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="rgba(255,255,255,.55)"/>
-      <stop offset="1" stop-color="rgba(255,255,255,0)"/>
-    </linearGradient>
-    <radialGradient id="orb" cx=".35" cy=".3" r=".95">
-      <stop offset="0" stop-color="#A8F7BB"/>
-      <stop offset=".5" stop-color="#2CC84D"/>
-      <stop offset="1" stop-color="#0B7A2A"/>
-    </radialGradient>
-    <radialGradient id="orbGlow" cx=".5" cy=".5" r=".5">
-      <stop offset="0" stop-color="rgba(44,200,77,.55)"/>
-      <stop offset=".6" stop-color="rgba(44,200,77,.18)"/>
-      <stop offset="1" stop-color="rgba(44,200,77,0)"/>
-    </radialGradient>
-    <linearGradient id="arc" x1="0" y1="1" x2="1" y2="0">
-      <stop offset="0" stop-color="#7B6BE0"/>
-      <stop offset="1" stop-color="#3BE86B"/>
-    </linearGradient>
-    <filter id="soft" x="-80%" y="-80%" width="260%" height="260%">
-      <feGaussianBlur stdDeviation=".7"/>
-    </filter>
-    <filter id="drop" x="-60%" y="-60%" width="220%" height="220%">
-      <feDropShadow dx="0" dy="1.1" stdDeviation="1" flood-color="#080418" flood-opacity=".45"/>
-    </filter>
   </defs>
-  <!-- glassy enterprise block -->
-  <g filter="url(#drop)">
-    <rect x="4" y="17.5" width="10.5" height="10.5" rx="3.2" fill="url(#sq)"/>
-  </g>
-  <rect x="4.6" y="18.1" width="9.3" height="4.6" rx="2.4" fill="url(#bevel)" opacity=".5"/>
-  <rect x="4" y="17.5" width="10.5" height="10.5" rx="3.2" fill="none" stroke="rgba(158,141,235,.6)" stroke-width=".5"/>
-  <!-- luminous flow arc: glow pass under crisp pass -->
-  <path d="M9.2 17.5 C9.2 9.5 15.5 5.6 22.6 7.7" fill="none" stroke="url(#arc)" stroke-width="3.4" stroke-linecap="round" opacity=".4" filter="url(#soft)"/>
-  <path d="M9.2 17.5 C9.2 9.5 15.5 5.6 22.6 7.7" fill="none" stroke="url(#arc)" stroke-width="1.7" stroke-linecap="round"/>
-  <!-- agent sparks -->
-  <circle cx="14.3" cy="9.8" r="1.5" fill="#8FB3FF" opacity=".35" filter="url(#soft)"/>
-  <circle cx="14.3" cy="9.8" r="1" fill="#A9C6FF"/>
-  <circle cx="18.8" cy="7.7" r="1.5" fill="#B3A6F7" opacity=".35" filter="url(#soft)"/>
-  <circle cx="18.8" cy="7.7" r="1" fill="#CFC5FF"/>
-  <!-- demonstrated orb: aura, ball, rim light, specular -->
-  <circle cx="23.9" cy="9.3" r="9" fill="url(#orbGlow)"/>
-  <g filter="url(#drop)">
-    <circle cx="23.9" cy="9.3" r="5.1" fill="url(#orb)"/>
-  </g>
-  <path d="M19.4 11.5 A5.1 5.1 0 0 0 27.4 13" fill="none" stroke="rgba(255,255,255,.25)" stroke-width=".7"/>
-  <ellipse cx="22.2" cy="7.4" rx="1.6" ry="1" fill="rgba(255,255,255,.6)"/>
+  <path d="M5.5 26.5 C7.5 19.5 11.5 17 16 15.2 C21 13.2 24.5 10 26.5 5.5"
+        fill="none" stroke="url(#flow)" stroke-width="3.6" stroke-linecap="round"/>
 </svg>
