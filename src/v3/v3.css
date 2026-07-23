@@ -8557,11 +8557,14 @@ select.v3fs-dir-in {cursor:pointer}
   align-self:flex-start;user-select:none;flex-shrink:0}
 .brillio-tone-invert {filter:brightness(0) invert(1)}
 
-/* Brillio logo — sizing per placement (height-based; aspect preserved). */
+/* Brillio logo — sizing per placement (height-based; aspect preserved). The
+   artwork is the BLACK wordmark (green dots), correct on light chrome; dark
+   chrome white-outs it like the classic topbar does. */
 .v3-topbar-logo.brillio-logo {height:28px}                        /* topbar / skeleton */
 .v3-auth-brandmark {height:40px;margin-bottom:16px}               /* auth kicker slot */
 .v3fs-appbar-brandlock {display:inline-flex;align-items:center;gap:9px}
-.v3fs-appbar-logo {height:24px}                                   /* app-bar lockup */
+.v3fs-appbar-logo {height:20px}                                   /* app-bar lockup */
+[data-theme="dark"] .v3fs-appbar-logo {filter:brightness(0) invert(1);opacity:.9}
 
 
 /* ── Intelligence / AI-provider panel legibility ─────────────────────────────

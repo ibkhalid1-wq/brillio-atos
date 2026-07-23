@@ -929,7 +929,7 @@ export default function AppShellV3() {
   // Update document title to reflect active programme
   useEffect(() => {
     const name = activeProgram?.name;
-    document.title = name ? `${name} — ATOS` : "Brillio ATOS — Agentic Transformation OS";
+    document.title = name ? `${name} — Brillio - ATOS` : "Brillio - ATOS";
   }, [activeProgram?.name]);
 
   const copilotWorkspaceId = "home";
