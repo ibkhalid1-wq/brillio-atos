@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
-  <!-- ATOS Flow signature: the flow spine climbing to the demo. Three nodes on
-       the engagement path in the app's evidence grammar — blue (what people
-       said) → lavender-indigo (what ATOS made) → green (what was demonstrated,
-       the gate). On the app's deep-indigo chrome tile. -->
+  <!-- ATOS as a network: evidence, artifacts and demonstrations as connected
+       nodes. Same grammar — blue (what people said), lavender-indigo (what
+       ATOS made), green (what was demonstrated) as the biggest hub — now with
+       satellites and cross-links so the mark reads as a living graph. -->
   <defs>
     <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#2E2364"/>
@@ -10,8 +10,16 @@
     </linearGradient>
   </defs>
   <rect width="32" height="32" rx="7.5" fill="url(#tile)"/>
-  <path d="M8 23 L16 16.5 L23.5 9.5" fill="none" stroke="rgba(255,255,255,0.38)" stroke-width="2" stroke-linecap="round"/>
-  <circle cx="8" cy="23" r="3" fill="#5B8DEF"/>
-  <circle cx="16" cy="16.5" r="3.2" fill="#B3A6F7"/>
-  <circle cx="23.5" cy="9.5" r="4.2" fill="#2CC84D"/>
+  <g stroke="rgba(255,255,255,0.34)" stroke-width="1.6" stroke-linecap="round">
+    <line x1="8.5" y1="23.5" x2="15.5" y2="17"/>
+    <line x1="15.5" y1="17" x2="22.5" y2="10"/>
+    <line x1="9.5" y1="9.5" x2="15.5" y2="17"/>
+    <line x1="9.5" y1="9.5" x2="22.5" y2="10"/>
+    <line x1="15.5" y1="17" x2="23.5" y2="22.5"/>
+  </g>
+  <circle cx="9.5" cy="9.5" r="2.2" fill="#8FB3FF"/>
+  <circle cx="8.5" cy="23.5" r="2.8" fill="#5B8DEF"/>
+  <circle cx="15.5" cy="17" r="3.1" fill="#B3A6F7"/>
+  <circle cx="23.5" cy="22.5" r="2.2" fill="#B3A6F7"/>
+  <circle cx="22.5" cy="10" r="4.1" fill="#2CC84D"/>
 </svg>
