@@ -8566,6 +8566,15 @@ select.v3fs-dir-in {cursor:pointer}
 .v3fs-appbar-logo {height:20px}                                   /* app-bar lockup */
 [data-theme="dark"] .v3fs-appbar-logo {filter:brightness(0) invert(1);opacity:.9}
 
+/* Portal / linked-page brand image — the wordmark inline with "ATOS" text on
+   the public surfaces (respond, brief, approve, review). Baseline-tucked so it
+   reads as one lockup inside headings and eyebrows. */
+.v3fs-portal-brandimg {height:15px;width:auto;display:inline-block;vertical-align:-2px;user-select:none}
+.v3fs-portal-brandimg.sm {height:11px;vertical-align:-1px}
+.v3fs-hero-brand {display:inline-flex;align-items:baseline;gap:7px}
+.v3fs-hero-brand .v3fs-portal-brandimg {align-self:center}
+.v3fs-rvw-brandline .v3fs-portal-brandimg {height:14px}
+
 
 /* ── Intelligence / AI-provider panel legibility ─────────────────────────────
    The provider setup embeds classic `adam-*` controls, which are styled for a

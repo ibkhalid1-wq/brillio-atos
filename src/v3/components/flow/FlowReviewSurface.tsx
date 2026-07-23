@@ -88,7 +88,7 @@ function ReviewHeader({ stakeholder, programme, objective, intro, areaLabel, ret
   const coreGoal = objective ? objective.split(/\s+[—–]\s+/)[0].trim().replace(/[.\s]+$/, "") : "";
   return (
     <header className="v3fs-rvw-top">
-      <div className="v3fs-rvw-brandline"><span className="v3fs-rvw-mark" aria-hidden="true">◆</span>Brillio · ATOS</div>
+      <div className="v3fs-rvw-brandline"><img src="/brillio-logo.png" alt="Brillio" className="v3fs-portal-brandimg" /> · ATOS</div>
       {programme ? <div className="v3fs-rvw-prog">{programme}</div> : null}
       {/* On a return visit the FollowUpBanner above carries the "Welcome back"
           greeting — don't say it twice; a first visit greets here. */}

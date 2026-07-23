@@ -43,7 +43,7 @@ export default function FlowBrief({ token }: { token: string }) {
     return (
       <div className="v3fs-brief">
         <div className="v3fs-brief-card v3fs-pack-page">
-          <div className="v3fs-pack-eyebrow">ATOS Flow · Sponsor brief</div>
+          <div className="v3fs-pack-eyebrow"><img src="/brillio-logo.png" alt="Brillio" className="v3fs-portal-brandimg sm" /> ATOS · Sponsor brief</div>
           <h1>This link is not valid</h1>
           <p>It may have expired or been superseded by a newer brief. Ask the programme team for a fresh link.</p>
         </div>
@@ -64,7 +64,7 @@ export default function FlowBrief({ token }: { token: string }) {
   return (
     <div className="v3fs-brief">
       <div className="v3fs-brief-card v3fs-pack-page">
-        <div className="v3fs-pack-eyebrow">ATOS Flow · Sponsor brief — sent {sent}</div>
+        <div className="v3fs-pack-eyebrow"><img src="/brillio-logo.png" alt="Brillio" className="v3fs-portal-brandimg sm" /> ATOS · Sponsor brief — sent {sent}</div>
         <h1>{text(snap.name) || brief.programme}</h1>
         {text(snap.client) ? <div className="v3fs-pack-client">{text(snap.client)}</div> : null}
 
