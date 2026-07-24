@@ -25,7 +25,7 @@ import {
 } from "@/v3/components/flow/flowShellData";
 import { gateAugmentations } from "@/v3/components/flow/flowCrossValidation";
 import { meetingKit, askableMovementGaps } from "@/v3/components/flow/flowMeetings";
-import { listInterviewPacks, listDemoInvites, portalLinkFor } from "@/v3/components/flow/flowPortal";
+import { listInterviewPacks, listDemoInvites, portalLinkFor, movementValidationCoverage } from "@/v3/components/flow/flowPortal";
 import { resolveMovementStakeholders, operatorAsksFor } from "@/v3/components/flow/flowStakeholders";
 import { readDrillAnchor } from "@/v3/components/flow/flowDrilldown";
 import { gateApprovalIntegrity } from "@/v3/components/flow/flowGovernance";
@@ -594,20 +594,39 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
                   dashboards. The stage tabs + studios below open on demand. */}
               {/* The Design/Validate switch — the loop control between the two
                   Prototype bodies. */}
-              {movement.id === "envision" || movement.id === "show" ? (
+              {movement.id === "envision" || movement.id === "show" ? (() => {
+                // Live state on each half of the loop, so the switch tells you
+                // WHERE THE LOOP IS, not just where you are: Design reports the
+                // build; Validate reports links out vs verdicts in.
+                const pb = readArtifactDoc(program, "prototypeBuild");
+                const builtScreens = Array.isArray(pb?.screens) ? pb.screens.length : 0;
+                const hasBuild = !!String(pb?.html ?? "").trim();
+                const cov = movementValidationCoverage(program, "show");
+                const waiting = cov.reduce((s, r) => s + r.waiting, 0);
+                const validated = cov.reduce((s, r) => s + r.validated, 0);
+                const designStatus = hasBuild
+                  ? `prototype built${builtScreens ? ` · ${builtScreens} screen${builtScreens === 1 ? "" : "s"}` : ""}`
+                  : "the team shapes the prototype";
+                const validateStatus = waiting || validated
+                  ? `${validated} verdict${validated === 1 ? "" : "s"} in · ${waiting} link${waiting === 1 ? "" : "s"} waiting`
+                  : "clients sign off on it";
+                return (
                 <div className="v3fs-loopswitch" role="tablist" aria-label="Design or Validate">
                   <button type="button" role="tab" aria-selected={active === "envision"}
                     className={`v3fs-loopswitch-b${active === "envision" ? " on" : ""}`} onClick={() => setActive("envision")}>
                     <span className="v3fs-loopswitch-i" aria-hidden="true">✎</span>
-                    <span className="v3fs-loopswitch-t">Design Workspace<em>the team shapes the prototype</em></span>
+                    <span className="v3fs-loopswitch-t">Design Workspace<em className={hasBuild ? "live ok" : ""}>{designStatus}</em></span>
                   </button>
+                  {/* The loop IS the relationship: design feeds validation, verdicts feed design. */}
+                  <span className="v3fs-loopswitch-loop" aria-hidden="true">⇄</span>
                   <button type="button" role="tab" aria-selected={active === "show"}
                     className={`v3fs-loopswitch-b${active === "show" ? " on" : ""}`} onClick={() => setActive("show")}>
                     <span className="v3fs-loopswitch-i" aria-hidden="true">◉</span>
-                    <span className="v3fs-loopswitch-t">Validate<em>clients sign off on it</em></span>
+                    <span className="v3fs-loopswitch-t">Validate<em className={validated ? "live ok" : waiting ? "live wait" : ""}>{validateStatus}</em></span>
                   </button>
                 </div>
-              ) : null}
+                );
+              })() : null}
               {(movement.id === "envision" || movement.id === "show") && tabKey === "collect" ? (
                 <section className="v3fs-protohome" aria-label="Prototype orchestration">
                   <ProductOwnerCockpit program={program} />
