@@ -8867,3 +8867,35 @@ select.v3fs-dir-in {cursor:pointer}
 .v3fs-rvw-whoelse input:focus {border-color:var(--v3-accent)}
 .v3fs-portal-whoelse input {width:100%;border:1px solid var(--fs-line);border-radius:9px;padding:9px 12px;font-size:13px;font-family:inherit;background:var(--fs-card);color:var(--v3-text-primary);outline:0;margin-top:5px}
 .v3fs-portal-whoelse input:focus {border-color:var(--v3-accent)}
+
+/* ── Depth pass — the flat UI gets a consistent elevation system ─────────────
+   Three soft, layered shadow tiers in the brand indigo (never pure black), a
+   hairline under the app bar, a floating dock, raised paper cards, and gentle
+   hover lift on primary actions. Scoped additively at the end of the sheet. */
+:root {
+  --elev-1: 0 1px 2px rgba(23,16,52,.05), 0 3px 10px -2px rgba(23,16,52,.07);
+  --elev-2: 0 2px 4px rgba(23,16,52,.05), 0 10px 28px -8px rgba(23,16,52,.14);
+  --elev-3: 0 4px 10px rgba(23,16,52,.07), 0 20px 48px -12px rgba(23,16,52,.22);
+}
+.v3fs-appbar { box-shadow: 0 1px 0 rgba(33,23,71,.06), 0 6px 18px -12px rgba(23,16,52,.18); }
+.v3fs-dock { box-shadow: var(--elev-3); }
+.v3fs-docview { box-shadow: var(--elev-2); }
+.v3fs-regenbar { box-shadow: var(--elev-1); }
+.v3fs-dv-card, .v3fs-copilotcard, .v3fs-brief-card, .v3fs-dka-pcard {
+  box-shadow: var(--elev-1);
+  transition: box-shadow 160ms ease, transform 160ms ease;
+}
+.v3fs-dv-card:hover, .v3fs-dka-pcard:hover { box-shadow: var(--elev-2); }
+.v3fs-btn.pri, .v3fs-regenbar-btn, .v3fs-welcome-cta {
+  box-shadow: var(--elev-1);
+  transition: box-shadow 140ms ease, transform 140ms ease;
+}
+.v3fs-btn.pri:hover, .v3fs-regenbar-btn:hover, .v3fs-welcome-cta:hover {
+  box-shadow: var(--elev-2);
+  transform: translateY(-1px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .v3fs-btn.pri, .v3fs-regenbar-btn, .v3fs-welcome-cta,
+  .v3fs-dv-card, .v3fs-copilotcard, .v3fs-brief-card, .v3fs-dka-pcard { transition: none; }
+  .v3fs-btn.pri:hover, .v3fs-regenbar-btn:hover, .v3fs-welcome-cta:hover { transform: none; }
+}
