@@ -133,6 +133,21 @@ export function flowMovements(): PhaseDefinition[] {
 }
 
 /**
+ * User-facing movement label. The VISIBLE spine folds Envision (Design) and
+ * Show (Validate) into ONE "Prototype" stage — but the methodology registry
+ * still carries them as separate phases, so any surface that labels straight
+ * off `displayName` leaks the old names (the Inbox did exactly that).
+ * `distinct` keeps the two halves tellable-apart on per-movement lists
+ * (budgets, agent groups) where two identical "Prototype" rows would confuse.
+ */
+export function spineLabel(idOrName: string, opts?: { distinct?: boolean }): string {
+  const key = idOrName.trim().toLowerCase();
+  if (key === "envision") return opts?.distinct ? "Prototype · Design" : "Prototype";
+  if (key === "show") return opts?.distinct ? "Prototype · Validate" : "Prototype";
+  return flowMovements().find((m) => m.id === key)?.displayName ?? idOrName;
+}
+
+/**
  * Questions a respondent DEFERRED to someone else ("not me — ask our Partner
  * Ops lead"). Stored under Listen's inputs as `_deferredAsks` (underscore ⇒
  * fingerprint-safe: a deferral is routing, not new evidence). Script

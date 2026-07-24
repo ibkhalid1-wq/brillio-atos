@@ -12,7 +12,7 @@ import EvidenceReader from "@/v3/components/flow/EvidenceReader";
 import {
   flowMovements, movementEvidence, movementArtifacts, gateChecklist, gateReadiness, listenCoverage,
   demoAcceptance, daysToFirstDemo, wordsOfEvidence, readContradictions, parseGridRows, readMovementInputs,
-  contradictionLogWithout, autoBuildEnabled,
+  contradictionLogWithout, autoBuildEnabled, spineLabel,
 } from "@/v3/components/flow/flowShellData";
 import {
   listOpenFlowDecisions, listFlowAttestations, describeDecisionChanges,
@@ -1107,7 +1107,7 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
     .filter((p) => p.id !== program.id && p.methodology === "atos-flow")
     .map((p) => ({ p, waiting: listOpenFlowDecisions(p).length + listPortalInbox(p).length }))
     .filter((e) => e.waiting > 0);
-  const label = (id: string) => movements.find((m) => m.id === id)?.displayName ?? id;
+  const label = (id: string) => spineLabel(id);
 
   const actOnItem = async (itemId: string, fn: (id: string) => Promise<void>) => {
     setBusyId(itemId);
@@ -1163,7 +1163,7 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
       const artifacts = movementArtifacts(program, movement);
       const readiness = gateReadiness(program, movement, artifacts, gateChecklist(program, movement, artifacts));
       if (readiness.tone === "amber" && (readiness.kind === "trails" || readiness.kind === "gaps")) {
-        items.push({ movement: movement.displayName, what: readiness.detail ?? readiness.headline });
+        items.push({ movement: spineLabel(movement.id), what: readiness.detail ?? readiness.headline });
       }
     }
     // Show validation coverage — an area with demo links out but ZERO recorded
@@ -1171,7 +1171,7 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
     // an open flank on discovery. Validation lives in SHOW; Envision is the
     // delivery team's build studio and carries no client-validation coverage.
     {
-      const displayName = movements.find((m) => m.id === "show")?.displayName ?? "Show";
+      const displayName = spineLabel("show");
       for (const row of movementValidationCoverage(program, "show")) {
         if (row.validated === 0 && row.waiting > 0) {
           items.push({
@@ -1546,7 +1546,8 @@ function FlowMission({ program, fleet, loadMovementSpend, onSetHaltAll, onToggle
               const state = stateOf(agentId);
               const run = runByAgent.get(agentId);
               const halted = governance.haltedAgents.includes(agentId);
-              const movementName = movements[movementOf.get(agentId) ?? -1]?.displayName ?? "Programme-wide";
+              const mv = movements[movementOf.get(agentId) ?? -1];
+              const movementName = mv ? spineLabel(mv.id, { distinct: true }) : "Programme-wide";
               return (
                 <div key={agentId} className="v3fs-row">
                   {state === "running"
@@ -1574,7 +1575,7 @@ function FlowMission({ program, fleet, loadMovementSpend, onSetHaltAll, onToggle
             // Grouped by PHASE into collapsible sections — the fleet reads as the
             // methodology spine, each phase's agents folded until you open it.
             const groupIdx = [...new Set(roster.map(spineIndex))].sort((a, b) => a - b);
-            const groupLabel = (idx: number) => movements[idx]?.displayName ?? "Programme-wide";
+            const groupLabel = (idx: number) => { const mv = movements[idx]; return mv ? spineLabel(mv.id, { distinct: true }) : "Programme-wide"; };
             return (
               <>
                 {runningCount === 0 ? <div className="v3fs-empty">The fleet is idle — every agent below is ready to run.</div> : null}
@@ -1609,7 +1610,7 @@ function FlowMission({ program, fleet, loadMovementSpend, onSetHaltAll, onToggle
             return (
               <div key={movement.id} className="v3fs-budget">
                 <div className="v3fs-budget-t">
-                  <b>{movement.displayName}</b>
+                  <b>{spineLabel(movement.id, { distinct: true })}</b>
                   <span>
                     {spend === null ? "…" : `${(spent ?? 0).toLocaleString()} tokens`}
                     {cap ? ` / ${cap.toLocaleString()}` : " · no cap"}
@@ -1629,13 +1630,13 @@ function FlowMission({ program, fleet, loadMovementSpend, onSetHaltAll, onToggle
             <div className="v3fs-disc-b">
               {movements.map((movement) => (
                 <div key={movement.id} className="v3fs-budget-edit">
-                  <span className="v3fs-budget-edit-l">{movement.displayName}</span>
+                  <span className="v3fs-budget-edit-l">{spineLabel(movement.id, { distinct: true })}</span>
                   <input
                     inputMode="numeric"
                     placeholder="tokens · 0 removes"
                     value={capDrafts[movement.id] ?? ""}
                     onChange={(e) => setCapDrafts((d) => ({ ...d, [movement.id]: e.target.value.replace(/[^0-9]/g, "") }))}
-                    aria-label={`${movement.displayName} budget cap`}
+                    aria-label={`${spineLabel(movement.id, { distinct: true })} budget cap`}
                   />
                   <button type="button" className="v3fs-btn" disabled={busy || capDrafts[movement.id] == null || capDrafts[movement.id] === ""}
                     onClick={() => void act(async () => {
@@ -2694,7 +2695,7 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
     .map(({ entry }) => entry);
   const evidence = byNewest(q ? all.evidence.filter((e) => `${e.who} ${e.fieldLabel} ${e.excerpt} ${e.text}`.toLowerCase().includes(q)) : all.evidence);
   const artifacts = q ? all.artifacts.filter((a) => `${a.title} ${a.excerpt ?? ""}`.toLowerCase().includes(q)) : all.artifacts;
-  const label = (id: string) => movements.find((m) => m.id === id)?.displayName ?? id;
+  const label = (id: string) => spineLabel(id);
 
 
 
@@ -2946,7 +2947,7 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
           return (
             <details key={m.id} className="v3fs-lib-group">
               <summary className="v3fs-lib-group-h">
-                <span className="v3fs-lib-group-t">{m.displayName}</span>
+                <span className="v3fs-lib-group-t">{spineLabel(m.id, { distinct: true })}</span>
                 <span className="v3fs-lib-group-n">{groupCurrent}/{group.length}</span>
                 {groupStale ? <span className="v3fs-lib-group-stale">{groupStale} stale</span> : null}
                 <span className="v3fs-lib-group-caret" aria-hidden="true">▾</span>
