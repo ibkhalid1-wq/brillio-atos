@@ -1,19 +1,21 @@
 /**
- * The ATOS product mark — the network-graph tile (evidence, artifacts and
- * demonstrations as connected nodes). Rendered from /favicon.svg so the tab
- * icon and the in-app mark are ONE artwork: change the favicon, the brand
- * follows everywhere.
+ * The ATOS product mark — the sphere-network artwork from the brand kit
+ * (deep-indigo wireframe globe, Brillio-green accent nodes). The favicon PNGs
+ * ship from the same kit, so tab icon and in-app mark stay one identity.
+ * `tone="dark"` swaps to the white-linework variant for dark chrome.
  */
 export default function AtosMark({
   className = "",
   title = "ATOS",
+  tone = "light",
 }: {
   className?: string;
   title?: string;
+  tone?: "light" | "dark";
 }) {
   return (
     <img
-      src="/favicon.svg"
+      src={tone === "dark" ? "/atos-mark-dark.png" : "/atos-mark.png"}
       alt={title}
       className={`v3-atos-mark ${className}`.trim()}
       draggable={false}

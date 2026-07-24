@@ -8568,7 +8568,7 @@ select.v3fs-dir-in {cursor:pointer}
 
 /* ATOS product mark — the network tile, ONE artwork with the favicon
    (/favicon.svg). Rounded like the tile itself; sized per placement. */
-.v3-atos-mark {display:inline-block;width:auto;border-radius:26%;user-select:none;flex-shrink:0}
+.v3-atos-mark {display:inline-block;width:auto;user-select:none;flex-shrink:0}
 .v3fs-appbar-mark {height:22px}
 .v3-topbar-brandlock {display:inline-flex;align-items:center;gap:9px}
 .v3-topbar-mark {height:24px}
