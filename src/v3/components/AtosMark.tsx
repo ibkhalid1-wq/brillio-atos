@@ -15,7 +15,7 @@ export default function AtosMark({
 }) {
   return (
     <img
-      src={tone === "dark" ? "/atos-mark-dark.png" : "/atos-mark.png"}
+      src={tone === "dark" ? "/atos-mark-dark.png" : "/atos-mark.svg"}
       alt={title}
       className={`v3-atos-mark ${className}`.trim()}
       draggable={false}
