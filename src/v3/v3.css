@@ -63,7 +63,8 @@
   --v3-text-secondary: var(--color-text-secondary);
   --v3-text-muted: var(--color-text-muted);
 
-  --v3-font: "Outfit", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --v3-font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --v3-font-display: "Outfit", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   /* A guaranteed, web-loaded premium mono. SF Mono / ui-monospace lead so Apple
      machines keep the crisp system face; IBM Plex Mono is the loaded fallback so
      Windows/Linux get the SAME refined data voice instead of Courier — the mono
@@ -8899,3 +8900,18 @@ select.v3fs-dir-in {cursor:pointer}
   .v3fs-dv-card, .v3fs-copilotcard, .v3fs-brief-card, .v3fs-dka-pcard { transition: none; }
   .v3fs-btn.pri:hover, .v3fs-regenbar-btn:hover, .v3fs-welcome-cta:hover { transform: none; }
 }
+
+/* ── Typography pass — Outfit was declared but never loaded; the whole app fell
+   back to system fonts. Now: Inter carries UI/body (crisp at small sizes),
+   Outfit carries display headings, numerals align in stats. ── */
+#root h1, #root h2, #root h3,
+.v3fs-hero-title, .v3fs-pf-eyebrow, .v3fs-appbar-brand,
+.v3-welcome-hero-title, .v3fs-pack-page h1 {
+  font-family: var(--v3-font-display);
+}
+#root h1, .v3fs-hero-title, .v3-welcome-hero-title { letter-spacing: -0.02em; }
+#root h2 { letter-spacing: -0.012em; }
+.v3fs-regenbar-n, .v3fs-dtab-count, .v3-deck-num, .v3fs-gatechip, .v3fs-plan-chip {
+  font-variant-numeric: tabular-nums;
+}
+body { text-rendering: optimizeLegibility; }
