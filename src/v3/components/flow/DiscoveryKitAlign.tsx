@@ -274,7 +274,9 @@ export default function DiscoveryKitAlign({ program, onSaveInputs, onRenamePerso
             <div className="v3fs-dka-foot lbl">Coverage · heard</div>
             {footer.map((f) => (
               <div key={f.area} className={`v3fs-dka-foot cov${f.total > 0 && f.heard === f.total ? " full" : ""}`}>
-                <span className="n">{f.heard} / {f.total || "—"}</span>
+                {/* Coverage first, heard second — the label's order. A bare
+                    "0 / 9" read as a fraction and pointed the wrong way. */}
+                <span className="n">{f.total ? <>{f.total} covering · {f.heard} heard</> : "no one covering"}</span>
                 <span className="bar"><i style={{ width: `${f.total ? Math.round((100 * f.heard) / f.total) : 0}%` }} /></span>
               </div>
             ))}
