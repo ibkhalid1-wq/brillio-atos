@@ -10,7 +10,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { safePrompt } from "@/v3/components/flow/flowCapture";
 import { useFocusTrap } from "@/v3/lib/useFocusTrap";
 import type { ProgramSummary } from "@/new/types";
-import { artifactDocument, falsifiedGap, flowMovements, locateQuote, movementEvidence, type ArtifactCardModel, type EvidenceEntry } from "@/v3/components/flow/flowShellData";
+import { artifactDocument, falsifiedGap, flowMovements, locateQuote, movementEvidence, spineLabel, type ArtifactCardModel, type EvidenceEntry } from "@/v3/components/flow/flowShellData";
 import { groundingFor, citationGraph, resourceUri, artifactFabioType, SEMANTIC_CONTEXT } from "@/v3/components/flow/flowSemantics";
 import { readRoleBindings, readOperatorAsks, operatorAsksFor, resolveMovementStakeholders, readDirectoryPeople, validateProgramRole, readGapRoutes, gapRouteKey } from "@/v3/components/flow/flowStakeholders";
 import { artifactApprovalState } from "@/v3/components/flow/flowApprovals";
@@ -171,8 +171,9 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
     })), [body]);
 
   const grounding = useMemo(() => groundingFor(program, artifact.id, artifact.movementId), [program, artifact]);
+  // Spine-folded: envision/show read "Prototype · Design/Validate", never the old names.
   const movementName = useMemo(
-    () => flowMovements().find((m) => m.id === artifact.movementId)?.displayName ?? artifact.movementId,
+    () => spineLabel(artifact.movementId, { distinct: true }),
     [artifact.movementId],
   );
   // The regeneration guard queues fresh versions of hand-edited docs as

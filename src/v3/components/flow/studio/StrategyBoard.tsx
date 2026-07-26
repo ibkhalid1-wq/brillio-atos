@@ -101,13 +101,12 @@ function ArchDiagram({ shape, integrationMap }: { shape: string; integrationMap:
             const ay = 50 + i * ((H - 100) / Math.max(1, agents.length - 1 || 1));
             return (
               <g key={`ag-${i}`}>
-                <rect x={hubX - 62} y={ay - 15} width="70" height="30" rx="8" fill="var(--v3-surface-2)" stroke="var(--v3-accent-2)" />
-                <text x={hubX - 27} y={ay + 4} textAnchor="middle" className="v3fs-arch-ag">{a}</text>
-                <line x1={hubX - 62} y1={ay} x2={hubX} y2={ay} stroke="var(--v3-accent-2)" strokeWidth="1.5" />
+                <rect x={hubX - 45} y={ay - 15} width="90" height="30" rx="8" fill="var(--v3-surface-2)" stroke="var(--v3-accent-2)" />
+                <text x={hubX} y={ay + 4} textAnchor="middle" className="v3fs-arch-ag">{a}</text>
               </g>
             );
           })}
-          {systems.map((s, i) => arrow(s.direction, hubX + 4, sysY(i), sysX - 6))}
+          {systems.map((s, i) => arrow(s.direction, hubX + 50, sysY(i), sysX - 6))}
         </>
       ) : (
         <>

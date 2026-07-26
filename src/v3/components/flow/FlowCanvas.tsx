@@ -610,19 +610,29 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
                 const validateStatus = waiting || validated
                   ? `${validated} verdict${validated === 1 ? "" : "s"} in · ${waiting} link${waiting === 1 ? "" : "s"} waiting`
                   : "clients sign off on it";
+                // The control IS the loop: two stations on a visible circuit.
+                // The forward leg lights when builds are out with pilots; the
+                // return leg lights when verdicts flow back. Clicking a station
+                // moves the cockpit there.
                 return (
-                <div className="v3fs-loopswitch" role="tablist" aria-label="Design or Validate">
+                <div className="v3fs-looprail" role="tablist" aria-label="Design or Validate">
                   <button type="button" role="tab" aria-selected={active === "envision"}
-                    className={`v3fs-loopswitch-b${active === "envision" ? " on" : ""}`} onClick={() => setActive("envision")}>
-                    <span className="v3fs-loopswitch-i" aria-hidden="true">✎</span>
-                    <span className="v3fs-loopswitch-t">Design Workspace<em className={hasBuild ? "live ok" : ""}>{designStatus}</em></span>
+                    className={`v3fs-looprail-station${active === "envision" ? " on" : ""}`} onClick={() => setActive("envision")}>
+                    <span className={`v3fs-looprail-node${hasBuild ? " done" : ""}`} aria-hidden="true">✎</span>
+                    <span className="v3fs-looprail-t">Design Workspace<em className={hasBuild ? "live ok" : ""}>{designStatus}</em></span>
                   </button>
-                  {/* The loop IS the relationship: design feeds validation, verdicts feed design. */}
-                  <span className="v3fs-loopswitch-loop" aria-hidden="true">⇄</span>
+                  <div className="v3fs-looprail-legs" aria-hidden="true">
+                    <span className={`v3fs-looprail-leg fwd${waiting > 0 ? " lit wait" : hasBuild ? " lit" : ""}`}>
+                      <i>{waiting > 0 ? `${waiting} with pilots` : "build ships to pilots"}</i><b>⟶</b>
+                    </span>
+                    <span className={`v3fs-looprail-leg back${validated > 0 ? " lit ok" : ""}`}>
+                      <b>⟵</b><i>{validated > 0 ? `${validated} verdict${validated === 1 ? "" : "s"} back` : "verdicts return"}</i>
+                    </span>
+                  </div>
                   <button type="button" role="tab" aria-selected={active === "show"}
-                    className={`v3fs-loopswitch-b${active === "show" ? " on" : ""}`} onClick={() => setActive("show")}>
-                    <span className="v3fs-loopswitch-i" aria-hidden="true">◉</span>
-                    <span className="v3fs-loopswitch-t">Validate<em className={validated ? "live ok" : waiting ? "live wait" : ""}>{validateStatus}</em></span>
+                    className={`v3fs-looprail-station${active === "show" ? " on" : ""}`} onClick={() => setActive("show")}>
+                    <span className={`v3fs-looprail-node${validated > 0 ? " done" : ""}`} aria-hidden="true">◉</span>
+                    <span className="v3fs-looprail-t">Validate<em className={validated ? "live ok" : waiting ? "live wait" : ""}>{validateStatus}</em></span>
                   </button>
                 </div>
                 );
