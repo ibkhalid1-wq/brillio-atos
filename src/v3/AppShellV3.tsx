@@ -36,7 +36,7 @@ import HelpPanel from "@/v3/components/HelpPanel";
 import ProgramSetupWizard from "@/v3/components/ProgramSetupWizard";
 import FlowShell from "@/v3/components/flow/FlowShell";
 import { resolveFlowDecision } from "@/v3/components/flow/flowDecisions";
-import { renamePersonInProgram } from "@/v3/components/flow/flowStakeholders";
+import { renamePersonInProgram, renameRoleInProgram } from "@/v3/components/flow/flowStakeholders";
 import { mintApprovalRequest, approvalLinkFor, ingestApprovalResponse, listApprovalResponses } from "@/v3/components/flow/flowApprovals";
 import { setHaltAll, toggleAgentHalt, setMovementBudget } from "@/v3/components/flow/flowGovernance";
 import { mintInterviewPacks, mintDemoInvites, ingestPortalResponse, dismissPortalResponse, portalItemTargetMovement } from "@/v3/components/flow/flowPortal";
@@ -2665,6 +2665,10 @@ export default function AppShellV3() {
           onRenamePerson={async (oldName, newName) => {
             const actor = currentUser?.email || "you";
             await persistFlowMutation((program) => renamePersonInProgram(program, oldName, newName, actor));
+          }}
+          onRenameRole={async (oldRole, newRole) => {
+            const actor = currentUser?.email || "you";
+            await persistFlowMutation((program) => renameRoleInProgram(program, oldRole, newRole, actor));
           }}
           onResolveDecision={async (decisionId, resolution) => {
             const resolvedBy = currentUser?.email || "you";

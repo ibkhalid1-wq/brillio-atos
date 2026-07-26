@@ -89,6 +89,10 @@ interface FlowCanvasProps {
   onReopenGate?: (movementId: string, reason: string) => Promise<void>;
   /** Awaitable agent run — the spine runner sequences regenerations with it. */
   onRunAgentAndWait?: (agentId: string, phaseId: string) => Promise<void>;
+  /** Rename a named person programme-wide (Discovery Kit inline rename). */
+  onRenamePerson?: (oldName: string, newName: string) => Promise<void>;
+  /** Rename a role-only roster row's label programme-wide. */
+  onRenameRole?: (oldRole: string, newRole: string) => Promise<void>;
 }
 
 
@@ -101,7 +105,7 @@ interface FlowCanvasProps {
  * one-line brief, and the ranked "Up next" queue. Nothing locks; editing
  * unfolds in place via the shared inputs panel.
  */
-export default function FlowCanvas({ program, programs, runningAgentIds, regenActiveIds, onEnqueueRegen, agentErrors, onRunAgent, onSaveInputs, onMintPacks, onMintDemoInvites, onCompileShipLanes, onToggleShipItem, onSetShipLane, onScheduleFollowUp, onMintFollowUp, onMintReview, onSaveArtifactDoc, onSendForApproval, onOpenInbox, onRecordShowPass, onRecordGate, onReopenGate, relatedPrograms, onSelectProgram, onComment }: FlowCanvasProps) {
+export default function FlowCanvas({ program, programs, runningAgentIds, regenActiveIds, onEnqueueRegen, agentErrors, onRunAgent, onSaveInputs, onMintPacks, onMintDemoInvites, onCompileShipLanes, onToggleShipItem, onSetShipLane, onScheduleFollowUp, onMintFollowUp, onMintReview, onSaveArtifactDoc, onSendForApproval, onOpenInbox, onRecordShowPass, onRecordGate, onReopenGate, relatedPrograms, onSelectProgram, onComment, onRenamePerson, onRenameRole }: FlowCanvasProps) {
   // A regeneration is "active" for an artifact when it's in flight OR queued. All
   // Regenerate controls check this to hide themselves; enqueueRegen is the single
   // ordered/de-duplicated path (falls back to an immediate run if unwired).
@@ -1126,6 +1130,7 @@ export default function FlowCanvas({ program, programs, runningAgentIds, regenAc
                           onOpenInbox={onOpenInbox}
                           header={movement.id === "frame" && artifact.id === "discovery-kit"
                             ? <DiscoveryKitAlign program={program} onSaveInputs={onSaveInputs}
+                                onRenamePerson={onRenamePerson} onRenameRole={onRenameRole}
                                 locked={isDone} onOpenGate={() => setGateModalFor(movement.id)} />
                             : artifact.id === "prototype-build"
                               ? <ExternalBuildPanel program={program} onSaveInputs={onSaveInputs} />

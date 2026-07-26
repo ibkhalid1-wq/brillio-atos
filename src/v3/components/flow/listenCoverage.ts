@@ -9,7 +9,7 @@
  */
 import type { ProgramSummary } from "@/new/types";
 import { programAreas, GENERAL_AREA, stakeholderPrimaryArea } from "@/v3/components/flow/flowAreas";
-import { resolveMovementStakeholders, readDirectoryPeople, dismissedListenRoles, validateProgramRole, readListenPlan, listenPlanWrite, type ListenPlanOverlay } from "@/v3/components/flow/flowStakeholders";
+import { resolveMovementStakeholders, readDirectoryPeople, dismissedListenRoles, validateProgramRole, readListenPlan, listenPlanWrite, readListenPlanOrder, type ListenPlanOverlay, type ListenPlanOrder } from "@/v3/components/flow/flowStakeholders";
 
 export interface CoverageRole { label: string; name?: string; added: boolean }
 export interface CoverageArea { label: string; added: boolean }
@@ -18,6 +18,16 @@ const AREA_STOP = ["and", "the", "of", "amp"];
 const covTokens = (a: string): Set<string> =>
   new Set(a.toLowerCase().split(/[^a-z0-9]+/).filter((t) => t && !AREA_STOP.includes(t)));
 const areaNorm = (a: string) => a.trim().toLowerCase();
+
+/** Sort by the operator's saved order; items it doesn't know keep their
+ * derived position after the ordered ones (stable sort, equal keys). */
+const applyOrder = <T,>(items: T[], labelOf: (item: T) => string, order: string[]): T[] => {
+  if (!order.length) return items;
+  const idx = new Map(order.map((label, i) => [label.toLowerCase(), i]));
+  return [...items].sort((a, b) =>
+    (idx.get(labelOf(a).toLowerCase()) ?? Number.MAX_SAFE_INTEGER)
+    - (idx.get(labelOf(b).toLowerCase()) ?? Number.MAX_SAFE_INTEGER));
+};
 
 /** The deduped roster (roles/people) for Listen, tagged whether operator-added. */
 export function listenCoverageRoles(program: ProgramSummary): CoverageRole[] {
@@ -28,7 +38,7 @@ export function listenCoverageRoles(program: ProgramSummary): CoverageRole[] {
     if (!key || seen.has(key)) continue;
     seen.set(key, { label: person.role || person.name, name: person.isRole ? undefined : person.name, added: directoryNames.has(person.name.trim().toLowerCase()) });
   }
-  return [...seen.values()];
+  return applyOrder([...seen.values()], (r) => r.label, readListenPlanOrder(program).roles);
 }
 
 /** Derived areas (from the ontology) + operator-added, minus dismissed. */
@@ -37,8 +47,9 @@ export function listenCoverageAreas(program: ProgramSummary, plan: ListenPlanOve
   const derived = programAreas(program).filter((a) => a && a !== GENERAL_AREA);
   const seen = new Set(derived.map((a) => a.toLowerCase()));
   const extra = plan.areas.filter((a) => !seen.has(a.toLowerCase()));
-  return [...derived.map((a) => ({ label: a, added: false })), ...extra.map((a) => ({ label: a, added: true }))]
+  const areas = [...derived.map((a) => ({ label: a, added: false })), ...extra.map((a) => ({ label: a, added: true }))]
     .filter((a) => !dismissed.has(areaNorm(a.label)));
+  return applyOrder(areas, (a) => a.label, readListenPlanOrder(program).areas);
 }
 
 /** Who covers each area — the EXPLICIT hand-curated list wins (even empty), else
@@ -70,16 +81,62 @@ export function makeListenPlanWriter(program: ProgramSummary, onSaveInputs: Save
   });
   // Persist a PARTIAL overlay merged onto the current plan; stamp planRev into
   // Listen/Envision/Show so their artifacts stale for regeneration. ONE write.
-  const writePlan = async (next: Partial<ListenPlanOverlay>, listenExtra?: Record<string, string>) => {
+  // frameExtra rides along for frame-bucket side fields (e.g. the order overlay
+  // when a rename must keep the renamed column/row in its slot).
+  const writePlan = async (next: Partial<ListenPlanOverlay>, listenExtra?: Record<string, string>, frameExtra?: Record<string, string>) => {
     if (!onSaveInputs) return;
     const plan = readListenPlan(program);
     const merged: ListenPlanOverlay = { roles: plan.roles, areas: plan.areas, coverage: plan.coverage, dismissedAreas: plan.dismissedAreas, ...next };
     const { frame, planRev } = listenPlanWrite(merged);
-    await onSaveInputs("frame", frame, { silent: true, extraInputs: { listen: { planRev, ...(listenExtra ?? {}) }, envision: { planRev }, show: { planRev } } });
+    await onSaveInputs("frame", { ...frame, ...(frameExtra ?? {}) }, { silent: true, extraInputs: { listen: { planRev, ...(listenExtra ?? {}) }, envision: { planRev }, show: { planRev } } });
+  };
+  // Order is presentational: an underscore field, ONE silent write, no
+  // planRev stamps — reordering must not stale artifacts or re-open gates.
+  const writeOrder = async (next: Partial<ListenPlanOrder>) => {
+    if (!onSaveInputs) return;
+    const order: ListenPlanOrder = { ...readListenPlanOrder(program), ...next };
+    await onSaveInputs("frame", { _listenPlanOrder: JSON.stringify(order) }, { silent: true });
+  };
+  const shifted = (labels: string[], label: string, delta: number): string[] | null => {
+    const from = labels.indexOf(label);
+    const to = from + delta;
+    if (from < 0 || to < 0 || to >= labels.length) return null;
+    const next = [...labels];
+    [next[from], next[to]] = [next[to], next[from]];
+    return next;
   };
   return {
     dirEntry,
     writePlan,
+    /** Pin an explicit column/row order — the drag-drop path. */
+    setAreaOrder: (labels: string[]) => writeOrder({ areas: labels }),
+    setRoleOrder: (labels: string[]) => writeOrder({ roles: labels }),
+    moveArea: (area: string, delta: number) => {
+      const next = shifted(listenCoverageAreas(program).map((a) => a.label), area, delta);
+      return next ? writeOrder({ areas: next }) : Promise.resolve();
+    },
+    moveRole: (label: string, delta: number) => {
+      const next = shifted(listenCoverageRoles(program).map((r) => r.label), label, delta);
+      return next ? writeOrder({ roles: next }) : Promise.resolve();
+    },
+    /** Rename an area IN PLACE: coverage follows, the column keeps its slot.
+     * A derived label can't change at its source, so old is dismissed and the
+     * new name added as an operator area — substantive, so it stales the kit. */
+    renameArea: (area: string, nextName: string) => {
+      const to = nextName.trim();
+      if (!to || areaNorm(to) === areaNorm(area)) return Promise.resolve();
+      const plan = readListenPlan(program);
+      const shownNow = listenCoverageAreas(program, plan);
+      if (shownNow.some((a) => areaNorm(a.label) === areaNorm(to))) return Promise.resolve();
+      const roles = listenAreaCoverage(program, plan, undefined, shownNow).find((c) => c.area === area)?.roles ?? [];
+      const cov = { ...plan.coverage }; delete cov[area]; cov[to] = roles;
+      const order = readListenPlanOrder(program);
+      return writePlan({
+        areas: [...plan.areas.filter((a) => areaNorm(a) !== areaNorm(area)), to],
+        dismissedAreas: [...new Set([...plan.dismissedAreas, area.trim()])].filter((d) => areaNorm(d) !== areaNorm(to)),
+        coverage: cov,
+      }, undefined, { _listenPlanOrder: JSON.stringify({ ...order, areas: shownNow.map((a) => (a.label === area ? to : a.label)) }) });
+    },
     setAreaRoles: (area: string, nextRoles: string[]) =>
       writePlan({ coverage: { ...readListenPlan(program).coverage, [area]: [...new Set(nextRoles)] } }),
     addArea: (area: string) => {

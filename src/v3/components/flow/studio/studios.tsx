@@ -24,11 +24,13 @@ import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
 
 /* ── shared card-list scaffolding ─────────────────────────────────────────── */
 
-function CardList({ items, render, onAdd, onRemove, addLabel, itemLabel }: {
+function CardList({ items, render, onAdd, onRemove, onMove, addLabel, itemLabel }: {
   items: Record<string, unknown>[];
   render: (item: Record<string, unknown>, index: number) => React.ReactNode;
   onAdd: () => void;
   onRemove: (index: number) => void;
+  /** ↑/↓ on each card — pass only when the list's order carries meaning. */
+  onMove?: (index: number, delta: number) => void;
   addLabel: string;
   itemLabel: (item: Record<string, unknown>, index: number) => string;
 }) {
@@ -39,6 +41,14 @@ function CardList({ items, render, onAdd, onRemove, addLabel, itemLabel }: {
         <details key={index} className="v3fs-stu-card" open={items.length <= 2}>
           <summary>
             <span className="v3fs-stu-card-t">{itemLabel(item, index)}</span>
+            {locked || !onMove ? null : (
+              <span className="v3fs-stu-mv">
+                <button type="button" className="v3fs-stu-x" aria-label="Move up" disabled={index === 0}
+                  onClick={(e) => { e.preventDefault(); onMove(index, -1); }}>↑</button>
+                <button type="button" className="v3fs-stu-x" aria-label="Move down" disabled={index === items.length - 1}
+                  onClick={(e) => { e.preventDefault(); onMove(index, 1); }}>↓</button>
+              </span>
+            )}
             {locked ? null : <button type="button" className="v3fs-stu-x" aria-label="Remove"
               onClick={(e) => { e.preventDefault(); onRemove(index); }}>×</button>}
           </summary>
@@ -56,7 +66,14 @@ function useListOps(doc: Record<string, unknown>, onChange: (next: Record<string
     onChange({ ...doc, [key]: items.map((item, i) => (i === index ? { ...item, ...changes } : item)) });
   const add = (blank: Record<string, unknown>) => onChange({ ...doc, [key]: [...items, blank] });
   const remove = (index: number) => onChange({ ...doc, [key]: items.filter((_, i) => i !== index) });
-  return { items, set, add, remove };
+  const move = (index: number, delta: number) => {
+    const to = index + delta;
+    if (to < 0 || to >= items.length) return;
+    const next = [...items];
+    [next[index], next[to]] = [next[to], next[index]];
+    onChange({ ...doc, [key]: next });
+  };
+  return { items, set, add, remove, move };
 }
 
 const patchOf = (doc: Record<string, unknown>, onChange: (next: Record<string, unknown>) => void) =>
@@ -116,11 +133,20 @@ const THIN_COVERAGE = "Thin — needs another voice";
  * gaps fold below — present, but never in the way of the main job.
  */
 function DiscoveryKitStudio({ doc, onChange, program }: StudioProps) {
+  const locked = useStudioLocked();
   const patch = patchOf(doc, onChange);
   const interviews = useListOps(doc, onChange, "interviews");
   const personas = useListOps(doc, onChange, "personas");
   const [selected, setSelected] = React.useState(0);
   const current = interviews.items[selected] as Record<string, unknown> | undefined;
+  // Reordering the roster keeps the operator's place: the selection follows
+  // the interview it was on, not the slot number.
+  const moveInterview = (index: number, delta: number) => {
+    const to = index + delta;
+    if (to < 0 || to >= interviews.items.length) return;
+    interviews.move(index, delta);
+    setSelected((sel) => (sel === index ? to : sel === to ? index : sel));
+  };
 
   const questionsOf = (interview: Record<string, unknown>): string[] =>
     asArray(interview.agenda).map(asRecord).flatMap((block) => asStrings(block.questions));
@@ -178,6 +204,7 @@ function DiscoveryKitStudio({ doc, onChange, program }: StudioProps) {
           rows={asArray(doc.coverageMap).map(asRecord).map((row) => ({ ...row, coveredBy: Array.isArray(row.coveredBy) ? asStrings(row.coveredBy).join(", ") : asText(row.coveredBy), thin: row.thin === true ? THIN_COVERAGE : WELL_COVERED }))}
           onChange={(next) => patch({ coverageMap: next.map((row) => ({ ...row, coveredBy: asText(row.coveredBy), thin: asText(row.thin) === THIN_COVERAGE })) })}
           addLabel="Add domain"
+          reorderable
         />
       </Section>
       <Section label="Interviews" hint="the conversations to run — pick one to refine its questions">
@@ -190,12 +217,22 @@ function DiscoveryKitStudio({ doc, onChange, program }: StudioProps) {
               const interview = entry as Record<string, unknown>;
               const count = questionsOf(interview).length;
               return (
-                <button key={index} type="button" role="tab" aria-selected={index === selected}
-                  className={`v3fs-kit2-person${index === selected ? " on" : ""}`} onClick={() => setSelected(index)}>
-                  <span className="v3fs-kit2-pr">{asText(interview.role) || asText(interview.domain) || "Interview"}</span>
-                  <span className="v3fs-kit2-pn">{asText(interview.stakeholder) || <em>unassigned — name them in People</em>}</span>
-                  <span className="v3fs-kit2-pq">{count} question{count === 1 ? "" : "s"}</span>
-                </button>
+                <div key={index} className="v3fs-kit2-rrow">
+                  <button type="button" role="tab" aria-selected={index === selected}
+                    className={`v3fs-kit2-person${index === selected ? " on" : ""}`} onClick={() => setSelected(index)}>
+                    <span className="v3fs-kit2-pr">{asText(interview.role) || asText(interview.domain) || "Interview"}</span>
+                    <span className="v3fs-kit2-pn">{asText(interview.stakeholder) || <em>unassigned — name them in People</em>}</span>
+                    <span className="v3fs-kit2-pq">{count} question{count === 1 ? "" : "s"}</span>
+                  </button>
+                  {locked ? null : (
+                    <span className="v3fs-kit2-rmv">
+                      <button type="button" className="v3fs-stu-x" aria-label="Move interview up" disabled={index === 0}
+                        onClick={() => moveInterview(index, -1)}>↑</button>
+                      <button type="button" className="v3fs-stu-x" aria-label="Move interview down" disabled={index === interviews.items.length - 1}
+                        onClick={() => moveInterview(index, 1)}>↓</button>
+                    </span>
+                  )}
+                </div>
               );
             })}
           </aside>
@@ -239,6 +276,7 @@ function DiscoveryKitStudio({ doc, onChange, program }: StudioProps) {
             itemLabel={(it) => `${asText(it.name) || "Persona"}${asText(it.kind) === "external" ? " · external" : ""}`}
             onAdd={() => personas.add({ name: "", kind: "internal", partInWorkflow: "", spokenForBy: [], unrepresented: false })}
             onRemove={personas.remove}
+            onMove={personas.move}
             addLabel="Add persona"
             render={(persona, index) => (
               <>

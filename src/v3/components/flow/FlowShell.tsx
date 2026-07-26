@@ -75,6 +75,8 @@ interface FlowShellProps {
   onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string }; extraInputs?: Record<string, Record<string, string>> }) => Promise<void>;
   /** Rename a person across the roster + contact bindings (People page). */
   onRenamePerson?: (oldName: string, newName: string) => Promise<void>;
+  /** Rename a role-only roster row's label programme-wide (Discovery Kit). */
+  onRenameRole?: (oldRole: string, newRole: string) => Promise<void>;
   /** Resolve an open decision (confirm applies its prepared payload). */
   onResolveDecision: (decisionId: string, resolution: "confirmed" | "declined") => Promise<void>;
   /** Record a movement's gate — demonstrated. Locks the movement's inputs. */
@@ -800,12 +802,12 @@ export default function FlowShell(props: FlowShellProps) {
             onIngestPortalItem={props.onIngestPortalItem} onDismissPortalItem={props.onDismissPortalItem} onRecordApproval={props.onRecordApproval}
             onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} />
         ) : view === "flow" ? (
-          <FlowCanvas program={program} programs={props.programs} runningAgentIds={props.runningAgentIds} regenActiveIds={props.regenActiveIds} onEnqueueRegen={props.onEnqueueRegen} agentErrors={props.agentErrors} relatedPrograms={[...(drillParent ? [drillParent] : []), ...listChildDrilldowns(program, props.programs).map((c) => c.child)]} onSelectProgram={props.onSelectProgram} onComment={props.onComment} onRunAgent={props.onRunAgent} onSaveInputs={props.onSaveInputs} onMintPacks={props.onMintPacks} onMintDemoInvites={props.onMintDemoInvites} onCompileShipLanes={props.onCompileShipLanes} onToggleShipItem={props.onToggleShipItem} onSetShipLane={props.onSetShipLane} onScheduleFollowUp={props.onScheduleFollowUp} onMintFollowUp={props.onMintFollowUp} onMintReview={props.onMintReview} onRecordShowPass={props.onRecordShowPass} onSaveArtifactDoc={props.onSaveArtifactDoc} onRecordGate={props.onRecordGate} onReopenGate={props.onReopenGate} onRunAgentAndWait={props.onRunAgentAndWait} onSendForApproval={props.onSendForApproval} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }}
+          <FlowCanvas program={program} programs={props.programs} runningAgentIds={props.runningAgentIds} regenActiveIds={props.regenActiveIds} onEnqueueRegen={props.onEnqueueRegen} agentErrors={props.agentErrors} relatedPrograms={[...(drillParent ? [drillParent] : []), ...listChildDrilldowns(program, props.programs).map((c) => c.child)]} onSelectProgram={props.onSelectProgram} onComment={props.onComment} onRunAgent={props.onRunAgent} onSaveInputs={props.onSaveInputs} onMintPacks={props.onMintPacks} onMintDemoInvites={props.onMintDemoInvites} onCompileShipLanes={props.onCompileShipLanes} onToggleShipItem={props.onToggleShipItem} onSetShipLane={props.onSetShipLane} onScheduleFollowUp={props.onScheduleFollowUp} onMintFollowUp={props.onMintFollowUp} onMintReview={props.onMintReview} onRecordShowPass={props.onRecordShowPass} onSaveArtifactDoc={props.onSaveArtifactDoc} onRecordGate={props.onRecordGate} onReopenGate={props.onReopenGate} onRunAgentAndWait={props.onRunAgentAndWait} onSendForApproval={props.onSendForApproval} onRenamePerson={props.onRenamePerson} onRenameRole={props.onRenameRole} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }}
           />
         ) : view === "people" ? (
           <FlowPeople program={program} onSaveInputs={props.onSaveInputs} onRenamePerson={props.onRenamePerson} onGoInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }} />
         ) : view === "library" ? (
-          <FlowLibrary program={program} programs={props.programs} onSelectProgram={props.onSelectProgram} onSaveInputs={props.onSaveInputs} onTagClaim={props.onTagClaim} onComment={props.onComment} onSaveArtifactDoc={props.onSaveArtifactDoc} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }} onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} />
+          <FlowLibrary program={program} programs={props.programs} onSelectProgram={props.onSelectProgram} onSaveInputs={props.onSaveInputs} onTagClaim={props.onTagClaim} onComment={props.onComment} onSaveArtifactDoc={props.onSaveArtifactDoc} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }} onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} onRenamePerson={props.onRenamePerson} onRenameRole={props.onRenameRole} />
         ) : view === "mission" ? (
           <FlowMission
             aiStatus={props.aiStatus}
@@ -2616,7 +2618,7 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
   );
 }
 
-function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagClaim, onComment, onSaveArtifactDoc, onOpenInbox, onGoFlow }: { program: ProgramSummary; programs: ProgramSummary[]; onSelectProgram: (id: string) => void; onSaveInputs?: FlowShellProps["onSaveInputs"]; onTagClaim?: FlowShellProps["onTagClaim"]; onComment?: FlowShellProps["onComment"]; onSaveArtifactDoc: FlowShellProps["onSaveArtifactDoc"]; onOpenInbox?: () => void; onGoFlow?: () => void }) {
+function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagClaim, onComment, onSaveArtifactDoc, onOpenInbox, onGoFlow, onRenamePerson, onRenameRole }: { program: ProgramSummary; programs: ProgramSummary[]; onSelectProgram: (id: string) => void; onSaveInputs?: FlowShellProps["onSaveInputs"]; onTagClaim?: FlowShellProps["onTagClaim"]; onComment?: FlowShellProps["onComment"]; onSaveArtifactDoc: FlowShellProps["onSaveArtifactDoc"]; onOpenInbox?: () => void; onGoFlow?: () => void; onRenamePerson?: FlowShellProps["onRenamePerson"]; onRenameRole?: FlowShellProps["onRenameRole"] }) {
   const claims = listClaimTags(program);
   const tagTargets = useMemo(() => claimTargets(program), [program]);
   const [claimHighlight, setClaimHighlight] = useState<string | undefined>(undefined);
@@ -2983,7 +2985,7 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
       </div>
       {docFor ? <Suspense fallback={null}><FlowArtifactStudio program={program} artifact={docFor} onClose={() => setDocFor(null)} onSaveDoc={onSaveArtifactDoc} onSaveInputs={onSaveInputs} onComment={onComment} onOpenInbox={onOpenInbox}
         header={docFor.id === "discovery-kit"
-          ? <DiscoveryKitAlign program={program} onSaveInputs={onSaveInputs} />
+          ? <DiscoveryKitAlign program={program} onSaveInputs={onSaveInputs} onRenamePerson={onRenamePerson} onRenameRole={onRenameRole} />
           : undefined}
         onOpenArtifact={(artifactId) => {
           for (const m of flowMovements()) {

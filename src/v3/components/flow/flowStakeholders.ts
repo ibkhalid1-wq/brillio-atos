@@ -613,6 +613,20 @@ export function readListenPlan(program: ProgramSummary): ListenPlanOverlay {
     return { roles: strs(p.roles), areas: strs(p.areas), coverage: cov, dismissedAreas: strs(p.dismissedAreas) };
   } catch { return empty; }
 }
+/** The operator's row/column order for the coverage matrix — PRESENTATIONAL,
+ * so it lives in an underscore (fingerprint-exempt) frame field: reordering
+ * areas or people never stales the kit and never re-opens the gate. */
+export interface ListenPlanOrder { areas: string[]; roles: string[] }
+export function readListenPlanOrder(program: ProgramSummary): ListenPlanOrder {
+  const raw = readMovementInputs(program, "frame")._listenPlanOrder;
+  const empty: ListenPlanOrder = { areas: [], roles: [] };
+  if (typeof raw !== "string" || !raw.trim()) return empty;
+  try {
+    const p = JSON.parse(raw) as Record<string, unknown>;
+    const strs = (v: unknown) => Array.isArray(v) ? v.map(String).map((s) => s.trim()).filter(Boolean) : [];
+    return { areas: strs(p.areas), roles: strs(p.roles) };
+  } catch { return empty; }
+}
 /** The plan's revision stamp — written as `planRev` (a NON-underscore key)
  * into the Listen/Envision/Show buckets so their artifacts stale too. */
 export function listenPlanRev(plan: ListenPlanOverlay): string {
@@ -1073,6 +1087,130 @@ export function renamePersonInProgram(
       ts: new Date().toISOString(), agentId: actor, phaseId: "listen", tier: 2,
       action: `Person renamed — ${from} → ${to}`,
       detail: "roster, contact binding, links and approval packs updated; historical evidence keeps the original attribution",
+    }].slice(-200),
+  }, usesNestedData);
+}
+
+/**
+ * Rename a ROLE label programme-wide — the sibling of renamePersonInProgram
+ * for roster rows that are roles, not named people. Patches every store that
+ * joins on the label: the kit's interviews/coverage, role-keyed contact
+ * bindings, the directory, the listen-plan overlay (roles + per-area coverage
+ * lists) and the presentational order overlay, plus standing interview links.
+ */
+export function renameRoleInProgram(
+  program: ProgramSummary,
+  oldRole: string,
+  newRole: string,
+  actor: string,
+): Record<string, unknown> | null {
+  const from = oldRole.trim();
+  const to = newRole.trim();
+  if (!from || !to || from.toLowerCase() === to.toLowerCase()) return null;
+  const { wrapper, inner, usesNestedData } = getProgramState((program.rawData ?? {}) as Record<string, unknown>);
+  const eq = (value: unknown) => String(value ?? "").trim().toLowerCase() === from.toLowerCase();
+  let touched = false;
+
+  // 1) Discovery-Kit — the role on interviews and the coverage map's lists.
+  const kit = isRecord(inner.discoveryKit) ? { ...(inner.discoveryKit as Record<string, unknown>) } : null;
+  if (kit) {
+    if (Array.isArray(kit.interviews)) {
+      kit.interviews = (kit.interviews as unknown[]).map((iv) => {
+        if (!isRecord(iv)) return iv;
+        let next = iv;
+        if (eq(iv.role)) { touched = true; next = { ...next, role: to }; }
+        // A role-row's stakeholder IS the label when no person is named yet.
+        if (eq(iv.stakeholder)) { touched = true; next = { ...next, stakeholder: to }; }
+        return next;
+      });
+    }
+    if (Array.isArray(kit.coverageMap)) {
+      kit.coverageMap = (kit.coverageMap as unknown[]).map((row) => {
+        if (!isRecord(row) || !Array.isArray(row.coveredBy)) return row;
+        const people = (row.coveredBy as unknown[]).map((n) => (eq(n) ? (touched = true, to) : n));
+        return { ...row, coveredBy: people };
+      });
+    }
+  }
+
+  // 2) Contact bindings keyed by the label, and the plan + order overlays.
+  const phaseInputs = isRecord(inner.phaseInputs) ? { ...(inner.phaseInputs as Record<string, unknown>) } : {};
+  for (const [mid, bucketRaw] of Object.entries(phaseInputs)) {
+    if (!isRecord(bucketRaw)) continue;
+    const raw = bucketRaw._roleBindings;
+    if (typeof raw !== "string" || !raw.trim()) continue;
+    try {
+      const parsed = JSON.parse(raw) as Record<string, { name?: unknown; email?: unknown }>;
+      let changed = false;
+      const next: Record<string, unknown> = {};
+      for (const [key, val] of Object.entries(parsed)) {
+        if (key.trim().toLowerCase() === from.toLowerCase()) {
+          next[to] = isRecord(val) && eq(val.name) ? { ...val, name: to } : val; changed = true; touched = true;
+        } else next[key] = val;
+      }
+      if (changed) phaseInputs[mid] = { ...bucketRaw, _roleBindings: JSON.stringify(next) };
+    } catch { /* skip malformed bindings */ }
+  }
+  const frame = isRecord(phaseInputs.frame) ? { ...(phaseInputs.frame as Record<string, unknown>) } : null;
+  if (frame && typeof frame.listenPlan === "string" && frame.listenPlan.trim()) {
+    try {
+      const plan = JSON.parse(frame.listenPlan) as Record<string, unknown>;
+      const roles = Array.isArray(plan.roles) ? (plan.roles as unknown[]).map((r) => (eq(r) ? (touched = true, to) : r)) : plan.roles;
+      const cov = isRecord(plan.coverage)
+        ? Object.fromEntries(Object.entries(plan.coverage as Record<string, unknown>).map(([area, list]) =>
+            [area, Array.isArray(list) ? list.map((r) => (eq(r) ? (touched = true, to) : r)) : list]))
+        : plan.coverage;
+      frame.listenPlan = JSON.stringify({ ...plan, roles, coverage: cov });
+      phaseInputs.frame = frame;
+    } catch { /* skip malformed plan */ }
+  }
+  if (frame && typeof frame._listenPlanOrder === "string" && frame._listenPlanOrder.trim()) {
+    try {
+      const order = JSON.parse(frame._listenPlanOrder) as Record<string, unknown>;
+      if (Array.isArray(order.roles)) {
+        frame._listenPlanOrder = JSON.stringify({ ...order, roles: (order.roles as unknown[]).map((r) => (eq(r) ? (touched = true, to) : r)) });
+        phaseInputs.frame = frame;
+      }
+    } catch { /* skip */ }
+  }
+
+  // 3) Operator-added directory entries carrying the label as role (and as
+  //    name, for role-only seats minted by the coverage editor).
+  const listen = isRecord(phaseInputs.listen) ? { ...(phaseInputs.listen as Record<string, unknown>) } : null;
+  if (listen && typeof listen._directoryPeople === "string") {
+    try {
+      const dp = JSON.parse(listen._directoryPeople) as unknown[];
+      if (Array.isArray(dp)) {
+        listen._directoryPeople = JSON.stringify(dp.map((p) => {
+          if (!isRecord(p)) return p;
+          let next = p;
+          if (eq(p.role)) { touched = true; next = { ...next, role: to }; }
+          if (eq(p.name)) { touched = true; next = { ...next, name: to }; }
+          return next;
+        }));
+        phaseInputs.listen = listen;
+      }
+    } catch { /* skip */ }
+  }
+
+  // 4) Standing links minted for the role-row keep working.
+  const nextInterviewPacks = Array.isArray(inner.flowInterviewPacks)
+    ? (inner.flowInterviewPacks as unknown[]).map((pack) =>
+        isRecord(pack) && eq(pack.stakeholder) ? (touched = true, { ...pack, stakeholder: to }) : pack)
+    : undefined;
+
+  if (!touched) return null;
+
+  const log = Array.isArray(inner.flowAttestations) ? (inner.flowAttestations as unknown[]) : [];
+  return wrapProgramState(wrapper, {
+    ...inner,
+    ...(kit ? { discoveryKit: kit } : {}),
+    ...(nextInterviewPacks ? { flowInterviewPacks: nextInterviewPacks } : {}),
+    phaseInputs,
+    flowAttestations: [...log, {
+      ts: new Date().toISOString(), agentId: actor, phaseId: "listen", tier: 2,
+      action: `Role renamed — ${from} → ${to}`,
+      detail: "kit roster, coverage lists, contact binding, directory and links updated",
     }].slice(-200),
   }, usesNestedData);
 }

@@ -4919,6 +4919,13 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 .v3fs-kit2-pn {font-size:11px;color:var(--v3-text-secondary)}
 .v3fs-kit2-pn em {opacity:.7}
 .v3fs-kit2-pq {font-size:9.5px;font-weight:600;letter-spacing:.02em;color:var(--v3-text-muted);text-transform:uppercase}
+/* Roster row = the interview tab + its reorder pair; the arrows stay out of
+   the way until the row is hovered or focused. */
+.v3fs-kit2-rrow {display:flex;align-items:center;gap:4px}
+.v3fs-kit2-rrow .v3fs-kit2-person {flex:1;min-width:0}
+.v3fs-kit2-rmv {display:flex;flex-direction:column;gap:3px;opacity:0;transition:opacity .13s ease}
+.v3fs-kit2-rrow:hover .v3fs-kit2-rmv, .v3fs-kit2-rmv:focus-within {opacity:1}
+@media (prefers-reduced-motion:reduce){.v3fs-kit2-rmv{transition:none}}
 .v3fs-kit2-detail {display:flex;flex-direction:column;gap:14px;min-width:0}
 /* Read-only identity band atop the interview detail — who the plan targets;
    editing who they are lives in People. */
@@ -6343,6 +6350,13 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-stu-x{flex-shrink:0;width:24px;height:24px;border-radius:7px;border:1px solid var(--fs-line);background:var(--fs-card);
   color:var(--v3-text-muted);font-size:14px;line-height:1;cursor:pointer;display:grid;place-items:center}
 .v3fs-stu-x:hover{color:var(--v3-red,#dc2626);border-color:currentColor}
+/* ↑/↓ reorder pair — same chrome as the remove button, accent on hover (not
+   the destructive red), quiet when the row can't move that way. */
+.v3fs-stu-mv{flex-shrink:0;display:inline-flex;gap:3px}
+.v3fs-stu-mv .v3fs-stu-x{font-size:12px}
+.v3fs-stu-mv .v3fs-stu-x:hover{color:var(--v3-accent-b);border-color:currentColor}
+.v3fs-stu-x:disabled{opacity:.3;cursor:default;pointer-events:none}
+.v3fs-stu-mv-h{flex-shrink:0;width:51px}
 .v3fs-stu-table{display:flex;flex-direction:column;gap:6px;margin:0 0 10px}
 .v3fs-stu-tr{display:flex;gap:6px;align-items:flex-start}
 .v3fs-stu-th{font-size:9.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--v3-text-muted);padding:0 2px}
@@ -8726,9 +8740,10 @@ select.v3fs-dir-in {cursor:pointer}
 .v3fs-dka-pcard .nm {font-weight:650;font-size:13.5px;color:var(--v3-text-primary)}
 .v3fs-dka-pcard .rl {font-size:11.5px;color:var(--v3-text-muted)}
 .v3fs-dka-pcard .areas {margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}
-.v3fs-dka-pcard .achip {font-size:11.5px;font-weight:600;border-radius:20px;padding:4px 11px;
+.v3fs-dka-pcard .achip, .v3fs-dka-peek .achip {font-size:11.5px;font-weight:600;border-radius:20px;padding:4px 11px;
   color:var(--acc, var(--v3-accent));background:color-mix(in srgb, var(--acc, var(--v3-accent)) 12%, transparent)}
-.v3fs-dka-pcard .achip.none {color:var(--v3-text-muted);background:color-mix(in srgb, var(--v3-text-muted) 12%, transparent)}
+.v3fs-dka-pcard .achip.none, .v3fs-dka-peek .achip.none {color:var(--v3-text-muted);background:color-mix(in srgb, var(--v3-text-muted) 12%, transparent)}
+.v3fs-dka-peek .achip {font-size:10.5px;padding:3px 9px}
 
 .v3fs-dka-hint {margin:12px 2px 0;font-size:11px;color:var(--v3-text-muted);line-height:1.5}
 
@@ -8797,6 +8812,44 @@ select.v3fs-dir-in {cursor:pointer}
 .v3fs-dka-x:hover {color:var(--color-danger, #c0392b);background:color-mix(in srgb, var(--color-danger, #c0392b) 12%, transparent)}
 .v3fs-dka-ahdr .v3fs-dka-x {position:absolute;top:3px;right:3px;font-size:12px}
 .v3fs-dka-person .v3fs-dka-x {margin-left:auto}
+/* Reorder arrows — hover-revealed like the remove ×, accent (not danger). An
+   area header moves ◂▸ along the columns; a person moves ▴▾ down the rows. */
+.v3fs-dka-mv {display:inline-flex;gap:1px;opacity:0;transition:opacity .13s ease}
+.v3fs-dka-ahdr:hover .v3fs-dka-mv, .v3fs-dka-person:hover .v3fs-dka-mv, .v3fs-dka-pcard:hover .v3fs-dka-mv,
+.v3fs-dka-mv:focus-within {opacity:1}
+.v3fs-dka-ahdr .v3fs-dka-mv {position:absolute;top:3px;left:3px}
+.v3fs-dka-mv.rows {flex-direction:column;margin-left:auto}
+.v3fs-dka-person .v3fs-dka-x, .v3fs-dka-pcard .v3fs-dka-x {margin-left:0}
+.v3fs-dka-mvb {border:0;background:transparent;color:var(--v3-text-muted);cursor:pointer;font-size:10px;line-height:1;padding:2px 4px;border-radius:5px}
+.v3fs-dka-mvb:hover {color:var(--v3-accent-b);background:var(--v3-accent-soft)}
+.v3fs-dka-mvb:disabled {opacity:.3;cursor:default;pointer-events:none}
+@media (prefers-reduced-motion:reduce){.v3fs-dka-mv{transition:none}}
+/* Drag-drop reorder: whole headers/rows are grabbable; the drop target lights
+   with the accent ring so where-it-lands is visible before release. */
+.v3fs-dka-ahdr[draggable="true"], .v3fs-dka-person[draggable="true"] {cursor:grab}
+.v3fs-dka-ahdr.dragover, .v3fs-dka-person.dragover {box-shadow:inset 0 0 0 2px var(--v3-accent);border-radius:8px}
+/* Inline rename input — swaps in for the label on double-click. */
+.v3fs-dka-ren {font:inherit;font-size:12px;font-weight:650;color:var(--v3-text-primary);background:var(--fs-card);
+  border:1px solid var(--v3-accent);border-radius:6px;padding:2px 6px;min-width:0;max-width:150px;outline:0}
+/* Hover peek — fixed-position card; pointer-events none so it never traps the
+   mouse; sits above the studio chrome. */
+.v3fs-dka-peek {position:fixed;z-index:320;width:270px;pointer-events:none;
+  background:var(--fs-card);border:1px solid var(--fs-line);border-radius:13px;padding:13px 15px;
+  box-shadow:0 6px 16px -6px rgba(23,26,46,.22),0 24px 48px -18px rgba(23,26,46,.3)}
+.v3fs-dka-peek .pk-t {font-size:13.5px;font-weight:750;letter-spacing:-.01em;color:var(--v3-text-primary)}
+.v3fs-dka-peek .pk-r {font-size:11px;color:var(--v3-text-muted);margin-top:1px}
+.v3fs-dka-peek .pk-meta {display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}
+.v3fs-dka-peek .pk-pill {font-size:9.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--v3-text-muted);background:color-mix(in srgb,var(--fs-line) 40%,transparent);border-radius:99px;padding:2px 8px}
+.v3fs-dka-peek .pk-pill.ok {color:var(--v3-green,#1d9e43);background:color-mix(in srgb,var(--v3-green,#1d9e43) 12%,transparent)}
+.v3fs-dka-peek .pk-e {font-family:var(--v3-font-mono);font-size:10.5px;color:var(--v3-text-muted);margin-top:6px}
+.v3fs-dka-peek .pk-l {font-size:9px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--v3-text-muted);margin:9px 0 5px}
+.v3fs-dka-peek .pk-chips {display:flex;gap:4px;flex-wrap:wrap}
+.v3fs-dka-peek .pk-list {list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px}
+.v3fs-dka-peek .pk-list li {font-size:11.5px;color:var(--v3-text-secondary);display:flex;gap:6px;align-items:baseline}
+.v3fs-dka-peek .pk-list i {font-style:normal;color:var(--v3-text-muted)}
+.v3fs-dka-peek .pk-list i.ok {color:var(--v3-green,#1d9e43)}
+.v3fs-dka-peek .pk-none {font-size:11.5px;color:var(--v3-text-muted)}
 .v3fs-dka-dot {padding:0;border-radius:50%;width:20px;height:20px;border:1.6px solid var(--fs-line);background:transparent;cursor:default;display:grid;place-items:center}
 .v3fs-dka-dot.editable {cursor:pointer}
 .v3fs-dka-dot.editable:hover {border-color:var(--v3-accent)}

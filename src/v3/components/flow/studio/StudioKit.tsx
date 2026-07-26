@@ -202,12 +202,14 @@ export interface TableColumn {
 }
 
 /** Editor for an array of flat objects — a labelled column per key. */
-export function TableEditor({ columns, rows, onChange, addLabel, emptyHint }: {
+export function TableEditor({ columns, rows, onChange, addLabel, emptyHint, reorderable }: {
   columns: TableColumn[];
   rows: Record<string, unknown>[];
   onChange: (next: Record<string, unknown>[]) => void;
   addLabel?: string;
   emptyHint?: string;
+  /** ↑/↓ per row — only for lists whose order carries meaning downstream. */
+  reorderable?: boolean;
 }) {
   const locked = useStudioLocked();
   const authoring = useStudioAuthoring();
@@ -215,11 +217,19 @@ export function TableEditor({ columns, rows, onChange, addLabel, emptyHint }: {
     onChange(rows.map((row, i) => (i === index ? { ...row, [key]: next } : row)));
   const remove = (index: number) => onChange(rows.filter((_, i) => i !== index));
   const add = () => onChange([...rows, Object.fromEntries(columns.map((c) => [c.key, ""]))]);
+  const move = (index: number, delta: number) => {
+    const to = index + delta;
+    if (to < 0 || to >= rows.length) return;
+    const next = [...rows];
+    [next[index], next[to]] = [next[to], next[index]];
+    onChange(next);
+  };
   return (
     <div className="v3fs-stu-table">
       {rows.length ? (
         <div className="v3fs-stu-tr v3fs-stu-th" aria-hidden="true">
           {columns.map((col) => <span key={col.key} style={{ flexGrow: col.grow ?? 1, flexBasis: 0 }}>{col.label}</span>)}
+          {locked || !reorderable ? null : <span className="v3fs-stu-mv-h" />}
           <span className="v3fs-stu-xcol" />
         </div>
       ) : emptyHint ? <div className="v3fs-stu-empty">{emptyHint}</div> : null}
@@ -245,6 +255,12 @@ export function TableEditor({ columns, rows, onChange, addLabel, emptyHint }: {
             return <input key={col.key} style={style} value={value} aria-label={col.label} disabled={locked}
               onChange={(e) => setCell(index, col.key, e.target.value)} />;
           })}
+          {locked || !reorderable ? null : (
+            <span className="v3fs-stu-mv">
+              <button type="button" className="v3fs-stu-x" aria-label="Move row up" disabled={index === 0} onClick={() => move(index, -1)}>↑</button>
+              <button type="button" className="v3fs-stu-x" aria-label="Move row down" disabled={index === rows.length - 1} onClick={() => move(index, 1)}>↓</button>
+            </span>
+          )}
           {locked ? null : <button type="button" className="v3fs-stu-x v3fs-stu-xcol" aria-label="Remove row" onClick={() => remove(index)}>×</button>}
         </div>
       ))}
