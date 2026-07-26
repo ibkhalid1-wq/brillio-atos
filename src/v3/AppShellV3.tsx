@@ -44,6 +44,7 @@ import { recordShowPass } from "@/v3/components/flow/flowTracks";
 import { applyArtifactEdit } from "@/v3/components/flow/flowArtifactEdit";
 import { compileShipLanes, setShipLane, toggleShipItem } from "@/v3/components/flow/flowShip";
 import { scheduleFollowUp, discoveryKitCoverageGuidance } from "@/v3/components/flow/flowMeetings";
+import { listenCanonicalCastGuidance } from "@/v3/components/flow/listenCoverage";
 import { mintFollowUpPack, latestPackFor, portalLinkFor, mintReviewPack, latestReviewPackFor } from "@/v3/components/flow/flowPortal";
 import { mintBrief, briefLinkFor } from "@/v3/components/flow/flowBriefs";
 import FlowRespond from "@/v3/components/flow/FlowRespond";
@@ -1043,10 +1044,14 @@ export default function AppShellV3() {
     // Regenerating the Discovery Kit HONOURS the operator's coverage-map edits:
     // domains they marked thin become an instruction to deepen those domains'
     // questions and secure a second voice. Without this, a regenerate re-derived
-    // from Frame evidence alone and ignored their triage.
+    // from Frame evidence alone and ignored their triage. The canonical cast
+    // guidance pins their CURRENT roster/area labels the same way, so renames
+    // and removals don't leak back from the transcripts.
     if (resolvedAgentId === "discovery-kit" && activeProgram) {
       const guidance = discoveryKitCoverageGuidance(activeProgram);
       if (guidance) crossPhaseContext += `${crossPhaseContext ? "\n\n" : ""}${guidance}`;
+      const cast = listenCanonicalCastGuidance(activeProgram);
+      if (cast) crossPhaseContext += `${crossPhaseContext ? "\n\n" : ""}${cast}`;
     }
     // Append the artifact's stored quality-review suggestions to the prompt context.
     // The edge function folds crossPhaseContext into prompt.system, so the model

@@ -70,6 +70,28 @@ export function listenAreaCoverage(
   });
 }
 
+/**
+ * The operator's CURRENT roster and area labels as prompt guidance for the
+ * Discovery-Kit regenerator. Without this, the agent re-derives interviews
+ * from evidence and resurrects labels the operator renamed or removed —
+ * their curation must outrank the transcripts it was applied to.
+ */
+export function listenCanonicalCastGuidance(program: ProgramSummary): string | null {
+  const roles = listenCoverageRoles(program);
+  const areas = listenCoverageAreas(program);
+  if (!roles.length && !areas.length) return null;
+  const dismissedRoles = [...dismissedListenRoles(program)];
+  const dismissedAreas = readListenPlan(program).dismissedAreas;
+  const lines = ["## Canonical cast and area names (operator-curated — use these labels VERBATIM)"];
+  if (roles.length) {
+    lines.push(`Interview roles/stakeholders — every interview must use exactly one of these labels (no variants, no replaced or invented names): ${roles.map((r) => (r.name && r.name !== r.label ? `${r.label} (person: ${r.name})` : r.label)).join("; ")}.`);
+  }
+  if (areas.length) lines.push(`Coverage domains — use exactly these area names: ${areas.map((a) => a.label).join("; ")}.`);
+  if (dismissedRoles.length) lines.push(`Labels the operator REMOVED or RENAMED AWAY — never reintroduce them under any spelling or casing: ${dismissedRoles.join("; ")}.`);
+  if (dismissedAreas.length) lines.push(`Areas the operator REMOVED or RENAMED AWAY — never reintroduce: ${dismissedAreas.join("; ")}.`);
+  return lines.join("\n");
+}
+
 type SaveInputs = (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; extraInputs?: Record<string, Record<string, string>> }) => Promise<void> | void;
 
 /** The plan-overlay write actions, shared by both editors. Each caller supplies
