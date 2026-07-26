@@ -6882,12 +6882,6 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-lc-rec-hint {font-size:10.5px;color:var(--v3-text-muted)}
 .v3fs-lc-clear {font-size:11.5px;color:var(--v3-green);padding:2px 2px}
 .v3fs-lanes-empty {font-size:12px;color:var(--v3-text-muted);padding:14px 12px;border:1px dashed var(--fs-line);border-radius:10px;background:var(--fs-bg,transparent)}
-/* Role-remap (alias) chips on the People page. */
-.v3fs-alias-list {display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
-.v3fs-alias-chip {display:inline-flex;align-items:center;gap:6px;font-size:11.5px;padding:3px 6px 3px 10px;border-radius:999px;background:color-mix(in srgb,var(--v3-accent) 6%,transparent);border:1px solid color-mix(in srgb,var(--v3-accent) 24%,var(--fs-line));color:var(--v3-text-secondary)}
-.v3fs-alias-chip b {color:var(--v3-text-primary)}
-.v3fs-alias-x {font:inherit;font-size:11px;line-height:1;background:none;border:0;padding:2px 4px;border-radius:6px;color:var(--v3-text-muted);cursor:pointer}
-.v3fs-alias-x:hover {background:color-mix(in srgb,var(--v3-red,#d64545) 12%,transparent);color:var(--v3-red,#d64545)}
 /* Prominent Design ⇄ Validate mode switch on the Prototype phase home. */
 /* The Design ⇄ Validate loop switch — a recessed track where the ACTIVE half
    rises as a card (elevated, white) and the inactive half sits in the well;
@@ -8747,6 +8741,11 @@ select.v3fs-dir-in {cursor:pointer}
 .v3fs-dka-peek .achip {font-size:10.5px;padding:3px 9px}
 
 .v3fs-dka-hint {margin:12px 2px 0;font-size:11px;color:var(--v3-text-muted);line-height:1.5}
+/* People ⇄ Discovery Kit reconcile panel */
+.v3fs-recon {display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.v3fs-recon-sum {font-size:12.5px;line-height:1.5;color:var(--v3-text-secondary)}
+.v3fs-recon-sum b {margin:0 2px}
+.v3fs-recon-sum.ok {color:var(--v3-green,#1d9e43);font-weight:600}
 
 /* ── "Request a meeting instead" bar on the stakeholder linked pages ── */
 .v3fs-mrq {margin:16px 0;border:1px solid color-mix(in srgb, var(--v3-accent) 24%, var(--fs-line));background:color-mix(in srgb, var(--v3-accent) 5%, transparent);border-radius:13px;padding:14px 16px}

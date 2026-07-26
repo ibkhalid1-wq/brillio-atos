@@ -23,7 +23,6 @@ import {
 } from "@/v3/components/flow/flowTracks";
 import { readFlowGovernance, flowAgentTier } from "@/v3/components/flow/flowGovernance";
 import { resolveMovementStakeholders, deliveryRoleDirectory, readDirectoryPeople, validateProgramRole, readRoleBindings, knownProgramRoles, unresolvedCoverageNames, kitPersonaDirectory, readSuggestedVoices, readListenPlan, listenPlanWrite, dismissedListenRoles } from "@/v3/components/flow/flowStakeholders";
-import { programAreas, GENERAL_AREA, readRoleAliases, roleAliasKey } from "@/v3/components/flow/flowAreas";
 import DiscoveryKitAlign from "@/v3/components/flow/DiscoveryKitAlign";
 import { stakeholderEmail } from "@/v3/components/flow/flowMeetings";
 import { readMetricRegistry, metricConsistency } from "@/v3/components/flow/flowMetricRegistry";
@@ -2266,43 +2265,57 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
     } finally { setAddBusy(false); }
   };
 
-  // ── Role remap (alias) ────────────────────────────────────────────────────
-  // Correct a synthesized role: rename it and/or pin it to a business area. The
-  // remap persists as `_roleAliases` and is honoured across every phase (the
-  // area drives stakeholderPrimaryArea; the rename drives the display), surviving
-  // regeneration — the durable answer to "the Customer Success role is called
-  // Vertical Sales and maps to Sales" that a free-text note could never deliver.
-  const roleAliases = useMemo(() => readRoleAliases(program), [program]);
-  const canonicalAreas = useMemo(() => {
-    const set = new Set<string>(programAreas(program));
-    for (const a of ["Sales", "Marketing", "Finance", "People", "Legal & Compliance", "Support", "Operations", "Product & Engineering", "Clinical"]) set.add(a);
-    set.delete(GENERAL_AREA);
-    return [...set].sort((a, b) => a.localeCompare(b));
+  // ── Reconcile with the Discovery Kit ─────────────────────────────────────
+  // The kit is the cast's source of truth. One explicit gesture makes this
+  // page mirror it: internal personas the kit lists but People doesn't gain a
+  // row; operator-added Listen rows the kit no longer knows are removed.
+  // External personas stay display-only — they're heard through whoever faces
+  // them, not interviewed. ONE batched write; counts shown before and after.
+  const kitIdentity = useMemo(() => {
+    const s = new Set<string>();
+    const raw = (program.rawData ?? {}) as Record<string, unknown>;
+    const inner = (typeof raw.data === "object" && raw.data !== null ? raw.data : raw) as Record<string, unknown>;
+    const kit = inner.discoveryKit;
+    if (kit && typeof kit === "object" && !Array.isArray(kit)) {
+      const k = kit as Record<string, unknown>;
+      for (const iv of Array.isArray(k.interviews) ? k.interviews : []) {
+        if (!iv || typeof iv !== "object") continue;
+        const row = iv as Record<string, unknown>;
+        for (const v of [row.role, row.stakeholder]) { const id = peopleIdentity(String(v ?? "")); if (id) s.add(id); }
+      }
+      for (const p of Array.isArray(k.personas) ? k.personas : []) {
+        if (!p || typeof p !== "object") continue;
+        const id = peopleIdentity(String((p as Record<string, unknown>).name ?? "")); if (id) s.add(id);
+      }
+    }
+    // People added on the kit's coverage matrix are part of the kit too.
+    for (const r of readListenPlan(program).roles) { const id = peopleIdentity(r); if (id) s.add(id); }
+    return s;
   }, [program]);
-  const [aliasForm, setAliasForm] = useState({ role: "", rename: "", area: "" });
-  const [aliasBusy, setAliasBusy] = useState(false);
-  const saveRoleAlias = async () => {
-    const role = aliasForm.role.trim();
-    const rename = aliasForm.rename.trim();
-    const area = aliasForm.area.trim();
-    if (!onSaveInputs || !role || (!rename && !area)) return;
-    const next = { ...readRoleAliases(program) };
-    next[roleAliasKey(role)] = { from: role, ...(rename ? { rename } : {}), ...(area ? { area } : {}) };
-    setAliasBusy(true);
+  const reconcile = useMemo(() => ({
+    toAdd: personas.filter((p) => p.kind !== "external"),
+    toRemove: added.filter((p) => p.movementId === "listen"
+      && !kitIdentity.has(peopleIdentity(p.name)) && !kitIdentity.has(peopleIdentity(p.role))),
+  }), [personas, added, kitIdentity]);
+  const [reconBusy, setReconBusy] = useState(false);
+  const [reconNote, setReconNote] = useState<string | null>(null);
+  const runReconcile = async () => {
+    if (!onSaveInputs || (!reconcile.toAdd.length && !reconcile.toRemove.length)) return;
+    setReconBusy(true);
     try {
-      await onSaveInputs("listen", { _roleAliases: JSON.stringify(next) }, {
-        attest: { action: `Role remapped — ${role}${rename ? ` → ${rename}` : ""}${area ? ` · ${area}` : ""}` },
+      const dropIds = new Set(reconcile.toRemove.map((p) => p.id));
+      const kept = readDirectoryPeople(program).filter((p) => !dropIds.has(p.id));
+      const stamp = Date.now().toString(36);
+      const additions = reconcile.toAdd.map((p, i) => ({
+        id: `dp-${stamp}-${i}-${p.name.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 8)}`,
+        name: p.name, role: p.name, email: undefined, movementId: "listen",
+        roleResolved: validateProgramRole(program, p.name).known,
+      }));
+      await onSaveInputs("listen", { _directoryPeople: JSON.stringify([...kept, ...additions]) }, {
+        attest: { action: "People reconciled with the Discovery Kit", detail: `${additions.length} added, ${reconcile.toRemove.length} removed` },
       });
-      setAliasForm({ role: "", rename: "", area: "" });
-    } finally { setAliasBusy(false); }
-  };
-  const removeRoleAlias = async (key: string) => {
-    if (!onSaveInputs) return;
-    const next = { ...readRoleAliases(program) };
-    delete next[key];
-    setAliasBusy(true);
-    try { await onSaveInputs("listen", { _roleAliases: JSON.stringify(next) }, { attest: { action: "Role remap cleared" } }); }
-    finally { setAliasBusy(false); }
+      setReconNote(`${additions.length} added · ${reconcile.toRemove.length} removed — People now mirrors the kit.`);
+    } finally { setReconBusy(false); }
   };
 
   // ── Inline editing ──────────────────────────────────────────────────────
@@ -2545,31 +2558,22 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
       ) : null}
       {onSaveInputs ? (
         <div className="v3fs-panel v3fs-panel-wide">
-          <div className="v3fs-ph"><h3>Remap a role</h3><span>correct a synthesized role — rename it and/or map it to the right area. Applies across every phase and survives regeneration.</span></div>
-          <div className="v3fs-addp">
-            <input placeholder="Role to correct (e.g. Customer Success Manager)" aria-label="Role to correct" list="v3fs-role-alias-opts"
-              value={aliasForm.role} onChange={(event) => setAliasForm({ ...aliasForm, role: event.target.value })} />
-            <datalist id="v3fs-role-alias-opts">{roleOptions.map((r) => <option key={r} value={r} />)}</datalist>
-            <input placeholder="Rename to (optional, e.g. Vertical Sales)" aria-label="Rename to"
-              value={aliasForm.rename} onChange={(event) => setAliasForm({ ...aliasForm, rename: event.target.value })} />
-            <select value={aliasForm.area} aria-label="Map to area" onChange={(event) => setAliasForm({ ...aliasForm, area: event.target.value })}>
-              <option value="">Keep current area</option>
-              {canonicalAreas.map((a) => <option key={a} value={a}>{a}</option>)}
-            </select>
-            <button type="button" className="v3fs-btn pri"
-              disabled={aliasBusy || !aliasForm.role.trim() || (!aliasForm.rename.trim() && !aliasForm.area.trim())}
-              onClick={() => void saveRoleAlias()}>{aliasBusy ? "Saving…" : "Remap role"}</button>
-          </div>
-          {Object.keys(roleAliases).length ? (
-            <div className="v3fs-alias-list">
-              {Object.entries(roleAliases).map(([key, a]) => (
-                <span key={key} className="v3fs-alias-chip">
-                  <b>{a.from || key}</b>{a.rename ? ` → ${a.rename}` : ""}{a.area ? ` · ${a.area}` : ""}
-                  <button type="button" className="v3fs-alias-x" onClick={() => void removeRoleAlias(key)} aria-label={`Clear remap for ${a.from || key}`}>✕</button>
+          <div className="v3fs-ph"><h3>Reconcile with the Discovery Kit</h3><span>make this cast mirror the kit — internal personas the kit lists gain a row; operator-added Listen rows the kit doesn&rsquo;t know are removed</span></div>
+          <div className="v3fs-recon">
+            {reconcile.toAdd.length || reconcile.toRemove.length ? (
+              <>
+                <span className="v3fs-recon-sum">
+                  {reconcile.toAdd.length ? <>＋ {reconcile.toAdd.length} to add: {reconcile.toAdd.map((p) => p.name).slice(0, 4).join(", ")}{reconcile.toAdd.length > 4 ? ` +${reconcile.toAdd.length - 4} more` : ""}</> : null}
+                  {reconcile.toAdd.length && reconcile.toRemove.length ? <b> · </b> : null}
+                  {reconcile.toRemove.length ? <>− {reconcile.toRemove.length} to remove: {reconcile.toRemove.map((p) => p.name).slice(0, 4).join(", ")}{reconcile.toRemove.length > 4 ? ` +${reconcile.toRemove.length - 4} more` : ""}</> : null}
                 </span>
-              ))}
-            </div>
-          ) : null}
+                <button type="button" className="v3fs-btn pri" disabled={reconBusy}
+                  onClick={() => void runReconcile()}>{reconBusy ? "Reconciling…" : "Reconcile"}</button>
+              </>
+            ) : (
+              <span className="v3fs-recon-sum ok">✓ In sync with the Discovery Kit{reconNote ? ` (${reconNote})` : ""}</span>
+            )}
+          </div>
         </div>
       ) : null}
       {suggested.length ? (
