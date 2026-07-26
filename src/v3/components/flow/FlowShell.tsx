@@ -2532,12 +2532,15 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
       </div>
       {onSaveInputs ? (
         <div className="v3fs-panel v3fs-panel-wide">
-          <div className="v3fs-ph"><h3>Add a person</h3><span>name a new person and their role — a role the programme doesn&rsquo;t recognise is sent to the Inbox to clarify</span></div>
+          <div className="v3fs-ph"><h3>Add a person</h3><span>name a new person and pick their role from the ones this programme knows — new roles are minted on the Discovery Kit matrix</span></div>
           <div className="v3fs-addp">
             <input placeholder="Name" aria-label="Name" value={form.name}
               onChange={(event) => setForm({ ...form, name: event.target.value })} />
-            <input placeholder="Role (e.g. Data Steward)" aria-label="Role" value={form.role}
-              onChange={(event) => setForm({ ...form, role: event.target.value })} />
+            <select aria-label="Role" value={form.role}
+              onChange={(event) => setForm({ ...form, role: event.target.value })}>
+              <option value="">Select a role…</option>
+              {roleOptions.map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
             <input placeholder="Email (optional)" type="email" aria-label="Email" value={form.email}
               onChange={(event) => setForm({ ...form, email: event.target.value })} />
             <select value={form.movementId} aria-label="Movement" onChange={(event) => setForm({ ...form, movementId: event.target.value })}>
@@ -2546,9 +2549,6 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
             <button type="button" className="v3fs-btn pri" disabled={addBusy || !form.name.trim() || !form.role.trim()}
               onClick={() => void addPerson()}>{addBusy ? "Adding…" : "Add person"}</button>
           </div>
-          {form.role.trim() && !validateProgramRole(program, form.role).known ? (
-            <p className="v3fs-addp-note">&ldquo;{form.role.trim()}&rdquo; isn&rsquo;t a role this programme recognises yet — adding will route it to the Inbox to clarify.{(() => { const s = validateProgramRole(program, form.role).suggestions; return s.length ? ` Closest: ${s.slice(0, 3).join(", ")}.` : ""; })()}</p>
-          ) : null}
           {lastAdd ? (
             <p className="v3fs-addp-note">{lastAdd.resolved
               ? `${lastAdd.name} added — role recognised.`
