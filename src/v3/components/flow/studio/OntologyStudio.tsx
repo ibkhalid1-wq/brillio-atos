@@ -471,6 +471,74 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
       </aside>
 
       <div className="v3fs-onto-below">
+        {/* The whole model as a LIST under the map — every entity a collapsible
+            card carrying the same editors as the side panel, plus its
+            relationships in place (type + cardinality editable, add/delete).
+            The graph shows shape; this is where methodical curation happens. */}
+        <Section label="Entities" hint="each entity as a card — expand to edit it and manage its relationships">
+          <div className="v3fs-stu-cards">
+            {entities.length === 0 ? <div className="v3fs-stu-empty">No entities on record yet.</div> : null}
+            {entities.map((entity, index) => {
+              const name = asText(entity.name);
+              const rels = relations.map((relation, ri) => ({ relation, ri }))
+                .filter(({ relation }) => asText(relation.from) === name || asText(relation.to) === name);
+              return (
+                <details key={entityId(entity, index)} className="v3fs-stu-card">
+                  <summary>
+                    <span className="v3fs-stu-card-t">{name || `Entity ${index + 1}`}</span>
+                    <span className="v3fs-onto-entrels">{rels.length} relationship{rels.length === 1 ? "" : "s"}</span>
+                  </summary>
+                  <div className="v3fs-stu-card-b">
+                    <div className="v3fs-stu-grid2">
+                      <TextField label="Name" value={name} onChange={(next) => renameEntity(index, next)} />
+                      <TextField label="System of record" value={asText(entity.systemOfRecord)}
+                        onChange={(next) => updateEntity(index, { systemOfRecord: next || null })} />
+                    </div>
+                    <TextArea label="Definition" rows={2} value={asText(entity.definition)}
+                      onChange={(next) => updateEntity(index, { definition: next })} />
+                    <div className="v3fs-stu-grid2">
+                      <ChipsField label="Attributes" values={asStrings(entity.attributes)}
+                        onChange={(next) => updateEntity(index, { attributes: next })} />
+                      <ChipsField label="Aliases" values={asStrings(entity.aliases)}
+                        onChange={(next) => updateEntity(index, { aliases: next })} />
+                    </div>
+                    <div className="v3fs-stu-sec-h"><h3>Relationships</h3><span>type and cardinality edit in place; × removes the edge</span></div>
+                    {rels.length === 0 ? <div className="v3fs-stu-empty">No relationships yet — add one below.</div> : (
+                      <div className="v3fs-onto-relrows">
+                        {rels.map(({ relation, ri }) => {
+                          const outgoing = asText(relation.from) === name;
+                          const other = outgoing ? asText(relation.to) : asText(relation.from);
+                          return (
+                            <div key={ri} className="v3fs-onto-relrow">
+                              <span className={`v3fs-onto-reldir${outgoing ? "" : " in"}`} title={outgoing ? "outgoing" : "incoming"} aria-hidden="true">{outgoing ? "→" : "←"}</span>
+                              <input value={asText(relation.relation)} aria-label={`Relation type with ${other}`} disabled={locked}
+                                onChange={(e) => updateRelation(ri, { relation: e.target.value })} />
+                              <span className="v3fs-onto-relother">{other}</span>
+                              <select value={asText(relation.cardinality) || "unknown"} aria-label="Cardinality" disabled={locked}
+                                onChange={(e) => updateRelation(ri, { cardinality: e.target.value })}>
+                                {CARDINALITIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                              </select>
+                              {locked ? null : <button type="button" className="v3fs-stu-x" aria-label={`Delete relationship with ${other}`}
+                                onClick={() => deleteRelation(ri, "removed on the entity card")}>×</button>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {locked ? null : (
+                      <SelectField label="Add a relationship to…" value=""
+                        options={["", ...ids.filter((target) => target !== name)]}
+                        onChange={(target) => {
+                          if (!target) return;
+                          patch({ relations: [...relations, { from: name, relation: "relates to", to: target, cardinality: "unknown" }] });
+                        }} />
+                    )}
+                  </div>
+                </details>
+              );
+            })}
+          </div>
+        </Section>
         <Section label="Business events" hint="what happens, what causes it, what it changes">
           <TableEditor
             columns={[

@@ -6366,6 +6366,17 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-stu-th span{padding:0 4px}
 .v3fs-stu-xcol{width:24px;flex-shrink:0}
 /* Gap-routing editor — a gap row's second column redirects it to a stakeholder/role */
+/* Ontology entity cards under the map — relationship rows + summary count. */
+.v3fs-onto-entrels {margin-left:auto;margin-right:8px;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--v3-text-muted)}
+.v3fs-onto-relrows {display:flex;flex-direction:column;gap:6px;margin:0 0 10px}
+.v3fs-onto-relrow {display:flex;align-items:center;gap:7px}
+.v3fs-onto-relrow input {flex:1 1 140px;min-width:100px}
+.v3fs-onto-relrow select {flex:0 0 auto}
+.v3fs-onto-reldir {flex:none;width:16px;text-align:center;font-weight:800;color:var(--v3-accent-2)}
+.v3fs-onto-reldir.in {color:var(--v3-text-muted)}
+.v3fs-onto-relother {flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-size:12px;font-weight:700;color:var(--v3-text-primary);background:var(--fs-indigo-wash,var(--v3-surface-2));
+  border-radius:99px;padding:3px 10px}
 /* Instant hover peek for clipped gap/open-question text — no title delay. */
 .v3fs-gaprt-peek {position:fixed;z-index:320;max-width:430px;pointer-events:none;
   background:var(--fs-card);border:1px solid var(--fs-line);border-radius:11px;padding:10px 13px;
