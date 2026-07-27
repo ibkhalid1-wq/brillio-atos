@@ -18,7 +18,7 @@ import {
   curationNote, DismissControl, type StudioProps,
 } from "./StudioKit";
 
-import { ONTOLOGY_CARDINALITIES, ONTOLOGY_RELATION_VERBS } from "@/v3/components/flow/flowOntologyConstraints";
+import { ONTOLOGY_CARDINALITIES, ONTOLOGY_RELATION_VERBS, ONTOLOGY_RELATION_VERB_MEANINGS } from "@/v3/components/flow/flowOntologyConstraints";
 import { GapRoutingEditor } from "./GapRoutingEditor";
 
 type Selection = { kind: "entity"; id: string } | { kind: "relation"; index: number } | { kind: "candidate"; id: string } | null;
@@ -424,6 +424,9 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
             <SelectField label="Relation" value={asText(selectedRelation.relation) || "relates to"}
               options={verbOptions(asText(selectedRelation.relation))}
               onChange={(next) => updateRelation(selected.index, { relation: next })} />
+            {ONTOLOGY_RELATION_VERB_MEANINGS[asText(selectedRelation.relation)] ? (
+              <p className="v3fs-onto-hint">{ONTOLOGY_RELATION_VERB_MEANINGS[asText(selectedRelation.relation)]}</p>
+            ) : null}
             <SelectField label="Cardinality" value={asText(selectedRelation.cardinality) || "unknown"} options={CARDINALITIES}
               onChange={(next) => updateRelation(selected.index, { cardinality: next })} />
             <DismissControl label="Dismiss relation" confirmLabel="Dismiss relation"
@@ -512,8 +515,11 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
                               <span className="v3fs-onto-relmid">
                                 <select className="v3fs-onto-relverb" value={verb || "relates to"}
                                   aria-label={`Relation type with ${other}`} disabled={locked}
+                                  title={ONTOLOGY_RELATION_VERB_MEANINGS[verb] ?? undefined}
                                   onChange={(e) => updateRelation(ri, { relation: e.target.value })}>
-                                  {verbOptions(verb).map((option) => <option key={option} value={option}>{option}</option>)}
+                                  {verbOptions(verb).map((option) => (
+                                    <option key={option} value={option} title={ONTOLOGY_RELATION_VERB_MEANINGS[option]}>{option}</option>
+                                  ))}
                                 </select>
                                 <span className="v3fs-onto-relarrow" aria-hidden="true">→</span>
                               </span>
