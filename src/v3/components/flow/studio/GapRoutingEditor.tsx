@@ -96,6 +96,7 @@ export function GapRoutingEditor({ values, onChange, program, movementId, gapRou
         return (
           <div key={index} className="v3fs-stu-tr">
             <input style={{ flexGrow: 2, flexBasis: 0 }} value={parsed.text} placeholder={placeholder} aria-label="Gap"
+              title={parsed.text || undefined}
               disabled={overlay || locked} readOnly={overlay}
               onChange={(e) => set(index, composeGap(e.target.value, who))} />
             {overlay ? (

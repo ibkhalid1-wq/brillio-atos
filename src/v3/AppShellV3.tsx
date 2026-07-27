@@ -41,7 +41,7 @@ import { mintApprovalRequest, approvalLinkFor, ingestApprovalResponse, listAppro
 import { setHaltAll, toggleAgentHalt, setMovementBudget } from "@/v3/components/flow/flowGovernance";
 import { mintInterviewPacks, mintDemoInvites, ingestPortalResponse, dismissPortalResponse, portalItemTargetMovement } from "@/v3/components/flow/flowPortal";
 import { recordShowPass } from "@/v3/components/flow/flowTracks";
-import { applyArtifactEdit } from "@/v3/components/flow/flowArtifactEdit";
+import { applyArtifactEdit, readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
 import { compileShipLanes, setShipLane, toggleShipItem } from "@/v3/components/flow/flowShip";
 import { scheduleFollowUp, discoveryKitCoverageGuidance } from "@/v3/components/flow/flowMeetings";
 import { listenCanonicalCastGuidance } from "@/v3/components/flow/listenCoverage";
@@ -1052,6 +1052,18 @@ export default function AppShellV3() {
       if (guidance) crossPhaseContext += `${crossPhaseContext ? "\n\n" : ""}${guidance}`;
       const cast = listenCanonicalCastGuidance(activeProgram);
       if (cast) crossPhaseContext += `${crossPhaseContext ? "\n\n" : ""}${cast}`;
+    }
+    // The Atlas weaves the ontology's BUSINESS EVENTS into its workflows:
+    // each step that raises or responds to one is annotated, and a workflow
+    // started by one names it as the trigger. Definitions stay in the
+    // ontology — the atlas references, exactly like entities.
+    if (resolvedAgentId === "current-state-atlas" && activeProgram) {
+      const events = ((readArtifactDoc(activeProgram, "domainOntology")?.events as unknown[]) ?? [])
+        .map((e) => (e && typeof e === "object" ? String((e as Record<string, unknown>).name ?? "").trim() : ""))
+        .filter(Boolean);
+      if (events.length) {
+        crossPhaseContext += `${crossPhaseContext ? "\n\n" : ""}## Business events (from the Domain Ontology — weave them into the workflows)\nAnnotate every workflow step that RAISES or RESPONDS TO one of these events with "events": ["<event name>"] (verbatim names). When a business event STARTS a workflow, use the event's name in that workflow's "trigger". Reference only these names — a new event belongs in the Domain Ontology, not here: ${events.join("; ")}.`;
+      }
     }
     // Append the artifact's stored quality-review suggestions to the prompt context.
     // The edge function folds crossPhaseContext into prompt.system, so the model

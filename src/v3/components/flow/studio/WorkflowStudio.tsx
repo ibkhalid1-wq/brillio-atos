@@ -13,11 +13,37 @@ import {
   curationNote, DismissControl, EmptyState, type StudioProps,
 } from "./StudioKit";
 import { workflowArea, programAreas, GENERAL_AREA } from "@/v3/components/flow/flowAreas";
+import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
 
 interface PainHit {
   severity: string;
   pain: string;
   quote: string;
+}
+
+/** Loose word-stem hit so "QuoteAmended" lands on "Amend the quote". */
+const stemHit = (haystack: string, word: string) => haystack.includes(word.replace(/(ed|ing|s)$/i, ""));
+const eventWords = (name: string) =>
+  name.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 4);
+
+/** The business events on a step — the ontology's event names. Explicit
+ * annotations (`step.events`, the generator's or the operator's) lead; a
+ * deterministic match follows, same discipline as painForStep but STRICT:
+ * every significant word of the event's name must appear in the step's
+ * action. (Matching on shared entities was tried and dropped — it put
+ * "Opportunity Created" on every step that touches an Opportunity.) */
+function eventsForStep(step: Record<string, unknown>, events: Array<Record<string, unknown>>): string[] {
+  const explicit = asStrings(step.events);
+  const action = asText(step.action).toLowerCase();
+  const matched = events
+    .filter((event) => {
+      const name = asText(event.name);
+      if (!name || explicit.includes(name)) return false;
+      const words = eventWords(name);
+      return words.length > 0 && words.every((word) => stemHit(action, word));
+    })
+    .map((event) => asText(event.name));
+  return [...explicit, ...matched];
 }
 
 /** Deterministic pain↔step match: a heatmap entry lands on a step when a
@@ -52,6 +78,23 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program 
   const [selected, setSelected] = useState<number | null>(null);
   const workflow = workflows[Math.min(active, Math.max(0, workflows.length - 1))];
   const steps = useMemo(() => (workflow ? asArray(workflow.steps).map(asRecord) : []), [workflow]);
+  // The ontology's business events, woven into the diagram: an event chip on
+  // the step that raises it, and the workflow's trigger named as an event
+  // where one starts it. Division of record holds — events are DEFINED in the
+  // Domain Ontology; the atlas only references them, like entities.
+  const ontoEvents = useMemo(
+    () => (program ? asArray(readArtifactDoc(program, "domainOntology")?.events).map(asRecord) : []),
+    [program],
+  );
+  const triggerEvent = useMemo(() => {
+    const trigger = asText(workflow?.trigger).toLowerCase();
+    if (!trigger) return null;
+    const hit = ontoEvents.find((event) => {
+      const words = eventWords(asText(event.name));
+      return words.length > 0 && words.every((word) => stemHit(trigger, word));
+    });
+    return hit ? asText(hit.name) : null;
+  }, [workflow, ontoEvents]);
 
   // The atlas is organised BY the ontology's business areas: each workflow files
   // under its area (the generator's explicit tag, else inferred), so the tabs
@@ -174,6 +217,7 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program 
                       if (actor !== lane) return <div key={index} className="v3fs-swim-cell" aria-hidden="true" />;
                       const pain = painForStep(step, pains);
                       const entities = asStrings(step.entities);
+                      const stepEvents = eventsForStep(step, ontoEvents);
                       return (
                         <div key={index} className="v3fs-swim-cell has">
                           <button
@@ -189,7 +233,7 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program 
                               {asText(step.duration) ? <span className="v3fs-wf-dur">{asText(step.duration)}</span> : null}
                             </span>
                             {pain ? <span className="v3fs-swim-pain">{pain.pain.slice(0, 46)}</span> : null}
-                            {entities.length ? (
+                            {entities.length || stepEvents.length ? (
                               <span className="v3fs-wf-ents">
                                 {entities.slice(0, 3).map((entity) => (
                                   <span key={entity} role="link" tabIndex={0} className="v3fs-wf-ent"
@@ -197,6 +241,14 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program 
                                     onClick={(event) => { event.stopPropagation(); onOpenArtifact?.("domain-ontology"); }}
                                     onKeyDown={(event) => { if (event.key === "Enter") { event.stopPropagation(); onOpenArtifact?.("domain-ontology"); } }}>
                                     {entity}
+                                  </span>
+                                ))}
+                                {stepEvents.slice(0, 2).map((name) => (
+                                  <span key={`ev-${name}`} role="link" tabIndex={0} className="v3fs-wf-evt"
+                                    title="Business event — defined in the Domain Ontology; open it"
+                                    onClick={(event) => { event.stopPropagation(); onOpenArtifact?.("domain-ontology"); }}
+                                    onKeyDown={(event) => { if (event.key === "Enter") { event.stopPropagation(); onOpenArtifact?.("domain-ontology"); } }}>
+                                    ⚡{name}
                                   </span>
                                 ))}
                               </span>
@@ -232,6 +284,8 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program 
               <TextField label="Duration" value={asText(steps[selected].duration)} onChange={(next) => patchStep(selected, { duration: next })} />
               <ChipsField label="Entities touched (from the ontology)" values={asStrings(steps[selected].entities)}
                 onChange={(next) => patchStep(selected, { entities: next })} />
+              <ChipsField label="Business events raised (from the ontology)" values={asStrings(steps[selected].events)}
+                onChange={(next) => patchStep(selected, { events: next })} />
             </div>
           ) : null}
 
@@ -241,6 +295,17 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program 
               <TextField label="Trigger" value={asText(workflow.trigger)} onChange={(next) => patchWorkflow({ trigger: next })} />
               <TextField label="Owner" value={asText(workflow.owner)} onChange={(next) => patchWorkflow({ owner: next })} />
             </div>
+            {triggerEvent ? (
+              <p className="v3fs-wf-trigev">
+                Starts on the business event{" "}
+                <span role="link" tabIndex={0} className="v3fs-wf-evt"
+                  title="Defined in the Domain Ontology — open it"
+                  onClick={() => onOpenArtifact?.("domain-ontology")}
+                  onKeyDown={(event) => { if (event.key === "Enter") onOpenArtifact?.("domain-ontology"); }}>
+                  ⚡{triggerEvent}
+                </span>
+              </p>
+            ) : null}
             <div className="v3fs-wf-head">
               <ChipsField label="Hand-offs" values={asStrings(workflow.handoffs)} onChange={(next) => patchWorkflow({ handoffs: next })} />
               <ChipsField label="Failure modes" values={asStrings(workflow.failureModes)} onChange={(next) => patchWorkflow({ failureModes: next })} />

@@ -183,7 +183,7 @@ export function StringListEditor({ label, values, onChange, placeholder, addLabe
       {label ? <span className="v3fs-stu-fl">{label}</span> : null}
       {values.map((value, index) => (
         <div key={index} className="v3fs-stu-list-row">
-          <input value={value} placeholder={placeholder} disabled={locked} onChange={(e) => set(index, e.target.value)} />
+          <input value={value} placeholder={placeholder} title={value || undefined} disabled={locked} onChange={(e) => set(index, e.target.value)} />
           {locked ? null : <button type="button" className="v3fs-stu-x" aria-label="Remove" onClick={() => remove(index)}>×</button>}
         </div>
       ))}
