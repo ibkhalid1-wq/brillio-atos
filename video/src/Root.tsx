@@ -2,6 +2,8 @@ import React from "react";
 import { AbsoluteFill, Composition, Sequence } from "remotion";
 import {
   SceneAlignment,
+  SceneIndustries,
+  SceneJourney,
   SceneClose,
   SceneGrounding,
   SceneNumbers,
@@ -24,8 +26,14 @@ const BoardCut: React.FC = () => (
     <Sequence from={T.alignment.from} durationInFrames={T.alignment.dur}>
       <SceneAlignment />
     </Sequence>
+    <Sequence from={T.journey.from} durationInFrames={T.journey.dur}>
+      <SceneJourney />
+    </Sequence>
     <Sequence from={T.numbers.from} durationInFrames={T.numbers.dur}>
       <SceneNumbers />
+    </Sequence>
+    <Sequence from={T.industries.from} durationInFrames={T.industries.dur}>
+      <SceneIndustries />
     </Sequence>
     <Sequence from={T.close.from} durationInFrames={T.close.dur}>
       <SceneClose />

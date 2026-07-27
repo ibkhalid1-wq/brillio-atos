@@ -17,8 +17,10 @@ export const T = {
   reveal: { from: 360, dur: 540 }, //  0:12–0:30 — spine draws, the Laila reveal
   grounding: { from: 900, dur: 540 }, //  0:30–0:48 — ontology + standards + RUN1|RUN2
   alignment: { from: 1440, dur: 360 }, //  0:48–1:00 — routed question, answer folds in
-  numbers: { from: 1800, dur: 540 }, //  1:00–1:18 — the stamps
-  close: { from: 2340, dur: 360 }, //  1:18–1:30 — tagline + handoff card
+  journey: { from: 1800, dur: 360 }, //  1:00–1:12 — autonomous + human in the loop
+  numbers: { from: 2160, dur: 540 }, //  1:12–1:30 — the stamps
+  industries: { from: 2700, dur: 450 }, //  1:30–1:45 — one method, every industry
+  close: { from: 3150, dur: 360 }, //  1:45–1:57 — tagline + bookend answer
 };
 
-export const TOTAL_FRAMES = 2700;
+export const TOTAL_FRAMES = 3510;
