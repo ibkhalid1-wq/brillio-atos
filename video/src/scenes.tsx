@@ -193,7 +193,7 @@ export const SceneAlignment: React.FC = () => {
       <Rise start={0} style={{ position: "absolute", top: 86, width: "100%", textAlign: "center" }}>
         <Eyebrow>02 · It starts with people</Eyebrow>
         <div style={{ fontFamily: FONT, fontSize: 40, fontWeight: 800, color: "#fff", marginBottom: 8 }}>
-          AURA engages the stakeholders itself.
+          AURA is designed to engage with stakeholders autonomously.
         </div>
         <div style={{ fontFamily: FONT, fontSize: 22, color: MUTED }}>
           Every gap becomes a plain-language question — routed on a no-login link, answered in their own words, folded back in.
