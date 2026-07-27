@@ -39,6 +39,7 @@ const META_KEYS = new Set([
   "flowdemoinvites",
   "flowapprovalpacks",
   "flowportalinbox",
+  "flowoperatoroverrides",
   "programsnapshots",
 ]);
 

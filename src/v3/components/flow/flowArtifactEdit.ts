@@ -7,6 +7,7 @@
 import type { ProgramSummary } from "@/new/types";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
 import { hasBlockingOntologyViolations } from "@/v3/components/flow/flowOntologyConstraints";
+import { overrideNotes, appendOperatorOverrides } from "@/v3/components/flow/flowOperatorOverrides";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -46,9 +47,18 @@ export function applyArtifactEdit(
   };
   const log = Array.isArray(inner.flowAttestations) ? (inner.flowAttestations as unknown[]) : [];
 
+  // Evidence-bearing docs (kit, ontology, atlas): the CHANGE itself is
+  // captured as an operator override — durable, programme-level, fed back
+  // into the regenerator's prompt — because the doc it lives in is replaced
+  // wholesale on regeneration.
+  const notes = overrideNotes(input.fieldKey, previous, nextDoc);
+  const overrides = notes.length
+    ? { flowOperatorOverrides: appendOperatorOverrides(inner.flowOperatorOverrides, input.fieldKey, notes, ts, actor) }
+    : {};
+
   return wrapProgramState(
     wrapper,
-    { ...inner, [input.fieldKey]: nextDoc, flowAttestations: [...log, attestation].slice(-200) },
+    { ...inner, [input.fieldKey]: nextDoc, ...overrides, flowAttestations: [...log, attestation].slice(-200) },
     usesNestedData,
   );
 }

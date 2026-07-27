@@ -42,6 +42,7 @@ import { setHaltAll, toggleAgentHalt, setMovementBudget } from "@/v3/components/
 import { mintInterviewPacks, mintDemoInvites, ingestPortalResponse, dismissPortalResponse, portalItemTargetMovement } from "@/v3/components/flow/flowPortal";
 import { recordShowPass } from "@/v3/components/flow/flowTracks";
 import { applyArtifactEdit, readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
+import { operatorOverrideGuidance } from "@/v3/components/flow/flowOperatorOverrides";
 import { compileShipLanes, setShipLane, toggleShipItem } from "@/v3/components/flow/flowShip";
 import { scheduleFollowUp, discoveryKitCoverageGuidance } from "@/v3/components/flow/flowMeetings";
 import { listenCanonicalCastGuidance } from "@/v3/components/flow/listenCoverage";
@@ -1064,6 +1065,20 @@ export default function AppShellV3() {
       if (events.length) {
         crossPhaseContext += `${crossPhaseContext ? "\n\n" : ""}## Business events (from the Domain Ontology — weave them into the workflows)\nAnnotate every workflow step that RAISES or RESPONDS TO one of these events with "events": ["<event name>"] (verbatim names). When a business event STARTS a workflow, use the event's name in that workflow's "trigger". Reference only these names — a new event belongs in the Domain Ontology, not here: ${events.join("; ")}.`;
       }
+    }
+    // Operator overrides: hand corrections to the kit/ontology/atlas are
+    // captured at save time (flowOperatorOverrides) and handed back to the
+    // regenerator as authoritative evidence — a regenerate must preserve
+    // them, never re-derive them away from the transcripts they corrected.
+    const OVERRIDE_FIELD_BY_AGENT: Record<string, string> = {
+      "discovery-kit": "discoveryKit",
+      "domain-ontology": "domainOntology",
+      "current-state-atlas": "currentStateAtlas",
+    };
+    const overrideField = OVERRIDE_FIELD_BY_AGENT[resolvedAgentId];
+    if (overrideField && activeProgram) {
+      const guidance = operatorOverrideGuidance(activeProgram, overrideField);
+      if (guidance) crossPhaseContext += `${crossPhaseContext ? "\n\n" : ""}${guidance}`;
     }
     // Append the artifact's stored quality-review suggestions to the prompt context.
     // The edge function folds crossPhaseContext into prompt.system, so the model
