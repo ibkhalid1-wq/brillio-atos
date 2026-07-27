@@ -106,7 +106,7 @@ export const SceneReveal: React.FC = () => {
             <Typed
               start={190}
               cps={30}
-              text={"The demo you just saw — Laila —\nwas grown from evidence. By AURA."}
+              text={"The demo you just saw — Laila —\nwas derived from evidence. By AURA."}
               style={{ fontSize: 54, fontWeight: 800, color: "#fff", lineHeight: 1.4 }}
             />
           ) : null}
