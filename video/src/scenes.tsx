@@ -74,42 +74,38 @@ export const SceneQuestion: React.FC = () => {
   );
 };
 
-/* ── 2 · The diagnosis — the missing middle (0:14–0:26) ─────────────── */
-export const SceneDiagnosis: React.FC = () => {
+/* ── 2 · DAY 0 — the mandate (0:13–0:24) ───────────────────────────── */
+export const SceneDay0: React.FC = () => {
   const frame = useCurrentFrame();
-  const leftP = interpolate(frame, [20, 46], [0, 1], EASE);
-  const rightP = interpolate(frame, [34, 60], [0, 1], EASE);
-  // The lines draw toward the centre from both sides — and never meet.
-  const lineP = interpolate(frame, [62, 112], [0, 1], EASE);
-  const qP = interpolate(frame, [120, 146], [0, 1], EASE);
-  const pulse = 0.6 + Math.sin(frame / 15) * 0.18;
-  const capP = interpolate(frame, [172, 198], [0, 1], EASE);
-  const pill = (p: number): React.CSSProperties => ({
-    opacity: p, transform: `translateY(${(1 - p) * 24}px)`,
-    fontFamily: FONT, fontSize: 34, fontWeight: 800, color: "#fff",
-    padding: "22px 44px", borderRadius: 18, border: `1px solid ${FAINT}`,
-    background: "rgba(255,255,255,0.05)", whiteSpace: "nowrap",
-  });
+  const clockP = interpolate(frame, [230, 256], [0, 1], EASE);
   return (
     <Ground>
-      <div style={{ textAlign: "center" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div style={pill(leftP)}>BUSINESS NEEDS</div>
-          <svg width={560} height={64}>
-            <line x1={0} y1={32} x2={200 * lineP} y2={32} stroke="#fff" strokeWidth={4} strokeLinecap="round" opacity={0.5} />
-            <line x1={560} y1={32} x2={560 - 200 * lineP} y2={32} stroke="#fff" strokeWidth={4} strokeLinecap="round" opacity={0.5} />
-            <text x={280} y={45} textAnchor="middle" fontFamily={FONT} fontSize={40} fontWeight={800}
-              fill={ELECTRIC} opacity={qP * pulse}>?</text>
-          </svg>
-          <div style={pill(rightP)}>AI SOLUTION</div>
+      <div style={{ textAlign: "center", width: 1500 }}>
+        <Rise start={6}>
+          <Eyebrow>Day 0 · The mandate</Eyebrow>
+        </Rise>
+        <div style={{ minHeight: 150 }}>
+          <Typed
+            start={30}
+            cps={30}
+            text={'\u201cEvery function sees a different number.\nSales has one forecast, Finance another, Delivery plans against a third.\u201d'}
+            accents={["a different number"]}
+            style={{ fontSize: 44, fontWeight: 750, color: "#fff", lineHeight: 1.5 }}
+          />
         </div>
-        <div style={{ marginTop: 60, opacity: capP, transform: `translateY(${(1 - capP) * 18}px)` }}>
-          <div style={{ fontFamily: FONT, fontSize: 36, fontWeight: 750, color: "#fff", marginBottom: 12 }}>
-            The failure was never AI.
+        <Rise start={200}>
+          <div style={{ fontFamily: FONT, fontSize: 22, color: MUTED, marginTop: 18 }}>
+            — the sponsor&rsquo;s mandate · Laila CRM programme
           </div>
-          <div style={{ fontFamily: FONT, fontSize: 24, color: MUTED, maxWidth: 1100, margin: "0 auto", lineHeight: 1.5 }}>
-            An agent is only as good as its model of the business — and that model lives in heads, decks, and disagreement.
-          </div>
+        </Rise>
+        <div style={{ marginTop: 54, opacity: clockP, transform: `translateY(${(1 - clockP) * 20}px)` }}>
+          <span style={{
+            fontFamily: FONT, fontSize: 30, fontWeight: 800, color: "#fff",
+            border: `1.5px solid ${ELECTRIC}`, background: "rgba(110,91,255,0.16)",
+            borderRadius: 99, padding: "16px 36px",
+          }}>
+            21 days on the clock
+          </span>
         </div>
       </div>
     </Ground>
@@ -191,7 +187,7 @@ export const SceneAlignment: React.FC = () => {
   return (
     <Ground>
       <Rise start={0} style={{ position: "absolute", top: 86, width: "100%", textAlign: "center" }}>
-        <Eyebrow>02 · It starts with people</Eyebrow>
+        <Eyebrow>Days 1–7 · It starts with people</Eyebrow>
         <div style={{ fontFamily: FONT, fontSize: 40, fontWeight: 800, color: "#fff", marginBottom: 8 }}>
           AURA engages the stakeholders itself.
         </div>
@@ -283,6 +279,64 @@ export const SceneAlignment: React.FC = () => {
   );
 };
 
+/* ── 4b · DAY 8 — the moment it could have died (0:53–1:10) ─────────── */
+export const SceneDay8: React.FC = () => {
+  const frame = useCurrentFrame();
+  const leftP = interpolate(frame, [26, 50], [0, 1], EASE);
+  const rightP = interpolate(frame, [46, 70], [0, 1], EASE);
+  const sparkP = interpolate(frame, [92, 112], [0, 1], EASE);
+  const doomP = interpolate(frame, [150, 176], [0, 1], EASE);
+  // The turn: borders go green, the resolution stamps onto the record.
+  const turnP = interpolate(frame, [265, 295], [0, 1], EASE);
+  const quote = (p: number, turn: number): React.CSSProperties => ({
+    opacity: p, transform: `translateY(${(1 - p) * 28}px)`,
+    width: 560, borderRadius: 20, padding: "30px 34px", fontFamily: FONT, textAlign: "left",
+    background: `rgba(${Math.round(255 - (255 - 46) * turn)},${Math.round(255 - (255 - 160) * turn)},${Math.round(255 - (255 - 90) * turn)},${0.06 + 0.12 * turn})`,
+    border: `1.5px solid rgba(${Math.round(255 - (255 - 110) * turn)},${Math.round(255 - (255 - 220) * turn)},${Math.round(255 - (255 - 150) * turn)},${0.3 + 0.5 * turn})`,
+  });
+  return (
+    <Ground>
+      <div style={{ textAlign: "center", width: 1700 }}>
+        <Rise start={0}>
+          <Eyebrow>Day 8 · The moment it could have died</Eyebrow>
+        </Rise>
+        <div style={{ display: "flex", gap: 44, justifyContent: "center", alignItems: "stretch", marginTop: 20 }}>
+          <div style={quote(leftP, turnP)}>
+            <div style={{ fontSize: 30, fontWeight: 700, color: "#fff", lineHeight: 1.45 }}>
+              &ldquo;Pricing approval takes <b style={{ color: ELECTRIC }}>two weeks</b>.&rdquo;
+            </div>
+            <div style={{ fontSize: 21, color: MUTED, marginTop: 14 }}>— Sales</div>
+          </div>
+          <div style={{ alignSelf: "center", opacity: sparkP, transform: `scale(${0.6 + sparkP * 0.4})`,
+            fontFamily: FONT, fontSize: 44, fontWeight: 800, color: "#B4541E" }}>⚖</div>
+          <div style={quote(rightP, turnP)}>
+            <div style={{ fontSize: 30, fontWeight: 700, color: "#fff", lineHeight: 1.45 }}>
+              &ldquo;The SLA is <b style={{ color: ELECTRIC }}>three days</b> — and we hit it.&rdquo;
+            </div>
+            <div style={{ fontSize: 21, color: MUTED, marginTop: 14 }}>— Sales Operations</div>
+          </div>
+        </div>
+        <div style={{ marginTop: 44, opacity: doomP, transform: `translateY(${(1 - doomP) * 16}px)` }}>
+          <div style={{ fontFamily: FONT, fontSize: 27, color: MUTED }}>
+            In a normal programme, this surfaces in <b style={{ color: "#fff" }}>month four</b> — and kills the rollout.
+          </div>
+        </div>
+        <div style={{ marginTop: 34, opacity: turnP, transform: `translateY(${(1 - turnP) * 18}px)` }}>
+          <span style={{
+            fontFamily: FONT, fontSize: 26, fontWeight: 800, color: "#fff",
+            background: "rgba(46,160,90,0.85)", borderRadius: 99, padding: "14px 30px",
+          }}>
+            ✓ Surfaced day 8 · resolved on the record
+          </span>
+          <div style={{ fontFamily: FONT, fontSize: 23, color: MUTED, marginTop: 20 }}>
+            A finding, not noise — settled by the people who owned it.
+          </div>
+        </div>
+      </div>
+    </Ground>
+  );
+};
+
 /* ── 5 · The business's own language (0:56–1:12) ────────────────────── */
 const NODE_POS: Array<[number, number, string]> = [
   [420, 300, "Account"], [700, 190, "Opportunity"], [960, 320, "Quote"],
@@ -292,8 +346,8 @@ const NODE_POS: Array<[number, number, string]> = [
 export const SceneGrounding: React.FC = () => {
   const frame = useCurrentFrame();
   // Crossfade between the map view and the RUN1|RUN2 view — no hard flip.
-  const mapO = interpolate(frame, [252, 278], [1, 0], LIN);
-  const runO = interpolate(frame, [266, 292], [0, 1], LIN);
+  const mapO = interpolate(frame, [210, 236], [1, 0], LIN);
+  const runO = interpolate(frame, [224, 250], [0, 1], LIN);
   const graph = (seed: number) => (
     <svg viewBox="0 0 1600 700" width={1600} height={700}>
       {NODE_POS.map(([x1, y1], i) =>
@@ -320,7 +374,7 @@ export const SceneGrounding: React.FC = () => {
   return (
     <Ground>
       <Rise start={0} style={{ position: "absolute", top: 58, width: "100%", textAlign: "center" }}>
-        <Eyebrow>03 · In the business&rsquo;s own language</Eyebrow>
+        <Eyebrow>Days 9–20 · The picture agrees</Eyebrow>
       </Rise>
       {mapO > 0.01 ? (
         <div style={{ position: "absolute", inset: 0, opacity: mapO }}>
@@ -365,11 +419,11 @@ export const SceneGrounding: React.FC = () => {
                   <span style={{ position: "absolute", top: 20, left: 26, fontFamily: FONT, fontSize: 26, fontWeight: 800, color: MUTED, letterSpacing: ".14em" }}>
                     {r}
                   </span>
-                  <div style={{ position: "absolute", left: -60, top: -10, transform: "scale(0.55)", transformOrigin: "top left" }}>{graph(285)}</div>
+                  <div style={{ position: "absolute", left: -60, top: -10, transform: "scale(0.55)", transformOrigin: "top left" }}>{graph(245)}</div>
                 </div>
               ))}
             </div>
-            <Rise start={392}>
+            <Rise start={330}>
               <div style={{ marginTop: 38, fontFamily: FONT, fontSize: 46, fontWeight: 800, color: "#fff" }}>
                 Same mandate. Same model. <span style={{ color: ELECTRIC }}>Every time.</span>
               </div>
@@ -400,7 +454,7 @@ export const SceneJourney: React.FC = () => {
     <Ground>
       <div style={{ width: 1780, textAlign: "center" }}>
         <Rise start={0}>
-          <Eyebrow>04 · Governed by design</Eyebrow>
+          <Eyebrow>Governed · every day of the twenty-one</Eyebrow>
           <div style={{ fontFamily: FONT, fontSize: 40, fontWeight: 800, color: "#fff", marginBottom: 8 }}>
             Autonomous — with a human in the loop, end to end.
           </div>
@@ -460,7 +514,7 @@ export const SceneJourney: React.FC = () => {
         {/* Governance band — the three claims that survive the meeting. */}
         <div style={{ marginTop: 28, display: "flex", gap: 20, justifyContent: "center" }}>
           {GOV_CHIPS.map((c, i) => {
-            const at = 420 + i * 24;
+            const at = 290 + i * 24;
             const p = interpolate(frame, [at, at + 20], [0, 1], EASE);
             return (
               <div key={c} style={{
@@ -493,7 +547,10 @@ export const SceneNumbers: React.FC = () => {
   return (
     <Ground>
       <Glow size={1100} x="50%" y="50%" opacity={0.28} />
-      <div style={{ display: "flex", flexDirection: "column", gap: 34, alignItems: "center" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 30, alignItems: "center" }}>
+        <Rise start={4}>
+          <Eyebrow>Day 21 · The demo</Eyebrow>
+        </Rise>
         {stamps.map((s, i) => {
           const at = 30 + i * 74;
           // Eased landing, no overshoot — buttery, not bouncy.
@@ -520,6 +577,11 @@ export const SceneNumbers: React.FC = () => {
             </div>
           );
         })}
+        <Rise start={368}>
+          <div style={{ fontFamily: FONT, fontSize: 24, color: MUTED }}>
+            — validated by the people who named the problem
+          </div>
+        </Rise>
       </div>
     </Ground>
   );
@@ -597,7 +659,7 @@ const MiniDomain: React.FC<{ d: Domain; start: number }> = ({ d, start }) => {
       </svg>
       <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 14 }}>
         {d.flow.map((step, i) => {
-          const at = start + 80 + i * 12;
+          const at = start + 60 + i * 10;
           // Chips light with a soft ease, not a binary pop.
           const lp = interpolate(frame, [at, at + 12], [0, 1], EASE);
           return (
@@ -626,7 +688,7 @@ export const SceneIndustries: React.FC = () => {
     <Ground>
       <div style={{ textAlign: "center" }}>
         <Rise start={0}>
-          <Eyebrow>05 · Any business</Eyebrow>
+          <Eyebrow>Any business</Eyebrow>
           <div style={{ fontFamily: FONT, fontSize: 40, fontWeight: 800, color: "#fff", letterSpacing: "-0.01em", marginBottom: 8 }}>
             One method. Every industry.
           </div>
@@ -636,7 +698,7 @@ export const SceneIndustries: React.FC = () => {
         </Rise>
         <div style={{ display: "flex", gap: 36, justifyContent: "center" }}>
           {DOMAINS.map((d, i) => (
-            <MiniDomain key={d.industry} d={d} start={18 + i * 46} />
+            <MiniDomain key={d.industry} d={d} start={10 + i * 30} />
           ))}
         </div>
       </div>
