@@ -37,7 +37,7 @@ const Ground: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
 /* ── 1 · The question (0:00–0:14) ───────────────────────────────────── */
 export const SceneQuestion: React.FC = () => {
   const frame = useCurrentFrame();
-  const grave = ["Copilot nobody adopted", "Use case in search of a problem", "POC that proved nothing"];
+  const grave = ["Copilot nobody adopted", "Solution in search of a problem", "POC that proved nothing"];
   return (
     <Ground>
       <div style={{ width: 1680, textAlign: "center" }}>
