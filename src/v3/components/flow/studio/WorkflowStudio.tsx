@@ -7,7 +7,7 @@
  * complaint. The diagram IS the document: selection edits in the inspector;
  * add/reorder/remove rewrite the same steps array the generator emits.
  */
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   TextField, SelectField, ChipsField, asArray, asRecord, asText, asStrings, useStudioLocked, useStudioAuthoring,
   curationNote, DismissControl, EmptyState, type StudioProps,
@@ -20,6 +20,16 @@ interface PainHit {
   severity: string;
   pain: string;
   quote: string;
+}
+
+/** What the diagram is looking at right now — the selected step, else the
+ * active workflow. The Atlas's register cards (events / pains / systems)
+ * filter to it, so clicking a step narrows the whole tab to its context. */
+export interface AtlasFocus {
+  label: string;
+  events: string[];
+  systems: string[];
+  pains: string[];
 }
 
 /** Loose word-stem hit so "QuoteAmended" lands on "Amend the quote". */
@@ -70,7 +80,9 @@ function painForStep(step: Record<string, unknown>, pains: Array<Record<string, 
   return best;
 }
 
-export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program }: StudioProps) {
+export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program, onFocus }: StudioProps & {
+  onFocus?: (focus: AtlasFocus | null) => void;
+}) {
   const locked = useStudioLocked();
   const authoring = useStudioAuthoring();
   const workflows = useMemo(() => asArray(doc.workflows).map(asRecord), [doc.workflows]);
@@ -170,7 +182,10 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program 
     const words = lane.split(/[^A-Za-z0-9]+/).filter(Boolean);
     return ((words[0]?.[0] ?? "") + (words[1]?.[0] ?? "")).toUpperCase() || lane.slice(0, 2).toUpperCase();
   };
-  const systems = useMemo(() => [...new Set(steps.map((step) => asText(step.system)).filter(Boolean))], [steps]);
+  // A step's system is often a compound ("CRM, Email, Teams") — split it so
+  // counts and the register filter speak in single systems.
+  const splitSystems = (value: string): string[] => value.split(/[,/&]+| and /i).map((s) => s.trim()).filter(Boolean);
+  const systems = useMemo(() => [...new Set(steps.flatMap((step) => splitSystems(asText(step.system))))], [steps]);
   const painCounts = useMemo(() => {
     const counts = { high: 0, medium: 0, low: 0 };
     for (const step of steps) {
@@ -184,6 +199,29 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program 
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     setPeek({ index, x: Math.min(rect.left, Math.max(8, window.innerWidth - 380)), y: rect.bottom + 8 });
   };
+
+  // Report the diagram's focus (selected step, else the active workflow) so
+  // the register cards below filter to it.
+  useEffect(() => {
+    if (!onFocus) return;
+    if (!workflow) { onFocus(null); return; }
+    const step = selected != null ? steps[selected] : null;
+    if (step) {
+      onFocus({
+        label: `${asText(workflow.name) || "workflow"} · step ${(selected ?? 0) + 1}`,
+        events: eventsForStep(step, ontoEvents),
+        systems: splitSystems(asText(step.system)),
+        pains: [painForStep(step, pains)?.pain ?? ""].filter(Boolean),
+      });
+      return;
+    }
+    onFocus({
+      label: asText(workflow.name) || "workflow",
+      events: [...new Set([...(triggerEvent ? [triggerEvent] : []), ...steps.flatMap((s) => eventsForStep(s, ontoEvents))])],
+      systems,
+      pains: [...new Set(steps.map((s) => painForStep(s, pains)?.pain ?? "").filter(Boolean))],
+    });
+  }, [onFocus, workflow, steps, selected, ontoEvents, pains, systems, triggerEvent]);
 
   const writeWorkflows = useCallback((next: Array<Record<string, unknown>>) => {
     onChange({ ...doc, workflows: next });
@@ -342,25 +380,36 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program 
           {locked ? null : (
           <div className="v3fs-wf-bar">
             <button type="button" className="v3fs-btn" onClick={addStep}>＋ Step{selected != null ? " after selected" : ""}</button>
-            {selected != null ? (
-              <>
-                <button type="button" className="v3fs-btn" onClick={() => moveStep(-1)}>← Earlier</button>
-                <button type="button" className="v3fs-btn" onClick={() => moveStep(1)}>Later →</button>
-                <button type="button" className="v3fs-btn" onClick={removeStep}>Remove step</button>
-              </>
-            ) : <span className="v3fs-wf-hint">Select a step to edit it</span>}
+            {selected == null ? <span className="v3fs-wf-hint">Select a step to edit it</span> : null}
           </div>
           )}
+          {/* The step form — ONE organised card: what happens (headline), the
+              who/where/how-long row, then the ontology hooks. Reorder and
+              remove live in its header, beside the step they act on. */}
           {selected != null && steps[selected] ? (
             <div className="v3fs-wf-inspector">
-              <TextField label="Persona (lane)" value={asText(steps[selected].actor)} onChange={(next) => patchStep(selected, { actor: next })} />
-              <TextField label="Action" value={asText(steps[selected].action)} onChange={(next) => patchStep(selected, { action: next })} />
-              <TextField label="System" value={asText(steps[selected].system)} onChange={(next) => patchStep(selected, { system: next })} />
-              <TextField label="Duration" value={asText(steps[selected].duration)} onChange={(next) => patchStep(selected, { duration: next })} />
-              <ChipsField label="Entities touched (from the ontology)" values={asStrings(steps[selected].entities)}
-                onChange={(next) => patchStep(selected, { entities: next })} />
-              <ChipsField label="Business events raised (from the ontology)" values={asStrings(steps[selected].events)}
-                onChange={(next) => patchStep(selected, { events: next })} />
+              <div className="v3fs-wf-insp-h">
+                <span className="v3fs-wf-insp-t">Step {selected + 1} <i>of {steps.length}</i></span>
+                {locked ? null : (
+                  <span className="v3fs-wf-insp-actions">
+                    <button type="button" className="v3fs-btn" disabled={selected === 0} onClick={() => moveStep(-1)}>← Earlier</button>
+                    <button type="button" className="v3fs-btn" disabled={selected === steps.length - 1} onClick={() => moveStep(1)}>Later →</button>
+                    <button type="button" className="v3fs-btn" onClick={removeStep}>Remove step</button>
+                  </span>
+                )}
+              </div>
+              <TextField label="Action — what happens in this step" value={asText(steps[selected].action)} onChange={(next) => patchStep(selected, { action: next })} />
+              <div className="v3fs-stu-grid3">
+                <TextField label="Persona (lane)" value={asText(steps[selected].actor)} onChange={(next) => patchStep(selected, { actor: next })} />
+                <TextField label="System" value={asText(steps[selected].system)} onChange={(next) => patchStep(selected, { system: next })} />
+                <TextField label="Duration" value={asText(steps[selected].duration)} onChange={(next) => patchStep(selected, { duration: next })} />
+              </div>
+              <div className="v3fs-stu-grid2">
+                <ChipsField label="Entities touched (from the ontology)" values={asStrings(steps[selected].entities)}
+                  onChange={(next) => patchStep(selected, { entities: next })} />
+                <ChipsField label="Business events raised" values={asStrings(steps[selected].events)}
+                  onChange={(next) => patchStep(selected, { events: next })} />
+              </div>
             </div>
           ) : null}
 
