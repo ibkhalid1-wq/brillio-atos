@@ -30,6 +30,9 @@ export interface AtlasFocus {
   events: string[];
   systems: string[];
   pains: string[];
+  /** Free-text terms (workflow name, actors, entities…) — the gaps and open
+   * questions filter to items that mention one. */
+  terms: string[];
 }
 
 /** Loose word-stem hit so "QuoteAmended" lands on "Amend the quote". */
@@ -206,21 +209,26 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program,
     if (!workflow) { onFocus(null); return; }
     const step = selected != null ? steps[selected] : null;
     if (step) {
+      const events = eventsForStep(step, ontoEvents);
+      const stepSystems = splitSystems(asText(step.system));
       onFocus({
         label: `${asText(workflow.name) || "workflow"} · step ${(selected ?? 0) + 1}`,
-        events: eventsForStep(step, ontoEvents),
-        systems: splitSystems(asText(step.system)),
+        events,
+        systems: stepSystems,
         pains: [painForStep(step, pains)?.pain ?? ""].filter(Boolean),
+        terms: [asText(workflow.name), asText(step.actor), ...stepSystems, ...asStrings(step.entities), ...events].filter(Boolean),
       });
       return;
     }
+    const wfEvents = [...new Set([...(triggerEvent ? [triggerEvent] : []), ...steps.flatMap((s) => eventsForStep(s, ontoEvents))])];
     onFocus({
       label: asText(workflow.name) || "workflow",
-      events: [...new Set([...(triggerEvent ? [triggerEvent] : []), ...steps.flatMap((s) => eventsForStep(s, ontoEvents))])],
+      events: wfEvents,
       systems,
       pains: [...new Set(steps.map((s) => painForStep(s, pains)?.pain ?? "").filter(Boolean))],
+      terms: [asText(workflow.name), ...lanes, ...systems, ...wfEvents].filter(Boolean),
     });
-  }, [onFocus, workflow, steps, selected, ontoEvents, pains, systems, triggerEvent]);
+  }, [onFocus, workflow, steps, selected, ontoEvents, pains, systems, lanes, triggerEvent]);
 
   const writeWorkflows = useCallback((next: Array<Record<string, unknown>>) => {
     onChange({ ...doc, workflows: next });

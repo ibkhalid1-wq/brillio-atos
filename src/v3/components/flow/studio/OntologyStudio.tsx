@@ -56,6 +56,24 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
     .filter((candidate) => asText(candidate.name) && !entities.some((entity, i) => entityId(entity, i) === asText(candidate.name))),
     [doc.candidates, entities]);
   const [showCandidates, setShowCandidates] = useState(true);
+  // Area filter — narrows the MAP (nodes hidden, not removed, so positions
+  // and index-based edits survive) and the entity-card list beneath it.
+  const [areaFilter, setAreaFilter] = useState("");
+  const [showAllGaps, setShowAllGaps] = useState(false);
+  const entityAreas = useMemo(
+    () => [...new Set(entities.map((entity) => asText(entity.area)).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+    [entities],
+  );
+  const hasNoArea = useMemo(() => entities.some((entity) => !asText(entity.area)), [entities]);
+  const visibleIds = useMemo(() => {
+    if (!areaFilter) return null;
+    const set = new Set<string>();
+    entities.forEach((entity, index) => {
+      const area = asText(entity.area);
+      if (areaFilter === "__none__" ? !area : area === areaFilter) set.add(entityId(entity, index));
+    });
+    return set;
+  }, [areaFilter, entities]);
   const ghostIds = useMemo(() => (showCandidates ? candidates.map((c) => CAND_PREFIX + asText(c.name)) : []), [candidates, showCandidates]);
   // A candidate edge endpoint is either the candidate's own class (→ ghost id)
   // or an asserted entity's display name (→ its node id).
@@ -206,6 +224,7 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
         return {
           ...(prev ?? {}),
           id,
+          hidden: visibleIds ? !visibleIds.has(id) : false,
           position: prev?.position ?? seeded[id] ?? { x: 40 * (index % 5) - 80, y: 48 * Math.floor(index / 5) - 48 },
           className: `v3fs-onto-node${selected?.kind === "entity" && selected.id === id ? " selected" : ""}${focusIds && focusIds.has(id) && selectedEntityId !== id ? " related" : ""}${focusIds && !focusIds.has(id) ? " dimmed" : ""}`,
           data: {
@@ -227,6 +246,7 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
         return {
           ...(prev ?? {}),
           id,
+          hidden: !!visibleIds,
           position: prev?.position ?? { x: 220 * index - 60, y: 320 },
           className: `v3fs-onto-node candidate${selected?.kind === "candidate" && selected.id === id ? " selected" : ""}${focusIds ? " dimmed" : ""}`,
           style: { borderStyle: "dashed", opacity: 0.66 },
@@ -242,7 +262,7 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
         } as Node;
       }) : []);
     });
-  }, [entities, ids, relations, adopted, candidates, showCandidates, selected, selectedEntityId, focusIds, setNodes]);
+  }, [entities, ids, relations, adopted, candidates, showCandidates, selected, selectedEntityId, focusIds, visibleIds, setNodes]);
 
   const edges: Edge[] = useMemo(() => relations.map((relation, index) => {
     const cardinality = asText(relation.cardinality);
@@ -256,6 +276,7 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
       id: `rel-${index}`,
       type: route ? "routed" : "floating",
       ...(route ? { data: { points: route } } : {}),
+      hidden: visibleIds ? !(visibleIds.has(from) && visibleIds.has(to)) : false,
       selected: selected?.kind === "relation" && selected.index === index,
       source: from,
       target: to,
@@ -263,7 +284,7 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
       className: `v3fs-onto-edge${selected?.kind === "relation" && selected.index === index ? " selected" : ""}${selectedEntityId ? (touchesFocus ? " related" : " dimmed") : ""}`,
       markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16 },
     } as Edge;
-  }).concat(showCandidates ? candidates.flatMap((candidate, ci) => {
+  }).concat(showCandidates && !visibleIds ? candidates.flatMap((candidate, ci) => {
     const candidateName = asText(candidate.name);
     return asArray(candidate.relations).map(asRecord).map((relation, ri) => {
       const source = ghostEdgeEnd(asText(relation.from), candidateName);
@@ -273,6 +294,7 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
         id: `cedge-${ci}-${ri}`,
         type: route ? "routed" : "floating",
         ...(route ? { data: { points: route } } : {}),
+        hidden: !!visibleIds,
         source,
         target,
         label: asText(relation.relation) || "relates to",
@@ -282,7 +304,7 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
         markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14 },
       } as Edge;
     });
-  }) : []), [relations, routes, selected, selectedEntityId, candidates, showCandidates, ghostEdgeEnd]);
+  }) : []), [relations, routes, selected, selectedEntityId, candidates, showCandidates, visibleIds, ghostEdgeEnd]);
 
   const patch = (next: Partial<Record<string, unknown>>) => onChange({ ...doc, ...next });
 
@@ -362,6 +384,25 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
 
   return (
     <div className="v3fs-onto">
+      {/* Area filter deck — same indigo band as the atlas's pickers. It
+          narrows the MAP (hidden nodes/edges — never removed), the entity
+          cards and the gaps below. */}
+      <div className="v3fs-wf-filters">
+        <label className="v3fs-wf-filter">
+          <span>Area</span>
+          <select value={areaFilter} aria-label="Filter ontology by area" onChange={(e) => setAreaFilter(e.target.value)}>
+            <option value="">All areas ({entities.length})</option>
+            {entityAreas.map((area) => <option key={area} value={area}>{area}</option>)}
+            {hasNoArea ? <option value="__none__">(no area assigned)</option> : null}
+          </select>
+        </label>
+        {visibleIds ? (
+          <label className="v3fs-wf-filter">
+            <span>Showing</span>
+            <span className="v3fs-wf-filter-note">{visibleIds.size} of {entities.length} entities</span>
+          </label>
+        ) : null}
+      </div>
       <div className="v3fs-onto-canvas">
         {/* The flow viewport starts BELOW the toolbar band, so an arranged
             graph can never slide under the buttons. */}
@@ -468,7 +509,9 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
         <Section label="Entities" hint="each entity as a card — expand to edit it and manage its relationships; the list scrolls, the map stays">
           <div className="v3fs-stu-cards v3fs-onto-entwrap">
             {entities.length === 0 ? <div className="v3fs-stu-empty">No entities on record yet.</div> : null}
+            {visibleIds && visibleIds.size === 0 ? <div className="v3fs-stu-empty">No entities in this area.</div> : null}
             {entities.map((entity, index) => {
+              if (visibleIds && !visibleIds.has(entityId(entity, index))) return null;
               const name = asText(entity.name);
               const rels = relations.map((relation, ri) => ({ relation, ri }))
                 .filter(({ relation }) => asText(relation.from) === name || asText(relation.to) === name);
@@ -555,10 +598,44 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
             woven into the workflows there. Ambiguities (duplicated the open
             Gaps) and Standards alignment are hidden from the studio — the
             Gaps table below is the one place open questions get triaged. */}
-        <Section label="Gaps" hint="entities referenced but never defined — redirect each to the stakeholder or role who can close it">
-          <GapRoutingEditor values={asStrings(doc.gaps)} onChange={(next) => patch({ gaps: next })} program={program}
-            movementId="listen" gapRoutes={gapRoutes} onRoute={onRouteGap} addLabel="Add gap" emptyHint="No gaps." />
-        </Section>
+        {(() => {
+          // The area filter reaches the gaps too: show only questions that
+          // NAME one of the visible entities. Filtered view is read-only —
+          // "Show all & route" opens the full routing table.
+          const gapsAll = asStrings(doc.gaps);
+          const visibleNames = visibleIds
+            ? entities.filter((entity, i) => visibleIds.has(entityId(entity, i)))
+                .map((entity) => asText(entity.name).toLowerCase()).filter((name) => name.length >= 3)
+            : null;
+          const filtered = visibleNames && !showAllGaps
+            ? gapsAll.filter((gap) => { const t = gap.toLowerCase(); return visibleNames.some((name) => t.includes(name)); })
+            : null;
+          return (
+            <Section label="Gaps" hint="entities referenced but never defined — redirect each to the stakeholder or role who can close it">
+              {filtered ? (
+                <>
+                  <div className="v3fs-atlas-fltbar">
+                    <span>{filtered.length} of {gapsAll.length} for <b>{areaFilter === "__none__" ? "(no area)" : areaFilter}</b></span>
+                    <button type="button" className="v3fs-a" onClick={() => setShowAllGaps(true)}>Show all &amp; route</button>
+                  </div>
+                  {filtered.length ? filtered.map((gap, i) => (
+                    <div key={i} className="v3fs-atlas-flt-row"><span>{gap}</span></div>
+                  )) : <div className="v3fs-stu-empty">No open gaps name this area&rsquo;s entities.</div>}
+                </>
+              ) : (
+                <>
+                  {visibleIds && showAllGaps ? (
+                    <div className="v3fs-atlas-fltbar">
+                      <button type="button" className="v3fs-a" onClick={() => setShowAllGaps(false)}>Filter to {areaFilter === "__none__" ? "(no area)" : areaFilter}</button>
+                    </div>
+                  ) : null}
+                  <GapRoutingEditor values={gapsAll} onChange={(next) => patch({ gaps: next })} program={program}
+                    movementId="listen" gapRoutes={gapRoutes} onRoute={onRouteGap} addLabel="Add gap" emptyHint="No gaps." />
+                </>
+              )}
+            </Section>
+          );
+        })()}
       </div>
     </div>
   );

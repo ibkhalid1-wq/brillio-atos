@@ -466,14 +466,38 @@ function AtlasStudio({ doc, onChange, onOpenArtifact, program, gapRoutes, onRout
           </CollapsibleCard>
         );
       })()}
-      <Section label="Open questions" hint="redirect each to the stakeholder or role who can answer it">
-        <GapRoutingEditor values={asStrings(doc.openQuestions)} onChange={(next) => patch({ openQuestions: next })} program={program}
-          movementId="listen" gapRoutes={gapRoutes} onRoute={onRouteGap} addLabel="Add question" placeholder="the open question" emptyHint="No open questions." />
-      </Section>
-      <Section label="Gaps" hint="redirect each gap to the stakeholder or role who can close it">
-        <GapRoutingEditor values={asStrings(doc.gaps)} onChange={(next) => patch({ gaps: next })} program={program}
-          movementId="listen" gapRoutes={gapRoutes} onRoute={onRouteGap} addLabel="Add gap" emptyHint="No gaps." />
-      </Section>
+      {/* Open questions and gaps follow the diagram's focus too — items that
+          MENTION the focused workflow/step's terms (its name, actors,
+          systems, entities, events). Same read-only-when-filtered rule. */}
+      {([
+        { label: "Open questions", hint: "redirect each to the stakeholder or role who can answer it", key: "openQuestions", addLabel: "Add question", placeholder: "the open question", empty: "No open questions." },
+        { label: "Gaps", hint: "redirect each gap to the stakeholder or role who can close it", key: "gaps", addLabel: "Add gap", placeholder: undefined, empty: "No gaps." },
+      ] as const).map((section) => {
+        const values = asStrings(doc[section.key]);
+        const terms = focus?.terms.map((term) => term.toLowerCase()).filter((term) => term.length >= 4) ?? [];
+        const filtered = filtering && terms.length
+          ? values.filter((value) => { const t = value.toLowerCase(); return terms.some((term) => t.includes(term)); })
+          : null;
+        return (
+          <Section key={section.key} label={section.label} hint={section.hint}>
+            {filtered ? (
+              <>
+                {filterBar(filtered.length, values.length)}
+                {filtered.length ? filtered.map((value, i) => (
+                  <div key={i} className="v3fs-atlas-flt-row"><span>{value}</span></div>
+                )) : <div className="v3fs-stu-empty">Nothing here mentions this selection.</div>}
+              </>
+            ) : (
+              <>
+                {refocusBar}
+                <GapRoutingEditor values={values} onChange={(next) => patch({ [section.key]: next })} program={program}
+                  movementId="listen" gapRoutes={gapRoutes} onRoute={onRouteGap} addLabel={section.addLabel}
+                  {...(section.placeholder ? { placeholder: section.placeholder } : {})} emptyHint={section.empty} />
+              </>
+            )}
+          </Section>
+        );
+      })}
     </>
   );
 }
