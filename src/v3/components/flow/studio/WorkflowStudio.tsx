@@ -165,6 +165,26 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program 
     return seen;
   }, [steps]);
 
+  // The cockpit strip's live facts + the hover evidence peek.
+  const laneInitials = (lane: string): string => {
+    const words = lane.split(/[^A-Za-z0-9]+/).filter(Boolean);
+    return ((words[0]?.[0] ?? "") + (words[1]?.[0] ?? "")).toUpperCase() || lane.slice(0, 2).toUpperCase();
+  };
+  const systems = useMemo(() => [...new Set(steps.map((step) => asText(step.system)).filter(Boolean))], [steps]);
+  const painCounts = useMemo(() => {
+    const counts = { high: 0, medium: 0, low: 0 };
+    for (const step of steps) {
+      const hit = painForStep(step, pains);
+      if (hit) counts[(hit.severity as "high" | "medium" | "low") in counts ? (hit.severity as "high" | "medium" | "low") : "medium"] += 1;
+    }
+    return counts;
+  }, [steps, pains]);
+  const [peek, setPeek] = useState<null | { index: number; x: number; y: number }>(null);
+  const showStepPeek = (index: number) => (e: React.MouseEvent) => {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setPeek({ index, x: Math.min(rect.left, Math.max(8, window.innerWidth - 380)), y: rect.bottom + 8 });
+  };
+
   const writeWorkflows = useCallback((next: Array<Record<string, unknown>>) => {
     onChange({ ...doc, workflows: next });
   }, [doc, onChange]);
@@ -209,6 +229,7 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program 
         {groupedTabs.map(([area, items]) => (
           <div key={area} className="v3fs-wf-tabgroup">
             {multiArea ? <span className="v3fs-wf-tabgroup-l" title={`${area} workflows`}>{area}</span> : null}
+            {multiArea ? <em className="v3fs-wf-tabgroup-n">{items.length}</em> : null}
             {items.map(({ name, index }) => (
               <button key={index} type="button" role="tab" aria-selected={index === active}
                 className={index === active ? "on" : ""}
@@ -232,6 +253,30 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program 
         <EmptyState icon="🔀" title="No workflows on record yet" hint="Add one above, or regenerate the Current-State Atlas once the SME transcripts are in." />
       ) : (
         <>
+          {/* The cockpit: this workflow's vitals in one glance — what starts
+              it, who owns it, its size, and where the pain sits. */}
+          <div className="v3fs-wf-cockpit">
+            <div className="v3fs-wf-ckpt-id">
+              <span className="v3fs-wf-ckpt-name">{asText(workflow.name) || "Untitled workflow"}</span>
+              {triggerEvent
+                ? <span className="v3fs-wf-evt" title="The business event that starts this workflow">⚡{triggerEvent}</span>
+                : asText(workflow.trigger) ? <span className="v3fs-wf-ckpt-trig" title="What starts this workflow">{asText(workflow.trigger)}</span> : null}
+            </div>
+            <div className="v3fs-wf-ckpt-stats">
+              <span><b>{steps.length}</b> step{steps.length === 1 ? "" : "s"}</span>
+              <span><b>{lanes.length}</b> persona{lanes.length === 1 ? "" : "s"}</span>
+              <span><b>{systems.length}</b> system{systems.length === 1 ? "" : "s"}</span>
+              {painCounts.high || painCounts.medium || painCounts.low ? (
+                <span className="v3fs-wf-ckpt-pains" title="Steps carrying voiced pain, by severity">
+                  {painCounts.high ? <i className="high">{painCounts.high}</i> : null}
+                  {painCounts.medium ? <i className="medium">{painCounts.medium}</i> : null}
+                  {painCounts.low ? <i className="low">{painCounts.low}</i> : null}
+                  pain
+                </span>
+              ) : null}
+              {asText(workflow.owner) ? <span className="v3fs-wf-ckpt-owner">{asText(workflow.owner)}</span> : null}
+            </div>
+          </div>
           {steps.length === 0 ? (
             <div className="v3fs-stu-empty">No steps yet — add the first one below.</div>
           ) : (
@@ -239,7 +284,7 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program 
               <div className="v3fs-swim" style={{ gridTemplateColumns: `130px repeat(${steps.length}, minmax(178px, 1fr))` }}>
                 {lanes.map((lane) => (
                   <React.Fragment key={lane}>
-                    <div className="v3fs-swim-lane">{lane}</div>
+                    <div className="v3fs-swim-lane"><span className="v3fs-swim-av" aria-hidden="true">{laneInitials(lane)}</span>{lane}</div>
                     {steps.map((step, index) => {
                       const actor = asText(step.actor).trim() || "Unassigned";
                       if (actor !== lane) return <div key={index} className="v3fs-swim-cell" aria-hidden="true" />;
@@ -252,7 +297,8 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program 
                             type="button"
                             className={`v3fs-swim-tile${selected === index ? " on" : ""}${pain ? ` pain-${pain.severity}` : ""}`}
                             onClick={() => setSelected(selected === index ? null : index)}
-                            title={pain ? `${pain.pain}${pain.quote ? ` — “${pain.quote}”` : ""}` : undefined}
+                            onMouseEnter={showStepPeek(index)}
+                            onMouseLeave={() => setPeek(null)}
                           >
                             <span className="v3fs-swim-n" aria-hidden="true">{index + 1}</span>
                             <span className="v3fs-swim-action">{asText(step.action) || "—"}</span>
@@ -331,17 +377,6 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program 
                   onChange={(next) => patchWorkflow({ area: next })} />
               ) : null}
             </div>
-            {triggerEvent ? (
-              <p className="v3fs-wf-trigev">
-                Starts on the business event{" "}
-                <span role="link" tabIndex={0} className="v3fs-wf-evt"
-                  title="Defined in the Domain Ontology — open it"
-                  onClick={() => onOpenArtifact?.("domain-ontology")}
-                  onKeyDown={(event) => { if (event.key === "Enter") onOpenArtifact?.("domain-ontology"); }}>
-                  ⚡{triggerEvent}
-                </span>
-              </p>
-            ) : null}
             <div className="v3fs-wf-head">
               <ChipsField label="Hand-offs" values={asStrings(workflow.handoffs)} onChange={(next) => patchWorkflow({ handoffs: next })} />
               <ChipsField label="Failure modes" values={asStrings(workflow.failureModes)} onChange={(next) => patchWorkflow({ failureModes: next })} />
@@ -357,6 +392,30 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program 
                 setSelected(null);
               }} />
           </div>
+
+          {/* Hover evidence peek — the step's verbatim grounding without a
+              click. Fixed-position and pointer-transparent (same pattern as
+              the kit matrix and gap peeks). */}
+          {peek && steps[peek.index] ? (() => {
+            const step = steps[peek.index];
+            const pain = painForStep(step, pains);
+            const stepEvents = eventsForStep(step, ontoEvents);
+            const entities = asStrings(step.entities);
+            return (
+              <div className="v3fs-wf-peek" role="presentation" style={{ left: peek.x, top: peek.y }}>
+                <div className="pk-t">{peek.index + 1}. {asText(step.action) || "—"}</div>
+                <div className="pk-r">{asText(step.actor) || "Unassigned"}{asText(step.system) ? ` · ${asText(step.system)}` : ""}{asText(step.duration) ? ` · ${asText(step.duration)}` : ""}</div>
+                {asText(step.evidence) ? <blockquote className="pk-q">{asText(step.evidence)}</blockquote> : null}
+                {pain ? <div className={`pk-pain ${pain.severity}`}>{pain.pain}{pain.quote ? ` — “${pain.quote}”` : ""}</div> : null}
+                {entities.length || stepEvents.length ? (
+                  <div className="pk-chips">
+                    {entities.slice(0, 4).map((entity) => <span key={entity} className="v3fs-wf-ent">{entity}</span>)}
+                    {stepEvents.slice(0, 2).map((name) => <span key={name} className="v3fs-wf-evt">⚡{name}</span>)}
+                  </div>
+                ) : null}
+              </div>
+            );
+          })() : null}
         </>
       )}
     </div>
