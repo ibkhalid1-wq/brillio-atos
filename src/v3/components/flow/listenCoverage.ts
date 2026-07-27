@@ -209,10 +209,16 @@ export function kitAreaEntityGuidance(program: ProgramSummary): string | null {
 export function atlasAreaEntityGuidance(program: ProgramSummary): string | null {
   const { areas, byArea } = entitiesByFrameArea(program);
   if (!byArea.size) return null;
+  // The abstract AREA COMPLETENESS rule in the system prompt loses to the
+  // "one workflow per mandate stage" enumeration — name the areas HERE as a
+  // hard checklist so the model can't satisfy the prompt while skipping one.
+  const owed = areas.filter((area) => byArea.has(area));
   return [
     "## Each area's workflows must MOVE ITS ENTITIES (from the Domain Ontology)",
     "When mapping an area's workflow, its steps' entities come from that area's list below — reference them VERBATIM in steps[].entities. A noun the list doesn't carry is an openQuestion for that area's stakeholder, never a new entity:",
-    ...areas.filter((area) => byArea.has(area)).map((area) => `- ${area}: ${byArea.get(area)!.join(", ")}`),
+    ...owed.map((area) => `- ${area}: ${byArea.get(area)!.join(", ")}`),
+    "",
+    `AREA CHECKLIST — the returned workflows array MUST contain at least one workflow whose area is EACH of: ${owed.join(", ")}. An area with no transcript evidence still gets ONE provisional workflow — an industry-standard 3-6 step skeleton moving that area's entities above, every step's evidence "industry-standard practice — to confirm in interviews", actor = that area's kit persona, plus an openQuestion to them. Do not return an atlas that leaves any listed area workflow-less.`,
   ].join("\n");
 }
 

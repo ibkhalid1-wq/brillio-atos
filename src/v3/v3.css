@@ -8765,7 +8765,10 @@ select.v3fs-dir-in {cursor:pointer}
 .v3-auth-brandmark {height:40px;margin-bottom:16px}               /* auth kicker slot */
 .v3fs-appbar-brandlock {display:inline-flex;align-items:center;gap:9px}
 .v3fs-appbar-brandlock .brillio-logo {align-self:center} /* base class pins flex-start; the lockup centers */
-.v3fs-appbar-logo {height:20px}                                   /* app-bar lockup */
+/* The wordmark PNG carries its two dots BELOW the baseline inside the image
+   box, so geometric centring floats the letters high — nudge down to line
+   the letter mass up with AURA's caps (which ride +1px themselves). */
+.v3fs-appbar-logo {height:20px;transform:translateY(2.5px)}       /* app-bar lockup */
 [data-theme="dark"] .v3fs-appbar-logo {filter:brightness(0) invert(1);opacity:.9}
 
 /* AURA product mark — the network tile, ONE artwork with the favicon
