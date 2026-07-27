@@ -9,19 +9,28 @@ import {
   useVideoConfig,
 } from "remotion";
 import { ELECTRIC, FAINT, FONT, INK, INK_2, MUTED } from "./tokens";
-import { AuraWord, Chip, DrawnLine, Rise, Typed } from "./ui";
+import { AuraWord, Chip, DrawnLine, Eyebrow, Glow, Rise, Typed } from "./ui";
 
-const Ground: React.FC<{ children?: React.ReactNode }> = ({ children }) => (
-  <AbsoluteFill
-    style={{
-      background: `linear-gradient(150deg, ${INK_2} 0%, ${INK} 62%)`,
-      alignItems: "center",
-      justifyContent: "center",
-    }}
-  >
-    {children}
-  </AbsoluteFill>
-);
+const Ground: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
+  const frame = useCurrentFrame();
+  // Ambient aurora: two slow-drifting glows so no frame is ever static.
+  const gx = 30 + Math.sin(frame / 210) * 12;
+  const gy = 24 + Math.cos(frame / 260) * 8;
+  const hx = 74 - Math.sin(frame / 240) * 10;
+  return (
+    <AbsoluteFill
+      style={{
+        background: `radial-gradient(ellipse 60% 52% at ${gx}% ${gy}%, rgba(110,91,255,0.16), transparent 70%),
+          radial-gradient(ellipse 55% 60% at ${hx}% 82%, rgba(46,35,100,0.9), transparent 75%),
+          linear-gradient(150deg, ${INK_2} 0%, ${INK} 62%)`,
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      {children}
+    </AbsoluteFill>
+  );
+};
 
 /* ── Scene 1 · The question (0:00–0:12) ─────────────────────────────── */
 export const SceneQuestion: React.FC = () => {
@@ -89,6 +98,7 @@ export const SceneReveal: React.FC = () => {
   const counter = spring({ frame: frame - 320, fps, config: { damping: 200 } });
   return (
     <Ground>
+      <Glow size={900} x="50%" y="34%" />
       <div style={{ textAlign: "center" }}>
         <DrawnLine size={330} progress={draw} />
         <div style={{ height: 26 }} />
@@ -235,6 +245,7 @@ export const SceneAlignment: React.FC = () => {
   return (
     <Ground>
       <Rise start={0} style={{ position: "absolute", top: 96, width: "100%", textAlign: "center" }}>
+        <Eyebrow>03 · Autonomous alignment</Eyebrow>
         <div style={{ fontFamily: FONT, fontSize: 40, fontWeight: 800, color: "#fff", marginBottom: 8 }}>
           AURA engages the stakeholders itself.
         </div>
@@ -326,6 +337,7 @@ export const SceneJourney: React.FC = () => {
     <Ground>
       <div style={{ width: 1780, textAlign: "center" }}>
         <Rise start={0}>
+          <Eyebrow>04 · Governed by design</Eyebrow>
           <div style={{ fontFamily: FONT, fontSize: 40, fontWeight: 800, color: "#fff", marginBottom: 8 }}>
             Autonomous — with a human in the loop, end to end.
           </div>
@@ -386,6 +398,7 @@ export const SceneNumbers: React.FC = () => {
   ];
   return (
     <Ground>
+      <Glow size={1100} x="50%" y="50%" opacity={0.28} />
       <div style={{ display: "flex", flexDirection: "column", gap: 34, alignItems: "center" }}>
         {stamps.map((s, i) => {
           const at = 30 + i * 80;
@@ -559,6 +572,7 @@ export const SceneIndustries: React.FC = () => {
     <Ground>
       <div style={{ textAlign: "center" }}>
         <Rise start={0}>
+          <Eyebrow>05 · Beyond one use case</Eyebrow>
           <div style={{ fontFamily: FONT, fontSize: 40, fontWeight: 800, color: "#fff", letterSpacing: "-0.01em", marginBottom: 8 }}>
             One method. Every industry.
           </div>

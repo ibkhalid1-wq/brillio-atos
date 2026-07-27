@@ -1,5 +1,5 @@
 import React from "react";
-import { interpolate, useCurrentFrame } from "remotion";
+import { Easing, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
 import { ELECTRIC, FONT, INK } from "./tokens";
 
 /** Monospace-feel typed text with a blinking block cursor — the film's motif. */
@@ -68,16 +68,82 @@ export const Rise: React.FC<{
   dur?: number;
   children: React.ReactNode;
   style?: React.CSSProperties;
-}> = ({ start, dur = 18, children, style }) => {
+}> = ({ start, dur = 22, children, style }) => {
   const frame = useCurrentFrame();
   const p = interpolate(frame, [start, start + dur], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
+    easing: Easing.out(Easing.cubic),
   });
   return (
-    <div style={{ opacity: p, transform: `translateY(${(1 - p) * 26}px)`, ...style }}>
+    <div style={{ opacity: p, transform: `translateY(${(1 - p) * 30}px)`, ...style }}>
       {children}
     </div>
+  );
+};
+
+/** Editorial eyebrow above a scene headline — numbered, tracked, violet. */
+export const Eyebrow: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <div
+    style={{
+      fontFamily: FONT, fontSize: 17, fontWeight: 800, letterSpacing: "0.34em",
+      color: ELECTRIC, textTransform: "uppercase", marginBottom: 16,
+    }}
+  >
+    {children}
+  </div>
+);
+
+/** Soft violet glow puddle for depth behind key elements. */
+export const Glow: React.FC<{ size: number; x: string; y: string; opacity?: number }> = ({ size, x, y, opacity = 0.35 }) => (
+  <div
+    style={{
+      position: "absolute", left: x, top: y, width: size, height: size,
+      transform: "translate(-50%, -50%)", borderRadius: "50%", opacity,
+      background: `radial-gradient(circle, ${ELECTRIC}55 0%, transparent 65%)`,
+      filter: "blur(2px)", pointerEvents: "none",
+    }}
+  />
+);
+
+/** Scene shell: eased fade/scale in, fade out at the tail — no hard cuts. */
+export const FadeScene: React.FC<{ dur: number; children: React.ReactNode }> = ({ dur, children }) => {
+  const frame = useCurrentFrame();
+  const inP = interpolate(frame, [0, 14], [0, 1], {
+    extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: Easing.out(Easing.cubic),
+  });
+  const outP = interpolate(frame, [dur - 12, dur - 1], [1, 0], {
+    extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: Easing.in(Easing.cubic),
+  });
+  const o = Math.min(inP, outP);
+  return (
+    <div style={{ position: "absolute", inset: 0, opacity: o, transform: `scale(${0.988 + inP * 0.012})` }}>
+      {children}
+    </div>
+  );
+};
+
+/** Full-frame film grain + vignette — the premium texture pass. */
+export const Grain: React.FC = () => (
+  <>
+    <svg width="1920" height="1080" style={{ position: "absolute", inset: 0, opacity: 0.05, pointerEvents: "none", mixBlendMode: "overlay" }}>
+      <filter id="nz"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch" /></filter>
+      <rect width="1920" height="1080" filter="url(#nz)" />
+    </svg>
+    <div style={{
+      position: "absolute", inset: 0, pointerEvents: "none",
+      background: "radial-gradient(ellipse 105% 90% at 50% 42%, transparent 58%, rgba(6,4,20,0.55) 100%)",
+    }} />
+  </>
+);
+
+/** Bottom progress hairline — the film quietly tells you where it is. */
+export const ProgressLine: React.FC<{ total: number }> = ({ total }) => {
+  const frame = useCurrentFrame();
+  useVideoConfig();
+  return (
+    <div style={{ position: "absolute", left: 0, bottom: 0, height: 4, width: `${(frame / total) * 100}%`,
+      background: `linear-gradient(90deg, ${ELECTRIC}00, ${ELECTRIC})`, opacity: 0.75, pointerEvents: "none" }} />
   );
 };
 
