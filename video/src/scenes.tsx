@@ -37,7 +37,7 @@ const Ground: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
 /* ── 1 · The question (0:00–0:14) ───────────────────────────────────── */
 export const SceneQuestion: React.FC = () => {
   const frame = useCurrentFrame();
-  const grave = ["Copilot nobody adopted", "Use case picked in a workshop", "POC that proved nothing"];
+  const grave = ["Copilot nobody adopted", "Use case in search of a problem", "POC that proved nothing"];
   return (
     <Ground>
       <div style={{ width: 1680, textAlign: "center" }}>
@@ -93,14 +93,14 @@ export const SceneDiagnosis: React.FC = () => {
     <Ground>
       <div style={{ textAlign: "center" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div style={pill(leftP)}>THE BUSINESS</div>
+          <div style={pill(leftP)}>BUSINESS NEEDS</div>
           <svg width={560} height={64}>
             <line x1={0} y1={32} x2={200 * lineP} y2={32} stroke="#fff" strokeWidth={4} strokeLinecap="round" opacity={0.5} />
             <line x1={560} y1={32} x2={560 - 200 * lineP} y2={32} stroke="#fff" strokeWidth={4} strokeLinecap="round" opacity={0.5} />
             <text x={280} y={45} textAnchor="middle" fontFamily={FONT} fontSize={40} fontWeight={800}
               fill={ELECTRIC} opacity={qP * pulse}>?</text>
           </svg>
-          <div style={pill(rightP)}>THE AI</div>
+          <div style={pill(rightP)}>AI SOLUTION</div>
         </div>
         <div style={{ marginTop: 60, opacity: capP, transform: `translateY(${(1 - capP) * 18}px)` }}>
           <div style={{ fontFamily: FONT, fontSize: 36, fontWeight: 750, color: "#fff", marginBottom: 12 }}>
@@ -143,7 +143,7 @@ export const SceneReveal: React.FC = () => {
             <Typed
               start={175}
               cps={30}
-              text={"Meet AURA — Brillio\u2019s AI-native delivery engine."}
+              text={"Meet AURA — Brillio\u2019s AI-native delivery methodology."}
               style={{ fontSize: 38, fontWeight: 700, color: "rgba(255,255,255,0.85)" }}
             />
           ) : null}
@@ -154,14 +154,14 @@ export const SceneReveal: React.FC = () => {
             <Typed
               start={265}
               cps={30}
-              text={"Laila was derived from evidence."}
+              text={"AURA derived Laila from evidence."}
               style={{ fontSize: 54, fontWeight: 800, color: "#fff", lineHeight: 1.4 }}
             />
           ) : null}
         </div>
         <div style={{ height: 40 }} />
         <div style={{ opacity: counter, transform: `translateY(${(1 - counter) * 16}px)` }}>
-          <Chip tone="violet">15 days to first demo</Chip>
+          <Chip tone="violet">21 days to a working POC</Chip>
         </div>
       </div>
     </Ground>
@@ -485,7 +485,7 @@ export const SceneNumbers: React.FC = () => {
     "15 stakeholders heard",
     "34 entities",
     "10 business areas",
-    "15 days → working Sales POC",
+    "21 days → working Sales POC",
   ];
   return (
     <Ground>

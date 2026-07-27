@@ -18,8 +18,8 @@ export const Typed: React.FC<{
   return (
     <span style={{ fontFamily: FONT, whiteSpace: "pre-wrap", ...style }}>
       {shown}
-      {cursor && (!done || blink) && frame >= start ? (
-        <span style={{ opacity: done && !blink ? 0 : 1 }}>▌</span>
+      {cursor && frame >= start ? (
+        <span style={{ opacity: !done || blink ? 1 : 0 }}>▌</span>
       ) : null}
     </span>
   );
