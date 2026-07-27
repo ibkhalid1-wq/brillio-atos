@@ -71,25 +71,33 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
     () => (program ? listenCoverageAreas(program).map((area) => area.label) : []),
     [program],
   );
-  const entityAreaOf = useCallback((entity: Record<string, unknown>): string => {
+  // An entity can SPAN areas — the data convention is a compound label
+  // ("Marketing / Sales"). Each segment canonicalises separately, and the
+  // entity files under EVERY area it names (the filter, the counts and the
+  // regeneration guidance all treat it as belonging to each).
+  const entityAreasOf = useCallback((entity: Record<string, unknown>): string[] => {
     const raw = asText(entity.area);
-    return raw ? canonicalFrameArea(frameAreas, raw) : "";
+    if (!raw) return [];
+    return [...new Set(raw.split(/[/&,]+/).map((segment) => segment.trim()).filter(Boolean)
+      .map((segment) => canonicalFrameArea(frameAreas, segment)))];
   }, [frameAreas]);
   const entityAreas = useMemo(() => {
-    const present = new Set(entities.map(entityAreaOf).filter(Boolean));
-    const ordered = frameAreas.filter((area) => present.has(area));
+    const present = new Set(entities.flatMap(entityAreasOf));
+    // Alphabetical for scanning; the General fallback bucket always trails.
+    const ordered = frameAreas.filter((area) => present.has(area))
+      .sort((a, b) => a.localeCompare(b));
     return present.has(GENERAL_AREA) && !ordered.includes(GENERAL_AREA) ? [...ordered, GENERAL_AREA] : ordered;
-  }, [entities, frameAreas, entityAreaOf]);
+  }, [entities, frameAreas, entityAreasOf]);
   const hasNoArea = useMemo(() => entities.some((entity) => !asText(entity.area)), [entities]);
   const visibleIds = useMemo(() => {
     if (!areaFilter) return null;
     const set = new Set<string>();
     entities.forEach((entity, index) => {
-      const area = entityAreaOf(entity);
-      if (areaFilter === "__none__" ? !area : area === areaFilter) set.add(entityId(entity, index));
+      const areas = entityAreasOf(entity);
+      if (areaFilter === "__none__" ? !areas.length : areas.includes(areaFilter)) set.add(entityId(entity, index));
     });
     return set;
-  }, [areaFilter, entities, entityAreaOf]);
+  }, [areaFilter, entities, entityAreasOf]);
   const ghostIds = useMemo(() => (showCandidates ? candidates.map((c) => CAND_PREFIX + asText(c.name)) : []), [candidates, showCandidates]);
   // A candidate edge endpoint is either the candidate's own class (→ ghost id)
   // or an asserted entity's display name (→ its node id).
@@ -406,7 +414,7 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
           <select value={areaFilter} aria-label="Filter ontology by area" onChange={(e) => setAreaFilter(e.target.value)}>
             <option value="">All areas · {entities.length} entities</option>
             {entityAreas.map((area) => (
-              <option key={area} value={area}>{area} · {entities.filter((entity) => entityAreaOf(entity) === area).length}</option>
+              <option key={area} value={area}>{area} · {entities.filter((entity) => entityAreasOf(entity).includes(area)).length}</option>
             ))}
             {hasNoArea ? <option value="__none__">(no area assigned)</option> : null}
           </select>
@@ -419,11 +427,10 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
           <select value={selectedEntityId ?? ""} aria-label="Pick an entity"
             onChange={(e) => setSelected(e.target.value ? { kind: "entity", id: e.target.value } : null)}>
             <option value="">— pick an entity to edit ({visibleIds ? visibleIds.size : entities.length}) —</option>
-            {entities.map((entity, index) => {
-              const id = entityId(entity, index);
-              if (visibleIds && !visibleIds.has(id) && id !== selectedEntityId) return null;
-              return <option key={id} value={id}>{asText(entity.name) || id}</option>;
-            })}
+            {entities.map((entity, index) => ({ entity, id: entityId(entity, index) }))
+              .filter(({ id }) => !visibleIds || visibleIds.has(id) || id === selectedEntityId)
+              .sort((a, b) => (asText(a.entity.name) || a.id).localeCompare(asText(b.entity.name) || b.id))
+              .map(({ entity, id }) => <option key={id} value={id}>{asText(entity.name) || id}</option>)}
           </select>
         </label>
         {visibleIds ? (
@@ -559,15 +566,32 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
                     <span className="v3fs-onto-entrels">{rels.length} relationship{rels.length === 1 ? "" : "s"}</span>
                   </div>
                   <div className="v3fs-stu-card-b">
-                    <div className="v3fs-stu-grid3">
+                    <div className="v3fs-stu-grid2">
                       <TextField label="Name" value={name} onChange={(next) => renameEntity(index, next)} />
                       <TextField label="System of record" value={asText(entity.systemOfRecord)}
                         onChange={(next) => updateEntity(index, { systemOfRecord: next || null })} />
-                      {/* Assigning an area moves the entity's bucket in the deck's
-                          filter — how an unmatched or untagged entity gets home. */}
-                      <SelectField label="Area (from the Frame)" value={entityAreaOf(entity)}
-                        options={["", ...frameAreas, GENERAL_AREA]}
-                        onChange={(next) => updateEntity(index, { area: next || null })} />
+                    </div>
+                    {/* Toggling pills moves the entity's bucket(s) in the deck's
+                        filter. Several pills lit = a spanning entity — stored as
+                        the compound label ("Marketing / Sales") and filed under
+                        each of its areas everywhere. */}
+                    <div className="v3fs-stu-field">
+                      <span className="v3fs-stu-fl">Areas (from the Frame) — toggle every area this entity belongs to</span>
+                      <div className="v3fs-onto-areapills">
+                        {[...frameAreas].sort((a, b) => a.localeCompare(b)).map((area) => {
+                          const current = entityAreasOf(entity);
+                          const on = current.includes(area);
+                          return (
+                            <button key={area} type="button" className={`v3fs-onto-areapill${on ? " on" : ""}`}
+                              aria-pressed={on}
+                              onClick={() => {
+                                const kept = current.filter((a) => a !== GENERAL_AREA && a !== area);
+                                const next = on ? kept : [...kept, area];
+                                updateEntity(index, { area: next.length ? next.join(" / ") : null });
+                              }}>{area}</button>
+                          );
+                        })}
+                      </div>
                     </div>
                     <TextArea label="Definition" rows={2} value={asText(entity.definition)}
                       onChange={(next) => updateEntity(index, { definition: next })} />

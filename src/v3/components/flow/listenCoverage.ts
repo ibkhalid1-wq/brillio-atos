@@ -182,9 +182,14 @@ function entitiesByFrameArea(program: ProgramSummary): { areas: string[]; byArea
     const raw = txt(entity.area);
     const name = txt(entity.name);
     if (!raw || !name) continue;
-    const area = canonicalFrameArea(areas, raw);
-    if (!areas.includes(area)) continue;
-    byArea.set(area, [...(byArea.get(area) ?? []), name]);
+    // A compound label ("Marketing / Sales") is a SPANNING entity — it feeds
+    // the guidance for every area it names, not just its best single match.
+    const spanned = new Set(raw.split(/[/&,]+/).map((segment) => segment.trim()).filter(Boolean)
+      .map((segment) => canonicalFrameArea(areas, segment)));
+    for (const area of spanned) {
+      if (!areas.includes(area)) continue;
+      byArea.set(area, [...(byArea.get(area) ?? []), name]);
+    }
   }
   return { areas, byArea };
 }

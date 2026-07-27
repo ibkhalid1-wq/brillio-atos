@@ -679,7 +679,8 @@ function DemoScriptsStudio({ doc, onChange, program }: StudioProps) {
     const area = covered ?? (program ? canonicalFrameArea(kitAreas, stakeholderPrimaryArea(program, asText(item.stakeholder), asText(item.role))) : "");
     return { item, index, area };
   });
-  const areasPresent = kitAreas.filter((area) => entries.some((entry) => entry.area === area));
+  const areasPresent = kitAreas.filter((area) => entries.some((entry) => entry.area === area))
+    .sort((a, b) => a.localeCompare(b));
   const shown = areaPick ? entries.filter((entry) => entry.area === areaPick) : entries;
   return (
     <>

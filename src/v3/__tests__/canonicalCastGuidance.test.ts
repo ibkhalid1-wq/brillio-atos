@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { listenCanonicalCastGuidance } from "@/v3/components/flow/listenCoverage";
+import { listenCanonicalCastGuidance, kitAreaEntityGuidance } from "@/v3/components/flow/listenCoverage";
 import type { ProgramSummary } from "@/new/types";
 
 const prog = (data: Record<string, unknown>): ProgramSummary =>
@@ -29,5 +29,25 @@ describe("listenCanonicalCastGuidance", () => {
 
   it("returns null when there is no cast at all", () => {
     expect(listenCanonicalCastGuidance(prog({}))).toBeNull();
+  });
+});
+
+describe("kitAreaEntityGuidance — spanning entities", () => {
+  it("files a compound-area entity under EVERY area it names", () => {
+    const out = kitAreaEntityGuidance(prog({
+      phaseInputs: {
+        frame: { listenPlan: JSON.stringify({ roles: [], areas: ["Marketing", "Sales"], coverage: {}, dismissedAreas: [] }) },
+      },
+      domainOntology: {
+        entities: [
+          { name: "Signal", area: "Marketing / Sales" },
+          { name: "Campaign", area: "Marketing" },
+        ],
+      },
+    }));
+    expect(out).not.toBeNull();
+    expect(out).toMatch(/- Marketing: .*Signal/);
+    expect(out).toMatch(/- Sales: .*Signal/);
+    expect(out).not.toMatch(/- Sales: .*Campaign/);
   });
 });

@@ -538,7 +538,11 @@ export function IntervieweeDiscovery({ program, movementId, captureField, areaFi
                   <span>Area</span>
                   <select value={pickedLane?.area ?? ""} aria-label="Pick an area"
                     onChange={(e) => setAreaPick(e.target.value)}>
-                    {laneData.map((lane) => (
+                    {/* Options read alphabetically (General last) even though the
+                        DEFAULT pick stays the neediest lane (laneData[0]). */}
+                    {[...laneData].sort((a, b) =>
+                      a.area === GENERAL_AREA ? 1 : b.area === GENERAL_AREA ? -1 : a.area.localeCompare(b.area)
+                    ).map((lane) => (
                       <option key={lane.area} value={lane.area}>
                         {lane.area} — {lane.heard}/{lane.total} heard{lane.open.length ? ` · ${lane.open.length} to collect` : ""}
                       </option>

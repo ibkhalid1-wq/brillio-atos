@@ -89,7 +89,8 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
   // IS the document there, so the graphical view leads. Prose-first
   // documents keep the typeset reading view as the default.
   const GRAPH_FIRST = ["domain-ontology", "current-state-atlas", "architecture-strategy", "agentic-blueprint", "experience-design", "prototype-build"];
-  const [editing, setEditing] = useState(() => GRAPH_FIRST.includes(artifact.id));
+  const graphFirst = GRAPH_FIRST.includes(artifact.id);
+  const [editing, setEditing] = useState(graphFirst);
 
   // A regenerate or portal write can refresh the programme under the open
   // studio — follow the store while the user hasn't started editing.
@@ -141,7 +142,9 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
     try {
       await onSaveDoc({ fieldKey: entry.fieldKey, movementId: artifact.movementId, title: artifact.title, doc: draft });
       setDirty(false);
-      setEditing(false);
+      // Graph-first tabs (ontology, atlas, …) STAY in their studio after a
+      // save — flipping to the document reading is a jarring "navigation".
+      if (!graphFirst) setEditing(false);
       window.dispatchEvent(new CustomEvent("atlas-v3-toast", {
         detail: { message: `${artifact.title} saved — the change is on the trail.`, tone: "success", duration: 3000 },
       }));
@@ -153,7 +156,7 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
   const discard = () => {
     setDraft(storedDoc);
     setDirty(false);
-    setEditing(false);
+    if (!graphFirst) setEditing(false);
   };
 
   const body = artifactDocument(program, artifact.id);

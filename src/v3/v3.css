@@ -6395,6 +6395,14 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-onto-relcard:hover {color:var(--v3-accent-b)}
 .v3fs-onto-relx {opacity:0;transition:opacity .12s ease}
 .v3fs-onto-relrow:hover .v3fs-onto-relx, .v3fs-onto-relx:focus-visible {opacity:1}
+/* Area membership pills on the entity card — several lit = a spanning entity */
+.v3fs-onto-areapills {display:flex;flex-wrap:wrap;gap:6px}
+.v3fs-onto-areapill {border:1px solid var(--fs-line);background:var(--v3-surface-1,transparent);
+  font:inherit;font-size:12px;font-weight:600;color:var(--v3-text-secondary);
+  border-radius:99px;padding:4px 12px;cursor:pointer;transition:background .12s ease,color .12s ease,border-color .12s ease}
+.v3fs-onto-areapill:hover {border-color:color-mix(in srgb,var(--v3-accent-2) 45%,var(--fs-line));color:var(--v3-text-primary)}
+.v3fs-onto-areapill.on {color:#fff;background:var(--v3-accent-2);border-color:var(--v3-accent-2)}
+.v3fs-onto-areapill:focus-visible {outline:2px solid var(--v3-accent-2);outline-offset:1px}
 @media (prefers-reduced-motion:reduce){.v3fs-onto-relrow,.v3fs-onto-relx{transition:none}}
 /* Instant hover peek for clipped gap/open-question text — no title delay. */
 .v3fs-gaprt-peek {position:fixed;z-index:320;max-width:430px;pointer-events:none;
