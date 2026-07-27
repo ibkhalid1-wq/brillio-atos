@@ -19,6 +19,8 @@ import {
 } from "./StudioKit";
 
 import { ONTOLOGY_CARDINALITIES, ONTOLOGY_RELATION_VERBS, ONTOLOGY_RELATION_VERB_MEANINGS } from "@/v3/components/flow/flowOntologyConstraints";
+import { listenCoverageAreas, canonicalFrameArea } from "@/v3/components/flow/listenCoverage";
+import { GENERAL_AREA } from "@/v3/components/flow/flowAreas";
 import { GapRoutingEditor } from "./GapRoutingEditor";
 
 type Selection = { kind: "entity"; id: string } | { kind: "relation"; index: number } | { kind: "candidate"; id: string } | null;
@@ -60,20 +62,34 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
   // and index-based edits survive) and the entity-card list beneath it.
   const [areaFilter, setAreaFilter] = useState("");
   const [showAllGaps, setShowAllGaps] = useState(false);
-  const entityAreas = useMemo(
-    () => [...new Set(entities.map((entity) => asText(entity.area)).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
-    [entities],
+  // Entity areas CANONICALISED onto the Frame's (Discovery Kit's) area list —
+  // the generator's free-form tags ("Support") collapse onto the kit's own
+  // vocabulary, unmatched ones file under General, and untagged entities
+  // under "(no area)". The dropdown therefore always speaks the kit's areas,
+  // in the kit's pinned order; the entity card's Area select assigns one.
+  const frameAreas = useMemo(
+    () => (program ? listenCoverageAreas(program).map((area) => area.label) : []),
+    [program],
   );
+  const entityAreaOf = useCallback((entity: Record<string, unknown>): string => {
+    const raw = asText(entity.area);
+    return raw ? canonicalFrameArea(frameAreas, raw) : "";
+  }, [frameAreas]);
+  const entityAreas = useMemo(() => {
+    const present = new Set(entities.map(entityAreaOf).filter(Boolean));
+    const ordered = frameAreas.filter((area) => present.has(area));
+    return present.has(GENERAL_AREA) && !ordered.includes(GENERAL_AREA) ? [...ordered, GENERAL_AREA] : ordered;
+  }, [entities, frameAreas, entityAreaOf]);
   const hasNoArea = useMemo(() => entities.some((entity) => !asText(entity.area)), [entities]);
   const visibleIds = useMemo(() => {
     if (!areaFilter) return null;
     const set = new Set<string>();
     entities.forEach((entity, index) => {
-      const area = asText(entity.area);
+      const area = entityAreaOf(entity);
       if (areaFilter === "__none__" ? !area : area === areaFilter) set.add(entityId(entity, index));
     });
     return set;
-  }, [areaFilter, entities]);
+  }, [areaFilter, entities, entityAreaOf]);
   const ghostIds = useMemo(() => (showCandidates ? candidates.map((c) => CAND_PREFIX + asText(c.name)) : []), [candidates, showCandidates]);
   // A candidate edge endpoint is either the candidate's own class (→ ghost id)
   // or an asserted entity's display name (→ its node id).
@@ -541,10 +557,15 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
                     <span className="v3fs-onto-entrels">{rels.length} relationship{rels.length === 1 ? "" : "s"}</span>
                   </div>
                   <div className="v3fs-stu-card-b">
-                    <div className="v3fs-stu-grid2">
+                    <div className="v3fs-stu-grid3">
                       <TextField label="Name" value={name} onChange={(next) => renameEntity(index, next)} />
                       <TextField label="System of record" value={asText(entity.systemOfRecord)}
                         onChange={(next) => updateEntity(index, { systemOfRecord: next || null })} />
+                      {/* Assigning an area moves the entity's bucket in the deck's
+                          filter — how an unmatched or untagged entity gets home. */}
+                      <SelectField label="Area (from the Frame)" value={entityAreaOf(entity)}
+                        options={["", ...frameAreas, GENERAL_AREA]}
+                        onChange={(next) => updateEntity(index, { area: next || null })} />
                     </div>
                     <TextArea label="Definition" rows={2} value={asText(entity.definition)}
                       onChange={(next) => updateEntity(index, { definition: next })} />
