@@ -13,15 +13,15 @@ export const FPS = 30;
 
 /** Scene boundaries (frames @30fps) — the v7 script, 2:10. */
 export const T = {
-  question: { from: 0, dur: 420 }, //   0:00–0:14 — the question + graveyard
-  diagnosis: { from: 420, dur: 360 }, // 0:14–0:26 — the missing middle
-  reveal: { from: 780, dur: 480 }, //    0:26–0:42 — Laila, derived from evidence
-  alignment: { from: 1260, dur: 420 }, // 0:42–0:56 — it starts with people
-  grounding: { from: 1680, dur: 480 }, // 0:56–1:12 — the business's own language
-  journey: { from: 2160, dur: 600 }, //  1:12–1:32 — governed by design
-  numbers: { from: 2760, dur: 480 }, //  1:32–1:48 — the proof
-  industries: { from: 3240, dur: 360 }, // 1:48–2:00 — any business
-  close: { from: 3600, dur: 300 }, //    2:00–2:10 — bookend answer
+  question: { from: 0, dur: 380 }, //     0:00–0:12.7 — the question + graveyard
+  diagnosis: { from: 380, dur: 300 }, //  0:12.7–0:22.7 — the missing middle
+  reveal: { from: 680, dur: 400 }, //     0:22.7–0:36 — meet AURA, Laila derived
+  alignment: { from: 1080, dur: 380 }, // 0:36–0:48.7 — it starts with people
+  grounding: { from: 1460, dur: 400 }, // 0:48.7–1:02 — the business's own language
+  journey: { from: 1860, dur: 410 }, //   1:02–1:15.7 — governed by design
+  numbers: { from: 2270, dur: 390 }, //   1:15.7–1:28.7 — the proof
+  industries: { from: 2660, dur: 270 }, //1:28.7–1:37.7 — any business
+  close: { from: 2930, dur: 260 }, //     1:37.7–1:46.3 — the bookend answer
 };
 
-export const TOTAL_FRAMES = 3900;
+export const TOTAL_FRAMES = 3190;
