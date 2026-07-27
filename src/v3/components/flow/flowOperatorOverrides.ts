@@ -90,6 +90,7 @@ export function overrideNotes(
   if (fieldKey === "currentStateAtlas") {
     return [
       ...diffNamed("Workflow", asArr(previous.workflows), asArr(next.workflows), (row) => text(row.name), "name"),
+      ...diffNamed("Business event", asArr(previous.events), asArr(next.events), (row) => text(row.name), "name"),
       ...diffNamed("Pain point", asArr(previous.painHeatmap), asArr(next.painHeatmap),
         (row) => `${text(row.area)}: ${text(row.pain)}`),
     ];

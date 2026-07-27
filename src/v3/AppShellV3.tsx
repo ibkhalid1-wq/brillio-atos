@@ -1054,16 +1054,22 @@ export default function AppShellV3() {
       const cast = listenCanonicalCastGuidance(activeProgram);
       if (cast) crossPhaseContext += `${crossPhaseContext ? "\n\n" : ""}${cast}`;
     }
-    // The Atlas weaves the ontology's BUSINESS EVENTS into its workflows:
-    // each step that raises or responds to one is annotated, and a workflow
-    // started by one names it as the trigger. Definitions stay in the
-    // ontology — the atlas references, exactly like entities.
+    // The Atlas OWNS the business events (they moved from the ontology) and
+    // weaves them into its workflows: each step that raises or responds to
+    // one is annotated, and a workflow started by one names it as the
+    // trigger. The current list — the atlas's own, plus any still on a
+    // legacy ontology doc — rides in as the canonical set to carry forward.
     if (resolvedAgentId === "current-state-atlas" && activeProgram) {
-      const events = ((readArtifactDoc(activeProgram, "domainOntology")?.events as unknown[]) ?? [])
-        .map((e) => (e && typeof e === "object" ? String((e as Record<string, unknown>).name ?? "").trim() : ""))
-        .filter(Boolean);
+      const names = (doc: Record<string, unknown> | null) =>
+        ((doc?.events as unknown[]) ?? [])
+          .map((e) => (e && typeof e === "object" ? String((e as Record<string, unknown>).name ?? "").trim() : ""))
+          .filter(Boolean);
+      const events = [...new Set([
+        ...names(readArtifactDoc(activeProgram, "currentStateAtlas")),
+        ...names(readArtifactDoc(activeProgram, "domainOntology")),
+      ])];
       if (events.length) {
-        crossPhaseContext += `${crossPhaseContext ? "\n\n" : ""}## Business events (from the Domain Ontology — weave them into the workflows)\nAnnotate every workflow step that RAISES or RESPONDS TO one of these events with "events": ["<event name>"] (verbatim names). When a business event STARTS a workflow, use the event's name in that workflow's "trigger". Reference only these names — a new event belongs in the Domain Ontology, not here: ${events.join("; ")}.`;
+        crossPhaseContext += `${crossPhaseContext ? "\n\n" : ""}## Business events (carry them forward and weave them into the workflows)\nThe programme's current business events are: ${events.join("; ")}. Return them in this document's own "events" array (refined by evidence, names preserved). Annotate every workflow step that RAISES or RESPONDS TO one with "events": ["<event name>"] (verbatim names), and when a business event STARTS a workflow, use the event's name in that workflow's "trigger".`;
       }
     }
     // Operator overrides: hand corrections to the kit/ontology/atlas are

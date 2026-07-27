@@ -13,7 +13,7 @@ import {
 import { ROUTED_EDGE_TYPES, layeredPositions, elkGraphLayout } from "./graphKit";
 import "@xyflow/react/dist/style.css";
 import {
-  Section, TextField, TextArea, SelectField, ChipsField, TableEditor,
+  Section, TextField, TextArea, SelectField, ChipsField,
   asArray, asRecord, asText, asStrings, useStudioLocked, useStudioAuthoring,
   curationNote, DismissControl, type StudioProps,
 } from "./StudioKit";
@@ -343,11 +343,18 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
     setSelected(null);
   };
 
-  const selectedEntityIndex = selected?.kind === "entity"
-    ? entities.findIndex((entity, i) => entityId(entity, i) === selected.id)
-    : -1;
-  const selectedEntity = selectedEntityIndex >= 0 ? entities[selectedEntityIndex] : null;
   const selectedRelation = selected?.kind === "relation" ? relations[selected.index] : null;
+
+  // Clicking a node on the map jumps to that entity's card in the list below
+  // and expands it — the card IS the editor (the side panel's old entity form
+  // was a duplicate and is gone). The map stays in view: the canvas is sticky.
+  const cardRefs = useRef(new Map<string, HTMLDetailsElement>());
+  const openEntityCard = (id: string) => {
+    const card = cardRefs.current.get(id);
+    if (!card) return;
+    card.open = true;
+    card.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  };
 
   return (
     <div className="v3fs-onto">
@@ -361,7 +368,11 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
           edgeTypes={ROUTED_EDGE_TYPES}
           onNodesChange={handleNodesChange}
           onConnect={onConnect}
-          onNodeClick={(_, node) => setSelected(node.id.startsWith(CAND_PREFIX) ? { kind: "candidate", id: node.id } : { kind: "entity", id: node.id })}
+          onNodeClick={(_, node) => {
+            if (node.id.startsWith(CAND_PREFIX)) { setSelected({ kind: "candidate", id: node.id }); return; }
+            setSelected({ kind: "entity", id: node.id });
+            openEntityCard(node.id);
+          }}
           onEdgeClick={(_, edge) => { if (!edge.id.startsWith("cedge-")) setSelected({ kind: "relation", index: Number(edge.id.replace("rel-", "")) }); }}
           onPaneClick={() => setSelected(null)}
           onInit={(instance) => { flowRef.current = instance; }}
@@ -403,37 +414,7 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
       </div>
 
       <aside className="v3fs-onto-panel">
-        {selectedEntity ? (
-          <>
-            <div className="v3fs-stu-sec-h"><h3>Entity</h3><span>name, definition, evidence</span></div>
-            <TextField label="Name" value={asText(selectedEntity.name)}
-              onChange={(next) => renameEntity(selectedEntityIndex, next)} />
-            <TextArea label="Definition" rows={3} value={asText(selectedEntity.definition)}
-              onChange={(next) => updateEntity(selectedEntityIndex, { definition: next })} />
-            <TextField label="System of record" value={asText(selectedEntity.systemOfRecord)}
-              onChange={(next) => updateEntity(selectedEntityIndex, { systemOfRecord: next || null })} />
-            <ChipsField label="Attributes" values={asStrings(selectedEntity.attributes)}
-              onChange={(next) => updateEntity(selectedEntityIndex, { attributes: next })} />
-            <ChipsField label="Aliases" values={asStrings(selectedEntity.aliases)}
-              onChange={(next) => updateEntity(selectedEntityIndex, { aliases: next })} />
-            <TextArea label="Evidence" rows={2} value={asText(selectedEntity.evidence)}
-              onChange={(next) => updateEntity(selectedEntityIndex, { evidence: next })} />
-            {/* Explicit relation creation — same result as dragging node-to-
-                node on the canvas, but discoverable: pick the target entity
-                and the new relation opens in this panel to be named. */}
-            {locked ? null : <SelectField label="Add relation to…" value=""
-              options={["", ...ids.filter((entityName) => entityName !== asText(selectedEntity.name))]}
-              onChange={(target) => {
-                if (!target) return;
-                const next = [...relations, { from: asText(selectedEntity.name), relation: "relates to", to: target, cardinality: "unknown" }];
-                patch({ relations: next });
-                setSelected({ kind: "relation", index: next.length - 1 });
-              }} />}
-            {locked ? null : <p className="v3fs-onto-hint">…or drag from this entity’s edge dot to another entity on the canvas.</p>}
-            <DismissControl label="Dismiss entity" confirmLabel="Dismiss entity"
-              onDismiss={(reason) => deleteEntity(selectedEntityIndex, reason)} />
-          </>
-        ) : selectedRelation && selected?.kind === "relation" ? (
+        {selectedRelation && selected?.kind === "relation" ? (
           <>
             <div className="v3fs-stu-sec-h"><h3>Relation</h3><span>{asText(selectedRelation.from)} → {asText(selectedRelation.to)}</span></div>
             <TextField label="Relation (verb phrase)" value={asText(selectedRelation.relation)}
@@ -465,7 +446,8 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
           );
         })() : (
           <div className="v3fs-stu-empty">
-            Click an entity or relation to edit it. Drag from one node’s edge to another to draw a new relation.
+            Click an entity on the map to jump to its card below; click a relation (edge) to edit it here.
+            Drag from one node&rsquo;s edge to another to draw a new relation.
           </div>
         )}
       </aside>
@@ -475,15 +457,20 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
             card carrying the same editors as the side panel, plus its
             relationships in place (type + cardinality editable, add/delete).
             The graph shows shape; this is where methodical curation happens. */}
-        <Section label="Entities" hint="each entity as a card — expand to edit it and manage its relationships">
-          <div className="v3fs-stu-cards">
+        <Section label="Entities" hint="each entity as a card — expand to edit it and manage its relationships; the list scrolls, the map stays">
+          <div className="v3fs-stu-cards v3fs-onto-entwrap">
             {entities.length === 0 ? <div className="v3fs-stu-empty">No entities on record yet.</div> : null}
             {entities.map((entity, index) => {
               const name = asText(entity.name);
               const rels = relations.map((relation, ri) => ({ relation, ri }))
                 .filter(({ relation }) => asText(relation.from) === name || asText(relation.to) === name);
               return (
-                <details key={entityId(entity, index)} className="v3fs-stu-card">
+                <details key={entityId(entity, index)} className="v3fs-stu-card"
+                  ref={(el) => {
+                    const id = entityId(entity, index);
+                    if (el) cardRefs.current.set(id, el);
+                    else cardRefs.current.delete(id);
+                  }}>
                   <summary>
                     <span className="v3fs-stu-card-t">{name || `Entity ${index + 1}`}</span>
                     <span className="v3fs-onto-entrels">{rels.length} relationship{rels.length === 1 ? "" : "s"}</span>
@@ -502,23 +489,33 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
                       <ChipsField label="Aliases" values={asStrings(entity.aliases)}
                         onChange={(next) => updateEntity(index, { aliases: next })} />
                     </div>
-                    <div className="v3fs-stu-sec-h"><h3>Relationships</h3><span>type and cardinality edit in place; × removes the edge</span></div>
+                    <TextArea label="Evidence" rows={2} value={asText(entity.evidence)}
+                      onChange={(next) => updateEntity(index, { evidence: next })} />
+                    <div className="v3fs-stu-sec-h"><h3>Relationships</h3><span>reads left to right — the verb and cardinality edit in place</span></div>
                     {rels.length === 0 ? <div className="v3fs-stu-empty">No relationships yet — add one below.</div> : (
                       <div className="v3fs-onto-relrows">
                         {rels.map(({ relation, ri }) => {
                           const outgoing = asText(relation.from) === name;
                           const other = outgoing ? asText(relation.to) : asText(relation.from);
+                          const verb = asText(relation.relation);
+                          const endChip = (label: string, self: boolean) => (
+                            <span className={`v3fs-onto-relend${self ? " self" : ""}`} title={self ? name : undefined}>{self ? "This" : label}</span>
+                          );
                           return (
                             <div key={ri} className="v3fs-onto-relrow">
-                              <span className={`v3fs-onto-reldir${outgoing ? "" : " in"}`} title={outgoing ? "outgoing" : "incoming"} aria-hidden="true">{outgoing ? "→" : "←"}</span>
-                              <input value={asText(relation.relation)} aria-label={`Relation type with ${other}`} disabled={locked}
-                                onChange={(e) => updateRelation(ri, { relation: e.target.value })} />
-                              <span className="v3fs-onto-relother">{other}</span>
-                              <select value={asText(relation.cardinality) || "unknown"} aria-label="Cardinality" disabled={locked}
+                              {endChip(other, outgoing)}
+                              <span className="v3fs-onto-relmid">
+                                <input className="v3fs-onto-relverb" value={verb} size={Math.max(6, verb.length)}
+                                  aria-label={`Relation type with ${other}`} disabled={locked} placeholder="relates to"
+                                  onChange={(e) => updateRelation(ri, { relation: e.target.value })} />
+                                <span className="v3fs-onto-relarrow" aria-hidden="true">→</span>
+                              </span>
+                              {endChip(other, !outgoing)}
+                              <select className="v3fs-onto-relcard" value={asText(relation.cardinality) || "unknown"} aria-label="Cardinality" disabled={locked}
                                 onChange={(e) => updateRelation(ri, { cardinality: e.target.value })}>
                                 {CARDINALITIES.map((c) => <option key={c} value={c}>{c}</option>)}
                               </select>
-                              {locked ? null : <button type="button" className="v3fs-stu-x" aria-label={`Delete relationship with ${other}`}
+                              {locked ? null : <button type="button" className="v3fs-stu-x v3fs-onto-relx" aria-label={`Delete relationship with ${other}`}
                                 onClick={() => deleteRelation(ri, "removed on the entity card")}>×</button>}
                             </div>
                           );
@@ -533,28 +530,18 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
                           patch({ relations: [...relations, { from: name, relation: "relates to", to: target, cardinality: "unknown" }] });
                         }} />
                     )}
+                    <DismissControl label="Dismiss entity" confirmLabel="Dismiss entity"
+                      onDismiss={(reason) => deleteEntity(index, reason)} />
                   </div>
                 </details>
               );
             })}
           </div>
         </Section>
-        <Section label="Business events" hint="what happens, what causes it, what it changes">
-          <TableEditor
-            columns={[
-              { key: "name", label: "Event" },
-              { key: "triggers", label: "Triggered by", grow: 1.4 },
-              { key: "produces", label: "Produces", grow: 1.4 },
-            ]}
-            rows={asArray(doc.events).map(asRecord)}
-            onChange={(next) => patch({ events: next })}
-            addLabel="Add event"
-            emptyHint="No business events captured yet."
-          />
-        </Section>
-        {/* Ambiguities (duplicated the open Gaps) and Standards alignment are
-            hidden from the studio — the Gaps table below is the one place open
-            questions get triaged and redirected. */}
+        {/* Business events live on the Current-State Atlas tab now — they're
+            woven into the workflows there. Ambiguities (duplicated the open
+            Gaps) and Standards alignment are hidden from the studio — the
+            Gaps table below is the one place open questions get triaged. */}
         <Section label="Gaps" hint="entities referenced but never defined — redirect each to the stakeholder or role who can close it">
           <GapRoutingEditor values={asStrings(doc.gaps)} onChange={(next) => patch({ gaps: next })} program={program}
             movementId="listen" gapRoutes={gapRoutes} onRoute={onRouteGap} addLabel="Add gap" emptyHint="No gaps." />

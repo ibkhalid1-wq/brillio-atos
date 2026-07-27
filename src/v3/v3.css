@@ -6366,17 +6366,32 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-stu-th span{padding:0 4px}
 .v3fs-stu-xcol{width:24px;flex-shrink:0}
 /* Gap-routing editor — a gap row's second column redirects it to a stakeholder/role */
-/* Ontology entity cards under the map — relationship rows + summary count. */
+/* Ontology entity cards under the map — relationship rows read as SENTENCES:
+   [This] —produces→ [Opportunity] (1:N). The verb is an inline ghost input
+   (dashed underline on hover), cardinality a ghost pill select, delete
+   appears on row hover. */
 .v3fs-onto-entrels {margin-left:auto;margin-right:8px;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--v3-text-muted)}
-.v3fs-onto-relrows {display:flex;flex-direction:column;gap:6px;margin:0 0 10px}
-.v3fs-onto-relrow {display:flex;align-items:center;gap:7px}
-.v3fs-onto-relrow input {flex:1 1 140px;min-width:100px}
-.v3fs-onto-relrow select {flex:0 0 auto}
-.v3fs-onto-reldir {flex:none;width:16px;text-align:center;font-weight:800;color:var(--v3-accent-2)}
-.v3fs-onto-reldir.in {color:var(--v3-text-muted)}
-.v3fs-onto-relother {flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+.v3fs-onto-relrows {display:flex;flex-direction:column;gap:7px;margin:0 0 12px}
+.v3fs-onto-relrow {display:flex;align-items:center;gap:9px;padding:7px 11px;border:1px solid var(--fs-line);
+  border-radius:12px;background:var(--fs-card);transition:border-color .13s ease,box-shadow .13s ease}
+.v3fs-onto-relrow:hover {border-color:color-mix(in srgb,var(--v3-accent-2) 34%,var(--fs-line));
+  box-shadow:0 2px 10px -7px rgba(23,26,46,.35)}
+.v3fs-onto-relend {flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   font-size:12px;font-weight:700;color:var(--v3-text-primary);background:var(--fs-indigo-wash,var(--v3-surface-2));
-  border-radius:99px;padding:3px 10px}
+  border-radius:99px;padding:3px 11px}
+.v3fs-onto-relend.self {color:#fff;background:var(--v3-accent-2)}
+.v3fs-onto-relmid {display:inline-flex;align-items:center;gap:7px;min-width:0}
+.v3fs-onto-relverb {border:0;background:transparent;font:inherit;font-size:12.5px;font-style:italic;
+  color:var(--v3-text-secondary);padding:2px 1px;min-width:0;border-bottom:1px dashed transparent;outline:0}
+.v3fs-onto-relrow:hover .v3fs-onto-relverb {border-bottom-color:color-mix(in srgb,var(--v3-accent-2) 45%,transparent)}
+.v3fs-onto-relverb:focus {color:var(--v3-text-primary);border-bottom:1px solid var(--v3-accent-2)}
+.v3fs-onto-relarrow {font-weight:800;color:var(--v3-accent-2)}
+.v3fs-onto-relcard {margin-left:auto;flex:none;border:0;font:inherit;font-size:10px;font-weight:700;cursor:pointer;
+  color:var(--v3-text-muted);background:color-mix(in srgb,var(--fs-line) 40%,transparent);border-radius:99px;padding:3px 7px;outline:0}
+.v3fs-onto-relcard:hover {color:var(--v3-accent-b)}
+.v3fs-onto-relx {opacity:0;transition:opacity .12s ease}
+.v3fs-onto-relrow:hover .v3fs-onto-relx, .v3fs-onto-relx:focus-visible {opacity:1}
+@media (prefers-reduced-motion:reduce){.v3fs-onto-relrow,.v3fs-onto-relx{transition:none}}
 /* Instant hover peek for clipped gap/open-question text — no title delay. */
 .v3fs-gaprt-peek {position:fixed;z-index:320;max-width:430px;pointer-events:none;
   background:var(--fs-card);border:1px solid var(--fs-line);border-radius:11px;padding:10px 13px;
@@ -6417,6 +6432,11 @@ details[open] > summary .v3fs-disc-c::after {display:none}
    inspector is a strip beneath it; the element tables follow. */
 .v3fs-onto{display:flex;flex-direction:column;gap:14px}
 .v3fs-onto-canvas{position:relative;height:440px;border:1px solid var(--fs-line);border-radius:14px;overflow:hidden;background:var(--v3-bg)}
+/* The map PERSISTS while browsing entities: the card list scrolls inside its
+   own box (position:sticky can't engage here — the studio panel and stage
+   card are overflow:hidden for their rounded chrome), so the canvas above
+   simply never leaves the screen. Node click scrolls WITHIN this box. */
+.v3fs-onto-entwrap{max-height:56vh;overflow-y:auto;padding-right:6px;border-bottom:1px solid var(--fs-line)}
 /* The graph viewport is inset below the toolbar band, so fitView/arrange can
    never place nodes under the buttons. */
 .v3fs-onto-flowwrap{position:absolute;inset:52px 0 0 0}

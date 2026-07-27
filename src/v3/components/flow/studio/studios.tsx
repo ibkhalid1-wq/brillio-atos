@@ -317,6 +317,32 @@ function AtlasStudio({ doc, onChange, onOpenArtifact, program, gapRoutes, onRout
       <Section label="Workflows — the diagram" hint="each step: who does what, in which system; entity chips open the ontology">
         <WorkflowStudio doc={doc} onChange={onChange} onOpenArtifact={onOpenArtifact} program={program} />
       </Section>
+      {/* Business events live HERE, beside the workflows they punctuate (moved
+          from the ontology tab). Steps reference them as ⚡ chips above; a
+          workflow started by one names it as its trigger. Legacy programmes
+          whose events still sit on the ontology doc see them read-through;
+          the first edit materialises the list onto this document. */}
+      <Section label="Business events" hint="what happens, what causes it, what it changes — steps carry them as ⚡ chips">
+        {(() => {
+          const own = asArray(doc.events).map(asRecord);
+          const legacy = own.length === 0 && program
+            ? asArray(readArtifactDoc(program, "domainOntology")?.events).map(asRecord)
+            : [];
+          return (
+            <TableEditor
+              columns={[
+                { key: "name", label: "Event" },
+                { key: "triggers", label: "Triggered by", grow: 1.4 },
+                { key: "produces", label: "Produces", grow: 1.4 },
+              ]}
+              rows={own.length ? own : legacy}
+              onChange={(next) => patch({ events: next })}
+              addLabel="Add event"
+              emptyHint="No business events captured yet."
+            />
+          );
+        })()}
+      </Section>
       <Section label="Pain heatmap" hint="colour = severity">
         <div className="v3fs-stu-heat">
           {pains.items.map((pain, index) => (
@@ -966,8 +992,8 @@ const flowFieldKey = (artifactId: string): string => FORMAL_ARTIFACT_FIELD_KEYS[
 export const STUDIO_REGISTRY: Record<string, StudioEntry> = {
   "charter": { fieldKey: flowFieldKey("charter"), docOrder: ["mandate", "sponsor", "businessObjective", "objectives", "inScope", "outOfScope", "successCriteria", "keyRisks", "governanceSummary"], Component: CharterStudio },
   "discovery-kit": { fieldKey: flowFieldKey("discovery-kit"), docOrder: ["personas", "interviews", "coverageMap"], Component: DiscoveryKitStudio },
-  "current-state-atlas": { fieldKey: flowFieldKey("current-state-atlas"), docOrder: ["workflows", "painHeatmap", "systemsInventory", "openQuestions", "coverage"], Component: AtlasStudio },
-  "domain-ontology": { fieldKey: flowFieldKey("domain-ontology"), docOrder: ["entities", "relations", "events", "standardAlignment", "ambiguities"], Component: OntologyStudio },
+  "current-state-atlas": { fieldKey: flowFieldKey("current-state-atlas"), docOrder: ["workflows", "events", "painHeatmap", "systemsInventory", "openQuestions", "coverage"], Component: AtlasStudio },
+  "domain-ontology": { fieldKey: flowFieldKey("domain-ontology"), docOrder: ["entities", "relations", "standardAlignment", "ambiguities"], Component: OntologyStudio },
   "architecture-strategy": { fieldKey: flowFieldKey("architecture-strategy"), docOrder: ["candidates", "recommendation"], Component: StrategyStudio },
   "agentic-blueprint": { fieldKey: flowFieldKey("agentic-blueprint"), docOrder: ["agents", "journeys", "orchestration", "dataContracts", "hitlPoints", "evalPlan", "buildSequence", "tracks"], Component: BlueprintStudio },
   "experience-design": { fieldKey: flowFieldKey("experience-design"), docOrder: ["designIntent", "theme", "screens", "flows", "workflowMachines"], Component: ExperienceDesignStudio },

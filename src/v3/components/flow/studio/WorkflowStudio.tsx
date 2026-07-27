@@ -79,14 +79,17 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program 
   const [selected, setSelected] = useState<number | null>(null);
   const workflow = workflows[Math.min(active, Math.max(0, workflows.length - 1))];
   const steps = useMemo(() => (workflow ? asArray(workflow.steps).map(asRecord) : []), [workflow]);
-  // The ontology's business events, woven into the diagram: an event chip on
-  // the step that raises it, and the workflow's trigger named as an event
-  // where one starts it. Division of record holds — events are DEFINED in the
-  // Domain Ontology; the atlas only references them, like entities.
-  const ontoEvents = useMemo(
-    () => (program ? asArray(readArtifactDoc(program, "domainOntology")?.events).map(asRecord) : []),
-    [program],
-  );
+  // Business events woven into the diagram: an event chip on the step that
+  // raises it, and the workflow's trigger named as an event where one starts
+  // it. Events LIVE on this document now (the atlas's own events table below
+  // the diagram); ontology-doc events are read through for legacy programmes
+  // that predate the move.
+  const ontoEvents = useMemo(() => {
+    const own = asArray(doc.events).map(asRecord);
+    const legacy = program ? asArray(readArtifactDoc(program, "domainOntology")?.events).map(asRecord) : [];
+    const seen = new Set(own.map((event) => asText(event.name).toLowerCase()));
+    return [...own, ...legacy.filter((event) => !seen.has(asText(event.name).toLowerCase()))];
+  }, [doc.events, program]);
   const triggerEvent = useMemo(() => {
     const trigger = asText(workflow?.trigger).toLowerCase();
     if (!trigger) return null;

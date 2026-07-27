@@ -1301,6 +1301,8 @@ Return ONLY valid JSON:
   "title": "Current-State Atlas — <programme name>",
   "workflows": [ { "name": "string", "area": "the business area this workflow belongs to (e.g. Sales, Marketing, Finance, People, Operations) — a short, consistent label reused across workflows", "owner": "role", "trigger": "what starts it — when a business event from the Domain Ontology starts it, use that event's name verbatim", "steps": [ { "actor": "role", "action": "string", "system": "system used or null", "duration": "stated duration or null", "evidence": "verbatim quote — speaker", "entities": ["domain entities this step touches — use the ontology's names"], "events": ["business events this step raises or responds to — use the ontology's event names verbatim; omit when none"] } ], "handoffs": ["cross-team hand-offs"], "failureModes": ["where it goes wrong today"] } ],
   // Division of record: the Atlas owns ACTIVITIES and field findings. Reference domain entities by the Ontology's names in steps[].entities and its business events in steps[].events — never define or describe either here; definitions, attributes, systems-of-record and event semantics belong to the Domain Ontology. systemsInventory records usage and complaints, not which entities live where.
+  "events": [ { "name": "business event (a fact that occurs — QuoteAmended)", "triggers": "what causes it", "produces": "what it changes" } ],
+  // Business events LIVE here, beside the workflows they punctuate: name each in steps[].events where a step raises it, and as the workflow's trigger where one starts it. Events are facts, never sequences.
   "painHeatmap": [ { "area": "string", "pain": "string", "severity": "high|medium|low", "voicedBy": ["stakeholders"], "quote": "the strongest verbatim expression of it" } ],
   "systemsInventory": [ { "system": "string", "usedFor": "string", "complaints": ["stakeholder complaints about it"] } ],
   "contradictions": [ { "statement": "what is disputed", "between": ["stakeholder A", "stakeholder B"], "positions": ["A's version", "B's version"] } ],
@@ -1316,7 +1318,7 @@ Return ONLY valid JSON:
     phase: "listen",
     fieldKey: "domainOntology",
     title: "Domain Ontology",
-    system: `You are the AURA Domain Ontology Agent. Build the domain ontology from the discovery conversations: the entities the business actually reasons about, their relationships, the events that move them, and the systems of record.
+    system: `You are the AURA Domain Ontology Agent. Build the domain ontology from the discovery conversations: the entities the business actually reasons about, their relationships, and the systems of record. (Business events belong to the Current-State Atlas, not here.)
 
 PROVISIONAL SEED: when no discovery conversations exist yet but the Frame MANDATE does (the sponsor's conversation and the charter's objective/scope in groundingFacts), do NOT return zero entities — draft a PROVISIONAL ontology from the mandate: the core BUSINESS entities the objective clearly implies (for "streamline customer onboarding and compliance": Customer, Onboarding Application, Compliance Check), each with evidence "from the sponsor mandate — to confirm", and gaps naming whom to hear. Interviews then enrich and correct it.
 
@@ -1353,8 +1355,7 @@ Return ONLY valid JSON:
   "title": "Domain Ontology — <programme name>",
   "entities": [ { "name": "their noun", "definition": "one sentence in their language", "area": "the business area this concept belongs to — reuse the same short labels as the Current-State Atlas workflows (e.g. Sales, Marketing, Finance)", "attributes": ["key attributes mentioned"], "systemOfRecord": "system or null", "aliases": ["what other teams call it"], "evidence": "verbatim quote — speaker" } ],
   "relations": [ { "from": "entity", "relation": "verb phrase", "to": "entity", "cardinality": "1:1|1:N|N:M|unknown" } ],
-  "events": [ { "name": "business event", "triggers": "what causes it", "produces": "what it changes" } ],
-  // Division of record: the Ontology owns NOUNS and state changes. Events are facts that occur (QuoteAmended), never sequences — actors, step order, durations and systems-in-use belong to the Current-State Atlas's workflows. Ambiguities are terminology collisions (same word, different meanings); factual disputes between people are contradictions and belong to the programme's contradiction log, not here.
+  // Division of record: the Ontology owns NOUNS. Business EVENTS (facts that occur — QuoteAmended) belong to the Current-State Atlas alongside the workflows they punctuate; do not emit an events section here. Ambiguities are terminology collisions (same word, different meanings); factual disputes between people are contradictions and belong to the programme's contradiction log, not here.
   "standardAlignment": [ { "entity": "ontology entity name", "standard": "full URI, e.g. https://schema.org/Order", "vocabulary": "schema.org|FIBO|GS1|FHIR", "relation": "skos:closeMatch|skos:exactMatch", "confidence": 0.0 } ],
   // Propose mappings ONLY from the vocabularies named in the input context's vocabularySteering — it is derived deterministically from the programme's industry; any other namespace is rejected before review. Only propose mappings you are confident in; omit rather than force.
   "ambiguities": [ { "term": "string", "conflictingMeanings": ["meaning per team"], "resolution": "proposed resolution or 'unresolved'" } ],
