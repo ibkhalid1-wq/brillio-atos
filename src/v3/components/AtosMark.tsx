@@ -18,7 +18,9 @@ export default function AtosMark({
   title?: string;
   tone?: "light" | "dark";
 }) {
-  const ink = tone === "dark" ? "#FFFFFF" : "#1D1545";
+  // Ink rides a CSS variable so dark chrome swaps the linework to white
+  // without prop plumbing; explicit tone="dark" still forces white.
+  const ink = tone === "dark" ? "#FFFFFF" : "var(--aura-mark-ink, #1D1545)";
   return (
     <svg
       viewBox="0 0 68 52"

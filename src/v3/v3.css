@@ -4584,9 +4584,14 @@ body:has(.v3fs-pack) .v3fs-appbar:focus-within {transform:none}
    lockup is geometrically centred (all four midlines measure equal); the
    1px drop is OPTICAL — lowercase "brillio" carries its mass low, caps
    carry it centred, so dead-centre reads a hair high. */
-.v3fs-appbar-brand {font-size:19px;line-height:1;font-weight:800;letter-spacing:.1em;text-transform:uppercase;
-  color:var(--v3-accent-2);white-space:nowrap;flex-shrink:0;transform:translateY(1px)}
-.v3fs-appbar-brandsep {font-size:19px;line-height:1;font-weight:600;color:var(--v3-text-muted);flex-shrink:0;transform:translateY(1px)}
+/* Wordmark set to the identity spec: weight 800, +17% tracking, ink matched
+   EXACTLY to the glyph's linework (one --aura-mark-ink variable drives both,
+   flipping to white on dark chrome). The glyph's violet crossbar is the
+   composition's single accent — the wordmark stays ink. */
+.v3fs-appbar-brand {font-size:19px;line-height:1;font-weight:800;letter-spacing:.17em;text-transform:uppercase;
+  color:var(--aura-mark-ink,#1D1545);white-space:nowrap;flex-shrink:0;transform:translateY(1px)}
+.v3fs-appbar-brandsep {font-size:19px;line-height:1;font-weight:600;color:var(--aura-mark-ink,#1D1545);opacity:.38;flex-shrink:0;transform:translateY(1px)}
+[data-theme="dark"] {--aura-mark-ink:#FFFFFF}
 .v3fs-appbar-crumbs {display:flex;align-items:center;gap:2px;flex:1;min-width:0;overflow:hidden}
 .v3fs-appbar-sl {color:var(--v3-text-muted);opacity:.45;font-size:12px;flex-shrink:0;padding:0 2px}
 /* Crumb buttons must SHRINK, not collide — each truncates inside its share. */
