@@ -175,9 +175,8 @@ export function areaCoherence(
  * and stored today — so regenerated questions align with the model by
  * construction instead of by hand.
  */
-export function kitAreaEntityGuidance(program: ProgramSummary): string | null {
+function entitiesByFrameArea(program: ProgramSummary): { areas: string[]; byArea: Map<string, string[]> } {
   const areas = listenCoverageAreas(program).map((area) => area.label);
-  if (!areas.length) return null;
   const byArea = new Map<string, string[]>();
   for (const entity of recArr(readArtifactDoc(program, "domainOntology")?.entities)) {
     const raw = txt(entity.area);
@@ -187,10 +186,27 @@ export function kitAreaEntityGuidance(program: ProgramSummary): string | null {
     if (!areas.includes(area)) continue;
     byArea.set(area, [...(byArea.get(area) ?? []), name]);
   }
+  return { areas, byArea };
+}
+export function kitAreaEntityGuidance(program: ProgramSummary): string | null {
+  const { areas, byArea } = entitiesByFrameArea(program);
   if (!byArea.size) return null;
   return [
     "## Each area's questions must PROBE ITS ENTITIES (from the Domain Ontology)",
     "The interviews covering an area must establish how that area's entities are created, moved and stored today — name them in the questions, in the stakeholders' own vocabulary:",
+    ...areas.filter((area) => byArea.has(area)).map((area) => `- ${area}: ${byArea.get(area)!.join(", ")}`),
+  ].join("\n");
+}
+
+/** The same per-area entity map for the ATLAS regenerator: an area's
+ * workflows must move ITS entities — steps reference them verbatim, and a
+ * noun outside the list is an open question, never an invention. */
+export function atlasAreaEntityGuidance(program: ProgramSummary): string | null {
+  const { areas, byArea } = entitiesByFrameArea(program);
+  if (!byArea.size) return null;
+  return [
+    "## Each area's workflows must MOVE ITS ENTITIES (from the Domain Ontology)",
+    "When mapping an area's workflow, its steps' entities come from that area's list below — reference them VERBATIM in steps[].entities. A noun the list doesn't carry is an openQuestion for that area's stakeholder, never a new entity:",
     ...areas.filter((area) => byArea.has(area)).map((area) => `- ${area}: ${byArea.get(area)!.join(", ")}`),
   ].join("\n");
 }

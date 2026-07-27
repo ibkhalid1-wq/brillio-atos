@@ -45,7 +45,7 @@ import { applyArtifactEdit, readArtifactDoc } from "@/v3/components/flow/flowArt
 import { operatorOverrideGuidance } from "@/v3/components/flow/flowOperatorOverrides";
 import { compileShipLanes, setShipLane, toggleShipItem } from "@/v3/components/flow/flowShip";
 import { scheduleFollowUp, discoveryKitCoverageGuidance } from "@/v3/components/flow/flowMeetings";
-import { listenCanonicalCastGuidance, kitAreaEntityGuidance } from "@/v3/components/flow/listenCoverage";
+import { listenCanonicalCastGuidance, kitAreaEntityGuidance, atlasAreaEntityGuidance } from "@/v3/components/flow/listenCoverage";
 import { mintFollowUpPack, latestPackFor, portalLinkFor, mintReviewPack, latestReviewPackFor } from "@/v3/components/flow/flowPortal";
 import { mintBrief, briefLinkFor } from "@/v3/components/flow/flowBriefs";
 import FlowRespond from "@/v3/components/flow/FlowRespond";
@@ -1076,6 +1076,11 @@ export default function AppShellV3() {
       if (events.length) {
         crossPhaseContext += `${crossPhaseContext ? "\n\n" : ""}## Business events (carry them forward and weave them into the workflows)\nThe programme's current business events are: ${events.join("; ")}. Return them in this document's own "events" array (refined by evidence, names preserved). Annotate every workflow step that RAISES or RESPONDS TO one with "events": ["<event name>"] (verbatim names), and when a business event STARTS a workflow, use the event's name in that workflow's "trigger".`;
       }
+      // Each area's workflows must move ITS ontology entities — steps
+      // reference them verbatim; a noun outside the list is an open
+      // question, never an invention.
+      const atlasEntities = atlasAreaEntityGuidance(activeProgram);
+      if (atlasEntities) crossPhaseContext += `${crossPhaseContext ? "\n\n" : ""}${atlasEntities}`;
     }
     // Operator overrides: hand corrections to ANY phase artifact (frame,
     // listen, prototype, ship) are captured at save time

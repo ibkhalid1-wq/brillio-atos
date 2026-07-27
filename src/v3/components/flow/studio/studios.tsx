@@ -21,7 +21,8 @@ import {
 } from "./StudioKit";
 import { FORMAL_ARTIFACT_FIELD_KEYS } from "@/v3/lib/formalArtifacts";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
-import { areaCoherence } from "@/v3/components/flow/listenCoverage";
+import { listenCoverageAreas, listenAreaCoverage, canonicalFrameArea } from "@/v3/components/flow/listenCoverage";
+import { stakeholderPrimaryArea } from "@/v3/components/flow/flowAreas";
 
 /* ── shared card-list scaffolding ─────────────────────────────────────────── */
 
@@ -329,30 +330,8 @@ function AtlasStudio({ doc, onChange, onOpenArtifact, program, gapRoutes, onRout
       <button type="button" className="v3fs-a" onClick={() => setShowAll(false)}>Filter to {focus.label}</button>
     </div>
   ) : null;
-  // The Listen triangle per area — coverage · entities · workflow · aligned
-  // questions — so "Talent Acquisition has ontology but no workflow and the
-  // questions don't probe it" reads at a glance instead of tab-hopping.
-  const coherence = React.useMemo(
-    () => (program ? areaCoherence(program, asArray(doc.workflows).map(asRecord)) : []),
-    [program, doc.workflows],
-  );
   return (
     <>
-      {coherence.length ? (
-        <div className="v3fs-cohere" role="note" aria-label="Listen alignment by area">
-          <span className="v3fs-cohere-l" title="Per area: people cover it · ontology entities · atlas workflows · kit questions name its entities">Alignment</span>
-          {coherence.map((row) => (
-            <span key={row.area} className="v3fs-cohere-chip"
-              title={`${row.area} — ${row.covered ? "covered by the kit" : "NO ONE covers it (assign on the kit matrix)"} · ${row.entities} entit${row.entities === 1 ? "y" : "ies"} · ${row.workflows} workflow${row.workflows === 1 ? "" : "s"} · questions ${row.questionsAligned ? "probe its entities" : "do NOT name its entities yet (route its gaps, mark it thin, regenerate the kit)"}`}>
-              <b>{row.area}</b>
-              <i className={row.covered ? "ok" : ""}>C</i>
-              <i className={row.entities ? "ok" : ""}>E</i>
-              <i className={row.workflows ? "ok" : ""}>W</i>
-              <i className={row.questionsAligned ? "ok" : ""}>Q</i>
-            </span>
-          ))}
-        </div>
-      ) : null}
       <Section label="Workflows — the diagram" hint="each step: who does what, in which system; entity chips open the ontology">
         <WorkflowStudio doc={doc} onChange={onChange} onOpenArtifact={onOpenArtifact} program={program} onFocus={handleFocus} />
       </Section>
@@ -684,19 +663,49 @@ function PrototypePackStudio({ doc, onChange }: StudioProps) {
   );
 }
 
-function DemoScriptsStudio({ doc, onChange }: StudioProps) {
+function DemoScriptsStudio({ doc, onChange, program }: StudioProps) {
   const patch = patchOf(doc, onChange);
   const scripts = useListOps(doc, onChange, "scripts");
+  // Area selector (the same indigo deck as every Listen surface): each script
+  // files under its stakeholder's KIT area — coverage-matrix assignment
+  // first, inference as fallback. Filtering keeps ORIGINAL indices so edits
+  // still land on the right script.
+  const [areaPick, setAreaPick] = React.useState("");
+  const kitAreas = React.useMemo(() => (program ? listenCoverageAreas(program).map((area) => area.label) : []), [program]);
+  const coverage = React.useMemo(() => (program ? listenAreaCoverage(program) : []), [program]);
+  const entries = scripts.items.map((item, index) => {
+    const labels = [asText(item.role), asText(item.stakeholder)].map((label) => label.trim().toLowerCase()).filter(Boolean);
+    const covered = coverage.find((row) => row.roles.some((role) => labels.includes(role.trim().toLowerCase())))?.area;
+    const area = covered ?? (program ? canonicalFrameArea(kitAreas, stakeholderPrimaryArea(program, asText(item.stakeholder), asText(item.role))) : "");
+    return { item, index, area };
+  });
+  const areasPresent = kitAreas.filter((area) => entries.some((entry) => entry.area === area));
+  const shown = areaPick ? entries.filter((entry) => entry.area === areaPick) : entries;
   return (
     <>
+      {areasPresent.length > 1 ? (
+        <div className="v3fs-wf-filters">
+          <label className="v3fs-wf-filter grow">
+            <span>Area</span>
+            <select value={areaPick} aria-label="Filter scripts by area" onChange={(e) => setAreaPick(e.target.value)}>
+              <option value="">All areas ({entries.length})</option>
+              {areasPresent.map((area) => (
+                <option key={area} value={area}>{area} ({entries.filter((entry) => entry.area === area).length})</option>
+              ))}
+            </select>
+          </label>
+        </div>
+      ) : null}
       <Section label="Scripts" hint="one per stakeholder, seeded from their own transcript">
         <CardList
-          items={scripts.items}
+          items={shown.map((entry) => entry.item)}
           itemLabel={(s) => `${asText(s.stakeholder) || "Stakeholder"} — ${asText(s.duration) || "10–15 min"}`}
           onAdd={() => scripts.add({ stakeholder: "", role: "", duration: "10–15 min", openingQuote: "", scenario: "", steps: [], watchFor: [], acceptanceAsk: "" })}
-          onRemove={scripts.remove}
+          onRemove={(shownIndex) => scripts.remove(shown[shownIndex].index)}
           addLabel="Add script"
-          render={(script, index) => (
+          render={(script, shownIndex) => {
+            const index = shown[shownIndex].index;
+            return (
             <>
               <div className="v3fs-stu-grid3">
                 <TextField label="Stakeholder" value={asText(script.stakeholder)} onChange={(next) => scripts.set(index, { stakeholder: next })} />
@@ -723,7 +732,8 @@ function DemoScriptsStudio({ doc, onChange }: StudioProps) {
               <TextArea label="Acceptance ask" rows={2} value={asText(script.acceptanceAsk)}
                 onChange={(next) => scripts.set(index, { acceptanceAsk: next })} />
             </>
-          )}
+            );
+          }}
         />
       </Section>
       <Section label="Tour sequence" hint="the recommended demo order">
