@@ -9,7 +9,8 @@
  */
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  TextField, SelectField, ChipsField, asArray, asRecord, asText, asStrings, useStudioLocked, useStudioAuthoring,
+  TextField, SelectField, ChipsField, TableEditor, CollapsibleCard,
+  asArray, asRecord, asText, asStrings, useStudioLocked, useStudioAuthoring,
   curationNote, DismissControl, EmptyState, type StudioProps,
 } from "./StudioKit";
 import { workflowArea, GENERAL_AREA } from "@/v3/components/flow/flowAreas";
@@ -202,33 +203,46 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program,
     setPeek({ index, x: Math.min(rect.left, Math.max(8, window.innerWidth - 380)), y: rect.bottom + 8 });
   };
 
-  // Report the diagram's focus (selected step, else the active workflow) so
-  // the register cards below filter to it.
-  useEffect(() => {
-    if (!onFocus) return;
-    if (!workflow) { onFocus(null); return; }
+  // The diagram's focus (selected step, else the active workflow) — drives
+  // the combined details-and-registers card here and, via onFocus, the gaps
+  // and open-question sections in the parent studio.
+  const focus = useMemo<AtlasFocus | null>(() => {
+    if (!workflow) return null;
     const step = selected != null ? steps[selected] : null;
     if (step) {
       const events = eventsForStep(step, ontoEvents);
       const stepSystems = splitSystems(asText(step.system));
-      onFocus({
+      return {
         label: `${asText(workflow.name) || "workflow"} · step ${(selected ?? 0) + 1}`,
         events,
         systems: stepSystems,
         pains: [painForStep(step, pains)?.pain ?? ""].filter(Boolean),
         terms: [asText(workflow.name), asText(step.actor), ...stepSystems, ...asStrings(step.entities), ...events].filter(Boolean),
-      });
-      return;
+      };
     }
     const wfEvents = [...new Set([...(triggerEvent ? [triggerEvent] : []), ...steps.flatMap((s) => eventsForStep(s, ontoEvents))])];
-    onFocus({
+    return {
       label: asText(workflow.name) || "workflow",
       events: wfEvents,
       systems,
       pains: [...new Set(steps.map((s) => painForStep(s, pains)?.pain ?? "").filter(Boolean))],
       terms: [asText(workflow.name), ...lanes, ...systems, ...wfEvents].filter(Boolean),
+    };
+  }, [workflow, steps, selected, ontoEvents, pains, systems, lanes, triggerEvent]);
+  useEffect(() => { onFocus?.(focus); }, [onFocus, focus]);
+  // Registers inside the combined card: filtered read-only to the focus by
+  // default (editing a filtered table would drop hidden rows); one toggle
+  // opens the full editors.
+  const [showAllReg, setShowAllReg] = useState(false);
+  const regFiltering = !!focus && !showAllReg;
+  const regHit = (value: string, list: string[]) => {
+    const needle = value.trim().toLowerCase();
+    if (!needle) return false;
+    return list.some((entry) => {
+      const hay = entry.trim().toLowerCase();
+      return hay === needle || hay.includes(needle) || needle.includes(hay);
     });
-  }, [onFocus, workflow, steps, selected, ontoEvents, pains, systems, lanes, triggerEvent]);
+  };
 
   const writeWorkflows = useCallback((next: Array<Record<string, unknown>>) => {
     onChange({ ...doc, workflows: next });
@@ -435,35 +449,147 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program,
             {selected == null ? <span className="v3fs-wf-hint">Select a step to edit it</span> : null}
           </div>
           )}
-          {/* The step form — ONE organised card: what happens (headline), the
-              who/where/how-long row, then the ontology hooks. Reorder and
-              remove live in its header, beside the step they act on. */}
-          {selected != null && steps[selected] ? (
-            <div className="v3fs-wf-inspector">
-              <div className="v3fs-wf-insp-h">
-                <span className="v3fs-wf-insp-t">Step {selected + 1} <i>of {steps.length}</i></span>
-                {locked ? null : (
-                  <span className="v3fs-wf-insp-actions">
-                    <button type="button" className="v3fs-btn" disabled={selected === 0} onClick={() => moveStep(-1)}>← Earlier</button>
-                    <button type="button" className="v3fs-btn" disabled={selected === steps.length - 1} onClick={() => moveStep(1)}>Later →</button>
-                    <button type="button" className="v3fs-btn" onClick={removeStep}>Remove step</button>
-                  </span>
-                )}
+          {/* ONE card for the working context: the selected step's form plus
+              the three registers (events / pain / systems), each scoped to
+              the focus with a shared "Show all & edit" escape. */}
+          <CollapsibleCard key={selected != null ? `ctx-step-${selected}` : "ctx-wf"} defaultOpen
+            label={selected != null ? `Step ${selected + 1} — details & registers` : "Registers — events · pain · systems"}
+            hint={focus ? `scoped to ${focus.label}` : undefined}>
+            {selected != null && steps[selected] ? (
+              <div className="v3fs-wf-inspector">
+                <div className="v3fs-wf-insp-h">
+                  <span className="v3fs-wf-insp-t">Step {selected + 1} <i>of {steps.length}</i></span>
+                  {locked ? null : (
+                    <span className="v3fs-wf-insp-actions">
+                      <button type="button" className="v3fs-btn" disabled={selected === 0} onClick={() => moveStep(-1)}>← Earlier</button>
+                      <button type="button" className="v3fs-btn" disabled={selected === steps.length - 1} onClick={() => moveStep(1)}>Later →</button>
+                      <button type="button" className="v3fs-btn" onClick={removeStep}>Remove step</button>
+                    </span>
+                  )}
+                </div>
+                <TextField label="Action — what happens in this step" value={asText(steps[selected].action)} onChange={(next) => patchStep(selected, { action: next })} />
+                <div className="v3fs-stu-grid3">
+                  <TextField label="Persona (lane)" value={asText(steps[selected].actor)} onChange={(next) => patchStep(selected, { actor: next })} />
+                  <TextField label="System" value={asText(steps[selected].system)} onChange={(next) => patchStep(selected, { system: next })} />
+                  <TextField label="Duration" value={asText(steps[selected].duration)} onChange={(next) => patchStep(selected, { duration: next })} />
+                </div>
+                <div className="v3fs-stu-grid2">
+                  <ChipsField label="Entities touched (from the ontology)" values={asStrings(steps[selected].entities)}
+                    onChange={(next) => patchStep(selected, { entities: next })} />
+                  <ChipsField label="Business events raised" values={asStrings(steps[selected].events)}
+                    onChange={(next) => patchStep(selected, { events: next })} />
+                </div>
               </div>
-              <TextField label="Action — what happens in this step" value={asText(steps[selected].action)} onChange={(next) => patchStep(selected, { action: next })} />
-              <div className="v3fs-stu-grid3">
-                <TextField label="Persona (lane)" value={asText(steps[selected].actor)} onChange={(next) => patchStep(selected, { actor: next })} />
-                <TextField label="System" value={asText(steps[selected].system)} onChange={(next) => patchStep(selected, { system: next })} />
-                <TextField label="Duration" value={asText(steps[selected].duration)} onChange={(next) => patchStep(selected, { duration: next })} />
+            ) : null}
+            {focus && showAllReg ? (
+              <div className="v3fs-atlas-fltbar">
+                <button type="button" className="v3fs-a" onClick={() => setShowAllReg(false)}>Filter to {focus.label}</button>
               </div>
-              <div className="v3fs-stu-grid2">
-                <ChipsField label="Entities touched (from the ontology)" values={asStrings(steps[selected].entities)}
-                  onChange={(next) => patchStep(selected, { entities: next })} />
-                <ChipsField label="Business events raised" values={asStrings(steps[selected].events)}
-                  onChange={(next) => patchStep(selected, { events: next })} />
-              </div>
-            </div>
-          ) : null}
+            ) : null}
+            {(() => {
+              const filteredEvents = regFiltering ? ontoEvents.filter((event) => regHit(asText(event.name), focus!.events)) : null;
+              return (
+                <details className="v3fs-stu-card" open={!!filteredEvents?.length}>
+                  <summary><span className="v3fs-stu-card-t">Business events</span>
+                    <span className="v3fs-onto-entrels">{filteredEvents ? `${filteredEvents.length} of ${ontoEvents.length}` : ontoEvents.length}</span></summary>
+                  <div className="v3fs-stu-card-b">
+                    {filteredEvents ? (
+                      <>
+                        <div className="v3fs-atlas-fltbar">
+                          <span>{filteredEvents.length} of {ontoEvents.length} for <b>{focus!.label}</b></span>
+                          <button type="button" className="v3fs-a" onClick={() => setShowAllReg(true)}>Show all &amp; edit</button>
+                        </div>
+                        {filteredEvents.length ? filteredEvents.map((event, i) => (
+                          <div key={i} className="v3fs-atlas-flt-row">
+                            <b>⚡ {asText(event.name)}</b>
+                            <span>{[asText(event.triggers), asText(event.produces)].filter(Boolean).join(" → ")}</span>
+                          </div>
+                        )) : <div className="v3fs-stu-empty">No business events touch this selection.</div>}
+                      </>
+                    ) : (
+                      <TableEditor
+                        columns={[
+                          { key: "name", label: "Event" },
+                          { key: "triggers", label: "Triggered by", grow: 1.4 },
+                          { key: "produces", label: "Produces", grow: 1.4 },
+                        ]}
+                        rows={ontoEvents}
+                        onChange={(next) => onChange({ ...doc, events: next })}
+                        addLabel="Add event"
+                        emptyHint="No business events captured yet."
+                      />
+                    )}
+                  </div>
+                </details>
+              );
+            })()}
+            {(() => {
+              const filteredPains = regFiltering ? pains.filter((pain) => regHit(asText(pain.pain), focus!.pains)) : null;
+              return (
+                <details className="v3fs-stu-card" open={!!filteredPains?.length}>
+                  <summary><span className="v3fs-stu-card-t">Pain heatmap</span>
+                    <span className="v3fs-onto-entrels">{filteredPains ? `${filteredPains.length} of ${pains.length}` : pains.length}</span></summary>
+                  <div className="v3fs-stu-card-b">
+                    {filteredPains ? (
+                      filteredPains.length ? filteredPains.map((pain, i) => (
+                        <div key={i} className={`v3fs-atlas-flt-row sev-${asText(pain.severity) || "medium"}`}>
+                          <b>{asText(pain.area) || "—"}</b>
+                          <span>{asText(pain.pain)}</span>
+                        </div>
+                      )) : <div className="v3fs-stu-empty">No voiced pain on this selection.</div>
+                    ) : (
+                      <div className="v3fs-stu-heat">
+                        {pains.map((pain, index) => (
+                          <div key={index} className={`v3fs-stu-heat-row sev-${asText(pain.severity) || "medium"}`}>
+                            <select value={asText(pain.severity) || "medium"} aria-label="Severity" disabled={locked}
+                              onChange={(e) => onChange({ ...doc, painHeatmap: pains.map((p, i) => (i === index ? { ...p, severity: e.target.value } : p)) })}>
+                              {["high", "medium", "low"].map((s) => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                            <input value={asText(pain.area)} placeholder="Area" aria-label="Area" disabled={locked}
+                              onChange={(e) => onChange({ ...doc, painHeatmap: pains.map((p, i) => (i === index ? { ...p, area: e.target.value } : p)) })} />
+                            <input value={asText(pain.pain)} placeholder="The pain" aria-label="Pain" style={{ flexGrow: 2 }} disabled={locked}
+                              onChange={(e) => onChange({ ...doc, painHeatmap: pains.map((p, i) => (i === index ? { ...p, pain: e.target.value } : p)) })} />
+                            {locked ? null : <button type="button" className="v3fs-stu-x" aria-label="Remove"
+                              onClick={() => onChange({ ...doc, painHeatmap: pains.filter((_, i) => i !== index) })}>×</button>}
+                          </div>
+                        ))}
+                        {locked || !authoring ? null : <button type="button" className="v3fs-a"
+                          onClick={() => onChange({ ...doc, painHeatmap: [...pains, { area: "", pain: "", severity: "medium", voicedBy: [] }] })}>＋ Add pain</button>}
+                      </div>
+                    )}
+                  </div>
+                </details>
+              );
+            })()}
+            {(() => {
+              const inventory = asArray(doc.systemsInventory).map(asRecord);
+              const filteredSystems = regFiltering ? inventory.filter((row) => regHit(asText(row.system), focus!.systems)) : null;
+              return (
+                <details className="v3fs-stu-card" open={!!filteredSystems?.length}>
+                  <summary><span className="v3fs-stu-card-t">Systems inventory</span>
+                    <span className="v3fs-onto-entrels">{filteredSystems ? `${filteredSystems.length} of ${inventory.length}` : inventory.length}</span></summary>
+                  <div className="v3fs-stu-card-b">
+                    {filteredSystems ? (
+                      filteredSystems.length ? filteredSystems.map((row, i) => (
+                        <div key={i} className="v3fs-atlas-flt-row">
+                          <b>{asText(row.system)}</b>
+                          <span>{asText(row.usedFor)}</span>
+                        </div>
+                      )) : <div className="v3fs-stu-empty">No systems named on this selection.</div>
+                    ) : (
+                      <TableEditor
+                        columns={[{ key: "system", label: "System" }, { key: "usedFor", label: "Used for", grow: 2 }]}
+                        rows={inventory}
+                        onChange={(next) => onChange({ ...doc, systemsInventory: next })}
+                        addLabel="Add system"
+                        emptyHint="No systems captured."
+                      />
+                    )}
+                  </div>
+                </details>
+              );
+            })()}
+          </CollapsibleCard>
 
           {/* Hover evidence peek — the step's verbatim grounding without a
               click. Fixed-position and pointer-transparent (same pattern as

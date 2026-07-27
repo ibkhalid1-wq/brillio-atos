@@ -17,7 +17,7 @@ import PrototypeStudio from "./PrototypeStudio";
 import { GapRoutingEditor } from "./GapRoutingEditor";
 import {
   Section, CollapsibleCard, TextField, TextArea, SelectField, ChipsField, StringListEditor, TableEditor,
-  asArray, asRecord, asText, asStrings, useStudioLocked, useStudioAuthoring, type StudioProps,
+  asArray, asRecord, asText, asStrings, useStudioLocked, type StudioProps,
 } from "./StudioKit";
 import { FORMAL_ARTIFACT_FIELD_KEYS } from "@/v3/lib/formalArtifacts";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
@@ -305,15 +305,10 @@ function DiscoveryKitStudio({ doc, onChange, program }: StudioProps) {
 
 /* ── Listen ───────────────────────────────────────────────────────────────── */
 
-const SEVERITIES = ["high", "medium", "low"];
-
 function AtlasStudio({ doc, onChange, onOpenArtifact, program, gapRoutes, onRouteGap }: StudioProps) {
-  const locked = useStudioLocked();
-  const authoring = useStudioAuthoring();
   const patch = patchOf(doc, onChange);
-  const pains = useListOps(doc, onChange, "painHeatmap");
-  // The diagram's focus filters the register cards below: click a workflow
-  // or a step and each card narrows to its events/pains/systems. Filtered
+  // The diagram's focus (the registers now live INSIDE the workflow studio's
+  // combined card) still filters the gaps and open questions below. Filtered
   // views are READ-ONLY on purpose — editing a filtered table would silently
   // drop the hidden rows — so "Show all & edit" opens the full editor.
   const [focus, setFocus] = React.useState<AtlasFocus | null>(null);
@@ -322,16 +317,6 @@ function AtlasStudio({ doc, onChange, onOpenArtifact, program, gapRoutes, onRout
     setFocus((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
   }, []);
   const filtering = !!focus && !showAll;
-  // Bidirectional contains — the diagram says "CRM", the inventory says
-  // "Salesforce CRM"; either direction counts as the same system.
-  const hits = (value: string, list: string[]) => {
-    const needle = value.trim().toLowerCase();
-    if (!needle) return false;
-    return list.some((entry) => {
-      const hay = entry.trim().toLowerCase();
-      return hay === needle || hay.includes(needle) || needle.includes(hay);
-    });
-  };
   const filterBar = (shown: number, total: number) => (
     <div className="v3fs-atlas-fltbar">
       <span>{shown} of {total} for <b>{focus?.label}</b></span>
@@ -348,124 +333,6 @@ function AtlasStudio({ doc, onChange, onOpenArtifact, program, gapRoutes, onRout
       <Section label="Workflows — the diagram" hint="each step: who does what, in which system; entity chips open the ontology">
         <WorkflowStudio doc={doc} onChange={onChange} onOpenArtifact={onOpenArtifact} program={program} onFocus={handleFocus} />
       </Section>
-      {/* The three supporting registers fold under the diagram — the steps
-          already carry their signals (⚡ event chips, the pain edge + dot,
-          the system tag), so the tables are reference, not the main read.
-          Business events moved here from the ontology tab; legacy programmes
-          whose events still sit on the ontology doc see them read-through
-          until the first edit materialises the list onto this document. */}
-      {(() => {
-        const own = asArray(doc.events).map(asRecord);
-        const legacy = own.length === 0 && program
-          ? asArray(readArtifactDoc(program, "domainOntology")?.events).map(asRecord)
-          : [];
-        const events = own.length ? own : legacy;
-        const filtered = filtering ? events.filter((event) => hits(asText(event.name), focus!.events)) : null;
-        return (
-          <CollapsibleCard key={filtered ? "events-flt" : "events-all"} label="Business events"
-            badge={filtered ? `${filtered.length} of ${events.length}` : events.length}
-            defaultOpen={!!filtered && filtered.length > 0}
-            hint="what happens, what causes it, what it changes — steps carry them as ⚡ chips">
-            {filtered ? (
-              <>
-                {filterBar(filtered.length, events.length)}
-                {filtered.length ? filtered.map((event, i) => (
-                  <div key={i} className="v3fs-atlas-flt-row">
-                    <b>⚡ {asText(event.name)}</b>
-                    <span>{[asText(event.triggers), asText(event.produces)].filter(Boolean).join(" → ")}</span>
-                  </div>
-                )) : <div className="v3fs-stu-empty">No business events touch this selection.</div>}
-              </>
-            ) : (
-              <>
-                {refocusBar}
-                <TableEditor
-                  columns={[
-                    { key: "name", label: "Event" },
-                    { key: "triggers", label: "Triggered by", grow: 1.4 },
-                    { key: "produces", label: "Produces", grow: 1.4 },
-                  ]}
-                  rows={events}
-                  onChange={(next) => patch({ events: next })}
-                  addLabel="Add event"
-                  emptyHint="No business events captured yet."
-                />
-              </>
-            )}
-          </CollapsibleCard>
-        );
-      })()}
-      {(() => {
-        const filtered = filtering ? pains.items.filter((pain) => hits(asText(pain.pain), focus!.pains)) : null;
-        return (
-          <CollapsibleCard key={filtered ? "pains-flt" : "pains-all"} label="Pain heatmap"
-            badge={filtered ? `${filtered.length} of ${pains.items.length}` : pains.items.length}
-            defaultOpen={!!filtered && filtered.length > 0}
-            hint="colour = severity — each pain also marks its step in the diagram">
-            {filtered ? (
-              <>
-                {filterBar(filtered.length, pains.items.length)}
-                {filtered.length ? filtered.map((pain, i) => (
-                  <div key={i} className={`v3fs-atlas-flt-row sev-${asText(pain.severity) || "medium"}`}>
-                    <b>{asText(pain.area) || "—"}</b>
-                    <span>{asText(pain.pain)}</span>
-                  </div>
-                )) : <div className="v3fs-stu-empty">No voiced pain on this selection.</div>}
-              </>
-            ) : (
-              <div className="v3fs-stu-heat">
-                {refocusBar}
-                {pains.items.map((pain, index) => (
-                  <div key={index} className={`v3fs-stu-heat-row sev-${asText(pain.severity) || "medium"}`}>
-                    <select value={asText(pain.severity) || "medium"} aria-label="Severity" disabled={locked}
-                      onChange={(e) => pains.set(index, { severity: e.target.value })}>
-                      {SEVERITIES.map((s) => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                    <input value={asText(pain.area)} placeholder="Area" aria-label="Area" disabled={locked}
-                      onChange={(e) => pains.set(index, { area: e.target.value })} />
-                    <input value={asText(pain.pain)} placeholder="The pain" aria-label="Pain" style={{ flexGrow: 2 }} disabled={locked}
-                      onChange={(e) => pains.set(index, { pain: e.target.value })} />
-                    {locked ? null : <button type="button" className="v3fs-stu-x" aria-label="Remove" onClick={() => pains.remove(index)}>×</button>}
-                  </div>
-                ))}
-                {locked || !authoring ? null : <button type="button" className="v3fs-a" onClick={() => pains.add({ area: "", pain: "", severity: "medium", voicedBy: [] })}>＋ Add pain</button>}
-              </div>
-            )}
-          </CollapsibleCard>
-        );
-      })()}
-      {(() => {
-        const systems = asArray(doc.systemsInventory).map(asRecord);
-        const filtered = filtering ? systems.filter((row) => hits(asText(row.system), focus!.systems)) : null;
-        return (
-          <CollapsibleCard key={filtered ? "sys-flt" : "sys-all"} label="Systems inventory"
-            badge={filtered ? `${filtered.length} of ${systems.length}` : systems.length}
-            defaultOpen={!!filtered && filtered.length > 0}>
-            {filtered ? (
-              <>
-                {filterBar(filtered.length, systems.length)}
-                {filtered.length ? filtered.map((row, i) => (
-                  <div key={i} className="v3fs-atlas-flt-row">
-                    <b>{asText(row.system)}</b>
-                    <span>{asText(row.usedFor)}</span>
-                  </div>
-                )) : <div className="v3fs-stu-empty">No systems named on this selection.</div>}
-              </>
-            ) : (
-              <>
-                {refocusBar}
-                <TableEditor
-                  columns={[{ key: "system", label: "System" }, { key: "usedFor", label: "Used for", grow: 2 }]}
-                  rows={systems}
-                  onChange={(next) => patch({ systemsInventory: next })}
-                  addLabel="Add system"
-                  emptyHint="No systems captured."
-                />
-              </>
-            )}
-          </CollapsibleCard>
-        );
-      })()}
       {/* Open questions and gaps follow the diagram's focus too — items that
           MENTION the focused workflow/step's terms (its name, actors,
           systems, entities, events). Same read-only-when-filtered rule. */}

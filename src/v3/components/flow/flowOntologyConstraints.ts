@@ -33,7 +33,7 @@ export type OntologyCardinality = (typeof ONTOLOGY_CARDINALITIES)[number];
  */
 export const ONTOLOGY_RELATION_VERBS = [
   "conducts", "runs", "manages", "supports", "produces",
-  "measures", "leads to", "is part of", "applies to", "participates in", "relates to",
+  "measures", "leads to", "is part of", "is a type of", "applies to", "participates in", "relates to",
 ] as const;
 
 /** What each menu verb MEANS — surfaced as option tooltips so the editor
@@ -48,6 +48,7 @@ export const ONTOLOGY_RELATION_VERB_MEANINGS: Record<string, string> = {
   "measures": "Quantifies or scores the other thing — a Lead Score measures a Lead.",
   "leads to": "Process sequence: this stage feeds the next — Qualification leads to Proposal.",
   "is part of": "Composition or membership: part of a whole — a Contact is part of an Account.",
+  "is a type of": "Specialisation: a narrower kind of the other — an Escalation is a type of Case.",
   "applies to": "Attaches to or governs the other thing — a Contract applies to a Client.",
   "participates in": "Takes part without owning it — a Partner participates in a Deal.",
   "relates to": "Neutral placeholder — refine it once evidence names the real verb.",
