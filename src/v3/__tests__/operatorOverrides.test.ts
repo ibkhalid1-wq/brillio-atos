@@ -44,8 +44,28 @@ describe("overrideNotes", () => {
       { workflows: [{ name: "Handoff", steps: [] }], painHeatmap: [] },
       { workflows: [{ name: "Handoff", steps: [{ action: "notify" }] }], painHeatmap: [] });
     expect(atlas).toEqual(['Workflow edited: "Handoff"']);
-    expect(overrideNotes("charter", { objectives: ["a"] }, { objectives: ["b"] })).toEqual([]);
     expect(overrideNotes("domainOntology", { entities: [{ name: "X" }] }, { entities: [{ name: "X" }] })).toEqual([]);
+  });
+
+  it("captures an atlas area reassignment as an explicit move", () => {
+    const notes = overrideNotes("currentStateAtlas",
+      { workflows: [{ name: "Opportunity Signal Generation", area: "Sales" }] },
+      { workflows: [{ name: "Opportunity Signal Generation", area: "Marketing" }] });
+    expect(notes).toContain('Workflow "Opportunity Signal Generation" moved to area "Marketing"');
+  });
+
+  it("captures edits to ANY other artifact via the generic key diff", () => {
+    const charter = overrideNotes("transformationCharter",
+      { objectives: ["a"], mandate: "old", editedAt: "x" },
+      { objectives: ["a", "b"], mandate: "new", editedAt: "y" });
+    expect(charter).toContain('Section "objectives" edited');
+    expect(charter).toContain('Section "mandate" edited');
+    expect(charter).not.toContain('Section "editedAt" edited');
+    const design = overrideNotes("experienceDesign",
+      { journeys: [{ name: "Quote to Cash" }] },
+      { journeys: [{ name: "Quote to Cash" }, { name: "Onboarding" }] });
+    expect(design).toContain('"journeys" entry added: "Onboarding"');
+    expect(overrideNotes("transformationCharter", { mandate: "same" }, { mandate: "same" })).toEqual([]);
   });
 });
 

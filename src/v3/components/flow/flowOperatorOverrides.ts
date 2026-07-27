@@ -88,14 +88,47 @@ export function overrideNotes(
     ];
   }
   if (fieldKey === "currentStateAtlas") {
+    // Area reassignment gets its own explicit line — "moved to Marketing" is
+    // the correction the regenerator must honour, not just "edited".
+    const prevByName = new Map(asArr(previous.workflows).map((row) => [text(row.name).toLowerCase(), row] as const));
+    const moved = asArr(next.workflows).flatMap((row) => {
+      const before = prevByName.get(text(row.name).toLowerCase());
+      return before && text(row.area) && text(before.area) !== text(row.area)
+        ? [`Workflow "${text(row.name)}" moved to area "${text(row.area)}"`]
+        : [];
+    });
     return [
+      ...moved,
       ...diffNamed("Workflow", asArr(previous.workflows), asArr(next.workflows), (row) => text(row.name), "name"),
       ...diffNamed("Business event", asArr(previous.events), asArr(next.events), (row) => text(row.name), "name"),
       ...diffNamed("Pain point", asArr(previous.painHeatmap), asArr(next.painHeatmap),
         (row) => `${text(row.area)}: ${text(row.pain)}`),
     ];
   }
-  return [];
+  // Every other artifact (charter, experience design, blueprint, prototype
+  // pack, demo scripts, ship docs…): a generic key-level diff. Named
+  // collections diff by their evident name key; anything else that changed
+  // is recorded as a section edit — coarse, but enough for the regenerator
+  // to know a human shaped that section.
+  const GENERIC_META = new Set(["editedAt", "editedBy", "generatedAt", "confidence", "inputsFingerprint", "title"]);
+  const NAME_KEYS = ["name", "title", "label", "domain", "stakeholder", "id"];
+  const notes: string[] = [];
+  for (const key of new Set([...Object.keys(previous), ...Object.keys(next)])) {
+    if (key.startsWith("_") || GENERIC_META.has(key)) continue;
+    const before = previous[key];
+    const after = next[key];
+    if (JSON.stringify(before) === JSON.stringify(after)) continue;
+    const beforeRows = asArr(before);
+    const afterRows = asArr(after);
+    const nameKey = NAME_KEYS.find((candidate) =>
+      [...beforeRows, ...afterRows].some((row) => text(row[candidate])));
+    if ((beforeRows.length || afterRows.length) && nameKey) {
+      const named = diffNamed(`"${key}" entry`, beforeRows, afterRows, (row) => text(row[nameKey]), nameKey);
+      if (named.length) { notes.push(...named); continue; }
+    }
+    notes.push(`Section "${key}" edited`);
+  }
+  return notes;
 }
 
 /** Append override records to the programme's durable store (capped). Pure —

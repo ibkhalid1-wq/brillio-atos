@@ -9,7 +9,7 @@
  */
 import React, { useCallback, useMemo, useState } from "react";
 import {
-  TextField, ChipsField, asArray, asRecord, asText, asStrings, useStudioLocked, useStudioAuthoring,
+  TextField, SelectField, ChipsField, asArray, asRecord, asText, asStrings, useStudioLocked, useStudioAuthoring,
   curationNote, DismissControl, EmptyState, type StudioProps,
 } from "./StudioKit";
 import { workflowArea, GENERAL_AREA } from "@/v3/components/flow/flowAreas";
@@ -322,6 +322,14 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program 
               <TextField label="Name" value={asText(workflow.name)} onChange={(next) => patchWorkflow({ name: next })} />
               <TextField label="Trigger" value={asText(workflow.trigger)} onChange={(next) => patchWorkflow({ trigger: next })} />
               <TextField label="Owner" value={asText(workflow.owner)} onChange={(next) => patchWorkflow({ owner: next })} />
+              {/* Reassigning the area moves this workflow's tab group — the
+                  way an "unmapped" frame area gets its first workflow, and
+                  the fix when the generator filed one under the wrong area. */}
+              {frameAreas.length ? (
+                <SelectField label="Area (from the Frame)" value={frameAreaFor(workflowArea(workflow))}
+                  options={[...frameAreas, GENERAL_AREA]}
+                  onChange={(next) => patchWorkflow({ area: next })} />
+              ) : null}
             </div>
             {triggerEvent ? (
               <p className="v3fs-wf-trigev">

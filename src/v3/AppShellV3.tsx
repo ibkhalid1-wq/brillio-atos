@@ -1072,16 +1072,12 @@ export default function AppShellV3() {
         crossPhaseContext += `${crossPhaseContext ? "\n\n" : ""}## Business events (carry them forward and weave them into the workflows)\nThe programme's current business events are: ${events.join("; ")}. Return them in this document's own "events" array (refined by evidence, names preserved). Annotate every workflow step that RAISES or RESPONDS TO one with "events": ["<event name>"] (verbatim names), and when a business event STARTS a workflow, use the event's name in that workflow's "trigger".`;
       }
     }
-    // Operator overrides: hand corrections to the kit/ontology/atlas are
-    // captured at save time (flowOperatorOverrides) and handed back to the
-    // regenerator as authoritative evidence — a regenerate must preserve
-    // them, never re-derive them away from the transcripts they corrected.
-    const OVERRIDE_FIELD_BY_AGENT: Record<string, string> = {
-      "discovery-kit": "discoveryKit",
-      "domain-ontology": "domainOntology",
-      "current-state-atlas": "currentStateAtlas",
-    };
-    const overrideField = OVERRIDE_FIELD_BY_AGENT[resolvedAgentId];
+    // Operator overrides: hand corrections to ANY phase artifact (frame,
+    // listen, prototype, ship) are captured at save time
+    // (flowOperatorOverrides) and handed back to that artifact's regenerator
+    // as authoritative evidence — a regenerate must preserve them, never
+    // re-derive them away from the transcripts they corrected.
+    const overrideField = FORMAL_ARTIFACT_FIELD_KEYS[resolvedAgentId];
     if (overrideField && activeProgram) {
       const guidance = operatorOverrideGuidance(activeProgram, overrideField);
       if (guidance) crossPhaseContext += `${crossPhaseContext ? "\n\n" : ""}${guidance}`;
