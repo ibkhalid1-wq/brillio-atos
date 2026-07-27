@@ -71,6 +71,30 @@ export function listenAreaCoverage(
 }
 
 /**
+ * Canonicalise a free-form area label onto the FRAME's area list (the same
+ * list the Discovery Kit covers): exact label first, else the frame area
+ * sharing the most words ("Sales & Delivery" → Delivery), else General.
+ * Shared by the Atlas's workflow grouping and the collect boards so every
+ * surface speaks the kit's own vocabulary.
+ */
+export function canonicalFrameArea(frameAreas: string[], raw: string): string {
+  const label = raw.trim();
+  if (!frameAreas.length) return label || GENERAL_AREA;
+  const exact = frameAreas.find((area) => area.toLowerCase() === label.toLowerCase());
+  if (exact) return exact;
+  const words = new Set(label.toLowerCase().split(/[^a-z0-9]+/).filter((word) => word.length >= 3));
+  let best: { area: string; score: number } | null = null;
+  for (const area of frameAreas) {
+    const areaWords = area.toLowerCase().split(/[^a-z0-9]+/).filter((word) => word.length >= 3);
+    if (!areaWords.length) continue;
+    const hits = areaWords.filter((word) => words.has(word)).length;
+    const score = hits / areaWords.length;
+    if (hits && (!best || score > best.score)) best = { area, score };
+  }
+  return best?.area ?? GENERAL_AREA;
+}
+
+/**
  * The operator's CURRENT roster and area labels as prompt guidance for the
  * Discovery-Kit regenerator. Without this, the agent re-derives interviews
  * from evidence and resurrects labels the operator renamed or removed —

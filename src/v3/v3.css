@@ -4580,10 +4580,13 @@ body:has(.v3fs-pack) .v3fs-appbar:focus-within {transform:none}
    centres itself in whatever remains via auto margins — crumbs never starve. */
 .v3fs-appbar-l {flex:0 1 auto;display:flex;align-items:center;justify-content:flex-start;gap:14px;min-width:0}
 /* AURA sized so its caps match the 20px Brillio wordmark beside it (cap
-   height ≈ .72em → ~19px caps + tracking reads level with the logo). */
+   height ≈ .72em → ~19px caps + tracking reads level with the logo). The
+   lockup is geometrically centred (all four midlines measure equal); the
+   1px drop is OPTICAL — lowercase "brillio" carries its mass low, caps
+   carry it centred, so dead-centre reads a hair high. */
 .v3fs-appbar-brand {font-size:19px;line-height:1;font-weight:800;letter-spacing:.1em;text-transform:uppercase;
-  color:var(--v3-accent-2);white-space:nowrap;flex-shrink:0}
-.v3fs-appbar-brandsep {font-size:19px;line-height:1;font-weight:600;color:var(--v3-text-muted);flex-shrink:0}
+  color:var(--v3-accent-2);white-space:nowrap;flex-shrink:0;transform:translateY(1px)}
+.v3fs-appbar-brandsep {font-size:19px;line-height:1;font-weight:600;color:var(--v3-text-muted);flex-shrink:0;transform:translateY(1px)}
 .v3fs-appbar-crumbs {display:flex;align-items:center;gap:2px;flex:1;min-width:0;overflow:hidden}
 .v3fs-appbar-sl {color:var(--v3-text-muted);opacity:.45;font-size:12px;flex-shrink:0;padding:0 2px}
 /* Crumb buttons must SHRINK, not collide — each truncates inside its share. */
@@ -7616,6 +7619,13 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-wf-insp-t i {font-style:normal;font-weight:500;font-size:11px;color:var(--v3-text-muted);margin-left:4px}
 .v3fs-wf-insp-actions {display:flex;gap:6px;flex-wrap:wrap}
 .v3fs-wf-insp-actions .v3fs-btn:disabled {opacity:.4;cursor:default}
+/* Flat register sections inside the combined context card — always visible
+   (not collapsible), a slight separator ruling between them. */
+.v3fs-wf-reg {padding-top:12px;margin-top:12px;border-top:1px solid var(--fs-line)}
+.v3fs-wf-reg-h {display:flex;align-items:baseline;gap:8px;margin-bottom:8px}
+.v3fs-wf-reg-h span {font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--v3-text-secondary)}
+.v3fs-wf-reg-h em {font-style:normal;font-size:10px;font-weight:700;color:var(--v3-text-muted);
+  background:color-mix(in srgb,var(--fs-line) 45%,transparent);border-radius:99px;padding:1px 7px}
 /* Register cards filtered by the diagram's focus. */
 .v3fs-atlas-fltbar {display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
   font-size:11px;color:var(--v3-text-muted);padding:2px 2px 8px}

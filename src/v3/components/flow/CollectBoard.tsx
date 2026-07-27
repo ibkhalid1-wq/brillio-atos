@@ -17,7 +17,8 @@ import { mapTranscriptSpeakers } from "@/v3/components/flow/flowTranscriptMap";
 import { AttachFileButton, TranscribeButton, copyTextFromAction } from "@/v3/components/flow/flowCapture";
 import { readGovernedExceptions, withNewException, withResolvedException } from "@/v3/components/flow/flowExceptions";
 import { projectStakeholderReview, reviewFallbackQuestions } from "@/v3/components/flow/flowReviews";
-import { areaProgress, stakeholderPrimaryArea, programAreas, GENERAL_AREA, displayRole, type AreaProgress } from "@/v3/components/flow/flowAreas";
+import { areaProgress, stakeholderPrimaryArea, GENERAL_AREA, displayRole, type AreaProgress } from "@/v3/components/flow/flowAreas";
+import { listenCoverageAreas, canonicalFrameArea } from "@/v3/components/flow/listenCoverage";
 
 /** A movement's discovery, organized by stakeholder. One card per person or
  * role: their script, their link/meeting channels, their captured evidence, a
@@ -288,9 +289,13 @@ export function IntervieweeDiscovery({ program, movementId, captureField, areaFi
       coll: stakeholderCollection(movementId, s, packs, evidence, approvalByName.get(s.name.trim().toLowerCase())),
     }))
     .filter(({ s, coll }) => !directoryCardRetired(program, movementId, s, coll.heard));
-  // Resolve each stakeholder's ontology-grounded primary area ONCE — the single
-  // source for the by-area gate, the lane grouping, and each card's area chip.
-  const primaryAreaOf = new Map(evaluated.map((e) => [e.s.id, stakeholderPrimaryArea(program, e.s.name, e.s.role)] as const));
+  // Resolve each stakeholder's primary area ONCE — CANONICALISED to the
+  // Discovery Kit's own area list, so the lanes here speak exactly the
+  // kit's vocabulary (and honour its pinned order below). The kit is also
+  // where the personas themselves come from (resolveMovementStakeholders).
+  const kitAreas = listenCoverageAreas(program).map((area) => area.label);
+  const primaryAreaOf = new Map(evaluated.map((e) =>
+    [e.s.id, canonicalFrameArea(kitAreas, stakeholderPrimaryArea(program, e.s.name, e.s.role))] as const));
   const heardCount = evaluated.filter((e) => e.coll.heard && !e.s.questions.length).length;
   const word = movementId === "show" ? "reviewed" : movementId === "listen" || movementId === "frame" ? "heard" : "consulted";
   // Only cards with OUTSTANDING questions render — the board is the question
@@ -345,7 +350,9 @@ export function IntervieweeDiscovery({ program, movementId, captureField, areaFi
       const list = groups.get(area) ?? [];
       list.push(e); groups.set(area, list);
     }
-    const order = [...programAreas(program)];
+    // Lanes follow the Discovery Kit's areas in the kit's own (operator-
+    // pinned) order; anything the kit doesn't know trails behind.
+    const order = [...kitAreas];
     for (const a of groups.keys()) if (!order.includes(a)) order.push(a);
     // The phase-home area cards filter the board. Matching is token-tolerant, not
     // exact: a lane keyed by a person's PRIMARY area ("Sales") should surface when
@@ -358,17 +365,19 @@ export function IntervieweeDiscovery({ program, movementId, captureField, areaFi
     const filtered = areaFilter && areaFilter.length
       ? order.filter((a) => [...areaTokens(a)].some((t) => selTokens.has(t)))
       : order;
-    // The board shows OUTSTANDING work: only cards with open questions render,
-    // and an area with none folds away entirely. Lane STATS still read the
-    // full list, so the coverage meter stays honest about the whole area.
-    const lanes = filtered.filter((a) => groups.has(a)).map((area) => {
-      const list = groups.get(area)!.slice().sort((a, b) => STATUS_RANK[a.coll.status] - STATUS_RANK[b.coll.status]);
+    // EVERY kit area gets a lane — one with no outstanding cards renders as a
+    // quiet header (stats only), so the area map stays complete instead of
+    // folding finished or unstaffed areas away. Cards still show only
+    // outstanding work; lane STATS read the full list so the coverage meter
+    // stays honest about the whole area.
+    const lanes = filtered.map((area) => {
+      const list = (groups.get(area) ?? []).slice().sort((a, b) => STATUS_RANK[a.coll.status] - STATUS_RANK[b.coll.status]);
       const open = list.filter((e) => openQuestionCount(program, movementId, e.s) > 0);
       const heard = list.filter((e) => e.coll.heard && !e.s.questions.length).length;
       const toReach = list.filter((e) => e.coll.status === "toreach").length;
       const waiting = list.filter((e) => e.coll.status === "waiting").length;
       return { area, row: areaRows.get(area), list, open, heard, total: list.length, toReach, waiting };
-    }).filter((lane) => lane.open.length > 0);
+    });
     // Float the areas that still need the operator to the top: General last, then
     // complete areas below in-progress ones, then most-open-work first. The eye
     // lands on what's blocked instead of scrolling past finished lanes.
@@ -518,7 +527,13 @@ export function IntervieweeDiscovery({ program, movementId, captureField, areaFi
                 setInviteBusyArea(lane.area);
                 try { await inviteArea(lane.list); } finally { setInviteBusyArea(null); }
               } : undefined}>
-              {lane.open.map(renderCard)}
+              {lane.open.length ? lane.open.map(renderCard) : (
+                <div className="v3fs-lanes-empty" role="note">
+                  {lane.total === 0
+                    ? "No one covers this area yet — assign coverage on the Discovery Kit matrix."
+                    : "Nothing outstanding here — every voice in this area is settled."}
+                </div>
+              )}
             </AreaLane>
           ))}
         </div>

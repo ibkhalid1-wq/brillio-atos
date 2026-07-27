@@ -14,7 +14,7 @@ import {
   curationNote, DismissControl, EmptyState, type StudioProps,
 } from "./StudioKit";
 import { workflowArea, GENERAL_AREA } from "@/v3/components/flow/flowAreas";
-import { listenCoverageAreas } from "@/v3/components/flow/listenCoverage";
+import { listenCoverageAreas, canonicalFrameArea } from "@/v3/components/flow/listenCoverage";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
 
 interface PainHit {
@@ -126,22 +126,7 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program,
     () => (program ? listenCoverageAreas(program).map((area) => area.label) : []),
     [program],
   );
-  const frameAreaFor = useCallback((raw: string): string => {
-    const label = raw.trim();
-    if (!frameAreas.length) return label || GENERAL_AREA;
-    const exact = frameAreas.find((area) => area.toLowerCase() === label.toLowerCase());
-    if (exact) return exact;
-    const words = new Set(label.toLowerCase().split(/[^a-z0-9]+/).filter((word) => word.length >= 3));
-    let best: { area: string; score: number } | null = null;
-    for (const area of frameAreas) {
-      const areaWords = area.toLowerCase().split(/[^a-z0-9]+/).filter((word) => word.length >= 3);
-      if (!areaWords.length) continue;
-      const hits = areaWords.filter((word) => words.has(word)).length;
-      const score = hits / areaWords.length;
-      if (hits && (!best || score > best.score)) best = { area, score };
-    }
-    return best?.area ?? GENERAL_AREA;
-  }, [frameAreas]);
+  const frameAreaFor = useCallback((raw: string): string => canonicalFrameArea(frameAreas, raw), [frameAreas]);
   const groupedTabs = useMemo(() => {
     const groups = new Map<string, Array<{ name: string; index: number }>>();
     workflows.forEach((entry, index) => {
@@ -489,10 +474,10 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program,
             {(() => {
               const filteredEvents = regFiltering ? ontoEvents.filter((event) => regHit(asText(event.name), focus!.events)) : null;
               return (
-                <details className="v3fs-stu-card" open={!!filteredEvents?.length}>
-                  <summary><span className="v3fs-stu-card-t">Business events</span>
-                    <span className="v3fs-onto-entrels">{filteredEvents ? `${filteredEvents.length} of ${ontoEvents.length}` : ontoEvents.length}</span></summary>
-                  <div className="v3fs-stu-card-b">
+                <div className="v3fs-wf-reg">
+                  <div className="v3fs-wf-reg-h"><span>Business events</span>
+                    <em>{filteredEvents ? `${filteredEvents.length} of ${ontoEvents.length}` : ontoEvents.length}</em></div>
+                  <div>
                     {filteredEvents ? (
                       <>
                         <div className="v3fs-atlas-fltbar">
@@ -520,16 +505,16 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program,
                       />
                     )}
                   </div>
-                </details>
+                </div>
               );
             })()}
             {(() => {
               const filteredPains = regFiltering ? pains.filter((pain) => regHit(asText(pain.pain), focus!.pains)) : null;
               return (
-                <details className="v3fs-stu-card" open={!!filteredPains?.length}>
-                  <summary><span className="v3fs-stu-card-t">Pain heatmap</span>
-                    <span className="v3fs-onto-entrels">{filteredPains ? `${filteredPains.length} of ${pains.length}` : pains.length}</span></summary>
-                  <div className="v3fs-stu-card-b">
+                <div className="v3fs-wf-reg">
+                  <div className="v3fs-wf-reg-h"><span>Pain heatmap</span>
+                    <em>{filteredPains ? `${filteredPains.length} of ${pains.length}` : pains.length}</em></div>
+                  <div>
                     {filteredPains ? (
                       filteredPains.length ? filteredPains.map((pain, i) => (
                         <div key={i} className={`v3fs-atlas-flt-row sev-${asText(pain.severity) || "medium"}`}>
@@ -558,17 +543,17 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program,
                       </div>
                     )}
                   </div>
-                </details>
+                </div>
               );
             })()}
             {(() => {
               const inventory = asArray(doc.systemsInventory).map(asRecord);
               const filteredSystems = regFiltering ? inventory.filter((row) => regHit(asText(row.system), focus!.systems)) : null;
               return (
-                <details className="v3fs-stu-card" open={!!filteredSystems?.length}>
-                  <summary><span className="v3fs-stu-card-t">Systems inventory</span>
-                    <span className="v3fs-onto-entrels">{filteredSystems ? `${filteredSystems.length} of ${inventory.length}` : inventory.length}</span></summary>
-                  <div className="v3fs-stu-card-b">
+                <div className="v3fs-wf-reg">
+                  <div className="v3fs-wf-reg-h"><span>Systems inventory</span>
+                    <em>{filteredSystems ? `${filteredSystems.length} of ${inventory.length}` : inventory.length}</em></div>
+                  <div>
                     {filteredSystems ? (
                       filteredSystems.length ? filteredSystems.map((row, i) => (
                         <div key={i} className="v3fs-atlas-flt-row">
@@ -586,7 +571,7 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program,
                       />
                     )}
                   </div>
-                </details>
+                </div>
               );
             })()}
           </CollapsibleCard>
