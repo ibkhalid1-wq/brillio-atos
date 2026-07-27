@@ -12,7 +12,8 @@ import {
   TextField, ChipsField, asArray, asRecord, asText, asStrings, useStudioLocked, useStudioAuthoring,
   curationNote, DismissControl, EmptyState, type StudioProps,
 } from "./StudioKit";
-import { workflowArea, programAreas, GENERAL_AREA } from "@/v3/components/flow/flowAreas";
+import { workflowArea, GENERAL_AREA } from "@/v3/components/flow/flowAreas";
+import { listenCoverageAreas } from "@/v3/components/flow/listenCoverage";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
 
 interface PainHit {
@@ -112,19 +113,21 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program 
       a === GENERAL_AREA ? 1 : b === GENERAL_AREA ? -1 : a.localeCompare(b));
   }, [workflows]);
   const multiArea = groupedTabs.length > 1;
-  // Areas the ONTOLOGY defines but the atlas hasn't mapped a workflow for yet —
-  // e.g. Talent, whose entities are on the ontology but whose current-state
-  // process has no evidence (its SME hasn't been heard). Surfacing them here
-  // keeps the atlas honest: the domain is known, its workflow is still a gap.
+  // Areas the FRAME's coverage plan promises but the atlas hasn't mapped a
+  // workflow for yet — e.g. Talent, whose SME hasn't been heard. Surfacing
+  // them keeps the atlas honest: the domain is in scope, its workflow is
+  // still a gap. Bounded by the Discovery Kit's areas ON PURPOSE — the raw
+  // programAreas union carries canonical keyword seeds (Support, People…)
+  // that are placement vocabulary, not programme scope, and they nagged as
+  // "not mapped yet" for domains the Frame never included.
   const unmappedAreas = useMemo(() => {
     if (!program) return [];
-    const covered = new Set(groupedTabs.map(([area]) => area));
+    const covered = new Set(groupedTabs.map(([area]) => area.toLowerCase()));
     // Clean single-domain areas only — a compound label ("Alliances/Finance")
     // is an entity spanning areas already mapped by their segments, not its own
     // missing workflow. So "Talent" surfaces; "Talent/Delivery" doesn't.
-    return programAreas(program).filter((area) =>
-      area !== GENERAL_AREA && !area.includes("/") && !covered.has(area)
-      && ![...covered].some((mapped) => mapped.toLowerCase() === area.toLowerCase()));
+    return listenCoverageAreas(program).map((area) => area.label).filter((area) =>
+      area !== GENERAL_AREA && !area.includes("/") && !covered.has(area.toLowerCase()));
   }, [program, groupedTabs]);
 
   // Personas: rows in order of first appearance; blank actors pool at the foot.
