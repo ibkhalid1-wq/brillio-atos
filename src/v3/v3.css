@@ -8781,7 +8781,10 @@ select.v3fs-dir-in {cursor:pointer}
 /* AURA product mark — the network tile, ONE artwork with the favicon
    (/favicon.svg). Rounded like the tile itself; sized per placement. */
 .v3-atos-mark {display:inline-block;width:auto;user-select:none;flex-shrink:0;align-self:center}
-.v3fs-appbar-mark {height:32px}
+/* Sized to sit level with the 28px Brillio wordmark — the mark supports the
+   lockup, it doesn't dominate it. Tightened toward its own wordmark so
+   glyph+AURA read as one product unit. */
+.v3fs-appbar-mark {height:24px;margin-right:-2px}
 .v3-topbar-brandlock {display:inline-flex;align-items:center;gap:9px}
 .v3-topbar-mark {height:30px}
 .v3-welcome-mark {height:56px;box-shadow:0 10px 28px -10px rgba(26,18,64,.55)}
