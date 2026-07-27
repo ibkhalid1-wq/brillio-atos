@@ -50,6 +50,7 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
   const authoring = useStudioAuthoring();
   const entities = useMemo(() => asArray(doc.entities).map(asRecord), [doc.entities]);
   const relations = useMemo(() => asArray(doc.relations).map(asRecord), [doc.relations]);
+  const alignment = useMemo(() => asArray(doc.standardAlignment).map(asRecord), [doc.standardAlignment]);
   const ids = useMemo(() => entities.map(entityId), [entities]);
   // Candidates: the demoted standard classes behind the gap questions —
   // generator-emitted, pack-grounded, never part of doc.entities. Drawn as
@@ -578,7 +579,11 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
                     <div className="v3fs-stu-field">
                       <span className="v3fs-stu-fl">Areas (from the Frame) — toggle every area this entity belongs to</span>
                       <div className="v3fs-onto-areapills">
-                        {[...frameAreas].sort((a, b) => a.localeCompare(b)).map((area) => {
+                        {/* Clean single-domain areas only — a compound kit label
+                            ("Sales / Practices / Delivery") is a spanning TAG,
+                            not an area of its own; its segments are the pills. */}
+                        {frameAreas.filter((area) => !area.includes("/"))
+                          .sort((a, b) => a.localeCompare(b)).map((area) => {
                           const current = entityAreasOf(entity);
                           const on = current.includes(area);
                           return (
@@ -652,6 +657,31 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
                           patch({ relations: [...relations, { from: name, relation: "relates to", to: target, cardinality: "unknown" }] });
                         }} />
                     )}
+                    {(() => {
+                      // Standard alignment — the reference-model classes this
+                      // entity maps to. Removing a wrong mapping is curation;
+                      // proposing one stays the generator's job (it must come
+                      // from the steered vocabulary, not free text).
+                      const aligned = alignment.map((row, ai) => ({ row, ai }))
+                        .filter(({ row }) => asText(row.entity).trim().toLowerCase() === name.trim().toLowerCase());
+                      if (!aligned.length) return null;
+                      return (
+                        <>
+                          <div className="v3fs-stu-sec-h"><h3>Standard alignment</h3><span>reference-model classes this entity maps to — remove a mapping that doesn&rsquo;t fit</span></div>
+                          <div className="v3fs-onto-alignrows">
+                            {aligned.map(({ row, ai }) => (
+                              <div key={ai} className="v3fs-onto-alignrow">
+                                <span className="v3fs-onto-alignvocab">{asText(row.vocabulary) || "standard"}</span>
+                                <span className="v3fs-onto-alignuri" title={asText(row.standard)}>{asText(row.standard).replace(/^https?:\/\//, "")}</span>
+                                <span className="v3fs-onto-alignrel">{asText(row.relation) || "skos:closeMatch"}</span>
+                                {locked ? null : <button type="button" className="v3fs-stu-x" aria-label={`Remove the mapping to ${asText(row.standard)}`}
+                                  onClick={() => patch({ standardAlignment: alignment.filter((_, i) => i !== ai) })}>×</button>}
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      );
+                    })()}
                     <DismissControl label="Dismiss entity" confirmLabel="Dismiss entity"
                       onDismiss={(reason) => deleteEntity(index, reason)} />
                   </div>
@@ -662,8 +692,9 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
         </Section>
         {/* Business events live on the Current-State Atlas tab now — they're
             woven into the workflows there. Ambiguities (duplicated the open
-            Gaps) and Standards alignment are hidden from the studio — the
-            Gaps table below is the one place open questions get triaged. */}
+            Gaps) stay hidden — the Gaps table below is the one place open
+            questions get triaged. Standard alignment renders per entity on
+            its detail card, where a wrong mapping can be removed. */}
         {(() => {
           // The area filter reaches the gaps too: show only questions that
           // NAME one of the visible entities. Filtered view is read-only —

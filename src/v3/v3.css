@@ -6395,6 +6395,15 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-onto-relcard:hover {color:var(--v3-accent-b)}
 .v3fs-onto-relx {opacity:0;transition:opacity .12s ease}
 .v3fs-onto-relrow:hover .v3fs-onto-relx, .v3fs-onto-relx:focus-visible {opacity:1}
+/* Standard-alignment rows on the entity card */
+.v3fs-onto-alignrows {display:flex;flex-direction:column;gap:6px}
+.v3fs-onto-alignrow {display:flex;align-items:center;gap:9px;min-width:0;
+  border:1px solid var(--fs-line);border-radius:10px;padding:6px 10px;font-size:12px}
+.v3fs-onto-alignvocab {flex:none;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--v3-accent-2);background:var(--fs-indigo-wash,var(--v3-surface-2));border-radius:99px;padding:2px 8px}
+.v3fs-onto-alignuri {flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  color:var(--v3-text-primary);font-family:var(--v3-mono,ui-monospace,monospace);font-size:11.5px}
+.v3fs-onto-alignrel {flex:none;font-style:italic;color:var(--v3-text-muted)}
 /* Area membership pills on the entity card — several lit = a spanning entity */
 .v3fs-onto-areapills {display:flex;flex-wrap:wrap;gap:6px}
 .v3fs-onto-areapill {border:1px solid var(--fs-line);background:var(--v3-surface-1,transparent);

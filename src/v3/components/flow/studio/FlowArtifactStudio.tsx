@@ -559,6 +559,21 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
                       ＋ Declare “{violation.missing}”
                     </button>
                   ) : null}
+                  {/* A dangling STANDARD MAPPING has a second remedy: the row
+                      itself may be wrong — drop it here without declaring. */}
+                  {violation.kind === "dangling-alignment" && violation.missing && draft ? (
+                    <button type="button" className="v3fs-a v3fs-onto-gate-fix"
+                      title={`Remove the standard-alignment row referencing "${violation.missing}"`}
+                      onClick={() => {
+                        const rows = Array.isArray(draft.standardAlignment) ? draft.standardAlignment : [];
+                        const wanted = String(violation.missing).trim().toLowerCase();
+                        setDraft({ ...draft, standardAlignment: rows.filter((row) =>
+                          String((row as Record<string, unknown>)?.entity ?? "").trim().toLowerCase() !== wanted) });
+                        setDirty(true);
+                      }}>
+                      ✕ Remove the mapping
+                    </button>
+                  ) : null}
                 </li>
               ))}
             </ul>
