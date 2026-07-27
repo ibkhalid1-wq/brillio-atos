@@ -97,21 +97,43 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program 
     return hit ? asText(hit.name) : null;
   }, [workflow, ontoEvents]);
 
-  // The atlas is organised BY the ontology's business areas: each workflow files
-  // under its area (the generator's explicit tag, else inferred), so the tabs
-  // read as the domain map the ontology defines — Sales workflows together,
-  // Delivery together — rather than one flat undifferentiated row.
+  // The atlas is organised BY the FRAME's areas — the same list the Discovery
+  // Kit covers. The generator's own area tag is free-form ("Sales & Delivery")
+  // and drifted outside the frame, so each workflow's tag is CANONICALISED to
+  // the closest frame area: exact label first, else the frame area sharing the
+  // most words ("Sales & Delivery" → Delivery), else General. Tabs therefore
+  // always read in the programme's own vocabulary.
+  const frameAreas = useMemo(
+    () => (program ? listenCoverageAreas(program).map((area) => area.label) : []),
+    [program],
+  );
+  const frameAreaFor = useCallback((raw: string): string => {
+    const label = raw.trim();
+    if (!frameAreas.length) return label || GENERAL_AREA;
+    const exact = frameAreas.find((area) => area.toLowerCase() === label.toLowerCase());
+    if (exact) return exact;
+    const words = new Set(label.toLowerCase().split(/[^a-z0-9]+/).filter((word) => word.length >= 3));
+    let best: { area: string; score: number } | null = null;
+    for (const area of frameAreas) {
+      const areaWords = area.toLowerCase().split(/[^a-z0-9]+/).filter((word) => word.length >= 3);
+      if (!areaWords.length) continue;
+      const hits = areaWords.filter((word) => words.has(word)).length;
+      const score = hits / areaWords.length;
+      if (hits && (!best || score > best.score)) best = { area, score };
+    }
+    return best?.area ?? GENERAL_AREA;
+  }, [frameAreas]);
   const groupedTabs = useMemo(() => {
     const groups = new Map<string, Array<{ name: string; index: number }>>();
     workflows.forEach((entry, index) => {
-      const area = workflowArea(entry);
+      const area = frameAreaFor(workflowArea(entry));
       const list = groups.get(area) ?? [];
       list.push({ name: asText(entry.name) || `Workflow ${index + 1}`, index });
       groups.set(area, list);
     });
     return [...groups.entries()].sort(([a], [b]) =>
       a === GENERAL_AREA ? 1 : b === GENERAL_AREA ? -1 : a.localeCompare(b));
-  }, [workflows]);
+  }, [workflows, frameAreaFor]);
   const multiArea = groupedTabs.length > 1;
   // Areas the FRAME's coverage plan promises but the atlas hasn't mapped a
   // workflow for yet — e.g. Talent, whose SME hasn't been heard. Surfacing
