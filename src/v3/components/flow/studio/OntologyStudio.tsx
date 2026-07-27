@@ -559,7 +559,12 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
                                 <select className="v3fs-onto-relverb" value={verb || "relates to"}
                                   aria-label={`Relation type with ${other}`} disabled={locked}
                                   title={ONTOLOGY_RELATION_VERB_MEANINGS[verb] ?? undefined}
-                                  onChange={(e) => updateRelation(ri, { relation: e.target.value })}>
+                                  onChange={(e) => {
+                                    updateRelation(ri, { relation: e.target.value });
+                                    // Point at the edge on the map so the change is SEEN there
+                                    // too — its label bolds while selected.
+                                    setSelected({ kind: "relation", index: ri });
+                                  }}>
                                   {verbOptions(verb).map((option) => (
                                     <option key={option} value={option} title={ONTOLOGY_RELATION_VERB_MEANINGS[option]}>{option}</option>
                                   ))}
@@ -568,7 +573,7 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
                               </span>
                               {endChip(other, !outgoing)}
                               <select className="v3fs-onto-relcard" value={asText(relation.cardinality) || "unknown"} aria-label="Cardinality" disabled={locked}
-                                onChange={(e) => updateRelation(ri, { cardinality: e.target.value })}>
+                                onChange={(e) => { updateRelation(ri, { cardinality: e.target.value }); setSelected({ kind: "relation", index: ri }); }}>
                                 {CARDINALITIES.map((c) => <option key={c} value={c}>{c}</option>)}
                               </select>
                               {locked ? null : <button type="button" className="v3fs-stu-x v3fs-onto-relx" aria-label={`Delete relationship with ${other}`}
