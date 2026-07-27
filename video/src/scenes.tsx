@@ -104,7 +104,7 @@ export const SceneDiagnosis: React.FC = () => {
         </div>
         <div style={{ marginTop: 60, opacity: capP, transform: `translateY(${(1 - capP) * 18}px)` }}>
           <div style={{ fontFamily: FONT, fontSize: 36, fontWeight: 750, color: "#fff", marginBottom: 12 }}>
-            The failure was never the AI.
+            The failure was never AI.
           </div>
           <div style={{ fontFamily: FONT, fontSize: 24, color: MUTED, maxWidth: 1100, margin: "0 auto", lineHeight: 1.5 }}>
             An agent is only as good as its model of the business — and that model lives in heads, decks, and disagreement.
@@ -137,13 +137,24 @@ export const SceneReveal: React.FC = () => {
             </Rise>
           ))}
         </div>
-        <div style={{ height: 76 }} />
-        <div style={{ minHeight: 170 }}>
-          {frame >= 180 ? (
+        <div style={{ height: 56 }} />
+        <div style={{ minHeight: 70 }}>
+          {frame >= 175 ? (
             <Typed
-              start={180}
+              start={175}
               cps={30}
-              text={"Laila was derived from evidence.\nBy AURA."}
+              text={"Meet AURA — Brillio\u2019s AI-native delivery engine."}
+              style={{ fontSize: 38, fontWeight: 700, color: "rgba(255,255,255,0.85)" }}
+            />
+          ) : null}
+        </div>
+        <div style={{ height: 26 }} />
+        <div style={{ minHeight: 90 }}>
+          {frame >= 265 ? (
+            <Typed
+              start={265}
+              cps={30}
+              text={"Laila was derived from evidence."}
               style={{ fontSize: 54, fontWeight: 800, color: "#fff", lineHeight: 1.4 }}
             />
           ) : null}
@@ -237,6 +248,16 @@ export const SceneAlignment: React.FC = () => {
         <DrawnLine size={92} progress={1} />
       </div>
 
+      <Rise start={150} style={{ position: "absolute", left: 70, top: 400 }}>
+        <div style={{ fontFamily: FONT }}>
+          <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: ".12em", color: ELECTRIC, marginBottom: 10 }}>
+            LIVE · A ROUTED QUESTION
+          </div>
+          <div style={{ background: "#fff", borderRadius: 14, padding: "12px 16px", boxShadow: "0 24px 60px -24px rgba(0,0,0,.6)" }}>
+            <Img src={staticFile("ask-panel.png")} style={{ width: 400, display: "block", borderRadius: 8 }} />
+          </div>
+        </div>
+      </Rise>
       <Rise start={280} style={{ position: "absolute", bottom: 140, width: "100%", display: "flex", justifyContent: "center" }}>
         <div style={{ display: "flex", gap: 18, alignItems: "center", fontFamily: FONT, color: "#fff" }}>
           <span style={{ fontSize: 23, fontWeight: 800, background: "#B4541E", borderRadius: 10, padding: "7px 14px" }}>⚖ CONTRADICTION</span>
@@ -619,8 +640,7 @@ export const SceneIndustries: React.FC = () => {
 /* ── 9 · Close (2:00–2:10) ──────────────────────────────────────────── */
 export const SceneClose: React.FC = () => {
   const frame = useCurrentFrame();
-  const cardAt = 170;
-  const cardP = interpolate(frame, [cardAt, cardAt + 24], [0, 1], EASE);
+  const qP = interpolate(frame, [70, 94], [0, 1], EASE);
   return (
     <Ground>
       <Glow size={800} x="50%" y="42%" opacity={0.25} />
@@ -632,24 +652,17 @@ export const SceneClose: React.FC = () => {
             <AuraWord height={46} />
           </div>
         </Rise>
-        <div style={{ height: 54 }} />
-        <Typed
-          start={50}
-          cps={22}
-          text="Evidence in. Agentic systems out."
-          style={{ fontSize: 56, fontWeight: 800, color: "#fff", fontStyle: "italic" }}
-        />
-        <div style={{ height: 80 }} />
-        {/* The bookend: the opening question, answered. */}
-        <div style={{ opacity: cardP, transform: `translateY(${(1 - cardP) * 24}px)` }}>
-          <div style={{ fontFamily: FONT, fontSize: 30, fontWeight: 600, color: MUTED, marginBottom: 18 }}>
+        <div style={{ height: 100 }} />
+        {/* The bookend: the opening question, answered. Nothing else. */}
+        <div style={{ opacity: qP, transform: `translateY(${(1 - qP) * 24}px)` }}>
+          <div style={{ fontFamily: FONT, fontSize: 32, fontWeight: 600, color: MUTED, marginBottom: 22 }}>
             Would two teams draw the same picture?
           </div>
           <Typed
-            start={cardAt + 26}
+            start={108}
             cps={18}
             text="They now would… with AURA."
-            style={{ fontSize: 58, fontWeight: 800, color: "#fff" }}
+            style={{ fontSize: 62, fontWeight: 800, color: "#fff" }}
           />
         </div>
       </div>
