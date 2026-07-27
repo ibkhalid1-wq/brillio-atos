@@ -56,9 +56,25 @@ export function applyArtifactEdit(
     ? { flowOperatorOverrides: appendOperatorOverrides(inner.flowOperatorOverrides, input.fieldKey, notes, ts, actor) }
     : {};
 
+  // A kit-DOC edit moves Listen's scope exactly like a kit-matrix edit does,
+  // so it must prompt downstream regeneration the same way: stamp kitRev (a
+  // NON-underscore key, so it lands in the inputs fingerprint) into the
+  // Listen/Envision/Show buckets — the mirror of listenPlanWrite's planRev.
+  // The kit itself lives on Frame, whose bucket stays untouched, so the doc
+  // just edited never flags itself stale.
+  let phaseInputs = isRecord(inner.phaseInputs) ? (inner.phaseInputs as Record<string, unknown>) : {};
+  if (input.fieldKey === "discoveryKit") {
+    phaseInputs = { ...phaseInputs };
+    for (const movementId of ["listen", "envision", "show"]) {
+      const bucket = isRecord(phaseInputs[movementId]) ? { ...(phaseInputs[movementId] as Record<string, unknown>) } : {};
+      bucket.kitRev = ts;
+      phaseInputs[movementId] = bucket;
+    }
+  }
+
   return wrapProgramState(
     wrapper,
-    { ...inner, [input.fieldKey]: nextDoc, ...overrides, flowAttestations: [...log, attestation].slice(-200) },
+    { ...inner, [input.fieldKey]: nextDoc, ...overrides, phaseInputs, flowAttestations: [...log, attestation].slice(-200) },
     usesNestedData,
   );
 }

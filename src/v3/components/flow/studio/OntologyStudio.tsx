@@ -267,6 +267,9 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
   const edges: Edge[] = useMemo(() => relations.map((relation, index) => {
     const cardinality = asText(relation.cardinality);
     const from = asText(relation.from), to = asText(relation.to);
+    // Specialisation reads STRUCTURALLY: "is a type of" carries the UML
+    // hollow triangle at the supertype end instead of the ordinary arrow.
+    const isTypeOf = asText(relation.relation).trim().toLowerCase() === "is a type of";
     const touchesFocus = selectedEntityId != null && (from === selectedEntityId || to === selectedEntityId);
     // An edge with a current ELK route draws that exact polyline (routed
     // around nodes, crossings minimised); without one it falls back to the
@@ -281,8 +284,8 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
       source: from,
       target: to,
       label: `${asText(relation.relation) || "relates to"}${cardinality && cardinality !== "unknown" ? ` · ${cardinality}` : ""}`,
-      className: `v3fs-onto-edge${selected?.kind === "relation" && selected.index === index ? " selected" : ""}${selectedEntityId ? (touchesFocus ? " related" : " dimmed") : ""}`,
-      markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16 },
+      className: `v3fs-onto-edge${isTypeOf ? " typeof" : ""}${selected?.kind === "relation" && selected.index === index ? " selected" : ""}${selectedEntityId ? (touchesFocus ? " related" : " dimmed") : ""}`,
+      markerEnd: isTypeOf ? "url(#v3fs-uml-triangle)" : { type: MarkerType.ArrowClosed, width: 16, height: 16 },
     } as Edge;
   }).concat(showCandidates && !visibleIds ? candidates.flatMap((candidate, ci) => {
     const candidateName = asText(candidate.name);
@@ -370,17 +373,11 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
   };
 
   const selectedRelation = selected?.kind === "relation" ? relations[selected.index] : null;
-
-  // Clicking a node on the map jumps to that entity's card in the list below
-  // and expands it — the card IS the editor (the side panel's old entity form
-  // was a duplicate and is gone). The map stays in view: the canvas is sticky.
-  const cardRefs = useRef(new Map<string, HTMLDetailsElement>());
-  const openEntityCard = (id: string) => {
-    const card = cardRefs.current.get(id);
-    if (!card) return;
-    card.open = true;
-    card.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  };
+  // The ONE entity whose detail renders below the map — driven equally by the
+  // deck's Entity dropdown and by clicking a node (both set `selected`).
+  const selectedEntityIndex = selected?.kind === "entity"
+    ? entities.findIndex((entity, i) => entityId(entity, i) === selected.id)
+    : -1;
 
   return (
     <div className="v3fs-onto">
@@ -396,6 +393,21 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
             {hasNoArea ? <option value="__none__">(no area assigned)</option> : null}
           </select>
         </label>
+        {/* Picking here and clicking a node are the SAME act — both set the
+            selection, so the map spotlights the entity and its detail card
+            renders below. */}
+        <label className="v3fs-wf-filter grow">
+          <span>Entity</span>
+          <select value={selectedEntityId ?? ""} aria-label="Pick an entity"
+            onChange={(e) => setSelected(e.target.value ? { kind: "entity", id: e.target.value } : null)}>
+            <option value="">— pick an entity to edit ({visibleIds ? visibleIds.size : entities.length}) —</option>
+            {entities.map((entity, index) => {
+              const id = entityId(entity, index);
+              if (visibleIds && !visibleIds.has(id) && id !== selectedEntityId) return null;
+              return <option key={id} value={id}>{asText(entity.name) || id}</option>;
+            })}
+          </select>
+        </label>
         {visibleIds ? (
           <label className="v3fs-wf-filter">
             <span>Showing</span>
@@ -403,6 +415,17 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
           </label>
         ) : null}
       </div>
+      {/* UML hollow triangle for specialisation edges — points at the
+          supertype. Defined once; referenced by markerEnd url. */}
+      <svg style={{ position: "absolute", width: 0, height: 0 }} aria-hidden="true">
+        <defs>
+          <marker id="v3fs-uml-triangle" viewBox="0 0 14 14" markerWidth="13" markerHeight="13"
+            refX="12" refY="7" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+            <path d="M1.5,1.5 L12.5,7 L1.5,12.5 Z" fill="var(--fs-card, #fff)"
+              stroke="var(--v3-accent-2, #3b2f72)" strokeWidth="1.4" strokeLinejoin="round" />
+          </marker>
+        </defs>
+      </svg>
       <div className="v3fs-onto-canvas">
         {/* The flow viewport starts BELOW the toolbar band, so an arranged
             graph can never slide under the buttons. */}
@@ -413,11 +436,7 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
           edgeTypes={ROUTED_EDGE_TYPES}
           onNodesChange={handleNodesChange}
           onConnect={onConnect}
-          onNodeClick={(_, node) => {
-            if (node.id.startsWith(CAND_PREFIX)) { setSelected({ kind: "candidate", id: node.id }); return; }
-            setSelected({ kind: "entity", id: node.id });
-            openEntityCard(node.id);
-          }}
+          onNodeClick={(_, node) => setSelected(node.id.startsWith(CAND_PREFIX) ? { kind: "candidate", id: node.id } : { kind: "entity", id: node.id })}
           onEdgeClick={(_, edge) => { if (!edge.id.startsWith("cedge-")) setSelected({ kind: "relation", index: Number(edge.id.replace("rel-", "")) }); }}
           onPaneClick={() => setSelected(null)}
           onInit={(instance) => { flowRef.current = instance; }}
@@ -458,6 +477,9 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
         ) : null}
       </div>
 
+      {/* The side panel appears only when it has a job — a relation to edit
+          or a suggested entity to review; idle it renders nothing at all. */}
+      {(selectedRelation && selected?.kind === "relation") || selected?.kind === "candidate" ? (
       <aside className="v3fs-onto-panel">
         {selectedRelation && selected?.kind === "relation" ? (
           <>
@@ -493,39 +515,31 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
               <p className="v3fs-onto-hint">To adopt it: answer the gap below (route it to its owner), then add it as an entity — or regenerate once Listen evidence names it.</p>
             </>
           );
-        })() : (
-          <div className="v3fs-stu-empty">
-            Click an entity on the map to jump to its card below; click a relation (edge) to edit it here.
-            Drag from one node&rsquo;s edge to another to draw a new relation.
-          </div>
-        )}
+        })() : null}
       </aside>
+      ) : null}
 
       <div className="v3fs-onto-below">
-        {/* The whole model as a LIST under the map — every entity a collapsible
-            card carrying the same editors as the side panel, plus its
-            relationships in place (type + cardinality editable, add/delete).
-            The graph shows shape; this is where methodical curation happens. */}
-        <Section label="Entities" hint="each entity as a card — expand to edit it and manage its relationships; the list scrolls, the map stays">
-          <div className="v3fs-stu-cards v3fs-onto-entwrap">
+        {/* ONE entity's detail under the map — the deck's Entity dropdown and
+            a node click both drive the same selection, so the map spotlight,
+            the dropdown value and this card never disagree. */}
+        <Section label="Entity detail" hint="pick an entity in the deck above — or click its node on the map — to edit it and manage its relationships">
+          <div className="v3fs-stu-cards">
             {entities.length === 0 ? <div className="v3fs-stu-empty">No entities on record yet.</div> : null}
-            {visibleIds && visibleIds.size === 0 ? <div className="v3fs-stu-empty">No entities in this area.</div> : null}
+            {entities.length > 0 && selectedEntityIndex < 0 ? (
+              <div className="v3fs-stu-empty">No entity selected — pick one in the deck above, or click a node on the map.</div>
+            ) : null}
             {entities.map((entity, index) => {
-              if (visibleIds && !visibleIds.has(entityId(entity, index))) return null;
+              if (index !== selectedEntityIndex) return null;
               const name = asText(entity.name);
               const rels = relations.map((relation, ri) => ({ relation, ri }))
                 .filter(({ relation }) => asText(relation.from) === name || asText(relation.to) === name);
               return (
-                <details key={entityId(entity, index)} className="v3fs-stu-card"
-                  ref={(el) => {
-                    const id = entityId(entity, index);
-                    if (el) cardRefs.current.set(id, el);
-                    else cardRefs.current.delete(id);
-                  }}>
-                  <summary>
+                <div key={entityId(entity, index)} className="v3fs-stu-card v3fs-onto-entdetail">
+                  <div className="v3fs-onto-entdetail-h">
                     <span className="v3fs-stu-card-t">{name || `Entity ${index + 1}`}</span>
                     <span className="v3fs-onto-entrels">{rels.length} relationship{rels.length === 1 ? "" : "s"}</span>
-                  </summary>
+                  </div>
                   <div className="v3fs-stu-card-b">
                     <div className="v3fs-stu-grid2">
                       <TextField label="Name" value={name} onChange={(next) => renameEntity(index, next)} />
@@ -594,7 +608,7 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
                     <DismissControl label="Dismiss entity" confirmLabel="Dismiss entity"
                       onDismiss={(reason) => deleteEntity(index, reason)} />
                   </div>
-                </details>
+                </div>
               );
             })}
           </div>

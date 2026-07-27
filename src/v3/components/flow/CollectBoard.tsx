@@ -18,7 +18,7 @@ import { AttachFileButton, TranscribeButton, copyTextFromAction } from "@/v3/com
 import { readGovernedExceptions, withNewException, withResolvedException } from "@/v3/components/flow/flowExceptions";
 import { projectStakeholderReview, reviewFallbackQuestions } from "@/v3/components/flow/flowReviews";
 import { areaProgress, stakeholderPrimaryArea, GENERAL_AREA, displayRole, type AreaProgress } from "@/v3/components/flow/flowAreas";
-import { listenCoverageAreas, canonicalFrameArea } from "@/v3/components/flow/listenCoverage";
+import { listenCoverageAreas, listenAreaCoverage, canonicalFrameArea } from "@/v3/components/flow/listenCoverage";
 
 /** A movement's discovery, organized by stakeholder. One card per person or
  * role: their script, their link/meeting channels, their captured evidence, a
@@ -289,13 +289,21 @@ export function IntervieweeDiscovery({ program, movementId, captureField, areaFi
       coll: stakeholderCollection(movementId, s, packs, evidence, approvalByName.get(s.name.trim().toLowerCase())),
     }))
     .filter(({ s, coll }) => !directoryCardRetired(program, movementId, s, coll.heard));
-  // Resolve each stakeholder's primary area ONCE — CANONICALISED to the
-  // Discovery Kit's own area list, so the lanes here speak exactly the
-  // kit's vocabulary (and honour its pinned order below). The kit is also
-  // where the personas themselves come from (resolveMovementStakeholders).
+  // Resolve each stakeholder's primary area ONCE — the KIT MATRIX's own
+  // coverage assignment first (the operator clicked those dots; the lanes
+  // must agree with them), else the ontology-inferred area canonicalised to
+  // the kit's vocabulary. A "no one covers Delivery" lane while the matrix
+  // shows Delivery covered was exactly this disagreement.
   const kitAreas = listenCoverageAreas(program).map((area) => area.label);
+  const kitCoverage = listenAreaCoverage(program);
+  const coverageAreaOf = (label: string): string | null => {
+    const key = label.trim().toLowerCase();
+    if (!key) return null;
+    return kitCoverage.find((row) => row.roles.some((role) => role.trim().toLowerCase() === key))?.area ?? null;
+  };
   const primaryAreaOf = new Map(evaluated.map((e) =>
-    [e.s.id, canonicalFrameArea(kitAreas, stakeholderPrimaryArea(program, e.s.name, e.s.role))] as const));
+    [e.s.id, coverageAreaOf(e.s.role || e.s.name) ?? coverageAreaOf(e.s.name)
+      ?? canonicalFrameArea(kitAreas, stakeholderPrimaryArea(program, e.s.name, e.s.role))] as const));
   const heardCount = evaluated.filter((e) => e.coll.heard && !e.s.questions.length).length;
   const word = movementId === "show" ? "reviewed" : movementId === "listen" || movementId === "frame" ? "heard" : "consulted";
   // Only cards with OUTSTANDING questions render — the board is the question

@@ -1892,6 +1892,29 @@ describe("flowArtifactEdit.applyArtifactEdit", () => {
     expect(applyArtifactEdit(programme({}), { fieldKey: "", movementId: "listen", title: "x", doc: {} }, "u")).toBeNull();
   });
 
+  it("a Discovery-Kit doc edit stamps kitRev into Listen/Envision/Show so they stale", async () => {
+    const { applyArtifactEdit } = await import("@/v3/components/flow/flowArtifactEdit");
+    const p = programme({
+      discoveryKit: { interviews: [{ stakeholder: "Finance", role: "Finance" }] },
+      phaseInputs: { listen: { transcript: "kept" } },
+    });
+    const blob = applyArtifactEdit(p, {
+      fieldKey: "discoveryKit", movementId: "frame", title: "Discovery Kit",
+      doc: { interviews: [{ stakeholder: "Finance", role: "CFO" }] },
+    }, "user@x") as Record<string, Record<string, Record<string, unknown>>>;
+    for (const movementId of ["listen", "envision", "show"]) {
+      expect(typeof blob.phaseInputs[movementId].kitRev).toBe("string");
+    }
+    expect(blob.phaseInputs.listen.transcript).toBe("kept");
+    // Frame's own bucket is untouched — the kit never flags itself stale.
+    expect(blob.phaseInputs.frame).toBeUndefined();
+    // A non-kit edit stamps nothing.
+    const other = applyArtifactEdit(programme({ runbook: { steps: [] } }), {
+      fieldKey: "runbook", movementId: "ship", title: "Runbook", doc: { steps: [{ name: "cutover" }] },
+    }, "u") as Record<string, Record<string, unknown>>;
+    expect((other.phaseInputs as Record<string, unknown>)?.listen).toBeUndefined();
+  });
+
   it("rejects an ontology edit that would leave a relation dangling (F-004 backstop)", async () => {
     const { applyArtifactEdit } = await import("@/v3/components/flow/flowArtifactEdit");
     const p = programme({ domainOntology: { entities: [{ name: "Quote" }] } });

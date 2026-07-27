@@ -6442,7 +6442,13 @@ details[open] > summary .v3fs-disc-c::after {display:none}
    own box (position:sticky can't engage here — the studio panel and stage
    card are overflow:hidden for their rounded chrome), so the canvas above
    simply never leaves the screen. Node click scrolls WITHIN this box. */
-.v3fs-onto-entwrap{max-height:56vh;overflow-y:auto;padding-right:6px;border-bottom:1px solid var(--fs-line)}
+/* The single entity-detail card under the map — always open (no summary),
+   header row carrying the name + relationship count. */
+.v3fs-onto-entdetail{padding:0}
+.v3fs-onto-entdetail-h{display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--fs-line)}
+/* Edges: specialisation ("is a type of") draws slightly heavier so the UML
+   triangle reads as structure, not decoration. */
+.v3fs-onto-edge.typeof .react-flow__edge-path{stroke-width:1.8}
 /* The graph viewport is inset below the toolbar band, so fitView/arrange can
    never place nodes under the buttons. */
 .v3fs-onto-flowwrap{position:absolute;inset:52px 0 0 0}
