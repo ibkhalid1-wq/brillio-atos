@@ -344,7 +344,7 @@ export const SceneClose: React.FC = () => {
         <div style={{ height: 90 }} />
         <div style={{ opacity: cardP, transform: `translateY(${(1 - cardP) * 24}px)` }}>
           <span style={{ fontFamily: FONT, fontSize: 40, fontWeight: 650, color: MUTED }}>
-            The path forward — over to the room.
+            The evidence is in. The decision is yours.
           </span>
         </div>
       </div>
