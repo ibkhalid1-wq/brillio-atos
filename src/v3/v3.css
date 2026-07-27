@@ -7625,6 +7625,17 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-wf-insp-t i {font-style:normal;font-weight:500;font-size:11px;color:var(--v3-text-muted);margin-left:4px}
 .v3fs-wf-insp-actions {display:flex;gap:6px;flex-wrap:wrap}
 .v3fs-wf-insp-actions .v3fs-btn:disabled {opacity:.4;cursor:default}
+/* The Listen alignment strip — per area, four lights: Covered · Entities ·
+   Workflow · Questions. Hover a chip for the diagnosis and the fix. */
+.v3fs-cohere {display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin:0 0 12px;padding:9px 13px;
+  border:1px solid var(--fs-line);border-radius:12px;background:var(--v3-surface-2)}
+.v3fs-cohere-l {font-size:9.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--v3-text-muted);margin-right:3px}
+.v3fs-cohere-chip {display:inline-flex;align-items:center;gap:3px;padding:3px 7px 3px 9px;border-radius:99px;
+  border:1px solid var(--fs-line);background:var(--fs-card);cursor:default}
+.v3fs-cohere-chip b {font-size:10.5px;font-weight:700;color:var(--v3-text-primary);margin-right:3px}
+.v3fs-cohere-chip i {font-style:normal;font-size:8px;font-weight:800;width:14px;height:14px;border-radius:50%;
+  display:inline-grid;place-items:center;color:var(--v3-text-muted);background:color-mix(in srgb,var(--fs-line) 55%,transparent)}
+.v3fs-cohere-chip i.ok {color:#fff;background:var(--v3-green,#1d9e43)}
 /* Flat register sections inside the combined context card — always visible
    (not collapsible), a slight separator ruling between them. */
 .v3fs-wf-reg {padding-top:12px;margin-top:12px;border-top:1px solid var(--fs-line)}

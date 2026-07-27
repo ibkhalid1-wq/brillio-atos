@@ -1908,11 +1908,48 @@ describe("flowArtifactEdit.applyArtifactEdit", () => {
     expect(blob.phaseInputs.listen.transcript).toBe("kept");
     // Frame's own bucket is untouched — the kit never flags itself stale.
     expect(blob.phaseInputs.frame).toBeUndefined();
-    // A non-kit edit stamps nothing.
+    // A non-evidence edit stamps nothing.
     const other = applyArtifactEdit(programme({ runbook: { steps: [] } }), {
       fieldKey: "runbook", movementId: "ship", title: "Runbook", doc: { steps: [{ name: "cutover" }] },
     }, "u") as Record<string, Record<string, unknown>>;
     expect((other.phaseInputs as Record<string, unknown>)?.listen).toBeUndefined();
+  });
+
+  it("an ontology edit stales the atlas but SELF-EXEMPTS the ontology's own stub", async () => {
+    const { applyArtifactEdit } = await import("@/v3/components/flow/flowArtifactEdit");
+    const blob = applyArtifactEdit(programme({
+      domainOntology: { entities: [{ name: "Quote" }] },
+      phaseArtifacts: { listen: { "domain-ontology": { inputsFingerprint: "old" }, "current-state-atlas": { inputsFingerprint: "old" } } },
+    }), {
+      fieldKey: "domainOntology", movementId: "listen", title: "Domain Ontology",
+      doc: { entities: [{ name: "Quote" }, { name: "Order" }] },
+    }, "u") as Record<string, Record<string, Record<string, Record<string, unknown>>>>;
+    // Listen/Envision/Show inputs moved — the atlas (and Prototype docs) flag stale…
+    for (const movementId of ["listen", "envision", "show"]) {
+      expect(typeof (blob.phaseInputs[movementId] as Record<string, unknown>).ontologyRev).toBe("string");
+    }
+    expect(blob.phaseArtifacts.listen["current-state-atlas"].inputsFingerprint).toBe("old");
+    // …but the just-edited ontology's own stub is refreshed to the post-stamp
+    // fingerprint, so it does not flag itself.
+    const refreshed = blob.phaseArtifacts.listen["domain-ontology"].inputsFingerprint as string;
+    expect(refreshed).not.toBe("old");
+    const bucket = blob.phaseInputs.listen as Record<string, unknown>;
+    const keys = Object.keys(bucket).filter((k) => !k.startsWith("_")).sort();
+    const text = JSON.stringify(keys.map((k) => [k, bucket[k]]));
+    let hash = 5381;
+    for (let i = 0; i < text.length; i += 1) hash = ((hash * 33) ^ text.charCodeAt(i)) >>> 0;
+    expect(refreshed).toBe(hash.toString(16));
+  });
+
+  it("an atlas edit stamps Prototype only — Listen (the ontology) stays untouched", async () => {
+    const { applyArtifactEdit } = await import("@/v3/components/flow/flowArtifactEdit");
+    const blob = applyArtifactEdit(programme({ currentStateAtlas: { workflows: [] } }), {
+      fieldKey: "currentStateAtlas", movementId: "listen", title: "Current-State Atlas",
+      doc: { workflows: [{ name: "Handoff" }] },
+    }, "u") as Record<string, Record<string, Record<string, unknown>>>;
+    expect(typeof blob.phaseInputs.envision.atlasRev).toBe("string");
+    expect(typeof blob.phaseInputs.show.atlasRev).toBe("string");
+    expect(blob.phaseInputs.listen).toBeUndefined();
   });
 
   it("rejects an ontology edit that would leave a relation dangling (F-004 backstop)", async () => {

@@ -45,7 +45,7 @@ import { applyArtifactEdit, readArtifactDoc } from "@/v3/components/flow/flowArt
 import { operatorOverrideGuidance } from "@/v3/components/flow/flowOperatorOverrides";
 import { compileShipLanes, setShipLane, toggleShipItem } from "@/v3/components/flow/flowShip";
 import { scheduleFollowUp, discoveryKitCoverageGuidance } from "@/v3/components/flow/flowMeetings";
-import { listenCanonicalCastGuidance } from "@/v3/components/flow/listenCoverage";
+import { listenCanonicalCastGuidance, kitAreaEntityGuidance } from "@/v3/components/flow/listenCoverage";
 import { mintFollowUpPack, latestPackFor, portalLinkFor, mintReviewPack, latestReviewPackFor } from "@/v3/components/flow/flowPortal";
 import { mintBrief, briefLinkFor } from "@/v3/components/flow/flowBriefs";
 import FlowRespond from "@/v3/components/flow/FlowRespond";
@@ -1053,6 +1053,11 @@ export default function AppShellV3() {
       if (guidance) crossPhaseContext += `${crossPhaseContext ? "\n\n" : ""}${guidance}`;
       const cast = listenCanonicalCastGuidance(activeProgram);
       if (cast) crossPhaseContext += `${crossPhaseContext ? "\n\n" : ""}${cast}`;
+      // Tighten the Listen triangle: each area's questions must probe the
+      // ontology entities filed under it, so regenerated scripts align with
+      // the model by construction.
+      const areaEntities = kitAreaEntityGuidance(activeProgram);
+      if (areaEntities) crossPhaseContext += `${crossPhaseContext ? "\n\n" : ""}${areaEntities}`;
     }
     // The Atlas OWNS the business events (they moved from the ontology) and
     // weaves them into its workflows: each step that raises or responds to

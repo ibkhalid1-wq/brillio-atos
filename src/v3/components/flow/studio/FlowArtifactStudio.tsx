@@ -567,14 +567,10 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
           {studioActive && entry && draft ? (
             <>
               {/* Derived artifacts read-only: a compact marker, not a paragraph.
-                  Design-team artifacts (editable) show nothing here. */}
+                  Curatable and design-team artifacts show nothing here. */}
               {!editable ? (
                 <div className="v3fs-derived-chip" role="note">
                   <span aria-hidden="true">↻</span> Derived from the record — capture a correction as evidence to change it
-                </div>
-              ) : canCurate ? (
-                <div className="v3fs-derived-chip" role="note">
-                  <span aria-hidden="true">✎</span> Curate the structure directly — rename, relate, regroup, dismiss. New current-state facts still arrive as evidence, and your edits survive regeneration.
                 </div>
               ) : null}
               {/* Copilot command card — refine THIS section with a plain-language

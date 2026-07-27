@@ -8,6 +8,17 @@ import type { ProgramSummary } from "@/new/types";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
 import { hasBlockingOntologyViolations } from "@/v3/components/flow/flowOntologyConstraints";
 import { overrideNotes, appendOperatorOverrides } from "@/v3/components/flow/flowOperatorOverrides";
+import { FORMAL_ARTIFACT_FIELD_KEYS } from "@/v3/lib/formalArtifacts";
+
+/** Which evidence-bearing edits move which downstream movements' inputs —
+ * the mirror of listenPlanWrite's planRev discipline for DOC edits. */
+const DOWNSTREAM_STAMPS: Record<string, { key: string; movements: string[] }> = {
+  discoveryKit: { key: "kitRev", movements: ["listen", "envision", "show"] },
+  domainOntology: { key: "ontologyRev", movements: ["listen", "envision", "show"] },
+  currentStateAtlas: { key: "atlasRev", movements: ["envision", "show"] },
+};
+const ARTIFACT_ID_BY_FIELD: Record<string, string> = Object.fromEntries(
+  Object.entries(FORMAL_ARTIFACT_FIELD_KEYS).map(([artifactId, fieldKey]) => [fieldKey, artifactId]));
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -56,25 +67,46 @@ export function applyArtifactEdit(
     ? { flowOperatorOverrides: appendOperatorOverrides(inner.flowOperatorOverrides, input.fieldKey, notes, ts, actor) }
     : {};
 
-  // A kit-DOC edit moves Listen's scope exactly like a kit-matrix edit does,
-  // so it must prompt downstream regeneration the same way: stamp kitRev (a
-  // NON-underscore key, so it lands in the inputs fingerprint) into the
-  // Listen/Envision/Show buckets — the mirror of listenPlanWrite's planRev.
-  // The kit itself lives on Frame, whose bucket stays untouched, so the doc
-  // just edited never flags itself stale.
+  // An evidence-bearing DOC edit moves its downstream movements' inputs the
+  // same way a kit-matrix edit does: stamp a rev (a NON-underscore key, so it
+  // lands in the inputs fingerprint) into each downstream bucket — kit edits
+  // prompt Listen/Prototype regeneration, ontology edits prompt the atlas
+  // (and Prototype), atlas edits prompt Prototype.
   let phaseInputs = isRecord(inner.phaseInputs) ? (inner.phaseInputs as Record<string, unknown>) : {};
-  if (input.fieldKey === "discoveryKit") {
+  let phaseArtifactsPatch: Record<string, unknown> = {};
+  const stampSpec = DOWNSTREAM_STAMPS[input.fieldKey];
+  if (stampSpec) {
     phaseInputs = { ...phaseInputs };
-    for (const movementId of ["listen", "envision", "show"]) {
+    for (const movementId of stampSpec.movements) {
       const bucket = isRecord(phaseInputs[movementId]) ? { ...(phaseInputs[movementId] as Record<string, unknown>) } : {};
-      bucket.kitRev = ts;
+      bucket[stampSpec.key] = ts;
       phaseInputs[movementId] = bucket;
+    }
+    // Self-exemption: when the edited doc's OWN movement was stamped (the
+    // ontology lives in Listen), its stored fingerprint would now read stale
+    // for the very edit just made. Refresh its stub to the post-stamp
+    // fingerprint — the hash MIRRORS movementInputsFingerprint (and the edge
+    // implementation); keep byte-compatible.
+    const artifactId = ARTIFACT_ID_BY_FIELD[input.fieldKey];
+    if (artifactId && stampSpec.movements.includes(input.movementId)) {
+      const bucket = isRecord(phaseInputs[input.movementId]) ? (phaseInputs[input.movementId] as Record<string, unknown>) : {};
+      const keys = Object.keys(bucket).filter((key) => !key.startsWith("_")).sort();
+      const text = JSON.stringify(keys.map((key) => [key, bucket[key]]));
+      let hash = 5381;
+      for (let index = 0; index < text.length; index += 1) hash = ((hash * 33) ^ text.charCodeAt(index)) >>> 0;
+      const stubs = isRecord(inner.phaseArtifacts) ? { ...(inner.phaseArtifacts as Record<string, unknown>) } : {};
+      const movementStubs = isRecord(stubs[input.movementId]) ? { ...(stubs[input.movementId] as Record<string, unknown>) } : {};
+      const stub = isRecord(movementStubs[artifactId]) ? { ...(movementStubs[artifactId] as Record<string, unknown>) } : {};
+      stub.inputsFingerprint = hash.toString(16);
+      movementStubs[artifactId] = stub;
+      stubs[input.movementId] = movementStubs;
+      phaseArtifactsPatch = { phaseArtifacts: stubs };
     }
   }
 
   return wrapProgramState(
     wrapper,
-    { ...inner, [input.fieldKey]: nextDoc, ...overrides, phaseInputs, flowAttestations: [...log, attestation].slice(-200) },
+    { ...inner, [input.fieldKey]: nextDoc, ...overrides, phaseInputs, ...phaseArtifactsPatch, flowAttestations: [...log, attestation].slice(-200) },
     usesNestedData,
   );
 }

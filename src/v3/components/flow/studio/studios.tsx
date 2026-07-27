@@ -21,6 +21,7 @@ import {
 } from "./StudioKit";
 import { FORMAL_ARTIFACT_FIELD_KEYS } from "@/v3/lib/formalArtifacts";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
+import { areaCoherence } from "@/v3/components/flow/listenCoverage";
 
 /* ── shared card-list scaffolding ─────────────────────────────────────────── */
 
@@ -328,8 +329,30 @@ function AtlasStudio({ doc, onChange, onOpenArtifact, program, gapRoutes, onRout
       <button type="button" className="v3fs-a" onClick={() => setShowAll(false)}>Filter to {focus.label}</button>
     </div>
   ) : null;
+  // The Listen triangle per area — coverage · entities · workflow · aligned
+  // questions — so "Talent Acquisition has ontology but no workflow and the
+  // questions don't probe it" reads at a glance instead of tab-hopping.
+  const coherence = React.useMemo(
+    () => (program ? areaCoherence(program, asArray(doc.workflows).map(asRecord)) : []),
+    [program, doc.workflows],
+  );
   return (
     <>
+      {coherence.length ? (
+        <div className="v3fs-cohere" role="note" aria-label="Listen alignment by area">
+          <span className="v3fs-cohere-l" title="Per area: people cover it · ontology entities · atlas workflows · kit questions name its entities">Alignment</span>
+          {coherence.map((row) => (
+            <span key={row.area} className="v3fs-cohere-chip"
+              title={`${row.area} — ${row.covered ? "covered by the kit" : "NO ONE covers it (assign on the kit matrix)"} · ${row.entities} entit${row.entities === 1 ? "y" : "ies"} · ${row.workflows} workflow${row.workflows === 1 ? "" : "s"} · questions ${row.questionsAligned ? "probe its entities" : "do NOT name its entities yet (route its gaps, mark it thin, regenerate the kit)"}`}>
+              <b>{row.area}</b>
+              <i className={row.covered ? "ok" : ""}>C</i>
+              <i className={row.entities ? "ok" : ""}>E</i>
+              <i className={row.workflows ? "ok" : ""}>W</i>
+              <i className={row.questionsAligned ? "ok" : ""}>Q</i>
+            </span>
+          ))}
+        </div>
+      ) : null}
       <Section label="Workflows — the diagram" hint="each step: who does what, in which system; entity chips open the ontology">
         <WorkflowStudio doc={doc} onChange={onChange} onOpenArtifact={onOpenArtifact} program={program} onFocus={handleFocus} />
       </Section>

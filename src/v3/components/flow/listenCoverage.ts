@@ -8,8 +8,9 @@
  * it, so there is no import cycle.
  */
 import type { ProgramSummary } from "@/new/types";
-import { programAreas, GENERAL_AREA, stakeholderPrimaryArea } from "@/v3/components/flow/flowAreas";
+import { programAreas, GENERAL_AREA, stakeholderPrimaryArea, workflowArea } from "@/v3/components/flow/flowAreas";
 import { resolveMovementStakeholders, readDirectoryPeople, dismissedListenRoles, validateProgramRole, readListenPlan, listenPlanWrite, readListenPlanOrder, type ListenPlanOverlay, type ListenPlanOrder } from "@/v3/components/flow/flowStakeholders";
+import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
 
 export interface CoverageRole { label: string; name?: string; added: boolean }
 export interface CoverageArea { label: string; added: boolean }
@@ -114,6 +115,84 @@ export function listenCanonicalCastGuidance(program: ProgramSummary): string | n
   if (dismissedRoles.length) lines.push(`Labels the operator REMOVED or RENAMED AWAY — never reintroduce them under any spelling or casing: ${dismissedRoles.join("; ")}.`);
   if (dismissedAreas.length) lines.push(`Areas the operator REMOVED or RENAMED AWAY — never reintroduce: ${dismissedAreas.join("; ")}.`);
   return lines.join("\n");
+}
+
+const isRec = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+const recArr = (value: unknown): Record<string, unknown>[] => (Array.isArray(value) ? value.filter(isRec) : []);
+const txt = (value: unknown): string => String(value ?? "").trim();
+
+/**
+ * The Listen triangle, reconciled PER AREA: does the kit cover it, does the
+ * ontology model it, does the atlas map it, and do the kit's questions for
+ * its people actually name its entities? One row per Frame area — the
+ * glanceable answer to "Talent Acquisition has ontology but no workflows
+ * and the questions aren't aligned".
+ */
+export interface AreaCoherenceRow {
+  area: string;
+  /** The kit matrix assigns at least one person to it. */
+  covered: boolean;
+  /** Ontology entities filed under it (canonicalised). */
+  entities: number;
+  /** Atlas workflows filed under it (canonicalised). */
+  workflows: number;
+  /** ≥1 kit question for its people names one of its entities. */
+  questionsAligned: boolean;
+}
+export function areaCoherence(
+  program: ProgramSummary,
+  liveWorkflows?: Record<string, unknown>[],
+): AreaCoherenceRow[] {
+  const areas = listenCoverageAreas(program).map((area) => area.label);
+  if (!areas.length) return [];
+  const coverage = listenAreaCoverage(program);
+  const entities = recArr(readArtifactDoc(program, "domainOntology")?.entities);
+  const workflows = liveWorkflows ?? recArr(readArtifactDoc(program, "currentStateAtlas")?.workflows);
+  const interviews = recArr(readArtifactDoc(program, "discoveryKit")?.interviews);
+  const questionsOf = (interview: Record<string, unknown>): string[] => [
+    ...recArr(interview.agenda).flatMap((block) => (Array.isArray(block.questions) ? block.questions.map(txt) : [])),
+    ...(Array.isArray(interview.questions) ? interview.questions.map(txt) : []),
+  ];
+  return areas.map((area) => {
+    const roles = new Set((coverage.find((row) => row.area === area)?.roles ?? []).map((role) => role.toLowerCase()));
+    const areaEntities = entities.filter((entity) => txt(entity.area) && canonicalFrameArea(areas, txt(entity.area)) === area);
+    const areaWorkflows = workflows.filter((workflow) => canonicalFrameArea(areas, workflowArea(workflow)) === area);
+    const questionText = interviews
+      .filter((interview) => roles.has(txt(interview.role).toLowerCase()) || roles.has(txt(interview.stakeholder).toLowerCase()))
+      .flatMap(questionsOf).join(" ").toLowerCase();
+    const questionsAligned = areaEntities.some((entity) => {
+      const name = txt(entity.name).toLowerCase();
+      return name.length >= 3 && questionText.includes(name);
+    });
+    return { area, covered: roles.size > 0, entities: areaEntities.length, workflows: areaWorkflows.length, questionsAligned };
+  });
+}
+
+/**
+ * Per-area entity guidance for the Discovery-Kit regenerator: an area's
+ * interviews must PROBE its ontology entities — how each is created, moved
+ * and stored today — so regenerated questions align with the model by
+ * construction instead of by hand.
+ */
+export function kitAreaEntityGuidance(program: ProgramSummary): string | null {
+  const areas = listenCoverageAreas(program).map((area) => area.label);
+  if (!areas.length) return null;
+  const byArea = new Map<string, string[]>();
+  for (const entity of recArr(readArtifactDoc(program, "domainOntology")?.entities)) {
+    const raw = txt(entity.area);
+    const name = txt(entity.name);
+    if (!raw || !name) continue;
+    const area = canonicalFrameArea(areas, raw);
+    if (!areas.includes(area)) continue;
+    byArea.set(area, [...(byArea.get(area) ?? []), name]);
+  }
+  if (!byArea.size) return null;
+  return [
+    "## Each area's questions must PROBE ITS ENTITIES (from the Domain Ontology)",
+    "The interviews covering an area must establish how that area's entities are created, moved and stored today — name them in the questions, in the stakeholders' own vocabulary:",
+    ...areas.filter((area) => byArea.has(area)).map((area) => `- ${area}: ${byArea.get(area)!.join(", ")}`),
+  ].join("\n");
 }
 
 type SaveInputs = (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; extraInputs?: Record<string, Record<string, string>> }) => Promise<void> | void;
