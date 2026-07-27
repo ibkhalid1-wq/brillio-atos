@@ -11,18 +11,17 @@ export const FONT =
 
 export const FPS = 30;
 
-/** Scene boundaries (frames @30fps) — "The Twenty-One Days", 2:10. */
+/** Scene boundaries (frames @30fps) — the v7 script, 2:10. */
 export const T = {
-  question: { from: 0, dur: 390 }, //     0:00–0:13 — the question + graveyard
-  day0: { from: 390, dur: 330 }, //       0:13–0:24 — the mandate, clock starts
-  reveal: { from: 720, dur: 450 }, //     0:24–0:39 — meet AURA, Laila derived
-  listening: { from: 1170, dur: 420 }, // 0:39–0:53 — days 1–7, the listening
-  day8: { from: 1590, dur: 590 }, //      0:53–1:13 — the moment it could have died
-  agrees: { from: 2180, dur: 390 }, //    1:13–1:26 — days 9–20, the picture agrees
-  gates: { from: 2570, dur: 390 }, //     1:26–1:39 — governed, every day
-  day21: { from: 2960, dur: 430 }, //     1:39–1:53 — the demo + the numbers
-  industries: { from: 3390, dur: 240 }, //1:53–2:01 — any industry, one breath
-  close: { from: 3630, dur: 270 }, //     2:01–2:10 — the bookend answer
+  question: { from: 0, dur: 420 }, //   0:00–0:14 — the question + graveyard
+  diagnosis: { from: 420, dur: 360 }, // 0:14–0:26 — the missing middle
+  reveal: { from: 780, dur: 480 }, //    0:26–0:42 — Laila, derived from evidence
+  alignment: { from: 1260, dur: 420 }, // 0:42–0:56 — it starts with people
+  grounding: { from: 1680, dur: 480 }, // 0:56–1:12 — the business's own language
+  journey: { from: 2160, dur: 600 }, //  1:12–1:32 — governed by design
+  numbers: { from: 2760, dur: 480 }, //  1:32–1:48 — the proof
+  industries: { from: 3240, dur: 360 }, // 1:48–2:00 — any business
+  close: { from: 3600, dur: 300 }, //    2:00–2:10 — bookend answer
 };
 
 export const TOTAL_FRAMES = 3900;

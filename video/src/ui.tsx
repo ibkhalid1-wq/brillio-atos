@@ -163,28 +163,6 @@ export const Grain: React.FC = () => (
   </>
 );
 
-/** The ticking clock — DAY n / 21, top right, driven by scene boundaries. */
-export const DayCounter: React.FC = () => {
-  const frame = useCurrentFrame();
-  const day =
-    frame < 1170 ? 0 :
-    frame < 1590 ? Math.min(7, 1 + Math.floor(((frame - 1170) / 420) * 7)) :
-    frame < 2180 ? 8 :
-    frame < 2570 ? Math.min(20, 9 + Math.floor(((frame - 2180) / 390) * 12)) :
-    frame < 2960 ? 20 : 21;
-  const inP = interpolate(frame, [400, 430], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
-  const outP = interpolate(frame, [3390, 3450], [1, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
-  return (
-    <div style={{
-      position: "absolute", top: 44, right: 60, opacity: Math.min(inP, outP),
-      fontFamily: FONT, fontSize: 24, fontWeight: 800, letterSpacing: "0.22em",
-      color: "rgba(255,255,255,0.66)", pointerEvents: "none",
-    }}>
-      DAY <span style={{ color: ELECTRIC }}>{day}</span> / 21
-    </div>
-  );
-};
-
 /** Bottom progress hairline — the film quietly tells you where it is. */
 export const ProgressLine: React.FC<{ total: number }> = ({ total }) => {
   const frame = useCurrentFrame();
