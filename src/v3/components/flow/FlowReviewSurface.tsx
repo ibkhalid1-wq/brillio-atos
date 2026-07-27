@@ -71,7 +71,7 @@ function AreaChips({ areas, active, onPick }: { areas: string[]; active: string;
   );
 }
 
-/** The linked page's opening: a subtle Brillio·ATOS mark, the programme name,
+/** The linked page's opening: a subtle Brillio·AURA mark, the programme name,
  * a warm greeting, a one-line "what we're building + why", then plainly what we
  * need from this person and how to respond. Shared by every review surface. */
 function ReviewHeader({ stakeholder, programme, objective, intro, areaLabel, returning }: {
@@ -88,7 +88,7 @@ function ReviewHeader({ stakeholder, programme, objective, intro, areaLabel, ret
   const coreGoal = objective ? objective.split(/\s+[—–]\s+/)[0].trim().replace(/[.\s]+$/, "") : "";
   return (
     <header className="v3fs-rvw-top">
-      <div className="v3fs-rvw-brandline"><img src="/brillio-logo.png" alt="Brillio" className="v3fs-portal-brandimg" /> · ATOS</div>
+      <div className="v3fs-rvw-brandline"><img src="/brillio-logo.png" alt="Brillio" className="v3fs-portal-brandimg" /> · AURA</div>
       {programme ? <div className="v3fs-rvw-prog">{programme}</div> : null}
       {/* On a return visit the FollowUpBanner above carries the "Welcome back"
           greeting — don't say it twice; a first visit greets here. */}

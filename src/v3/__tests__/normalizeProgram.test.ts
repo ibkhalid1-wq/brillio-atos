@@ -48,7 +48,7 @@ describe("normalizeProgram", () => {
   });
 
   it("honours phasePct when data.phases is empty (partial-recovery case)", () => {
-    // ATOS-Validation-style program: the phases[] array was lost but the agent's
+    // AURA-Validation-style program: the phases[] array was lost but the agent's
     // phasePct estimate survived. Completion must come through, not default to 0.
     const program = normalizeProgram({
       ...baseRow,

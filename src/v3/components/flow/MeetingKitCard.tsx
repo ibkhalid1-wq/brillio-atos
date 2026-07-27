@@ -390,7 +390,7 @@ export default function MeetingKitCard({ kit, movementId, hasEvidence, generatin
               ) : null}
               {(onMintFollowUp && kit.questions.length > 0) || canMintPacks || canMintInvites || rows.length ? (
                 <div className="v3fs-kit-chan">
-                  <div className="v3fs-kit-chan-t">Links<span>ATOS asks for you — answers arrive in the Inbox, attributed</span></div>
+                  <div className="v3fs-kit-chan-t">Links<span>AURA asks for you — answers arrive in the Inbox, attributed</span></div>
                   {rows.length ? (
                     <div className="v3fs-kit-links">
                       {rows.map((row) => {

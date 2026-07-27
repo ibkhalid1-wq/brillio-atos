@@ -154,7 +154,7 @@ Deno.serve(async (request) => {
 
   if (!RUNTIME_READY_PROVIDERS.has(provider)) {
     return json({
-      error: "This AI provider is not connected to the ATOS agent runtime yet. Select Anthropic for live agent runs.",
+      error: "This AI provider is not connected to the AURA agent runtime yet. Select Anthropic for live agent runs.",
       provider,
       runtimeReady: false,
     }, 400);

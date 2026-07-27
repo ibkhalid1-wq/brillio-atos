@@ -1,10 +1,10 @@
 /**
  * The loop's three stages — every movement's body is organised as
- * Collect (people + what they said) -> Paper (what ATOS made of it) ->
+ * Collect (people + what they said) -> Paper (what AURA made of it) ->
  * Gate (can we demonstrate?). Shared by the canvas and the Up-next queue.
  */
 /** Every movement runs the same loop, and its body is organised as the
- * loop's three stages — Collect (people + what they said) → Paper (what ATOS
+ * loop's three stages — Collect (people + what they said) → Paper (what AURA
  * made of it) → Gate (can we demonstrate?). The active one. */
 // The Discovery board ("collect") and the Gate modal are fixed keys; every
 // other tab is one artifact, keyed `art:<artifactId>`. The `(string & {})`

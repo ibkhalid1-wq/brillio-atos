@@ -90,7 +90,7 @@ export function computePhaseReadiness(
   // The phase's required artifact set = the methodology's static requiredArtifacts
   // (Strategy) merged with any ai-derived dynamic artifacts the programme has
   // accrued for this phase. A dynamic-only phase has no static required set.
-  // Resolved via getPhaseDefinition so ATOS Flow movements gate on their
+  // Resolved via getPhaseDefinition so AURA Flow movements gate on their
   // declared artifact set exactly like stage-gate phases.
   const phaseDef = getPhaseDefinition(phaseId);
   const dynamicStore = getDynamicSchemaStore(program.rawData);
@@ -412,7 +412,7 @@ export function getCompletedPhaseIds(program: ProgramSummary): Set<string> {
 }
 
 export function getLockedPhaseIds(program: ProgramSummary): Set<string> {
-  // ATOS Flow: the pipeline streams — movements never hard-lock. A late
+  // AURA Flow: the pipeline streams — movements never hard-lock. A late
   // transcript re-runs everything downstream with visible diffs rather than
   // being locked out, and readiness signals (coverage, demo acceptances)
   // advise instead of gate. Completion still reads gateReviews (a movement's

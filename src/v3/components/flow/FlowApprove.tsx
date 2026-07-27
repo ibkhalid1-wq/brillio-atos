@@ -102,7 +102,7 @@ export default function FlowApprove({ token }: { token: string }) {
             <>
               <header className="v3fs-hero">
                 <h1 className="v3fs-hero-title">
-                  <span className="v3fs-hero-brand"><img src="/brillio-logo.png" alt="Brillio" className="v3fs-portal-brandimg" /> ATOS</span> · {state.pack.programme}
+                  <span className="v3fs-hero-brand"><img src="/brillio-logo.png" alt="Brillio" className="v3fs-portal-brandimg" /> AURA</span> · {state.pack.programme}
                 </h1>
                 <p className="v3fs-how">
                   {state.pack.approver.name ? `${state.pack.approver.name} — ` : ""}you&rsquo;ve been asked to approve

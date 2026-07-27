@@ -16,14 +16,14 @@ import { getMandatoryCriteria, EXIT_CRITERIA_LIBRARY } from "@/v3/lib/exitCriter
  * the two vocabularies can never diverge again.
  */
 describe("exit-criteria library reconciliation", () => {
-  it("derives every ATOS phase's exit-criteria templates from the library", () => {
+  it("derives every AURA phase's exit-criteria templates from the library", () => {
     for (const phase of ATOS_STANDARD.phases) {
       const derived = getMandatoryCriteria(phase.id).map((c) => c.label);
       expect(phase.mandatoryExitCriteriaTemplates).toEqual(derived);
     }
   });
 
-  it("covers every ATOS phase with at least one mandatory library criterion", () => {
+  it("covers every AURA phase with at least one mandatory library criterion", () => {
     for (const phase of ATOS_STANDARD.phases) {
       expect(getMandatoryCriteria(phase.id).length).toBeGreaterThan(0);
       expect(phase.mandatoryExitCriteriaTemplates.length).toBeGreaterThan(0);

@@ -14,7 +14,7 @@ export interface PhaseInputSchema {
 
 /**
  * Reads a phase's input-field definitions from the methodology registry —
- * resolved via getPhaseDefinition so stage-gate phases and ATOS Flow movements
+ * resolved via getPhaseDefinition so stage-gate phases and AURA Flow movements
  * (frame…evolve) both find their declared fields.
  */
 function methodologyInputFields(phaseId: string): PhaseInputField[] {
@@ -25,7 +25,7 @@ export const PHASE_INPUT_SCHEMAS: Record<string, PhaseInputSchema> = {
   strategy: {
     phaseId: "strategy",
     title: "Strategy inputs",
-    description: "Provide the foundational context ATOS needs to generate strategy artifacts.",
+    description: "Provide the foundational context AURA needs to generate strategy artifacts.",
     // Fields sourced from the methodology so the schema never drifts from it.
     fields: methodologyInputFields("strategy"),
   },
@@ -51,7 +51,7 @@ export const PHASE_INPUT_SCHEMAS: Record<string, PhaseInputSchema> = {
   build: {
     phaseId: "build",
     title: "Build inputs",
-    description: "Track build progress and highlight what ATOS should know.",
+    description: "Track build progress and highlight what AURA should know.",
     fields: methodologyInputFields("build"),
   },
   operate: {
@@ -78,7 +78,7 @@ export const PHASE_INPUT_SCHEMAS: Record<string, PhaseInputSchema> = {
     description: "Record realised benefits, lessons, and the handover that closes the programme.",
     fields: methodologyInputFields("valuerealize"),
   },
-  // ── ATOS Flow movements ─────────────────────────────────────────────────────
+  // ── AURA Flow movements ─────────────────────────────────────────────────────
   // Flow's panels capture evidence, not paperwork: conversations, coverage,
   // demo verdicts. Titles/descriptions speak that language.
   frame: {
@@ -129,7 +129,7 @@ export function getPhaseInputSchema(phaseId: string, store?: DynamicSchemaStore)
   const base = PHASE_INPUT_SCHEMAS[phaseId] ?? {
     phaseId,
     title: "Phase inputs",
-    description: "Provide any context ATOS needs to generate artifacts for this phase.",
+    description: "Provide any context AURA needs to generate artifacts for this phase.",
     fields: [
       { id: "context", label: "Phase context", type: "textarea", placeholder: "Key information, decisions made, or constraints for this phase", required: true },
       { id: "objectives", label: "Phase objectives", type: "textarea", placeholder: "What must be achieved before this phase can close?", required: true },

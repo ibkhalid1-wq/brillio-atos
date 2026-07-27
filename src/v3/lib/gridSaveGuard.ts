@@ -5,7 +5,7 @@
  * window on remount / when an external write lands where a local grid buffer can
  * be empty ("[]") while the persisted value already holds rows. If the debounced
  * auto-save (or the leave-phase flush) fires in that window it would serialize the
- * empty buffer over real data — the class of clobber behind the ATOS design-
+ * empty buffer over real data — the class of clobber behind the AURA design-
  * decision-row loss.
  *
  * This guard restores the persisted value for any grid field the user has NOT

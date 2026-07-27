@@ -271,7 +271,7 @@ Deno.serve(async (req) => {
     const partialContent = typeof partialOutput.partialContent === "string" ? partialOutput.partialContent : "";
 
     const systemPrompt = [
-      `You are resuming the ATOS ${run.phase_id} phase agent for this program.`,
+      `You are resuming the AURA ${run.phase_id} phase agent for this program.`,
       "A human resolved your pending decision. Continue from the partial output and complete the task.",
       "Return valid JSON only with this shape:",
       JSON.stringify({

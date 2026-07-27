@@ -71,7 +71,7 @@ const PHASE_LABELS: Record<string, string> = {
   delivery: "Delivery",
   adoption: "Drive Adoption",
   titan: "Read the Signals",
-  // ATOS Flow movements
+  // AURA Flow movements
   frame: "Frame",
   listen: "Listen",
   envision: "Envision",
@@ -162,7 +162,7 @@ function deriveObjective(phaseId: string): string {
     delivery: "Keep milestones, risks, and commitments on track.",
     adoption: "Build adoption, champions, and confident human usage.",
     titan: "Model outcomes, scenarios, and signal shifts before they land.",
-    // ATOS Flow movements
+    // AURA Flow movements
     frame: "Turn one sponsor conversation into a confirmed mandate and a booked discovery tour.",
     listen: "Hear every stakeholder; compile their words into the Current-State Atlas.",
     envision: "Choose a direction from candidate architectures; compile the Agentic Blueprint.",
@@ -226,7 +226,7 @@ function derivePhases(data: JsonRecord): PhaseSummary[] {
   });
 
   // The rendered spine follows the programme's OWN methodology variant.
-  // ATOS Flow is the only delivery model (classic retired 2026-07), so an
+  // AURA Flow is the only delivery model (classic retired 2026-07), so an
   // absent variant — e.g. a metadata-only summary beat — resolves to Flow.
   const variant = (asString(data.methodology) || "atos-flow") as MethodologyVariant;
   return getPhaseSequence(variant).map((id) => {

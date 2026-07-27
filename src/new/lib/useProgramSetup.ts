@@ -57,7 +57,7 @@ export function useProgramSetup(
       // When every patched phase already exists we're editing details — merge the
       // overrides onto the stored entries (previous behaviour, preserves whatever
       // else the entries carry). When the patch carries a DIFFERENT spine — an
-      // archetype pick that changes methodology, e.g. ATOS Flow's movements —
+      // archetype pick that changes methodology, e.g. AURA Flow's movements —
       // rebuild from the patch: same-id entries keep their stored extras, removed
       // phases drop, new ones seed at their patched values. Without this, movement
       // ids matched nothing and were silently discarded.

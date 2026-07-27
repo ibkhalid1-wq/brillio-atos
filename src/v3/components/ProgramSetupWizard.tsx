@@ -2,7 +2,7 @@
  * Programme setup — a moment, not a movement. Sixty seconds of identity
  * (name, client) and baseline (industry, sponsor, first-demo date), then the
  * loop starts with a conversation. Every programme is an agentic system
- * build on ATOS Flow, so there is nothing to pick — the wizard captures
+ * build on AURA Flow, so there is nothing to pick — the wizard captures
  * facts, and the baseline lands in Frame's inputs as early evidence.
  */
 import { useMemo, useRef, useState } from "react";
@@ -154,7 +154,7 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
     <div className="v3-wizard-overlay" role="dialog" aria-modal="true" aria-label="Programme setup">
       <div className="v3-wizard v3-wizard--setup">
         <div className="v3-wizard-head">
-          <span className="v3-wizard-eyebrow">ATOS Flow · {isNew ? "New programme" : "Programme setup"}</span>
+          <span className="v3-wizard-eyebrow">AURA Flow · {isNew ? "New programme" : "Programme setup"}</span>
           <h2 className="v3-wizard-title">{isNew ? "Set up the engagement" : "Programme setup"}</h2>
         </div>
 
@@ -251,7 +251,7 @@ export default function ProgramSetupWizard({ program, onSave, onClose, isSaving 
             disabled={prefilling}
           >
             <span aria-hidden="true">{prefilling ? "◌" : "↑"}</span>
-            {prefilling ? "Extracting details…" : "Or upload a charter / SOW and ATOS pre-fills what it can"}
+            {prefilling ? "Extracting details…" : "Or upload a charter / SOW and AURA pre-fills what it can"}
           </button>
           {prefillError ? <div className="v3-wizard-note is-warn">{prefillError}</div> : null}
         </section>

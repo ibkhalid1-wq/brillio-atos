@@ -64,7 +64,7 @@ export interface PhaseInputField {
    *   • organization        → a named org, vendor or department (client + orgs)
    *   • document            → an uploaded source document
    *   • artifact-reference  → a generated artifact in this programme
-   *   • transcript          → a recorded conversation (ATOS Flow's primary
+   *   • transcript          → a recorded conversation (AURA Flow's primary
    *     evidence): either a document reference OR the pasted transcript text
    *     itself — pasted text persists as the field value and flows verbatim
    *     into generation grounding, so evidence needs no upload round-trip.
@@ -174,15 +174,15 @@ export const INDUSTRY_OPTIONS = [
 ];
 
 /**
- * ATOS Flow movement metadata — the human/machine split of a movement. Where a
+ * AURA Flow movement metadata — the human/machine split of a movement. Where a
  * stage-gate phase describes work the TEAM performs, a Flow movement describes
- * the few conversations humans have and the generation ATOS runs between them.
+ * the few conversations humans have and the generation AURA runs between them.
  * Rendered by the Flow pipeline surfaces; absent on stage-gate phases.
  */
 export interface FlowMovement {
   /** The only human acts in the movement — everything between them is generated. */
   humanMoments: string[];
-  /** What ATOS generates during the movement (the automation surface). */
+  /** What AURA generates during the movement (the automation surface). */
   automations: string[];
   /** Plain-language readiness signal — under Flow the gate is a demonstration, not a document. */
   readyWhen: string;
@@ -219,7 +219,7 @@ export interface PhaseDefinition {
    */
   dynamicSchema?: boolean;
   /**
-   * ATOS Flow only: the movement's human/machine split and readiness signal.
+   * AURA Flow only: the movement's human/machine split and readiness signal.
    * Stage-gate phases omit it; Flow surfaces render it (human moments, the
    * automation surface, the "ready when" demonstration, the Evolve loop marker).
    */
@@ -237,8 +237,8 @@ export interface MethodologyDefinition {
 export const ATOS_STANDARD: MethodologyDefinition = {
   id: "atos-standard",
   version: "2.1.0",
-  name: "ATOS Standard",
-  description: "Full 9-phase ATOS transformation methodology for enterprise programs.",
+  name: "AURA Standard",
+  description: "Full 9-phase AURA transformation methodology for enterprise programs.",
   phases: [
     {
       id: "strategy",
@@ -1181,14 +1181,14 @@ export const ATOS_LITE: MethodologyDefinition = {
   ...ATOS_STANDARD,
   id: "atos-lite",
   version: "2.1.0",
-  name: "ATOS Lite",
+  name: "AURA Lite",
   description: "Streamlined 6-phase methodology for smaller programs under 6 months.",
   phases: ATOS_STANDARD.phases.filter((phase) =>
     ["strategy", "mobilise", "discover", "build", "operate", "valuerealize"].includes(phase.id)
   ),
 };
 
-// ─── ATOS Flow ────────────────────────────────────────────────────────────────
+// ─── AURA Flow ────────────────────────────────────────────────────────────────
 // The evidence-to-system methodology for agentic builds: conversations in,
 // systems out. Where the stage-gate variants above progress by approving
 // documents, Flow progresses by demonstrating working software. One primitive,
@@ -1205,7 +1205,7 @@ export const ATOS_LITE: MethodologyDefinition = {
 export const ATOS_FLOW: MethodologyDefinition = {
   id: "atos-flow",
   version: "3.0.0",
-  name: "ATOS Flow",
+  name: "AURA Flow",
   description:
     "Evidence-to-system delivery for agentic builds: conversations in, systems out. Five movements and a standing loop; the gate is a demo, not a document.",
   phases: [
@@ -1305,7 +1305,7 @@ export const ATOS_FLOW: MethodologyDefinition = {
             { key: "date", label: "Conversation date", type: "date", width: 110 },
           ],
         },
-        { id: "interviewTranscripts", label: "Interview transcripts", type: "transcript", required: false, usedByArtifacts: ["current-state-atlas", "domain-ontology"], hint: "Paste each 45-minute conversation (or reference uploaded documents). Open every transcript with a header line — e.g. \"— Maria Chen, Sales Ops, 2026-07-14 —\" — so the Atlas attributes quotes to the right voice. ATOS re-synthesises on every new transcript." },
+        { id: "interviewTranscripts", label: "Interview transcripts", type: "transcript", required: false, usedByArtifacts: ["current-state-atlas", "domain-ontology"], hint: "Paste each 45-minute conversation (or reference uploaded documents). Open every transcript with a header line — e.g. \"— Maria Chen, Sales Ops, 2026-07-14 —\" — so the Atlas attributes quotes to the right voice. AURA re-synthesises on every new transcript." },
         {
           id: "contradictionLog",
           label: "Contradiction log",
@@ -1505,7 +1505,7 @@ export const METHODOLOGY_REGISTRY: Record<MethodologyVariant, MethodologyDefinit
   "atos-regulated": {
     ...ATOS_STANDARD,
     id: "atos-regulated",
-    name: "ATOS Regulated",
+    name: "AURA Regulated",
   },
   "atos-flow": ATOS_FLOW,
 };

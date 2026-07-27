@@ -25,7 +25,7 @@ export const FORMAL_ARTIFACT_FIELD_KEYS: Record<string, string> = {
   "runbook": "runbook",
   "support-model": "supportModel",
   "optimization-backlog": "optimizationBacklog",
-  // ATOS Flow movement generators
+  // AURA Flow movement generators
   "discovery-kit": "discoveryKit",
   "current-state-atlas": "currentStateAtlas",
   "domain-ontology": "domainOntology",
@@ -59,7 +59,7 @@ export const FORMAL_ARTIFACT_PHASES: Record<string, string> = {
   "runbook": "operate",
   "support-model": "operate",
   "optimization-backlog": "optimize",
-  // ATOS Flow movement generators. Note runbook/optimization-backlog keep their
+  // AURA Flow movement generators. Note runbook/optimization-backlog keep their
   // stage-gate homes above: getPhaseArtifactDefs surfaces them on Flow movements
   // through requiredArtifacts directly, so no second home is needed here.
   "discovery-kit": "frame",

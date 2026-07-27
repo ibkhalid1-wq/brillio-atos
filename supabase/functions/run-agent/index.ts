@@ -47,7 +47,7 @@ const ATOS_PHASE_SEQUENCE = [
   "optimize",
   "valuerealize",
 ];
-// ATOS Flow (methodology variant "atos-flow"): the evidence-to-system pipeline's
+// AURA Flow (methodology variant "atos-flow"): the evidence-to-system pipeline's
 // movements. Disjoint ids from the stage-gate spine by design — cross-phase
 // grounding picks whichever sequence contains the target phase.
 const FLOW_MOVEMENT_SEQUENCE = [
@@ -125,7 +125,7 @@ const VALID_AGENT_IDS = new Set([
   "runbook",
   "support-model",
   "optimization-backlog",
-  // ATOS Flow movement generators (kept in lockstep with FORMAL_ARTIFACT_AGENTS).
+  // AURA Flow movement generators (kept in lockstep with FORMAL_ARTIFACT_AGENTS).
   "discovery-kit",
   "current-state-atlas",
   "domain-ontology",
@@ -935,7 +935,7 @@ const FORMAL_ARTIFACT_AGENTS: Record<string, FormalArtifactSpec> = {
     phase: "strategy",
     fieldKey: "transformationCharter",
     title: "Transformation Charter",
-    system: `You are the ATOS Transformation Charter Agent. Produce the foundational programme mandate that authorises the transformation and sets its boundaries.
+    system: `You are the AURA Transformation Charter Agent. Produce the foundational programme mandate that authorises the transformation and sets its boundaries.
 
 Use the provided Strategy inputs (sponsor, business objective, success metric, scope, constraints, kpiBaselines). Do NOT invent a sponsor, budget, or scope that is not supported by the context. Where a Strategy-owned input the charter itself needs is genuinely missing (e.g. no quantified budget, no sponsor), say so in "gaps" — but observe the phase-scoped gap discipline below: never list later-phase detail, content already present here or upstream, or approval/baseline state as a gap.
 
@@ -964,7 +964,7 @@ Return ONLY valid JSON:
     phase: "strategy",
     fieldKey: "businessCaseDoc",
     title: "Business Case",
-    system: `You are the ATOS Business Case Agent. Build the investment justification linking cost, benefit, and the value hypothesis.
+    system: `You are the AURA Business Case Agent. Build the investment justification linking cost, benefit, and the value hypothesis.
 
 Anchor benefits to the captured kpiBaselines (baseline → target) where present, and use valueProjected and constraints/budget for the investment side. Do NOT fabricate financial figures — when a number is unknown, mark it "TBD" and list it under "assumptions".
 
@@ -985,7 +985,7 @@ Return ONLY valid JSON:
     phase: "strategy",
     fieldKey: "outcomeFramework",
     title: "Outcome Framework",
-    system: `You are the ATOS Outcome Framework Agent. Structure the programme's outcomes into a measurable hierarchy that makes benefits traceable from strategy to KPI.
+    system: `You are the AURA Outcome Framework Agent. Structure the programme's outcomes into a measurable hierarchy that makes benefits traceable from strategy to KPI.
 
 Build directly on the captured kpiBaselines (name/baseline/target/unit). For each strategic outcome, link the measurable KPIs that evidence it and the leading indicators that predict it. Do NOT invent KPIs when kpiBaselines is non-empty — carry those through and only add leading indicators.
 
@@ -1009,7 +1009,7 @@ Return ONLY valid JSON:
     phase: "strategy",
     fieldKey: "strategicRoadmap",
     title: "Strategic Roadmap",
-    system: `You are the ATOS Strategic Roadmap Agent. Produce a phase-level roadmap sequencing the transformation from now to value realisation.
+    system: `You are the AURA Strategic Roadmap Agent. Produce a phase-level roadmap sequencing the transformation from now to value realisation.
 
 Ground the roadmap in ALL of the programme's strategy inputs provided in the context — the business objective, primary success metric, key constraints, cost assumption, industry, sponsor, and the validation approach (see "groundingFacts" plus the explicit fields) — so the sequencing reflects this programme's actual mandate, not a generic template. Bound the overall timeline by the programme start date and target end date, distributing the phases and milestones across that window. Anchor intermediate dates to existing phase ETAs/milestones where available; do NOT fabricate dates; mark unknown dates "TBD". Let the constraints and success metric shape phase ordering and the critical decisions/gaps you surface.
 
@@ -1044,7 +1044,7 @@ Return ONLY valid JSON:
     phase: "mobilise",
     fieldKey: "governanceModel",
     title: "Governance Model",
-    system: `You are the ATOS Governance Model Agent. Propose DISTINCT governance model OPTIONS for this programme and let the user choose — do not impose a single model.
+    system: `You are the AURA Governance Model Agent. Propose DISTINCT governance model OPTIONS for this programme and let the user choose — do not impose a single model.
 
 Use stakeholders, decisions, programType, scale and the programme objective to tailor every option to THIS programme. Do NOT invent named individuals not present in context — use roles where names are unknown. Do NOT return a generic menu: each option must reference the actual programme.
 
@@ -1074,7 +1074,7 @@ Return ONLY valid JSON:
     phase: "mobilise",
     fieldKey: "raciMatrix",
     title: "RACI Matrix",
-    system: `You are the ATOS RACI Matrix Agent. Map programme activities to roles with Responsible / Accountable / Consulted / Informed assignments.
+    system: `You are the AURA RACI Matrix Agent. Map programme activities to roles with Responsible / Accountable / Consulted / Informed assignments.
 
 Use stakeholders and phase activities. Every activity MUST have exactly one Accountable. Use roles where named individuals are unknown.
 
@@ -1091,7 +1091,7 @@ Return ONLY valid JSON:
     phase: "discover",
     fieldKey: "requirementsCatalog",
     title: "Requirements Catalog",
-    system: `You are the ATOS Requirements Catalog Agent. Capture and structure the programme requirements with priority and traceability.
+    system: `You are the AURA Requirements Catalog Agent. Capture and structure the programme requirements with priority and traceability.
 
 Use the discover-phase inputs, scope, and objective. Prioritise with MoSCoW. Each requirement links to the outcome/KPI it serves where possible. Do NOT fabricate requirements with no basis in context — list coverage gaps instead.
 
@@ -1107,7 +1107,7 @@ Return ONLY valid JSON:
     phase: "design",
     fieldKey: "futureStateDesign",
     title: "Future State Design",
-    system: `You are the ATOS Future State Design Agent. Describe the target future state: capabilities, processes, and the change from current state.
+    system: `You are the AURA Future State Design Agent. Describe the target future state: capabilities, processes, and the change from current state.
 
 Use requirements, objective, and design-phase inputs. Ground each future-state change in a requirement or outcome where possible.
 
@@ -1125,7 +1125,7 @@ Return ONLY valid JSON:
     phase: "design",
     fieldKey: "targetOperatingModel",
     title: "Target Operating Model",
-    system: `You are the ATOS Target Operating Model Agent. Define the TOM across people, process, technology, and governance dimensions.
+    system: `You are the AURA Target Operating Model Agent. Define the TOM across people, process, technology, and governance dimensions.
 
 Use future-state design, stakeholders, and objective. Be specific about how the organisation runs in the future state.
 
@@ -1145,7 +1145,7 @@ Return ONLY valid JSON:
     phase: "design",
     fieldKey: "solutionArchitecture",
     title: "Solution Architecture",
-    system: `You are the ATOS Solution Architecture Agent. Produce the solution architecture: components, integrations, data flows, NFRs, and key decisions.
+    system: `You are the AURA Solution Architecture Agent. Produce the solution architecture: components, integrations, data flows, NFRs, and key decisions.
 
 Use requirements, future-state design, and constraints. Do NOT invent vendor products not implied by context — describe capabilities generically where unknown.
 
@@ -1164,7 +1164,7 @@ Return ONLY valid JSON:
     phase: "build",
     fieldKey: "testPlan",
     title: "Test Plan",
-    system: `You are the ATOS Test Plan Agent. Define the test strategy: scope, types, environments, entry/exit criteria, and representative test cases.
+    system: `You are the AURA Test Plan Agent. Define the test strategy: scope, types, environments, entry/exit criteria, and representative test cases.
 
 Use requirements and acceptance criteria. Each key requirement should map to at least one test case where possible.
 
@@ -1185,7 +1185,7 @@ Return ONLY valid JSON:
     phase: "operate",
     fieldKey: "runbook",
     title: "Runbook",
-    system: `You are the ATOS Runbook Agent. Produce the operational runbook for running the solution in live operation.
+    system: `You are the AURA Runbook Agent. Produce the operational runbook for running the solution in live operation.
 
 Use the solution/operating context. Cover routine operations, monitoring, and incident response. Be concrete and actionable.
 
@@ -1203,7 +1203,7 @@ Return ONLY valid JSON:
     phase: "operate",
     fieldKey: "supportModel",
     title: "Support Model",
-    system: `You are the ATOS Support Model Agent. Define the post-go-live support model: tiers, SLAs, roles, escalation, and knowledge.
+    system: `You are the AURA Support Model Agent. Define the post-go-live support model: tiers, SLAs, roles, escalation, and knowledge.
 
 Use stakeholders and operating context. Be specific about who supports what and to what service level.
 
@@ -1222,7 +1222,7 @@ Return ONLY valid JSON:
     phase: "optimize",
     fieldKey: "optimizationBacklog",
     title: "Optimization Backlog",
-    system: `You are the ATOS Optimization Backlog Agent. Produce a prioritised backlog of continuous-improvement opportunities against baseline metrics.
+    system: `You are the AURA Optimization Backlog Agent. Produce a prioritised backlog of continuous-improvement opportunities against baseline metrics.
 
 Use kpiBaselines, benefits tracking, risks, and operating signals. Prioritise by value vs effort. Ground each item in evidence where possible.
 
@@ -1236,7 +1236,7 @@ Return ONLY valid JSON:
 }`,
   },
 
-  // ─── ATOS Flow movement generators ──────────────────────────────────────────
+  // ─── AURA Flow movement generators ──────────────────────────────────────────
   // The evidence-to-system pipeline's transformers. Every one of these derives
   // its content from recorded conversations and demonstrated behaviour — the
   // documentCarryForward (uploaded transcripts) and groundingFacts are the
@@ -1247,7 +1247,7 @@ Return ONLY valid JSON:
     phase: "frame",
     fieldKey: "discoveryKit",
     title: "Discovery Kit",
-    system: `You are the ATOS Discovery Kit Agent. From the sponsor conversation and the Frame facts, produce the discovery tour: who must be heard, and a role-aware 45-minute agenda for each of them.
+    system: `You are the AURA Discovery Kit Agent. From the sponsor conversation and the Frame facts, produce the discovery tour: who must be heard, and a role-aware 45-minute agenda for each of them.
 
 Use the People list carried in groundingFacts as "knownStakeholder" lines (the programme's roster — seeded by the operator, extended from a Team Roster or org chart, and grown as evidence names new voices) plus any stakeholders named in the sponsor conversation (documentCarryForward). Every named person on that roster MUST get an interview entry. Do NOT invent named individuals — where a domain clearly needs a voice but no name is known, emit a role placeholder ("Head of Fulfilment — TBC") and list it under "gaps". A knownStakeholder marked "confirmed by the operator" is a SETTLED voice the operator has placed on the programme: give them an interview entry and coverage rows under their name EXACTLY as listed, and NEVER re-emit them as a "— TBC" placeholder or re-list their domain under gaps for want of a name. Questions must be specific to this objective and industry, not generic discovery boilerplate; each agenda ends by asking what artifacts (screens, reports, exports) the stakeholder can share.
 
@@ -1280,7 +1280,7 @@ Return ONLY valid JSON:
     phase: "listen",
     fieldKey: "currentStateAtlas",
     title: "Current-State Atlas",
-    system: `You are the ATOS Current-State Atlas Agent. Synthesise EVERY discovery transcript into the current-state picture: the workflows as they actually run, the pain heatmap, and the contradictions between stakeholders.
+    system: `You are the AURA Current-State Atlas Agent. Synthesise EVERY discovery transcript into the current-state picture: the workflows as they actually run, the pain heatmap, and the contradictions between stakeholders.
 
 PROVISIONAL SEED: when no discovery transcripts exist yet but the Frame MANDATE does (the sponsor's conversation and the charter's objective/scope in groundingFacts), do NOT return an empty atlas — draft a PROVISIONAL current-state from the mandate, under the discipline below. Once interviews arrive, they replace the seed with the real picture.
 
@@ -1316,7 +1316,7 @@ Return ONLY valid JSON:
     phase: "listen",
     fieldKey: "domainOntology",
     title: "Domain Ontology",
-    system: `You are the ATOS Domain Ontology Agent. Build the domain ontology from the discovery conversations: the entities the business actually reasons about, their relationships, the events that move them, and the systems of record.
+    system: `You are the AURA Domain Ontology Agent. Build the domain ontology from the discovery conversations: the entities the business actually reasons about, their relationships, the events that move them, and the systems of record.
 
 PROVISIONAL SEED: when no discovery conversations exist yet but the Frame MANDATE does (the sponsor's conversation and the charter's objective/scope in groundingFacts), do NOT return zero entities — draft a PROVISIONAL ontology from the mandate: the core BUSINESS entities the objective clearly implies (for "streamline customer onboarding and compliance": Customer, Onboarding Application, Compliance Check), each with evidence "from the sponsor mandate — to confirm", and gaps naming whom to hear. Interviews then enrich and correct it.
 
@@ -1367,7 +1367,7 @@ Return ONLY valid JSON:
     phase: "envision",
     fieldKey: "architectureStrategy",
     title: "Architecture Strategy",
-    system: `You are the ATOS Architecture Strategy Agent. From the Current-State Atlas and the Domain Ontology (priorPhaseArtifacts), draft 2–3 genuinely distinct candidate target architectures for the agentic system, score their trade-offs against functional AND non-functional dimensions, and recommend one.
+    system: `You are the AURA Architecture Strategy Agent. From the Current-State Atlas and the Domain Ontology (priorPhaseArtifacts), draft 2–3 genuinely distinct candidate target architectures for the agentic system, score their trade-offs against functional AND non-functional dimensions, and recommend one.
 
 Candidates must differ in SHAPE — e.g. a single orchestrator with tools, a crew of specialist agents, agents embedded per-workflow — not merely in technology names. Anchor every candidate to the workflows and pains recorded in the Atlas. Honour the agenticFramework input: when it is "Undecided — recommend one", recommend a framework with rationale; otherwise design for the one chosen.
 
@@ -1396,7 +1396,7 @@ Return ONLY valid JSON:
     phase: "envision",
     fieldKey: "agenticBlueprint",
     title: "Agentic Blueprint",
-    system: `You are the ATOS Agentic Blueprint Agent. Compile the chosen architecture direction (directionDecision + the Architecture Strategy in priorPhaseArtifacts/existingArtifacts) into a buildable spec targeted at the chosen agenticFramework: agents, tools, orchestration, data contracts, human-in-the-loop points, guardrails and the eval plan.
+    system: `You are the AURA Agentic Blueprint Agent. Compile the chosen architecture direction (directionDecision + the Architecture Strategy in priorPhaseArtifacts/existingArtifacts) into a buildable spec targeted at the chosen agenticFramework: agents, tools, orchestration, data contracts, human-in-the-loop points, guardrails and the eval plan.
 
 The Blueprint DELIVERS the Experience Design (priorPhaseArtifacts/existingArtifacts): its screens, flows and workflow state machines are the experience your agents must produce and power. Where an Experience Design exists, wire each agent to the screens/flows it drives and honour the HITL/approval states the design already marks — build to it, don't invent a parallel design.
 
@@ -1435,7 +1435,7 @@ Return ONLY valid JSON:
     phase: "envision",
     fieldKey: "experienceDesign",
     title: "Experience Design",
-    system: `You are the ATOS Experience Design Agent — the design crew for the future system. Experience Design is an ENVISION artifact: it authors WHAT THE USER SEES AND DOES, and the Agentic Blueprint is then built to deliver it (so do NOT wait for or depend on the Blueprint — you come first). From the chosen Architecture Strategy (directionDecision), the Current-State Atlas's workflows and pains, the agentify dispositions stakeholders confirmed, and the Domain Ontology (priorPhaseArtifacts/existingArtifacts), design the experience the future system must deliver: the screens, the flows, the wireframes and the workflow state machines.
+    system: `You are the AURA Experience Design Agent — the design crew for the future system. Experience Design is an ENVISION artifact: it authors WHAT THE USER SEES AND DOES, and the Agentic Blueprint is then built to deliver it (so do NOT wait for or depend on the Blueprint — you come first). From the chosen Architecture Strategy (directionDecision), the Current-State Atlas's workflows and pains, the agentify dispositions stakeholders confirmed, and the Domain Ontology (priorPhaseArtifacts/existingArtifacts), design the experience the future system must deliver: the screens, the flows, the wireframes and the workflow state machines.
 
 DESIGN RULES (enforced, not optional):
 - COVER EVERY WORKFLOW: every workflow in the Current-State Atlas gets its own flow (drive the flow set from the Atlas workflows, not only the Blueprint's journeys) — AND every journey stage in the Blueprint gets a screen and every persona gets a flow. A workflow, stage or persona with no flow/screen is a gap, never an omission. Never emit only the "primary" or demoable flow; if a workflow can't yet be designed, emit it as a flow whose screens name the gap.
@@ -1463,7 +1463,7 @@ Return ONLY valid JSON:
     phase: "show",
     fieldKey: "prototypePack",
     title: "Prototype Build Pack",
-    system: `You are the ATOS Prototype Build Pack Agent. Turn the Agentic Blueprint (priorPhaseArtifacts) into a build pack a coding agent or team can execute to a working prototype fast — without a follow-up meeting: scaffold, agent wiring, seed data lifted from the discovery evidence, and an explicit scope contract.
+    system: `You are the AURA Prototype Build Pack Agent. Turn the Agentic Blueprint (priorPhaseArtifacts) into a build pack a coding agent or team can execute to a working prototype fast — without a follow-up meeting: scaffold, agent wiring, seed data lifted from the discovery evidence, and an explicit scope contract.
 
 When an Experience Design exists (existingArtifacts), BUILD TO IT: its screens are the interface inventory, its flows are the walkthrough, its workflow machines are the behaviour — do not invent a second design.
 
@@ -1502,7 +1502,7 @@ Return ONLY valid JSON:
     phase: "envision",
     fieldKey: "prototypeBuild",
     title: "Prototype Build",
-    system: `You are the ATOS Prototype Build Agent. Assemble a SELF-CONTAINED, CLICKABLE HTML PROTOTYPE from the design already on the record: the Experience Design — carried in "upstreamDesign" (its theme, designIntent, screens, flows and workflowMachines) — the Prototype Build Pack (its fixtures — the seed records — and its scope contract), the Agentic Blueprint (the agents and their human-in-the-loop points), and the Domain Ontology (entities and their attributes). "upstreamDesign" IS the Experience Design you build to: one navigable screen per upstreamDesign.screens entry, its flows clickable end to end, its workflowMachines the behaviour. This is the runnable app the delivery team refines in Envision and demonstrates to clients in Show. The Experience Designer will open and edit the HTML you return, so it must be clean, readable, and hand-editable.
+    system: `You are the AURA Prototype Build Agent. Assemble a SELF-CONTAINED, CLICKABLE HTML PROTOTYPE from the design already on the record: the Experience Design — carried in "upstreamDesign" (its theme, designIntent, screens, flows and workflowMachines) — the Prototype Build Pack (its fixtures — the seed records — and its scope contract), the Agentic Blueprint (the agents and their human-in-the-loop points), and the Domain Ontology (entities and their attributes). "upstreamDesign" IS the Experience Design you build to: one navigable screen per upstreamDesign.screens entry, its flows clickable end to end, its workflowMachines the behaviour. This is the runnable app the delivery team refines in Envision and demonstrates to clients in Show. The Experience Designer will open and edit the HTML you return, so it must be clean, readable, and hand-editable.
 
 BUILD TO THE DESIGN — do not invent a second one:
 - ONE SCREEN PER Experience Design screen. Every screen in the Experience Design becomes a navigable view in the app. A screen silently dropped is a failure, named in gaps if it truly cannot be built.
@@ -1552,7 +1552,7 @@ Return ONLY valid JSON:
     phase: "show",
     fieldKey: "demoScripts",
     title: "Demo Scripts",
-    system: `You are the ATOS Demo Scripts Agent. Write one walkthrough PER STAKEHOLDER, seeded from their own transcript: every person watches their own job running in the prototype.
+    system: `You are the AURA Demo Scripts Agent. Write one walkthrough PER STAKEHOLDER, seeded from their own transcript: every person watches their own job running in the prototype.
 
 Open each script with their own words — the pain they voiced — then the moment that pain disappears on screen. Use their scenario and their numbers ("you said the credit check takes three days; watch it take forty seconds"). End with the acceptance ask. Do NOT write generic feature tours; a script that could be shown to anyone is a failed script.
 
@@ -1573,7 +1573,7 @@ Return ONLY valid JSON:
     phase: "ship",
     fieldKey: "hardeningPlan",
     title: "Hardening Plan",
-    system: `You are the ATOS Hardening Plan Agent. Plan the prototype-to-production conversion: everything production requires beyond the accepted prototype — and the ship/cutover plan that gets it there safely.
+    system: `You are the AURA Hardening Plan Agent. Plan the prototype-to-production conversion: everything production requires beyond the accepted prototype — and the ship/cutover plan that gets it there safely.
 
 Walk the Blueprint's surfaces systematically — authn/z, error handling, observability, rate limits, data protection, guardrails, and the HITL mechanisms at the Blueprint's marked points. Anchor priorities to the demo feedback (what stakeholders accepted with changes) and the hard constraints. Classify every item must/should; a hardening plan that marks everything "must" has not made decisions.
 
@@ -1608,7 +1608,7 @@ Return ONLY valid JSON:
     phase: "ship",
     fieldKey: "evalSuite",
     title: "Eval Suite",
-    system: `You are the ATOS Eval Suite Agent. Generate the evaluation suite that gates shipping — derived from the discovery transcripts and the demo acceptances, never from imagination.
+    system: `You are the AURA Eval Suite Agent. Generate the evaluation suite that gates shipping — derived from the discovery transcripts and the demo acceptances, never from imagination.
 
 Every eval case traces to evidence: a stakeholder-stated expectation, an accepted demo behaviour (the demoTour verdicts), or a Blueprint evalPlan entry. Include failure-mode probes for the failure modes the Atlas recorded, and guardrail probes for every guardrail the Hardening Plan declares. "Eval suite green" must be defined numerically — a suite whose pass bar is vibes cannot gate a cutover.
 
@@ -1634,7 +1634,7 @@ Return ONLY valid JSON:
  * context JSON to decide how aggressively to redraw.
  */
 const FORMAL_ARTIFACT_DISCIPLINE = `
-## ATOS generation discipline
+## AURA generation discipline
 
 When the input context carries a non-null valueChainSegment, scope the output to
 that value-chain segment — its workflows, entities, stakeholders and agendas —
@@ -2069,7 +2069,7 @@ function docEntityText(entity: unknown): string {
  * target phase and every prior phase. The agent thus inherits what earlier
  * documents established without the user re-extracting the same file at each phase.
  * A document is in scope when its primaryPhase is at or before the target phase in
- * the ATOS sequence, or when it declares no known phase (treated as programme-wide).
+ * the AURA sequence, or when it declares no known phase (treated as programme-wide).
  */
 function buildDocumentCarryForward(documents: CarryForwardDocument[], targetPhaseId: string, includeFullText = false): string {
   const targetIndex = ATOS_PHASE_SEQUENCE.indexOf(targetPhaseId);
@@ -2191,7 +2191,7 @@ function getCurrentPhaseScope(programData: ProgramState, phaseId: string): strin
   const objective = typeof phase?.objective === "string" ? phase.objective : "";
   const exitCriteria = Array.isArray(phase?.exitCriteria) ? (phase!.exitCriteria as string[]) : [];
   const lines = [
-    `Phase under review: ${name} (${phaseId}) — step ${index + 1} of ${ATOS_PHASE_SEQUENCE.length} in the ATOS sequence.`,
+    `Phase under review: ${name} (${phaseId}) — step ${index + 1} of ${ATOS_PHASE_SEQUENCE.length} in the AURA sequence.`,
   ];
   if (objective) lines.push(`Objective of this phase: ${objective}`);
   if (ownArtifacts.length) lines.push(`Artifacts this phase is responsible for: ${ownArtifacts.join(", ")}.`);
@@ -3026,7 +3026,7 @@ function buildSpecialAgentInputContext(
   if (formalSpec) {
     const phaseInputsAll = normalizeProgramData(inner.phaseInputs as JsonValue | null);
     const strategyInputs = normalizeProgramData(phaseInputsAll.strategy as JsonValue | null);
-    // ATOS Flow captures the mandate facts (objective, sponsor, industry,
+    // AURA Flow captures the mandate facts (objective, sponsor, industry,
     // success metric, KPIs) on the Frame movement rather than Strategy — fall
     // back to frame inputs so Flow programmes ground exactly like stage-gate
     // ones. Stage-gate programmes have no frame bucket, so this is a no-op.
@@ -3118,7 +3118,7 @@ function buildSpecialAgentInputContext(
     // with the approved artifacts from all earlier phases in context, so later
     // artifacts build on what came before instead of contradicting it. The
     // spine is whichever sequence contains the phase — stage-gate phases walk
-    // ATOS_PHASE_SEQUENCE, ATOS Flow movements walk FLOW_MOVEMENT_SEQUENCE
+    // ATOS_PHASE_SEQUENCE, AURA Flow movements walk FLOW_MOVEMENT_SEQUENCE
     // (so Envision sees the Atlas and the Ontology, Show sees the Blueprint…).
     const groundingSpine = FLOW_MOVEMENT_SEQUENCE.includes(formalSpec.phase)
       ? FLOW_MOVEMENT_SEQUENCE
@@ -3188,7 +3188,7 @@ function buildSpecialAgentInputContext(
       scopeInclusions: strategyInputs.scopeInclusions || strategyInputs.scopeIn || null,
       scopeExclusions: strategyInputs.scopeExclusions || strategyInputs.scopeOut || null,
       kpiBaselines: parseKpiBaselines(strategyInputs.kpis ?? frameInputs.kpis),
-      // ATOS Flow keeps the mandate CONVERSATION on Frame while the charter's
+      // AURA Flow keeps the mandate CONVERSATION on Frame while the charter's
       // spec phase is Strategy — empty on Flow programmes. Grounded only in
       // that empty bucket, the model never reads the sponsor's own words, so
       // "the record outranks the fields" has no record to work with. Fall
@@ -3246,7 +3246,7 @@ function buildSpecialAgentInputContext(
   if (target?.agentId === "phase-input-planner") {
     const phaseInputsAll = normalizeProgramData(inner.phaseInputs as JsonValue | null);
     const strategyInputs = normalizeProgramData(phaseInputsAll.strategy as JsonValue | null);
-    // ATOS Flow: the mandate fundamentals live on Frame (see the formal-artifact
+    // AURA Flow: the mandate fundamentals live on Frame (see the formal-artifact
     // context above) — inherit them the same way so the planner never re-asks
     // objective/sponsor/KPIs on a Flow programme. No-op for stage-gate data.
     const frameInputs = normalizeProgramData(phaseInputsAll.frame as JsonValue | null);
@@ -4631,7 +4631,7 @@ function applyScopePcrResultToProgramData(programData: ProgramState, result: Rec
         priority: entry.severity === "critical" || entry.severity === "high" ? "high" : "medium",
         phaseId: entry.phase,
         question: `Raise a formal PCR for ${entry.description}?`,
-        recommendation: entry.pcrRationale || "ATOS detected a scope change signal that merits sponsor review.",
+        recommendation: entry.pcrRationale || "AURA detected a scope change signal that merits sponsor review.",
         options: ["Raise PCR", "Monitor only"],
         createdAt: new Date().toISOString(),
         status: "pending",
@@ -4930,7 +4930,7 @@ function createAgentReviewDecision(
     phase: phaseId,
     agentId,
     title: `Review ${agentId} output`,
-    question: `ATOS has generated a ${agentId} update. Review and approve or defer.`,
+    question: `AURA has generated a ${agentId} update. Review and approve or defer.`,
     recommendation: `Confidence was below the trust threshold. Reason: ${reason}`,
     createdAt: new Date().toISOString(),
     priority: "medium",
@@ -5362,7 +5362,7 @@ async function queueTriggeredRun(
       runId: inserted.data.id,
     } satisfies RunAgentRequest),
   }).catch((error) => {
-    console.warn("ATOS follow-on run invocation failed:", error);
+    console.warn("AURA follow-on run invocation failed:", error);
   });
 }
 
@@ -5492,7 +5492,7 @@ async function triggerDownstreamAgents(
   // pattern-query/contradiction-detector/health-heatmap chains) has been
   // retired: it multiplied LLM calls and produced drift. The ONLY automatic
   // follow-on now is the lean post-artifact refresh — when an artifact is
-  // (re)generated, ATOS refreshes the risk register so the risks/blockers
+  // (re)generated, AURA refreshes the risk register so the risks/blockers
   // surfaces stay in sync with the latest artifact. The delivery plan rides with
   // the strategic-roadmap artifact itself, so it needs no separate refresh.
   // Everything else (gate review, contradiction checks, decks, retros, pattern
@@ -5564,11 +5564,11 @@ async function triggerDownstreamAgents(
         } satisfies RunAgentRequest),
       });
       if (await isProviderRateLimited(res)) {
-        console.warn(`ATOS downstream fan-out halted after ${target.agentId}: AI provider rate-limited.`);
+        console.warn(`AURA downstream fan-out halted after ${target.agentId}: AI provider rate-limited.`);
         break;
       }
     } catch (error) {
-      console.warn(`ATOS downstream run for ${target.agentId} failed:`, error);
+      console.warn(`AURA downstream run for ${target.agentId} failed:`, error);
     }
     if (i < downstreamAgents.length - 1) {
       await new Promise((resolve) => setTimeout(resolve, DOWNSTREAM_STAGGER_MS));
@@ -5584,9 +5584,9 @@ async function triggerDownstreamAgents(
 function scheduleBackground(task: Promise<void>): void {
   const runtime = (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } }).EdgeRuntime;
   if (runtime?.waitUntil) {
-    runtime.waitUntil(task.catch((error) => console.warn("ATOS background task failed:", error)));
+    runtime.waitUntil(task.catch((error) => console.warn("AURA background task failed:", error)));
   } else {
-    void task.catch((error) => console.warn("ATOS background task failed:", error));
+    void task.catch((error) => console.warn("AURA background task failed:", error));
   }
 }
 
@@ -5623,18 +5623,18 @@ async function reviewArtifact(
   providedInputs: string,
   phaseScope: string,
 ): Promise<{ score: number; dimensions: Record<string, number>; improvements: string[]; suggestedStakeholders: string[] }> {
-  const systemPrompt = `You are an independent artifact quality reviewer for ATOS transformation programs.
+  const systemPrompt = `You are an independent artifact quality reviewer for AURA transformation programs.
 Score the artifact on these dimensions (0-100 each):
 - completeness: are all the sections expected FOR THIS PHASE present with substantive content?
 - specificity: does it reference actual program data (names, metrics, dates) vs generic statements?
 - actionability: does it tell the reader what to do next, concretely, within this phase's remit?
 - consistency: is it consistent with the prior-phase artifacts provided?
 
-PHASE SCOPE — read this first. The "Phase scope" block below states which phase this artifact belongs to, that phase's objective, the artifacts it owns, and which detail belongs to LATER phases. ATOS programmes run in sequenced phases: early phases set direction and intent; later phases add delivery detail. Judge the artifact ONLY against its own phase's purpose. NEVER recommend adding a fact, section, milestone schedule, RACI/ownership matrix, phase exit criteria, UAT/go-live date, delivery/run plan, or any other deliverable that the scope block flags as owned by a later phase — that detail is out of scope here and such a suggestion is wrong, not helpful. If a weakness only matters for a downstream phase, omit it entirely.
+PHASE SCOPE — read this first. The "Phase scope" block below states which phase this artifact belongs to, that phase's objective, the artifacts it owns, and which detail belongs to LATER phases. AURA programmes run in sequenced phases: early phases set direction and intent; later phases add delivery detail. Judge the artifact ONLY against its own phase's purpose. NEVER recommend adding a fact, section, milestone schedule, RACI/ownership matrix, phase exit criteria, UAT/go-live date, delivery/run plan, or any other deliverable that the scope block flags as owned by a later phase — that detail is out of scope here and such a suggestion is wrong, not helpful. If a weakness only matters for a downstream phase, omit it entirely.
 
-SOURCE OF TRUTH: The "Structured inputs already provided" and "Prior-phase artifacts" blocks below are authoritative — they are exactly what the user has already supplied or established upstream. Before writing ANY improvement, cross-check it against both blocks. NEVER recommend adding, specifying, quantifying, or clarifying a fact that already appears in them (for example, if targetEndDate is present in the inputs, do not ask for a target/end date; if a prior phase already named the sponsor or KPI, do not ask for it). Only raise inputs that are genuinely absent, empty, or too vague to act on. If a fact exists in the inputs but is simply not surfaced in the document prose, that is ATOS's job to weave in at generation — do NOT ask the user to do it.
+SOURCE OF TRUTH: The "Structured inputs already provided" and "Prior-phase artifacts" blocks below are authoritative — they are exactly what the user has already supplied or established upstream. Before writing ANY improvement, cross-check it against both blocks. NEVER recommend adding, specifying, quantifying, or clarifying a fact that already appears in them (for example, if targetEndDate is present in the inputs, do not ask for a target/end date; if a prior phase already named the sponsor or KPI, do not ask for it). Only raise inputs that are genuinely absent, empty, or too vague to act on. If a fact exists in the inputs but is simply not surfaced in the document prose, that is AURA's job to weave in at generation — do NOT ask the user to do it.
 
-INPUT FIELDS ARE ATOMIC, SINGLE-PURPOSE FACTS — NOT NARRATIVE. Each input field captures ONE fact for its own purpose; ATOS composes the document's narrative FROM those facts. So: (a) NEVER recommend that the user enrich one input field by restating a fact that ANOTHER input field already captures (e.g. do not say "add the budget and timeline to the business objective" when budget and timeline are their own populated fields — that is redundant data entry, and the score must not depend on it). (b) NEVER recommend turning an input field into a richer story, summary, multi-fact paragraph, or "more context" for the document's benefit — input fields exist to supply needed information, not to build deep narratives for inclusion in artifacts; that synthesis is ATOS's job at generation, not the user's. A recommendation about an input is valid ONLY when the underlying fact is missing, wrong, or too vague to act on — never to duplicate or narrate facts that already exist across the inputs.
+INPUT FIELDS ARE ATOMIC, SINGLE-PURPOSE FACTS — NOT NARRATIVE. Each input field captures ONE fact for its own purpose; AURA composes the document's narrative FROM those facts. So: (a) NEVER recommend that the user enrich one input field by restating a fact that ANOTHER input field already captures (e.g. do not say "add the budget and timeline to the business objective" when budget and timeline are their own populated fields — that is redundant data entry, and the score must not depend on it). (b) NEVER recommend turning an input field into a richer story, summary, multi-fact paragraph, or "more context" for the document's benefit — input fields exist to supply needed information, not to build deep narratives for inclusion in artifacts; that synthesis is AURA's job at generation, not the user's. A recommendation about an input is valid ONLY when the underlying fact is missing, wrong, or too vague to act on — never to duplicate or narrate facts that already exist across the inputs.
 
 Every entry in "improvements" must give the user precise direction on how to improve their INPUTS — the facts that ground this document — not vague edits to the prose, and not narrative expansion of an input. For each genuine gap, write one actionable sentence that:
 1. names the specific grounding fact that is missing, wrong, or too vague to act on;
@@ -5821,7 +5821,7 @@ const PLANNER_ARTIFACT_READINESS = new Set(["ready", "needs_input", "blocked"]);
 /**
  * Words that signal a label names a deliverable (artifact) rather than an atomic
  * fact. The Phase Transition Planner must never return these as input fields —
- * users supply facts; ATOS generates artifacts. Mirrors the client guardrail in
+ * users supply facts; AURA generates artifacts. Mirrors the client guardrail in
  * dynamicSchema.ts (ARTIFACT_LIKE_WORDS / isArtifactLikeLabel).
  */
 const PLANNER_ARTIFACT_WORDS = new Set([
@@ -7500,7 +7500,7 @@ async function runVotedProvisionalOntology(
   }
 }
 
-// ─── ATOS Flow: decisions, attestations, staleness ───────────────────────────
+// ─── AURA Flow: decisions, attestations, staleness ───────────────────────────
 // Flow programmes run propose-then-confirm: consequential agent results become
 // Tier-2 DECISIONS a human resolves instead of silent writes, every applied run
 // leaves an ATTESTATION entry, and artifact stubs carry an inputs FINGERPRINT
@@ -7599,7 +7599,7 @@ function notifyDecisionQueued(decision: Record<string, JsonValue>): void {
   fetch(SLACK_WEBHOOK_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text: `ATOS Flow — waiting on you in the Inbox: ${title}` }),
+    body: JSON.stringify({ text: `AURA Flow — waiting on you in the Inbox: ${title}` }),
   }).catch(() => { /* best effort */ });
 }
 
@@ -7816,7 +7816,7 @@ function buildContextSnapshot(
 }
 
 /**
- * A compact, ordered "phase timeline" for prompts whose reasoning spans the ATOS
+ * A compact, ordered "phase timeline" for prompts whose reasoning spans the AURA
  * sequence (change impact peaks per phase; stakeholder engagement shifts per
  * phase). Lists each STARTED phase — inactive phases carry no work yet, so they
  * would only invite speculation — with its status and objective, so the model
@@ -7848,7 +7848,7 @@ function buildAgentPrompt(
 ): { system: string; user: string } {
   if (request.agentId === "narrative") {
     return {
-      system: `You are the ATOS Narrative Agent. Your job is to write a single, precise 2-3 sentence executive narrative for a transformation program.
+      system: `You are the AURA Narrative Agent. Your job is to write a single, precise 2-3 sentence executive narrative for a transformation program.
 
 The narrative must answer three questions in plain English:
 1. Where is the transformation right now? (active phase, readiness %)
@@ -7867,7 +7867,7 @@ Input context will be provided as JSON.`,
 
   if (request.agentId === "risk") {
     return {
-      system: `You are the ATOS Risk Agent. Your job is to scan a transformation program and identify risks and blockers that the team should be aware of.
+      system: `You are the AURA Risk Agent. Your job is to scan a transformation program and identify risks and blockers that the team should be aware of.
 
 For each item you identify, produce a structured entry. Focus on:
 - Risks: things that could go wrong if not addressed (probability x impact)
@@ -8068,7 +8068,7 @@ If no phases have meaningful data, return null.`,
       ? `\n\nThe programme moves through these phases IN ORDER. Reason phase-by-phase: anchor each impacted group's peak change window and interventions to the phase(s) that actually drive that change, and weight change load toward the active and upcoming phases:\n${timeline}`
       : "";
     return {
-      system: `You are ATOS's Change Impact Intelligence agent for a Brillio transformation program.${phaseWalk}
+      system: `You are AURA's Change Impact Intelligence agent for a Brillio transformation program.${phaseWalk}
 
 Analyse the program context and return a JSON object with exactly this shape:
 {
@@ -8102,7 +8102,7 @@ Return ONLY valid JSON. No markdown fences.`,
       ? `\n\nThe programme moves through these phases IN ORDER. Reason phase-by-phase: consider how each stakeholder's influence, engagement and risk of disengagement shifts across them, and set targetEngagement / recommendedActions for where the programme is now and heading next:\n${timeline}`
       : "";
     return {
-      system: `You are ATOS's Stakeholder Intelligence agent for a Brillio transformation program.${phaseWalk}
+      system: `You are AURA's Stakeholder Intelligence agent for a Brillio transformation program.${phaseWalk}
 
 Return a JSON object with exactly this shape:
 {
@@ -8138,7 +8138,7 @@ Return ONLY valid JSON. No markdown fences.`,
       ? `\n\nThe programme moves through these phases IN ORDER. Reason phase-by-phase: judge adoption and go-live readiness relative to where the programme is now — adoption pressure builds as it approaches and enters Operate, so do not report a not-yet-reached phase's adoption as a current shortfall:\n${timeline}`
       : "";
     return {
-      system: `You are ATOS's Adoption Intelligence agent for a Brillio transformation program.${phaseWalk}
+      system: `You are AURA's Adoption Intelligence agent for a Brillio transformation program.${phaseWalk}
 
 Return a JSON object with exactly this shape:
 {
@@ -8172,7 +8172,7 @@ Return ONLY valid JSON.`,
       ? `\n\nThese are the phases that have STARTED (each with its status) — grade LIVE health only on these: a complete/approved phase is green, an in-progress one may be amber or red. EVERY other phase in the context is not-yet-reached and must be grey (score 0, topRisk null):\n${timeline}`
       : "";
     return {
-      system: `You are ATOS's Health Heatmap agent for a Brillio transformation program following the ATOS 13-phase lifecycle.${phaseWalk}
+      system: `You are AURA's Health Heatmap agent for a Brillio transformation program following the AURA 13-phase lifecycle.${phaseWalk}
 
 Return a JSON object with exactly this shape:
 {
@@ -8211,7 +8211,7 @@ Return ONLY valid JSON.`,
 
   if (request.agentId === "retro") {
     return {
-      system: `You are ATOS's Retrospective agent for a Brillio ATOS transformation phase.
+      system: `You are AURA's Retrospective agent for a Brillio AURA transformation phase.
 Analyse the phase context and return a JSON object with exactly this shape:
 {
   "wentWell": [
@@ -8241,7 +8241,7 @@ Return ONLY valid JSON. No markdown fences.`,
 
   if (request.agentId === "deck") {
     return {
-      system: `You are ATOS's Executive Deck agent for a Brillio transformation program.
+      system: `You are AURA's Executive Deck agent for a Brillio transformation program.
 Generate a structured executive presentation and return a JSON object with exactly this shape:
 {
   "title": "string",
@@ -8268,7 +8268,7 @@ Generate 8-12 slides. Return ONLY valid JSON.`,
 
   if (request.agentId === "deck-section") {
     return {
-      system: `You are ATOS's Executive Deck section agent. Regenerate a SINGLE slide of a given type for a transformation programme.
+      system: `You are AURA's Executive Deck section agent. Regenerate a SINGLE slide of a given type for a transformation programme.
 Return ONLY valid JSON (no markdown):
 {
   "slide": {
@@ -8288,7 +8288,7 @@ Rules: Keep the same slideNumber as the existing slide. Focus ONLY on the reques
 
   if (request.agentId === "narrative-refine") {
     return {
-      system: `You are ATOS's Narrative Refinement agent. Refine an existing programme narrative based on a specific instruction.
+      system: `You are AURA's Narrative Refinement agent. Refine an existing programme narrative based on a specific instruction.
 Return ONLY valid JSON (no markdown):
 { "narrative": "string", "generatedAt": "<ISO>", "confidence": 0.0-1.0, "dataPoints": ["string"] }
 Rules: Apply the refinementInstruction to the existingNarrative. Keep it 2-3 sentences. Maintain factual accuracy from the programme data. If the instruction is empty, improve clarity and conciseness.`,
@@ -8298,7 +8298,7 @@ Rules: Apply the refinementInstruction to the existingNarrative. Keep it 2-3 sen
 
   if (request.agentId === "board-pack") {
     return {
-      system: `You are ATOS's Board Pack Assembler. Synthesise all available programme data into a unified board-ready document with consistent tone and flow.
+      system: `You are AURA's Board Pack Assembler. Synthesise all available programme data into a unified board-ready document with consistent tone and flow.
 Return ONLY valid JSON (no markdown):
 {
   "title": "Board Pack — <Programme Name> — <Month Year>",
@@ -8322,7 +8322,7 @@ Rules: Always include sections: executive-summary, status, risks, outlook. Add f
 
   if (request.agentId === "scope-pcr") {
     return {
-      system: `You are ATOS's Scope & PCR Intelligence agent for a Brillio transformation program.
+      system: `You are AURA's Scope & PCR Intelligence agent for a Brillio transformation program.
 Analyse the program for scope creep and change request signals. Return a JSON object:
 {
   "scopeSignals": [
@@ -8435,9 +8435,9 @@ Return JSON only:
 
   if (request.agentId === "artifact-reviewer") {
     return {
-      system: `You are an independent artifact quality reviewer for ATOS transformation programs.
+      system: `You are an independent artifact quality reviewer for AURA transformation programs.
 Every entry in "improvements" must give the user precise direction on how to improve their INPUTS — the facts that ground this document — not vague edits to the prose. For each weakness, write one actionable sentence that names the specific grounding fact the document lacks, states exactly what fact to add or correct with a concrete worked example, and ties it to the dimension it lifts. Never write generic advice like "add more detail" — always say WHICH fact and WHAT to write.
-INPUT FIELDS ARE ATOMIC, SINGLE-PURPOSE FACTS — NOT NARRATIVE. Each input field captures one fact for its own purpose; ATOS composes the narrative FROM those facts. NEVER recommend enriching one input field by restating a fact another field already captures (e.g. do not say "add the budget and timeline to the business objective" when budget and timeline are their own fields), and NEVER recommend turning an input into a richer story or multi-fact paragraph for the document's benefit. A recommendation about an input is valid ONLY when the underlying fact is missing, wrong, or too vague to act on — never to duplicate or narrate facts that already exist across the inputs.
+INPUT FIELDS ARE ATOMIC, SINGLE-PURPOSE FACTS — NOT NARRATIVE. Each input field captures one fact for its own purpose; AURA composes the narrative FROM those facts. NEVER recommend enriching one input field by restating a fact another field already captures (e.g. do not say "add the budget and timeline to the business objective" when budget and timeline are their own fields), and NEVER recommend turning an input into a richer story or multi-fact paragraph for the document's benefit. A recommendation about an input is valid ONLY when the underlying fact is missing, wrong, or too vague to act on — never to duplicate or narrate facts that already exist across the inputs.
 NAME THE FIELD, NEVER A PHANTOM ONE. When a recommendation is about capturing or correcting a fact, name the exact input it belongs to only if that input is present in the input context. If no input in the context captures the fact, do NOT write "the relevant input", "the appropriate field", or any other unnamed or assumed input — that field may not exist and the user cannot find it. Instead state the fact to record plainly with its worked example, or say it belongs in the artifact body. Never imply an input field exists unless you can name it from the input context.
 Return ONLY valid JSON:
 { "score": 0-100, "dimensions": { "completeness": 0-100, "specificity": 0-100, "actionability": 0-100, "consistency": 0-100 }, "improvements": ["Name the executive sponsor with their title in the Sponsor input (e.g. 'Jane Doe, COO') — lifts specificity and makes accountability unambiguous", "Replace the open-ended timeline with a dated milestone (e.g. '2026-11-30') so the plan can sequence backwards from it"] }`,
@@ -8447,7 +8447,7 @@ Return ONLY valid JSON:
 
   if (request.agentId === "exit-criteria-generator") {
     return {
-      system: `You are an ATOS exit criteria generator for ATOS transformation programs.
+      system: `You are an AURA exit criteria generator for AURA transformation programs.
 
 Generate specific, measurable, program-tailored exit criteria for the ${request.phaseId} phase.
 Each criterion must reference actual program data where possible and never be generic.
@@ -8471,7 +8471,7 @@ Return ONLY valid JSON:
 
   if (request.agentId === "decision-advisor") {
     return {
-      system: `You are the ATOS Decision Advisor for transformation programs.
+      system: `You are the AURA Decision Advisor for transformation programs.
 Analyse the decision and generate structured option analysis to help the program team decide.
 
 Return ONLY valid JSON:
@@ -8498,7 +8498,7 @@ Return ONLY valid JSON:
 
   if (request.agentId === "contradiction-detector" && isFlowProgramme(programData)) {
     return {
-      system: `You are the ATOS Flow Contradiction Watcher. Compare the NEWEST evidence in the input context — the latest demonstration feedback and most recent transcript blocks — against the EARLIER record: prior transcripts, the direction decision, hard constraints, and claims the generated documents assert.
+      system: `You are the AURA Flow Contradiction Watcher. Compare the NEWEST evidence in the input context — the latest demonstration feedback and most recent transcript blocks — against the EARLIER record: prior transcripts, the direction decision, hard constraints, and claims the generated documents assert.
 
 Identify only genuine DISPUTES: the new evidence says something the record asserts is otherwise. Different emphasis, added detail, or new information that extends the record is NOT a contradiction.
 
@@ -8526,7 +8526,7 @@ Empty contradictions with "clean": true when nothing genuinely disputes the reco
 
   if (request.agentId === "contradiction-detector") {
     return {
-      system: `You are the ATOS Contradiction Detector. Scan the provided program artifacts and identify logical contradictions.
+      system: `You are the AURA Contradiction Detector. Scan the provided program artifacts and identify logical contradictions.
 
 Return ONLY valid JSON:
 {
@@ -8614,7 +8614,7 @@ Return ONLY valid JSON:
       }
     }
     return {
-      system: `You are the ATOS Cross-Artifact Validator — Layer 2 semantic validation.
+      system: `You are the AURA Cross-Artifact Validator — Layer 2 semantic validation.
 
 A deterministic Layer 1 already covers structural gaps (missing owners, risks
 without mitigations, milestones without exit criteria, KPIs without baselines,
@@ -8651,7 +8651,7 @@ the INTEGRITY of this chain, mapping each broken link to the phase that must fix
 Use the graph to trace the requirement→design→build chain; a link the chain
 needs but the graph lacks is itself the finding.
 
-BACKWARD PHASE FIDELITY — the phases are ordered in the ATOS sequence, each
+BACKWARD PHASE FIDELITY — the phases are ordered in the AURA sequence, each
 carrying its objective, exit criteria and artifacts. For every phase, judge
 whether it still HONOURS the commitments of the phases before it (the ones it
 was built on). Emit a finding when a later phase:
@@ -8756,15 +8756,15 @@ values below are ILLUSTRATIVE — do not copy them:
     const exitCriteria = specCriteria.length ? specCriteria : persistedCriteria;
     const recommendedAgents = Array.isArray(spec?.recommendedAgents) ? spec!.recommendedAgents.filter((c) => typeof c === "string" && c.trim()) : [];
     return {
-      system: `You are the ATOS Phase Transition Planner.
+      system: `You are the AURA Phase Transition Planner.
 The prior phase has just cleared its gate. For the NEXT phase ("${nextPhaseName}") identify
-the inputs the team must still provide, any conflicts to resolve, and the artifacts ATOS
+the inputs the team must still provide, any conflicts to resolve, and the artifacts AURA
 will generate to clear the gate.
 
-CORE PRINCIPLE — users provide FACTS; ATOS generates ARTIFACTS.
+CORE PRINCIPLE — users provide FACTS; AURA generates ARTIFACTS.
 - inputFields are ATOMIC, answerable facts (a date, a name, a number, a short list, a
   cadence, a budget range). A user can answer each in one sitting without authoring a doc.
-- artifactsToGenerate are the DELIVERABLES ATOS produces FROM those facts.
+- artifactsToGenerate are the DELIVERABLES AURA produces FROM those facts.
 - NEVER put a deliverable in inputFields. A label is a deliverable (not a fact) if it
   contains any of: plan, summary, report, register, map, model, deck, brief, pack,
   roadmap, assessment, design, artifact. Such items belong in artifactsToGenerate.
@@ -8883,7 +8883,7 @@ Input context JSON:\n${specialAgentInputContext || "{}"}${
 
   if (request.agentId === "dependency-check") {
     return {
-      system: `You are the ATOS Cross-Phase Dependency Checker.
+      system: `You are the AURA Cross-Phase Dependency Checker.
 Verify that the current phase artifacts are consistent with and build upon the prior approved phase.
 
 Return ONLY valid JSON:
@@ -8905,7 +8905,7 @@ Return ONLY valid JSON:
 
   if (request.agentId === "benefits-tracker") {
     return {
-      system: `You are the ATOS Benefits Tracker for transformation programs.
+      system: `You are the AURA Benefits Tracker for transformation programs.
 Compare the original program success metrics against current evidence and rate each KPI.
 
 When the context contains "kpiBaselines" (human-entered KPIs from the Strategy
@@ -8948,7 +8948,7 @@ Return ONLY valid JSON:
 
   if (request.agentId === "handoff-quality") {
     return {
-      system: `You are the ATOS Handoff Quality Reviewer.
+      system: `You are the AURA Handoff Quality Reviewer.
 Assess whether this phase handoff document is complete enough to properly brief the next phase.
 
 Return ONLY valid JSON:
@@ -8965,7 +8965,7 @@ Return ONLY valid JSON:
 
   if (request.agentId === "benchmark-comparator") {
     return {
-      system: `You are the ATOS Benchmark Comparator.
+      system: `You are the AURA Benchmark Comparator.
 Compare this program's profile against similar programs in the pattern library and provide calibrated assessment.
 
 Return ONLY valid JSON:
@@ -8993,7 +8993,7 @@ Return ONLY valid JSON:
 
   if (request.agentId === "meeting-notes") {
     return {
-      system: `You are the ATOS Meeting Notes Extractor for transformation programs.
+      system: `You are the AURA Meeting Notes Extractor for transformation programs.
 Extract structured program data from meeting notes or workshop outputs.
 
 Return ONLY valid JSON:
@@ -9020,7 +9020,7 @@ Return ONLY valid JSON:
 
   if (request.agentId === "daily-briefing") {
     return {
-      system: `You are the ATOS Daily Briefing Agent.
+      system: `You are the AURA Daily Briefing Agent.
 Generate a concise, actionable briefing for the programme manager at the start of each day.
 
 Return ONLY valid JSON:
@@ -9071,7 +9071,7 @@ Rules:
 
   if (request.agentId === "weekly-digest") {
     return {
-      system: `You are the ATOS Weekly Digest Generator.
+      system: `You are the AURA Weekly Digest Generator.
 Produce a concise Monday morning summary for the program manager.
 
 Return ONLY valid JSON:
@@ -9094,7 +9094,7 @@ Return ONLY valid JSON:
 
   if (request.agentId === "phase-completion-estimator") {
     return {
-      system: `You are the ATOS Phase Completion Estimator.
+      system: `You are the AURA Phase Completion Estimator.
 Compute an evidence-based completion estimate for the requested phase.
 
 Return ONLY valid JSON:
@@ -9369,7 +9369,7 @@ Rules: Extract verbatim or near-verbatim from transcript. Max 10 decisions, 15 a
   }
 
   const system = [
-    `You are the ATOS ${request.phaseId} phase agent running server-side for the transformation program "${String(programData.programName || "Untitled Program")}".`,
+    `You are the AURA ${request.phaseId} phase agent running server-side for the transformation program "${String(programData.programName || "Untitled Program")}".`,
     "You must produce structured, execution-ready output.",
     "If you reach a decision point where you need human input to continue, output the following marker on its own line and stop:",
     `[PAUSE_FOR_DECISION: {"reason": "...", "question": "...", "options": ["..."]}]`,
@@ -10091,7 +10091,7 @@ Deno.serve(async (req) => {
       },
     });
 
-    // ── ATOS Flow governance gate ────────────────────────────────────────
+    // ── AURA Flow governance gate ────────────────────────────────────────
     // Two guardrails before any model call on Flow programmes: halt flags
     // (the whole programme or named agents) and per-movement token budgets.
     // A blocked run fails VISIBLY — run row marked, attestation on the trail
@@ -10417,7 +10417,7 @@ Deno.serve(async (req) => {
         nextProgramData = applyDecisionAdvisorResultToProgramData(contextProgramData, request.decisionId, result);
       } else if (request.agentId === "contradiction-detector") {
         if (isFlowProgramme(contextProgramData)) {
-          // ATOS Flow: the watcher PROPOSES — an open Tier-2 decision carrying
+          // AURA Flow: the watcher PROPOSES — an open Tier-2 decision carrying
           // ready-to-file contradiction rows; the human judges in the Inbox.
           // One open proposal at a time: skip while a previous one waits.
           const parsed = isRecord(result) ? result as Record<string, unknown> : {};
@@ -10473,7 +10473,7 @@ Deno.serve(async (req) => {
         nextProgramData = applyCrossArtifactValidationResultToProgramData(contextProgramData, request.phaseId, result);
       } else if (request.agentId === "phase-input-planner") {
         if (isFlowProgramme(contextProgramData)) {
-          // ATOS Flow: propose, don't apply. The planner's plan is computed in
+          // AURA Flow: propose, don't apply. The planner's plan is computed in
           // full (same sanitisation path as classic) but lands as a Tier-2
           // decision carrying the ready-to-merge dynamicSchema — a human
           // confirms it in the deck's inbox before it takes effect.
@@ -10932,7 +10932,7 @@ Deno.serve(async (req) => {
         }]);
       }
 
-      // ── ATOS Flow: attest + fingerprint ───────────────────────────────────
+      // ── AURA Flow: attest + fingerprint ───────────────────────────────────
       // Every applied run leaves an attestation entry; formal artifacts get the
       // movement-inputs fingerprint stamped on their stub so the client marks
       // them stale when evidence changes. Skipped entirely when the regen
@@ -11518,7 +11518,7 @@ Deno.serve(async (req) => {
           payload: { error: message },
         });
       } catch (eventError) {
-        console.warn("ATOS failure event emit failed:", eventError);
+        console.warn("AURA failure event emit failed:", eventError);
       }
     }
     return jsonResponse({ error: message }, 500);

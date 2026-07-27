@@ -1,7 +1,7 @@
 /**
  * Per-programme dynamic schema extension.
  *
- * The static ATOS methodology (`ATOS_STANDARD`) declares the same input fields,
+ * The static AURA methodology (`ATOS_STANDARD`) declares the same input fields,
  * artifacts, and input→artifact flow for every programme. When a phase clears
  * its gate, a planner agent reads the prior phase's approved artifacts and can
  * propose *additional* next-phase input fields and artifacts tailored to that
@@ -429,7 +429,7 @@ function sanitizeGridColumns(raw: unknown): GridColumn[] {
 /**
  * Words that signal a label names a deliverable (artifact) rather than an atomic
  * fact the user can answer. The Phase Transition Planner must put these in
- * `artifactsToGenerate`, never in `inputFields` — users supply facts; ATOS
+ * `artifactsToGenerate`, never in `inputFields` — users supply facts; AURA
  * generates artifacts. The guardrail below repairs violations deterministically
  * so a misbehaving model can never present "Mobilization Plan" as something to
  * type in.

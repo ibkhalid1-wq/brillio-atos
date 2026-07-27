@@ -115,7 +115,7 @@ export default function FlowBoardPack({ program, onMintBrief, onClose }: {
         ) : null}
 
         <div className="v3fs-pack-page" ref={pageRef}>
-          <div className="v3fs-pack-eyebrow">ATOS Flow · Board pack</div>
+          <div className="v3fs-pack-eyebrow">AURA Flow · Board pack</div>
           <h1>{program.name}</h1>
           {program.client ? <div className="v3fs-pack-client">{program.client}</div> : null}
 
@@ -204,7 +204,7 @@ export default function FlowBoardPack({ program, onMintBrief, onClose }: {
           </section>
 
           <footer className="v3fs-pack-foot">
-            Built live from the programme’s data — every number here traces back to evidence, documents and decisions in ATOS Flow.
+            Built live from the programme’s data — every number here traces back to evidence, documents and decisions in AURA Flow.
           </footer>
         </div>
       </div>

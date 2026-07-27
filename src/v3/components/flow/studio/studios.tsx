@@ -163,7 +163,7 @@ function DiscoveryKitStudio({ doc, onChange, program }: StudioProps) {
       {/* The kit is the GENERATED interview plan — coverage, who to talk to,
           and what to ask. Names, emails and role assignment are managed in
           People; here the operator refines the PLAN (questions, coverage). */}
-      <p className="v3fs-stu-lead">This is the plan ATOS generated: the coverage it needs, who to interview, and the questions each conversation should surface. Refine the questions and coverage here; <b>who</b> each person is and their contact details are managed in <b>Library&nbsp;&rsaquo;&nbsp;People</b>.</p>
+      <p className="v3fs-stu-lead">This is the plan AURA generated: the coverage it needs, who to interview, and the questions each conversation should surface. Refine the questions and coverage here; <b>who</b> each person is and their contact details are managed in <b>Library&nbsp;&rsaquo;&nbsp;People</b>.</p>
       <Section label="Coverage" hint="who covers each workflow domain — mark the thin ones, then regenerate to deepen them">
         <p className="v3fs-stu-note">
           One row per workflow domain: who speaks to it, and whether its coverage is <b>thin</b> — only one

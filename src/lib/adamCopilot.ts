@@ -9,7 +9,7 @@ export function registerAdamCopilotRuntime(nextRuntime: RuntimeMap) {
 function invoke(name: string, args: any[]) {
   const fn = runtime[name];
   if (typeof fn !== "function") {
-    throw new Error(`ATOS copilot runtime not registered for ${name}`);
+    throw new Error(`AURA copilot runtime not registered for ${name}`);
   }
   return fn(...args);
 }

@@ -47,7 +47,7 @@ export const EXIT_CRITERIA_LIBRARY: ExitCriterion[] = [
   { id: "valuerealize-3", phaseId: "valuerealize", label: "Closure pack approved", description: "Programme closure pack (final narrative, lessons, benefits, recommendations) has been approved by SteerCo.", mandatory: true, evidencePrompt: "Closure pack approval reference.", category: "governance" },
   { id: "valuerealize-4", phaseId: "valuerealize", label: "Handover to BAU confirmed", description: "Programme outputs and ongoing responsibilities have been formally handed to the business-as-usual owner.", mandatory: true, evidencePrompt: "BAU handover confirmation document.", category: "delivery" },
 
-  // ─── ATOS Flow movements ─────────────────────────────────────────────────────
+  // ─── AURA Flow movements ─────────────────────────────────────────────────────
   // Flow's criteria are demonstration/evidence signals, never document approvals:
   // under Flow the gate is a demo. They stay mandatory so the same gate machinery
   // evidences a movement exactly like a phase — the difference is what the

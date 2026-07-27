@@ -502,7 +502,7 @@ export default function FlowRespond({ token }: { token: string }) {
             <>
               <header className="v3fs-hero">
                 <h1 className="v3fs-hero-title">
-                  <span className="v3fs-hero-brand"><img src="/brillio-logo.png" alt="Brillio" className="v3fs-portal-brandimg" /> ATOS</span> · {state.pack.programme}
+                  <span className="v3fs-hero-brand"><img src="/brillio-logo.png" alt="Brillio" className="v3fs-portal-brandimg" /> AURA</span> · {state.pack.programme}
                 </h1>
                 <p className="v3fs-how">
                   {greetName ? `${greetName} — ` : ""}this is the prototype we&rsquo;re building
@@ -604,7 +604,7 @@ export default function FlowRespond({ token }: { token: string }) {
               {state.pack.followUp ? <FollowUpBanner stakeholder={greetName}
                 submissions={state.pack.submissions ?? []} newCount={state.pack.questions.length} /> : null}
               <header className="v3fs-portal-head">
-                <div className="v3fs-hero-eyebrow">{state.pack.programme} <span>· <img src="/brillio-logo.png" alt="Brillio" className="v3fs-portal-brandimg sm" /> ATOS</span></div>
+                <div className="v3fs-hero-eyebrow">{state.pack.programme} <span>· <img src="/brillio-logo.png" alt="Brillio" className="v3fs-portal-brandimg sm" /> AURA</span></div>
                 {/* On a follow-up the banner above already greets and frames the
                     visit — the header stays lean so a returning voice isn't
                     re-onboarded ("replaces a discovery call" is a first-time line). */}
@@ -774,7 +774,7 @@ export default function FlowRespond({ token }: { token: string }) {
           ) : null}
           {state.phase !== "loading" ? (
             <footer className="v3fs-portal-brandfoot">
-              <span className="mark"><img src="/brillio-logo.png" alt="Brillio" className="v3fs-portal-brandimg" /> ATOS</span>
+              <span className="mark"><img src="/brillio-logo.png" alt="Brillio" className="v3fs-portal-brandimg" /> AURA</span>
               <small>⛨ Your response is private to the programme team.</small>
             </footer>
           ) : null}

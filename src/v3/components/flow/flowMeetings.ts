@@ -138,7 +138,7 @@ function baseMeetingKit(program: ProgramSummary, movementId: string): Omit<Meeti
       `${String(candidate.name ?? "Candidate")} (${String(candidate.shape ?? "shape")}): are its risks — ${(Array.isArray(candidate.risks) ? candidate.risks.map(String).slice(0, 2).join("; ") : "as scored")} — ones we can carry?`,
     );
     const recommendation = isRecord(strategy?.recommendation) ? String(strategy!.recommendation.candidate ?? "") : "";
-    if (recommendation) questions.push(`ATOS recommends “${recommendation}” — what would make you overrule it?`);
+    if (recommendation) questions.push(`AURA recommends “${recommendation}” — what would make you overrule it?`);
     questions.push("Which candidate do we choose, and what are we knowingly trading away?");
     return {
       title: "The direction conversation",
@@ -651,7 +651,7 @@ export function buildMeetingIcs(input: {
   return [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//ATOS Flow//EN",
+    "PRODID:-//AURA Flow//EN",
     "METHOD:PUBLISH",
     "BEGIN:VEVENT",
     `UID:atos-${day}-${input.who.toLowerCase().replace(/[^a-z0-9]+/g, "-")}@atos-flow`,

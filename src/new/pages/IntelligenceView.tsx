@@ -438,7 +438,7 @@ const AI_PROVIDERS: Array<{
   {
     id: "anthropic",
     label: "Anthropic",
-    description: "Recommended for ATOS agents today. Supports the deployed Claude runtime.",
+    description: "Recommended for AURA agents today. Supports the deployed Claude runtime.",
     placeholder: "sk-ant-...",
     runtimeReady: true,
     models: [
@@ -450,7 +450,7 @@ const AI_PROVIDERS: Array<{
   {
     id: "openai",
     label: "OpenAI",
-    description: "Use OpenAI chat models for ATOS agent runs.",
+    description: "Use OpenAI chat models for AURA agent runs.",
     placeholder: "sk-...",
     runtimeReady: true,
     models: [
@@ -462,7 +462,7 @@ const AI_PROVIDERS: Array<{
   {
     id: "google",
     label: "Google Gemini",
-    description: "Use Gemini models for ATOS agent runs.",
+    description: "Use Gemini models for AURA agent runs.",
     placeholder: "AIza...",
     runtimeReady: true,
     models: [
@@ -546,7 +546,7 @@ export function IntelligenceView({ program, initialTab, onRunAgent }: Intelligen
 
   const saveProviderSettings = useCallback(async () => {
     if (!isSupabaseConfigured || !supabase) { setProviderMessage("Cloud connection is not configured."); return; }
-    if (!providerMeta.runtimeReady) { setProviderMessage(`${providerMeta.label} is not connected to the ATOS agent runtime yet.`); return; }
+    if (!providerMeta.runtimeReady) { setProviderMessage(`${providerMeta.label} is not connected to the AURA agent runtime yet.`); return; }
     const trimmedKey = providerApiKey.trim();
     if (!trimmedKey && !providerConfigured) { setProviderMessage(`Enter a ${providerMeta.label} API key.`); return; }
     setProviderSaving(true);
@@ -645,11 +645,11 @@ export function IntelligenceView({ program, initialTab, onRunAgent }: Intelligen
             <div className="adam-row adam-space-between" style={{ alignItems: "center", gap: 12, flexWrap: "wrap" }}>
               <div className="adam-stack" style={{ gap: 4 }}>
                 <div className="adam-micro adam-muted">AI PROVIDER</div>
-                <div className="adam-title">Choose how ATOS agents think</div>
+                <div className="adam-title">Choose how AURA agents think</div>
                 <div className="adam-body adam-muted">
                   {activeProvider
                     ? `${activeProvider.label} is the active runtime${activeProviderStatus?.model ? ` · ${activeProvider.models.find((m) => m.id === activeProviderStatus.model)?.label || activeProviderStatus.model}` : ""}${activeProviderStatus?.updatedAt ? ` · updated ${timeAgo(activeProviderStatus.updatedAt)}` : ""}`
-                    : "No AI provider is connected yet. Connect one to enable ATOS agent runs."}
+                    : "No AI provider is connected yet. Connect one to enable AURA agent runs."}
                 </div>
               </div>
               <span className={`adam-badge ${activeProvider ? "green" : "amber"}`}>
@@ -703,7 +703,7 @@ export function IntelligenceView({ program, initialTab, onRunAgent }: Intelligen
                       <div className="adam-title">{providerMeta.label} settings</div>
                       <div className="adam-body adam-muted">
                         {selectedProviderStatus.active
-                          ? "Connected and used for new ATOS agent runs."
+                          ? "Connected and used for new AURA agent runs."
                           : selectedProviderStatus.configured
                           ? "Paused — key is saved but agents are not using this provider. Resume to activate."
                           : "Not connected yet. Add an API key to activate."}
@@ -751,7 +751,7 @@ export function IntelligenceView({ program, initialTab, onRunAgent }: Intelligen
 
                 <div className="adam-card p-4" style={{ background: "rgba(44,200,77,0.08)", borderColor: "rgba(44,200,77,0.22)" }}>
                   <div className="adam-body">
-                    Saving this key makes {providerMeta.label} with {selectedModelMeta.label} the active runtime for ATOS agent runs. The key is stored server-side and never exposed back to the browser.
+                    Saving this key makes {providerMeta.label} with {selectedModelMeta.label} the active runtime for AURA agent runs. The key is stored server-side and never exposed back to the browser.
                   </div>
                 </div>
               </div>

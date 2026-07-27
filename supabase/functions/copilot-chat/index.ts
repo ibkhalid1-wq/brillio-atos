@@ -284,7 +284,7 @@ function buildWorkspacePrompt(
   const groundingBlock = grounding ? buildGroundingBlock(grounding) : "";
 
   return [
-    `You are ATOS Copilot acting as the ${identity} for the "${workspaceId}" workspace.`,
+    `You are AURA Copilot acting as the ${identity} for the "${workspaceId}" workspace.`,
     `Program name: ${programName}`,
     `Program objective: ${objective}`,
     digest ? `Current program state:\n${digest}` : "",

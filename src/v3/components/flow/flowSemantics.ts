@@ -1,5 +1,5 @@
 /**
- * Semantic referencing — SPAR/PROV over what ATOS already records.
+ * Semantic referencing — SPAR/PROV over what AURA already records.
  *
  * The evidence→artifact chain (attributed transcripts, ingested documents,
  * generated artifacts, fingerprints) IS a citation graph; this module gives
@@ -20,7 +20,7 @@ export const SEMANTIC_CONTEXT = {
   skos: "http://www.w3.org/2004/02/skos/core#",
 } as const;
 
-/** Deterministic, stable identifier for any knowledge object ATOS holds. */
+/** Deterministic, stable identifier for any knowledge object AURA holds. */
 export function resourceUri(programId: string, kind: string, id: string): string {
   const slug = id.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 64);
   return `urn:atos:${programId}:${kind}:${slug || "item"}`;
@@ -88,7 +88,7 @@ export function citationGraph(program: ProgramSummary): Record<string, unknown> 
         "@id": resourceUri(program.id, "artifact", artifact.id),
         "@type": artifactFabioType(artifact.id),
         "dcterms:title": artifact.title,
-        "prov:wasAttributedTo": "ATOS",
+        "prov:wasAttributedTo": "AURA",
         ...(artifact.stale ? { "cito:updates": "pending — evidence changed" } : {}),
         "cito:citesAsEvidence": evidence.filter((e) => e.relation === "cito:citesAsEvidence").map((e) => e.uri),
         "cito:obtainsBackgroundFrom": evidence.filter((e) => e.relation === "cito:obtainsBackgroundFrom").map((e) => e.uri),

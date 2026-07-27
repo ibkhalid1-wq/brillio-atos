@@ -102,7 +102,7 @@ export function buildFieldAssistPrompt(mode: FieldAssistMode, ctx: FieldAssistCo
   if (mode === "merge") {
     const incoming = (ctx.incomingValue ?? "").trim();
     return [
-      "You are ATOS, a senior delivery consultant helping a Program Manager complete a phase input field.",
+      "You are AURA, a senior delivery consultant helping a Program Manager complete a phase input field.",
       "",
       "PROGRAMME CONTEXT:",
       ...contextLines,
@@ -125,7 +125,7 @@ export function buildFieldAssistPrompt(mode: FieldAssistMode, ctx: FieldAssistCo
 
   const guidance = (ctx.guidance ?? "").trim();
   return [
-    "You are ATOS, a senior delivery consultant helping a Program Manager complete a phase input field.",
+    "You are AURA, a senior delivery consultant helping a Program Manager complete a phase input field.",
     "",
     "PROGRAMME CONTEXT:",
     ...contextLines,

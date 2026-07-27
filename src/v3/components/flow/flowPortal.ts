@@ -463,9 +463,9 @@ export function mintDemoInvites(program: ProgramSummary, actor: string): Record<
 
 /**
  * Mint one follow-up link — the async form of "run the follow-up meeting":
- * ATOS asks exactly the gap questions, the answers come back through the
+ * AURA asks exactly the gap questions, the answers come back through the
  * quarantine, and ingest routes them to the right movement's transcript.
- * Today's practical step toward ATOS conducting meetings autonomously.
+ * Today's practical step toward AURA conducting meetings autonomously.
  */
 export function mintFollowUpPack(
   program: ProgramSummary,

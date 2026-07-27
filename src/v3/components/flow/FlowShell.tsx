@@ -113,7 +113,7 @@ interface FlowShellProps {
   onHydratePrograms: () => Promise<void>;
   /** Put a gap-closing follow-up on the calendar. */
   onScheduleFollowUp: (movementId: string, who: string, date: string) => Promise<void>;
-  /** Mint a follow-up link (ATOS asks the gaps itself); resolves to the URL. */
+  /** Mint a follow-up link (AURA asks the gaps itself); resolves to the URL. */
   onMintFollowUp: (input: { movementId: string; who: string; questions: string[]; captureField: string; unnamed?: boolean }) => Promise<string | null>;
   onMintReview: (input: { movementId: string; who: string; role: string; captureField: string; reviewKind: string; review: unknown; questions: string[]; intro: string; unnamed?: boolean }) => Promise<string | null>;
   /** Mint a shareable sponsor brief (dated board-pack snapshot); resolves to the URL. */
@@ -324,7 +324,7 @@ function FlowHelp({ onClose }: { onClose: () => void }) {
         <div className="v3fs-help-head">
           <div>
             <span className="v3fs-pf-eyebrow">Help</span>
-            <h2>How ATOS Flow works</h2>
+            <h2>How AURA Flow works</h2>
           </div>
           <button type="button" className="v3fs-help-x" onClick={onClose} aria-label="Close help">✕</button>
         </div>
@@ -467,11 +467,11 @@ function FlowDrillWizard({ program, onCreate, onClose }: {
 }
 
 /**
- * "Paper & Flow" — the reimagined shell for ATOS Flow programmes. None of the
+ * "Paper & Flow" — the reimagined shell for AURA Flow programmes. None of the
  * classic chrome renders here: a floating dock (Flow · Library · Pulse ·
  * Copilot), an editorial hero with the one metric that matters (days to first
  * demo), and the pipeline as the page. Brand hues carry one grammar: blue =
- * what people said, indigo = what ATOS made, green = what was demonstrated.
+ * what people said, indigo = what AURA made, green = what was demonstrated.
  * Theme-aware — follows the app's data-theme like every other surface.
  */
 export default function FlowShell(props: FlowShellProps) {
@@ -591,7 +591,7 @@ export default function FlowShell(props: FlowShellProps) {
         </div>
         <div className="v3fs-wrap">
           <header className="v3fs-hero">
-            <div className="v3fs-hero-eyebrow">ATOS Flow{program.client ? <span> · {program.client}</span> : null}</div>
+            <div className="v3fs-hero-eyebrow">AURA Flow{program.client ? <span> · {program.client}</span> : null}</div>
             <h1 className="v3fs-hero-title">{program.name}</h1>
             {days != null ? (
               <p className="v3fs-hero-line">
@@ -656,9 +656,9 @@ export default function FlowShell(props: FlowShellProps) {
           {/* Brand + breadcrumb: Portfolio / (parent) / programme. The trail IS
               the location — the hero no longer repeats it. The programme crumb
               opens the switcher; a drill-down shows its parent as a hop. */}
-          {/* The lockup reads "[mark] brillio · ATOS" — the network tile is the
+          {/* The lockup reads "[mark] brillio · AURA" — the network tile is the
               product mark (same artwork as the favicon), the wordmark is Brillio. */}
-          <span className="v3fs-appbar-brandlock"><AtosMark className="v3fs-appbar-mark" /><BrilioLogo className="v3fs-appbar-logo" title="Brillio" /><span className="v3fs-appbar-brand">ATOS</span></span>
+          <span className="v3fs-appbar-brandlock"><AtosMark className="v3fs-appbar-mark" /><BrilioLogo className="v3fs-appbar-logo" title="Brillio" /><span className="v3fs-appbar-brand">AURA</span></span>
           <nav className="v3fs-appbar-crumbs" aria-label="Breadcrumb">
             <button type="button" className={`v3fs-appbar-nav${view === "portfolio" ? " on" : ""}`}
               title={DOCK_TIPS.portfolio} aria-label="Portfolio"
@@ -697,7 +697,7 @@ export default function FlowShell(props: FlowShellProps) {
           <kbd>⌘K</kbd>
         </button>
         <div className="v3fs-appbar-r">
-          <button type="button" className="v3fs-appbar-nav" title="Help — how ATOS Flow works" aria-label="Help"
+          <button type="button" className="v3fs-appbar-nav" title="Help — how AURA Flow works" aria-label="Help"
             onClick={() => setHelpOpen(true)}>
             <DockIcon id="help" /><span>Help</span>
           </button>
@@ -1669,7 +1669,7 @@ function FlowMission({ program, fleet, loadMovementSpend, onSetHaltAll, onToggle
           <div className="v3fs-guard-row">
             <div className="v3fs-row-g">
               <div className="v3fs-row-n">Auto-build artifacts on input</div>
-              <div className="v3fs-row-m">off by default — evidence stales the affected artifacts and waits for you to press Regenerate. When on, ATOS regenerates them automatically as soon as their inputs arrive.</div>
+              <div className="v3fs-row-m">off by default — evidence stales the affected artifacts and waits for you to press Regenerate. When on, AURA regenerates them automatically as soon as their inputs arrive.</div>
             </div>
             <button type="button" role="switch" aria-checked={!!(autoBuildOn ?? autoBuildEnabled(program))}
               className={`v3fs-switch${(autoBuildOn ?? autoBuildEnabled(program)) ? " on" : ""}`} disabled={busy}

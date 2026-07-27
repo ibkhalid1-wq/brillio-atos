@@ -86,7 +86,7 @@ const AUTH_RECOVERY_INTENT_STORAGE_KEY = "atlas-auth-recovery-intent";
 
 
 
-// ATOS Flow is the only delivery model — the classic stage-gate workspace was
+// AURA Flow is the only delivery model — the classic stage-gate workspace was
 // retired (2026-07). Every programme seeds with, and renders, the Flow spine.
 const APP_METHODOLOGY_VARIANT: MethodologyVariant = "atos-flow";
 const DEFAULT_PHASE_SEQUENCE = getPhaseSequence(APP_METHODOLOGY_VARIANT);
@@ -426,7 +426,7 @@ function AuthScreen({
       <div className="v3-auth-shell">
         <div className="v3-auth-gate-inner">
           <BrilioLogo className="v3-auth-brandmark" tone="mono" />
-          <div className="v3-auth-gate-logo">ATOS</div>
+          <div className="v3-auth-gate-logo">AURA</div>
           <h1 className="v3-auth-gate-title">{authTitle}</h1>
           <p className="v3-auth-gate-body">{authBody}</p>
 
@@ -936,7 +936,7 @@ export default function AppShellV3() {
   // Update document title to reflect active programme
   useEffect(() => {
     const name = activeProgram?.name;
-    document.title = name ? `${name} — Brillio - ATOS` : "Brillio - ATOS";
+    document.title = name ? `${name} — Brillio - AURA` : "Brillio - AURA";
   }, [activeProgram?.name]);
 
   const copilotWorkspaceId = "home";
@@ -2364,7 +2364,7 @@ export default function AppShellV3() {
   }, [activeProgram]);
 
   // AUTONOMOUS REGENERATION. When feedback lands and a document falls behind its
-  // evidence, ATOS rebuilds it on its own — the operator is never prompted to
+  // evidence, AURA rebuilds it on its own — the operator is never prompted to
   // "regenerate, evidence changed" (they keep a manual regenerate as an option).
   // Keyed by the movement's evidence FINGERPRINT so it runs once per genuine
   // change: a successful rebuild clears the staleness (no re-fire), and a failed
@@ -2549,9 +2549,9 @@ export default function AppShellV3() {
             {/* Hero */}
             <div className="v3-welcome-hero">
               <div className="v3-welcome-hero-glyph" aria-hidden="true"><AtosMark className="v3-welcome-mark" /></div>
-              <h1 className="v3-welcome-hero-title">Welcome to Brillio ATOS</h1>
+              <h1 className="v3-welcome-hero-title">Welcome to Brillio AURA</h1>
               <p className="v3-welcome-hero-sub">
-                Create a programme and ATOS turns recorded stakeholder conversations into a current-state atlas, an agentic blueprint, and a working system.
+                Create a programme and AURA turns recorded stakeholder conversations into a current-state atlas, an agentic blueprint, and a working system.
               </p>
               <button
                 type="button"
@@ -2584,7 +2584,7 @@ export default function AppShellV3() {
             <div className="v3-welcome-tiles">
               {[
                 { icon: "◇", title: "Derived gates", body: "Transcripts and documents are first-class inputs. Gates tick themselves as evidence lands — nothing is hand-marked done." },
-                { icon: "✦", title: "Propose, then confirm", body: "ATOS generates the atlas, blueprint and demo scripts from what people said; consequential changes wait in your Inbox as decisions." },
+                { icon: "✦", title: "Propose, then confirm", body: "AURA generates the atlas, blueprint and demo scripts from what people said; consequential changes wait in your Inbox as decisions." },
                 { icon: "⬡", title: "Demonstration gates", body: "Each stakeholder watches their own workflow run — seeded from their own words — and acceptance is recorded pass by pass." },
                 { icon: "◫", title: "Governed autonomy", body: "Every action lands on an attested trail; budgets, halts and tiers keep agent work a deliberate, auditable call." },
               ].map((tile) => (

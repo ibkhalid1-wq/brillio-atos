@@ -343,7 +343,7 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
   // auto-save could clobber an external write (e.g. a document import that just
   // populated kpis) with an empty array before the resync effect adopted it.
   const [values, setValues] = useState<Record<string, string>>(existingInputs);
-  // Transcript fields (ATOS Flow evidence) render in one of two modes: paste the
+  // Transcript fields (AURA Flow evidence) render in one of two modes: paste the
   // conversation text (the value IS the transcript) or reference an uploaded
   // document. Explicit user toggles live here; untouched fields infer their mode
   // from the stored value's shape (multiline/long ⇒ pasted).
@@ -679,7 +679,7 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
   // while shaping the phase. Splitting them into a collapsed "Evidence &
   // sign-offs" band keeps the required substance front-and-centre and defers the
   // approval references until they are actually needed. A REQUIRED sign-off
-  // field is different: it IS the phase's substance (ATOS Flow's demo tour
+  // field is different: it IS the phase's substance (AURA Flow's demo tour
   // ledger — the gate itself — is one), so it stays in the primary band; every
   // stage-gate sign-off field is optional, so their placement is unchanged.
   // Partitioning preserves methodology order within each group (optional
@@ -1143,7 +1143,7 @@ export default function PhaseInputsPanel({ program, phaseId, onSave, onAssistFie
                     onChange={(value) => setValues((c) => ({ ...c, [field.id]: value }))}
                   />
                 ) : field.type === "transcript" ? (
-                  // ATOS Flow's evidence type. Paste-first: the pasted
+                  // AURA Flow's evidence type. Paste-first: the pasted
                   // conversation text persists AS the field value and flows
                   // verbatim into generation grounding — no upload round-trip.
                   // The toggle switches to a document reference for transcripts

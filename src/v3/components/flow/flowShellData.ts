@@ -1,10 +1,10 @@
 /**
- * Pure data readers for the Flow shell — the reimagined chrome for ATOS Flow
+ * Pure data readers for the Flow shell — the reimagined chrome for AURA Flow
  * programmes. Everything here derives from the programme summary + methodology
  * registry; no component state, so the canvas/library/pulse views stay thin.
  *
  * The shell's colour grammar (see v3.css `v3fs-`): blue = evidence (what
- * people said), indigo = generated (what ATOS made), green = demonstrated
+ * people said), indigo = generated (what AURA made), green = demonstrated
  * (what was accepted). These readers hand each view exactly those three kinds.
  */
 import type { ProgramSummary } from "@/new/types";
@@ -612,7 +612,7 @@ export function falsifiedGap(program: ProgramSummary, gap: string): boolean {
   return frameFactOnRecord(program, hit.fact ?? hit.field, hit.field, 8);
 }
 
-/** Operator opt-in: when ON, ATOS first-generates an impacted artifact as soon
+/** Operator opt-in: when ON, AURA first-generates an impacted artifact as soon
  * as its inputs arrive — not only regenerating already-present stale ones. OFF
  * by default so nothing fires model calls unprompted. Fingerprint-safe (`_`). */
 export function autoBuildEnabled(program: ProgramSummary): boolean {

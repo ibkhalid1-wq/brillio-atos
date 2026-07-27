@@ -1,5 +1,5 @@
 /**
- * flow-portal — the PUBLIC face of ATOS Flow's async evidence loop.
+ * flow-portal — the PUBLIC face of AURA Flow's async evidence loop.
  *
  * Deployed with --no-verify-jwt: the audience is an external stakeholder
  * holding a response link, not an authenticated user. Access is gated by the
@@ -701,7 +701,7 @@ Return ONLY JSON: {"topic":"design"|"other","answer":"..."}.`,
             const { data: rows, error } = await upd.select("id");
             if (error) break;
             if (rows && rows.length > 0) {
-              notifyWebhook(`ATOS Flow — ${hit.programName}: ${String(hit.pack.stakeholder ?? "a stakeholder")} asked a question. It is waiting in the evidence inbox.`);
+              notifyWebhook(`AURA Flow — ${hit.programName}: ${String(hit.pack.stakeholder ?? "a stakeholder")} asked a question. It is waiting in the evidence inbox.`);
               break;
             }
           }
@@ -739,7 +739,7 @@ Return ONLY JSON: {"topic":"design"|"other","answer":"..."}.`,
           const { data: rows, error } = await upd.select("id");
           if (error) return jsonResponse({ error: "Could not record that. Please try again." }, 500);
           if (rows && rows.length > 0) {
-            notifyWebhook(`ATOS Flow — ${hit.programName}: ${String(hit.pack.stakeholder ?? "a stakeholder")} gave design feedback. It is waiting in the evidence inbox.`);
+            notifyWebhook(`AURA Flow — ${hit.programName}: ${String(hit.pack.stakeholder ?? "a stakeholder")} gave design feedback. It is waiting in the evidence inbox.`);
             return jsonResponse({ ok: true });
           }
         }
@@ -970,10 +970,10 @@ Return ONLY JSON: {"topic":"design"|"other","answer":"..."}.`,
             });
           } catch { /* best effort — the poll still catches it */ }
           notifyWebhook(hit.kind === "approval"
-            ? `ATOS Flow — ${hit.programName}: ${approverName || "an approver"} responded to "${String(hit.pack.artifactTitle ?? "a document")}" — recorded automatically.`
+            ? `AURA Flow — ${hit.programName}: ${approverName || "an approver"} responded to "${String(hit.pack.artifactTitle ?? "a document")}" — recorded automatically.`
             : hit.kind === "demo"
-              ? `ATOS Flow — ${hit.programName}: ${stakeholder} returned a demo verdict. It is waiting in the evidence inbox.`
-              : `ATOS Flow — ${hit.programName}: ${stakeholder} answered an async interview. It is waiting in the evidence inbox.`);
+              ? `AURA Flow — ${hit.programName}: ${stakeholder} returned a demo verdict. It is waiting in the evidence inbox.`
+              : `AURA Flow — ${hit.programName}: ${stakeholder} answered an async interview. It is waiting in the evidence inbox.`);
           return jsonResponse({ ok: true });
         }
         // CAS miss — another writer landed in between; reload and retry.

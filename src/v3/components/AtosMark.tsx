@@ -1,12 +1,12 @@
 /**
- * The ATOS product mark — the sphere-network artwork from the brand kit
+ * The AURA product mark — the sphere-network artwork from the brand kit
  * (deep-indigo wireframe globe, Brillio-green accent nodes). The favicon PNGs
  * ship from the same kit, so tab icon and in-app mark stay one identity.
  * `tone="dark"` swaps to the white-linework variant for dark chrome.
  */
 export default function AtosMark({
   className = "",
-  title = "ATOS",
+  title = "AURA",
   tone = "light",
 }: {
   className?: string;

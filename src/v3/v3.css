@@ -485,18 +485,18 @@ select {
 
 /* Hide programme avatar/mark when rail is collapsed (not hovered) */
 
-/* ── Ask ATOS button in rail ── */
+/* ── Ask AURA button in rail ── */
 
 /* ── Brand lockup at top of rail ── */
 
-/* ── Collapsed: "ATOS" wordmark, centered ── */
+/* ── Collapsed: "AURA" wordmark, centered ── */
 
-/* ── Expanded: large Brillio logo + ATOS badge ── */
+/* ── Expanded: large Brillio logo + AURA badge ── */
 
-/* ATOS reads identically in both states: same wordmark typography, divided
+/* AURA reads identically in both states: same wordmark typography, divided
    from the Brillio logo by a hairline when expanded. */
 
-/* When rail expands: hide ATOS mark, reveal the full Brillio lockup */
+/* When rail expands: hide AURA mark, reveal the full Brillio lockup */
 
 /* Expanded: reserve room on the right so a long programme name clips with an
    ellipsis instead of running under the absolutely-positioned chevron. */
@@ -2830,7 +2830,7 @@ button.v3-chip:disabled {
   border-color: rgba(33, 23, 71, 0.18);
 }
 
-/* ─── Topbar Ask ATOS button ─────────────────────────────────────────── */
+/* ─── Topbar Ask AURA button ─────────────────────────────────────────── */
 
 /* ── Artifact preview panel ── */
 
@@ -2936,7 +2936,7 @@ button.v3-chip:disabled {
   color: #b42318;
 }
 
-/* ── ATOS Copilot trigger button ── */
+/* ── AURA Copilot trigger button ── */
 
 .v3-copilot-btn:hover,
 .v3-copilot-btn.active {
@@ -3282,7 +3282,7 @@ button.v3-chip:disabled {
   border-radius: 28px;
   padding: 28px;
   /* The brand panel: an accent-tinted ground and an accent left edge so it
-     reads as ATOS's own side, echoing the app's record-rail identity. */
+     reads as AURA's own side, echoing the app's record-rail identity. */
   background:
     radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--v3-accent-b) 16%, transparent) 0, transparent 55%),
     linear-gradient(180deg, color-mix(in srgb, var(--v3-accent) 9%, var(--v3-surface-2)) 0%, var(--v3-surface-2) 78%);
@@ -3722,7 +3722,7 @@ button, [role="button"] {
 /* Tile card */
 
 /* ==========================================================================
-   ATOS MARKETPLACE
+   AURA MARKETPLACE
    ========================================================================== */
 
 /* ─── Help panel ───────────────────────────────────────────────────────────── */
@@ -4485,14 +4485,14 @@ button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
 /* Axis pinned cells extend over the axis-month labels and the axis→grid gap so the
    scrolling month/year ticks and the "today" flag never bleed into the frozen columns. */
 
-/* ── ATOS Flow movement strip ─────────────────────────────────────────────────
+/* ── AURA Flow movement strip ─────────────────────────────────────────────────
    The human/machine split of a Flow movement (FlowMovementStrip): what the
-   humans do, what ATOS generates, and the demonstration that ends the movement.
+   humans do, what AURA generates, and the demonstration that ends the movement.
    Only Flow movements render it — stage-gate phases carry no movement meta. */
 
-/* ═══ "Paper & Flow" — the reimagined shell for ATOS Flow programmes ═══════
+/* ═══ "Paper & Flow" — the reimagined shell for AURA Flow programmes ═══════
    None of the classic chrome renders alongside this. One colour grammar:
-   blue = what people said · indigo = what ATOS made · green = demonstrated.
+   blue = what people said · indigo = what AURA made · green = demonstrated.
    Builds on the --v3-* tokens so [data-theme="light"] flips it automatically;
    the --fs-* locals below carry the few treatment-specific values per theme. */
 .v3fs-app, .v3-wizard-overlay {
@@ -4579,7 +4579,7 @@ body:has(.v3fs-pack) .v3fs-appbar:focus-within {transform:none}
 /* Left takes its natural width (crumbs truncate at their own caps); the search
    centres itself in whatever remains via auto margins — crumbs never starve. */
 .v3fs-appbar-l {flex:0 1 auto;display:flex;align-items:center;justify-content:flex-start;gap:14px;min-width:0}
-.v3fs-appbar-brand {font-size:10px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;
+.v3fs-appbar-brand {font-size:15px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;
   color:var(--v3-accent-2);white-space:nowrap;flex-shrink:0}
 .v3fs-appbar-crumbs {display:flex;align-items:center;gap:2px;flex:1;min-width:0;overflow:hidden}
 .v3fs-appbar-sl {color:var(--v3-text-muted);opacity:.45;font-size:12px;flex-shrink:0;padding:0 2px}
@@ -5914,7 +5914,7 @@ button.v3fs-stale-tag {font-family:inherit;border:none;cursor:pointer}
 .v3fs-async-who span {display:block;font-family:var(--v3-font-mono);font-size:10px;font-weight:400;color:var(--v3-text-muted)}
 .v3fs-portal {max-width:640px}
 .v3fs-hero-brand {color:var(--v3-accent-2);font-weight:750}
-/* A quiet Brillio·ATOS signature closes every linked page — brand presence +
+/* A quiet Brillio·AURA signature closes every linked page — brand presence +
    the reassurance that the response is private to the programme team. */
 .v3fs-portal-brandfoot {display:flex;flex-direction:column;align-items:center;gap:7px;margin:48px 0 30px;padding-top:26px;
   border-top:1px solid var(--fs-line);text-align:center}
@@ -8596,7 +8596,7 @@ select.v3fs-dir-in {cursor:pointer}
 .v3fs-appbar-logo {height:20px}                                   /* app-bar lockup */
 [data-theme="dark"] .v3fs-appbar-logo {filter:brightness(0) invert(1);opacity:.9}
 
-/* ATOS product mark — the network tile, ONE artwork with the favicon
+/* AURA product mark — the network tile, ONE artwork with the favicon
    (/favicon.svg). Rounded like the tile itself; sized per placement. */
 .v3-atos-mark {display:inline-block;width:auto;user-select:none;flex-shrink:0;align-self:center}
 .v3fs-appbar-mark {height:32px}
@@ -8604,7 +8604,7 @@ select.v3fs-dir-in {cursor:pointer}
 .v3-topbar-mark {height:30px}
 .v3-welcome-mark {height:56px;box-shadow:0 10px 28px -10px rgba(26,18,64,.55)}
 
-/* Portal / linked-page brand image — the wordmark inline with "ATOS" text on
+/* Portal / linked-page brand image — the wordmark inline with "AURA" text on
    the public surfaces (respond, brief, approve, review). Baseline-tucked so it
    reads as one lockup inside headings and eyebrows. */
 .v3fs-portal-brandimg {height:15px;width:auto;display:inline-block;vertical-align:-2px;user-select:none}

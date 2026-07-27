@@ -100,7 +100,7 @@ interface FlowCanvasProps {
  * "Paper & Flow" — the Flow programme home. The pipeline is drawn as one
  * continuous line down the page; movements are chapters on that spine. Each
  * open chapter runs the loop left to right as three stages — Collect (people
- * and their record) → Paper (the documents ATOS made) → Gate (the verdict
+ * and their record) → Paper (the documents AURA made) → Gate (the verdict
  * ceremony) — with a header that carries the gate gauge, the movement's
  * one-line brief, and the ranked "Up next" queue. Nothing locks; editing
  * unfolds in place via the shared inputs panel.

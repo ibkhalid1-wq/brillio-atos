@@ -1,6 +1,6 @@
 /**
  * parseDocumentToText
- * Converts an uploaded File to plain text for ATOS agent ingestion.
+ * Converts an uploaded File to plain text for AURA agent ingestion.
  *
  * Supported formats:
  *   Documents : PDF, DOCX, PPTX, XLSX/XLS/ODS, ODT, DOC (best-effort)

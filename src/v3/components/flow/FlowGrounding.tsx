@@ -153,7 +153,7 @@ export default function FlowGrounding({ program, onSaveInputs }: {
         <div className="v3fs-panel" key={pack.vocabulary}>
           <div className="v3fs-ph">
             <h3>{pack.vocabulary}</h3>
-            <span>industry standard — read-only; ships with ATOS and is validated in CI</span>
+            <span>industry standard — read-only; ships with AURA and is validated in CI</span>
           </div>
           <div style={{ display: "grid", gap: 6 }}>
             {pack.classes.map((c) => (

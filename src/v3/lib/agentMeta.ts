@@ -49,7 +49,7 @@ export const AGENT_META: Record<string, AgentMeta> = {
   "runbook": { id: "runbook", label: "Runbook", description: "Produces operational procedures, monitoring, and incident response", estimatedSeconds: 26, category: "governance", icon: "◷", outputArtifact: "Runbook", confidence: 78, reasoning: "Defines routine operations, monitoring thresholds, and incident-response procedures for live running" },
   "support-model": { id: "support-model", label: "Support Model", description: "Defines support tiers, SLAs, roles, and escalation", estimatedSeconds: 24, category: "governance", icon: "⊕", outputArtifact: "Support Model", confidence: 78, reasoning: "Specifies support tiers, SLAs, and escalation aligned to operating stakeholders" },
   "optimization-backlog": { id: "optimization-backlog", label: "Optimization Backlog", description: "Prioritises continuous-improvement opportunities", estimatedSeconds: 22, category: "strategy", icon: "✧", outputArtifact: "Optimization Backlog", confidence: 76, reasoning: "Ranks improvement opportunities by value vs effort against baseline KPIs and operating signals" },
-  // ── ATOS Flow producing agents ────────────────────────────────────────────
+  // ── AURA Flow producing agents ────────────────────────────────────────────
   // The evidence-to-system pipeline's transformers: each consumes the previous
   // movement's evidence (transcripts, the Atlas, the Blueprint, demo verdicts)
   // and generates the next living artifact. Registered here so Flow movements

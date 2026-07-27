@@ -12,14 +12,14 @@ export interface GuideArticle {
 export const ADAM_USER_GUIDE: GuideArticle[] = [
   {
     id: "gs-001",
-    title: "What ATOS helps you do",
+    title: "What AURA helps you do",
     category: "Getting Started",
     keywords: ["what is atos", "about atos", "overview", "methodology", "what does atos do", "introduction"],
-    summary: "ATOS helps teams move from a business problem to a production-ready Human + Agent capability with clear phase gates, stronger evidence, and visible accountability.",
+    summary: "AURA helps teams move from a business problem to a production-ready Human + Agent capability with clear phase gates, stronger evidence, and visible accountability.",
     body: `
-# What is ATOS?
+# What is AURA?
 
-ATOS stands for **Agentic Transformation Operating System**. It is a structured framework that guides your organization through every stage of an AI transformation program - from defining the business problem to measuring delivered value.
+AURA stands for **Agentic Transformation Operating System**. It is a structured framework that guides your organization through every stage of an AI transformation program - from defining the business problem to measuring delivered value.
 
 ## The 9 Phases
 
@@ -35,7 +35,7 @@ ATOS stands for **Agentic Transformation Operating System**. It is a structured 
 | **Optimize** | Continuously improve based on operational data |
 | **Value Realize** | Measure delivered outcomes against baseline and capture learning |
 
-## How ATOS protects you
+## How AURA protects you
 
 - **Phase gates** prevent you from moving forward before critical work is done
 - **The Copilot** guides you at every step, flags gaps, and generates content
@@ -69,11 +69,11 @@ Once your program is created, the Copilot will:
 - Flag anything missing before you try to advance
 
 ## Step 4: Work through each phase in order
-ATOS enforces phase sequencing. You must complete Strategy before Mobilise, and so on. The Copilot will tell you exactly what is needed at each gate.
+AURA enforces phase sequencing. You must complete Strategy before Mobilise, and so on. The Copilot will tell you exactly what is needed at each gate.
 
 ## Tips
 - You do not need to complete a phase in one sitting - save as you go
-- Upload documents at any phase to let ATOS extract relevant inputs automatically
+- Upload documents at any phase to let AURA extract relevant inputs automatically
 - Use the Readiness Score at the top of your program to track overall health
     `,
     relatedArticleIds: ["gs-001", "gs-004", "cp-001"],
@@ -83,11 +83,11 @@ ATOS enforces phase sequencing. You must complete Strategy before Mobilise, and 
     title: "How readiness is scored",
     category: "Getting Started",
     keywords: ["readiness score", "atos readiness index", "score", "percentage", "health", "progress", "how is score calculated"],
-    summary: "The ATOS Readiness Index combines evidence quality, decisions, approvals, stakeholder coverage, and freshness into one score that shows how ready the program is to progress.",
+    summary: "The AURA Readiness Index combines evidence quality, decisions, approvals, stakeholder coverage, and freshness into one score that shows how ready the program is to progress.",
     body: `
 # Understanding the Readiness Score
 
-The **ATOS Readiness Index** is a live health indicator for your program. It tells you - at a glance - how ready your program is to advance.
+The **AURA Readiness Index** is a live health indicator for your program. It tells you - at a glance - how ready your program is to advance.
 
 ## How it is calculated
 
@@ -129,20 +129,20 @@ The overall program score is the weighted average across all active phases.
     title: "Bring in existing documents",
     category: "Getting Started",
     keywords: ["upload document", "attach file", "document intelligence", "import", "pdf", "word", "deck", "extract", "parse"],
-    summary: "Upload decks, Word files, or PDFs and ATOS will extract likely inputs, stage proposals, and preserve your manual edits for review.",
+    summary: "Upload decks, Word files, or PDFs and AURA will extract likely inputs, stage proposals, and preserve your manual edits for review.",
     body: `
 # Uploading Documents
 
-ATOS can read your existing documents - strategy decks, business cases, architecture specs, project plans - and automatically extract relevant inputs to populate your program.
+AURA can read your existing documents - strategy decks, business cases, architecture specs, project plans - and automatically extract relevant inputs to populate your program.
 
 ## How to upload
 
 1. Navigate to the phase where the document is most relevant
 2. Click the **paperclip / Attach Document** icon in the Copilot panel or phase workspace
 3. Select your file (PDF, Word, or PowerPoint, up to 8MB)
-4. ATOS will parse the document and show you what it found
+4. AURA will parse the document and show you what it found
 
-## What ATOS extracts by phase
+## What AURA extracts by phase
 
 | Phase | What is extracted |
 |---|---|
@@ -154,14 +154,14 @@ ATOS can read your existing documents - strategy decks, business cases, architec
 
 ## What happens after extraction
 
-- ATOS shows you a **review panel** with each extracted item and a confidence score
+- AURA shows you a **review panel** with each extracted item and a confidence score
 - You can **Accept**, **Dismiss**, or **Edit** each item before it is added to your program
 - Accepted items are added to the relevant phase fields and improve your Readiness Score
 
 ## Important notes
 
-- ATOS never overwrites content you have manually edited - it creates **proposals** instead
-- If you upload a newer version of the same document, ATOS detects the update and flags any decisions that may be affected
+- AURA never overwrites content you have manually edited - it creates **proposals** instead
+- If you upload a newer version of the same document, AURA detects the update and flags any decisions that may be affected
 - If extraction finds nothing relevant, it will tell you why and suggest what to try instead
     `,
     relatedArticleIds: ["gs-002", "cp-003", "ar-002"],
@@ -196,7 +196,7 @@ Example: *"Meeting follow-up time: 10 hours per team per week (measured Q1 2026)
 Add baselines in **Strategy -> Baseline Metrics** with: metric name, current value, unit, data source, and measurement date.
 
 ## Exit criteria
-Before advancing to Mobilise, ATOS requires:
+Before advancing to Mobilise, AURA requires:
 - [ ] Business problem defined
 - [ ] Desired outcome defined
 - [ ] At least one baseline metric captured
@@ -231,10 +231,10 @@ Assemble the right people, assign clear responsibilities, and establish how deci
 3. For each person, set: Name, Role, and Allocation %
 
 ### Importing from a spreadsheet
-Upload a CSV or Excel file with columns: Role, Name, Allocation. ATOS will match each row to a delivery role and rebuild the roster cleanly.
+Upload a CSV or Excel file with columns: Role, Name, Allocation. AURA will match each row to a delivery role and rebuild the roster cleanly.
 
 ### Required roles for AI programs
-If your program includes L3 or L4 autonomous capabilities, ATOS requires:
+If your program includes L3 or L4 autonomous capabilities, AURA requires:
 - **AI/ML Engineer** - mandatory for L3/L4 agent development
 - **Program Sponsor** - executive accountable for the program
 - **Program Manager** - day-to-day delivery accountability
@@ -276,7 +276,7 @@ Identify what you are building, who it affects, and how you will measure success
 
 ## Capability DNA
 
-Capability DNA is ATOS's framework for defining AI capabilities with precision. Each capability card captures:
+Capability DNA is AURA's framework for defining AI capabilities with precision. Each capability card captures:
 
 | Field | Purpose |
 |---|---|
@@ -455,7 +455,7 @@ Mark each item complete:
 - Data Privacy Impact Assessment (DPIA) completed
 
 ## Separation of duties reminder
-ATOS enforces that the person who creates an artifact cannot be the same person who approves it. If you are working alone, assign a reviewer from the steering committee.
+AURA enforces that the person who creates an artifact cannot be the same person who approves it. If you are working alone, assign a reviewer from the steering committee.
 
 ## Exit criteria
 - [ ] All 5 governance framework fields complete
@@ -532,7 +532,7 @@ Prove that the program delivered the value it promised. This is the most importa
 
 ## KPI Measurement
 
-For each KPI defined in Discover, record the actual measured value. ATOS will automatically calculate:
+For each KPI defined in Discover, record the actual measured value. AURA will automatically calculate:
 - Achievement vs target (%)
 - Delta from baseline (if baseline was captured in Strategy)
 - Trend direction
@@ -555,7 +555,7 @@ Document at least 3 lessons for the next program cycle:
 - What would you do differently?
 - What surprised you?
 
-These feed ATOS's global learning loop and will surface as insights for future programs in the same industry.
+These feed AURA's global learning loop and will surface as insights for future programs in the same industry.
 
 ## Exit criteria
 - [ ] At least 1 KPI with a measured (actual) value
@@ -574,7 +574,7 @@ These feed ATOS's global learning loop and will surface as insights for future p
     body: `
 # Using the Copilot
 
-The ATOS Copilot is not a generic chatbot. It knows your program, your current phase, and exactly where your gaps are.
+The AURA Copilot is not a generic chatbot. It knows your program, your current phase, and exactly where your gaps are.
 
 ## What to ask the Copilot
 
@@ -663,17 +663,17 @@ Administrators can define custom contradiction rules in **Govern -> Custom Rules
     body: `
 # Artifact Update Proposals
 
-ATOS never silently overwrites content you have written. When the Copilot generates an update to a manually-edited artifact, it creates a **proposal** for you to review.
+AURA never silently overwrites content you have written. When the Copilot generates an update to a manually-edited artifact, it creates a **proposal** for you to review.
 
 ## How proposals work
 
 1. You manually edit an artifact (for example the Outcome Charter)
 2. You upload a new document or change a phase input
-3. ATOS detects that the artifact could be improved based on the new information
-4. Instead of overwriting, ATOS creates a proposal showing:
+3. AURA detects that the artifact could be improved based on the new information
+4. Instead of overwriting, AURA creates a proposal showing:
    - **Current content** - what you wrote
-   - **Proposed content** - what ATOS suggests
-   - **Reason** - why ATOS is suggesting the change
+   - **Proposed content** - what AURA suggests
+   - **Reason** - why AURA is suggesting the change
    - **Source** - what triggered the proposal (document upload, input change, and so on)
 
 ## Reviewing proposals
@@ -702,7 +702,7 @@ Without this protection, regenerating content would silently destroy your manual
     body: `
 # Artifacts
 
-Artifacts are the formal outputs of each ATOS phase. They are the evidence that a phase has been completed to the required standard.
+Artifacts are the formal outputs of each AURA phase. They are the evidence that a phase has been completed to the required standard.
 
 ## Artifact lifecycle
 
@@ -746,14 +746,14 @@ Some artifacts (for example the Capability DNA sign-off) are **signature artifac
     title: "Undo changes and restore earlier versions",
     category: "Artifacts",
     keywords: ["undo", "redo", "version history", "rollback", "restore", "previous version", "revert", "history"],
-    summary: "ATOS keeps both program-level and artifact-level history so you can recover from mistakes without losing the wider program state.",
+    summary: "AURA keeps both program-level and artifact-level history so you can recover from mistakes without losing the wider program state.",
     body: `
 # Undo and Version History
 
-ATOS protects your work with two levels of undo:
+AURA protects your work with two levels of undo:
 
 ## Program-level undo (20 snapshots)
-Every time you make a significant change to your program, ATOS saves a snapshot. You can step back through the last 20 states.
+Every time you make a significant change to your program, AURA saves a snapshot. You can step back through the last 20 states.
 
 **How to use:**
 - Click the **Undo** button in the top toolbar, or
@@ -777,7 +777,7 @@ Each artifact maintains its own undo history. When editing an artifact, you can 
 
 - Changes that have been formally approved (to protect audit integrity)
 - Phase advancement - these are intentional state transitions
-- Deletions that have been confirmed twice (ATOS asks for double confirmation on destructive actions)
+- Deletions that have been confirmed twice (AURA asks for double confirmation on destructive actions)
 
 ## Best practice
 If you are about to make significant changes to a complex artifact, use **Export Program** first to create a portable backup.
@@ -789,16 +789,16 @@ If you are about to make significant changes to a complex artifact, use **Export
     title: "Why a phase gate is blocked",
     category: "Artifacts",
     keywords: ["blocked", "cannot advance", "phase gate", "exit criteria", "blocker", "what is missing", "why cant i advance", "gate failed"],
-    summary: "When a gate is blocked, ATOS tells you which criteria are still failing and where to fix them so the next phase starts on stronger footing.",
+    summary: "When a gate is blocked, AURA tells you which criteria are still failing and where to fix them so the next phase starts on stronger footing.",
     body: `
 # Phase Gate Blockers
 
-If you cannot advance to the next phase, a phase gate is blocking you. This is intentional - ATOS protects downstream work from being built on an incomplete foundation.
+If you cannot advance to the next phase, a phase gate is blocking you. This is intentional - AURA protects downstream work from being built on an incomplete foundation.
 
 ## How to see what is blocking you
 
 1. Click the **Advance Phase** button
-2. If the gate is blocked, ATOS shows a list of failing exit criteria
+2. If the gate is blocked, AURA shows a list of failing exit criteria
 3. Each failure has a description and a link to the relevant workspace section
 
 ## Common blockers and how to fix them
@@ -856,7 +856,7 @@ The Twin updates automatically whenever you:
 - Define a KPI
 - Complete a phase
 
-You do not need to manually maintain the Twin - ATOS builds it from your program data.
+You do not need to manually maintain the Twin - AURA builds it from your program data.
 
 ## How to use it
 
@@ -927,7 +927,7 @@ Each node has a small status badge:
     title: "When changes are not saving",
     category: "Troubleshooting",
     keywords: ["not saving", "lost data", "save failed", "storage full", "sync error", "data loss", "not syncing"],
-    summary: "Check the sync signal first. ATOS distinguishes between safely saved local work and a true server-side save problem.",
+    summary: "Check the sync signal first. AURA distinguishes between safely saved local work and a true server-side save problem.",
     body: `
 # My Changes Are Not Saving
 
@@ -941,7 +941,7 @@ Look for the sync status in the top header area:
 ## If you see "Changes saved locally only"
 
 1. Check your internet connection
-2. Try refreshing the page - ATOS will attempt to sync on reload
+2. Try refreshing the page - AURA will attempt to sync on reload
 3. If the error persists, use **Export Program** to download a backup JSON file
 4. Contact your administrator if the error continues
 
@@ -971,7 +971,7 @@ If you see a storage warning banner, your browser's local storage is nearly full
 
 ## Copilot is slow or not responding
 
-ATOS queues AI requests to prevent overload. If you have triggered multiple AI operations at once, they process in sequence. Wait a moment and the response will appear.
+AURA queues AI requests to prevent overload. If you have triggered multiple AI operations at once, they process in sequence. Wait a moment and the response will appear.
 
 If the Copilot has not responded after 30 seconds:
 1. Scroll up in the chat - the response may have appeared above
