@@ -14,7 +14,7 @@
  *  • Inline (an editable document): both columns edit the item STRING directly,
  *    stored as "Ask the <who>: <text>" — the same grammar the router reads.
  */
-import { useId, useMemo } from "react";
+import { useId, useMemo, useState } from "react";
 import type { ProgramSummary } from "@/new/types";
 import { useStudioLocked } from "./StudioKit";
 import { resolveMovementStakeholders, gapRouteKey } from "@/v3/components/flow/flowStakeholders";
@@ -54,6 +54,10 @@ export function GapRoutingEditor({ values, onChange, program, movementId, gapRou
   const locked = useStudioLocked();
   const listId = useId();
   const overlay = !!onRoute; // derived doc: text read-only, redirect editable
+  // Instant hover peek for clipped questions — the native title tooltip's
+  // built-in delay made long items feel unreadable. Shown only when the
+  // input actually truncates; fixed-position so no container clips it.
+  const [peek, setPeek] = useState<null | { text: string; x: number; y: number }>(null);
 
   // The redirect targets — a ROLE per option, with the person who fills it in
   // parentheses when one is known, so the operator routes to a role and still
@@ -94,9 +98,17 @@ export function GapRoutingEditor({ values, onChange, program, movementId, gapRou
         // own addressee; fall back to the addressee baked into the item string.
         const who = overlay ? (gapRoutes?.[gapRouteKey(gap)] ?? parsed.who) : parsed.who;
         return (
-          <div key={index} className="v3fs-stu-tr">
+          // Hover lands on the ROW, not the input — a disabled input (overlay
+          // mode) swallows mouse events, and that's exactly where peeks matter.
+          <div key={index} className="v3fs-stu-tr"
+            onMouseEnter={(e) => {
+              const el = e.currentTarget.querySelector<HTMLInputElement>('input[aria-label="Gap"]');
+              if (!el || !parsed.text || el.scrollWidth <= el.clientWidth + 1) return;
+              const rect = el.getBoundingClientRect();
+              setPeek({ text: parsed.text, x: rect.left, y: rect.bottom + 6 });
+            }}
+            onMouseLeave={() => setPeek(null)}>
             <input style={{ flexGrow: 2, flexBasis: 0 }} value={parsed.text} placeholder={placeholder} aria-label="Gap"
-              title={parsed.text || undefined}
               disabled={overlay || locked} readOnly={overlay}
               onChange={(e) => set(index, composeGap(e.target.value, who))} />
             {overlay ? (
@@ -122,6 +134,12 @@ export function GapRoutingEditor({ values, onChange, program, movementId, gapRou
 
       {overlay ? null : <datalist id={listId}>{options.map((o) => <option key={o.value} value={o.value} />)}</datalist>}
       {overlay || locked ? null : <button type="button" className="v3fs-a" onClick={() => onChange([...values, ""])}>＋ {addLabel}</button>}
+      {peek ? (
+        <div className="v3fs-gaprt-peek" role="presentation"
+          style={{ left: Math.min(peek.x, Math.max(8, window.innerWidth - 440)), top: peek.y }}>
+          {peek.text}
+        </div>
+      ) : null}
     </div>
   );
 }

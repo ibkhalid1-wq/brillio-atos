@@ -6366,6 +6366,11 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-stu-th span{padding:0 4px}
 .v3fs-stu-xcol{width:24px;flex-shrink:0}
 /* Gap-routing editor — a gap row's second column redirects it to a stakeholder/role */
+/* Instant hover peek for clipped gap/open-question text — no title delay. */
+.v3fs-gaprt-peek {position:fixed;z-index:320;max-width:430px;pointer-events:none;
+  background:var(--fs-card);border:1px solid var(--fs-line);border-radius:11px;padding:10px 13px;
+  font-size:12.5px;line-height:1.5;color:var(--v3-text-primary);
+  box-shadow:0 6px 16px -6px rgba(23,26,46,.22),0 24px 48px -18px rgba(23,26,46,.3)}
 .v3fs-gaprt-who{display:flex;align-items:center;gap:6px;min-width:0}
 .v3fs-gaprt-who input,.v3fs-gaprt-who select{flex:1;min-width:0}
 .v3fs-gaprt-ic{flex:none;width:15px;text-align:center;font-size:12px;font-weight:800;color:var(--v3-text-faint,var(--v3-text-muted))}
