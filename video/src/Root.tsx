@@ -2,10 +2,11 @@ import React from "react";
 import { AbsoluteFill, Composition, Sequence } from "remotion";
 import {
   SceneAlignment,
+  SceneClose,
+  SceneDiagnosis,
+  SceneGrounding,
   SceneIndustries,
   SceneJourney,
-  SceneClose,
-  SceneGrounding,
   SceneNumbers,
   SceneQuestion,
   SceneReveal,
@@ -18,14 +19,17 @@ const BoardCut: React.FC = () => (
     <Sequence from={T.question.from} durationInFrames={T.question.dur}>
       <FadeScene dur={T.question.dur}><SceneQuestion /></FadeScene>
     </Sequence>
+    <Sequence from={T.diagnosis.from} durationInFrames={T.diagnosis.dur}>
+      <FadeScene dur={T.diagnosis.dur}><SceneDiagnosis /></FadeScene>
+    </Sequence>
     <Sequence from={T.reveal.from} durationInFrames={T.reveal.dur}>
       <FadeScene dur={T.reveal.dur}><SceneReveal /></FadeScene>
     </Sequence>
-    <Sequence from={T.grounding.from} durationInFrames={T.grounding.dur}>
-      <FadeScene dur={T.grounding.dur}><SceneGrounding /></FadeScene>
-    </Sequence>
     <Sequence from={T.alignment.from} durationInFrames={T.alignment.dur}>
       <FadeScene dur={T.alignment.dur}><SceneAlignment /></FadeScene>
+    </Sequence>
+    <Sequence from={T.grounding.from} durationInFrames={T.grounding.dur}>
+      <FadeScene dur={T.grounding.dur}><SceneGrounding /></FadeScene>
     </Sequence>
     <Sequence from={T.journey.from} durationInFrames={T.journey.dur}>
       <FadeScene dur={T.journey.dur}><SceneJourney /></FadeScene>
