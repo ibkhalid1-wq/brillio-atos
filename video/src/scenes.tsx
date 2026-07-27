@@ -1,8 +1,10 @@
 import React from "react";
 import {
   AbsoluteFill,
+  Img,
   interpolate,
   spring,
+  staticFile,
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
@@ -158,17 +160,22 @@ export const SceneGrounding: React.FC = () => {
       {!split ? (
         <>
           {graph(1, 160, 0)}
-          <Rise start={130} style={{ position: "absolute", left: 320, top: 690 }}>
+          {/* The receipt: REAL pixels of the live programme's Account card —
+              its Standard-alignment row, captured from the running app. */}
+          <Rise start={130} style={{ position: "absolute", left: 260, top: 670 }}>
             <div
               style={{
                 fontFamily: FONT, background: "#fff", color: INK, borderRadius: 18,
-                padding: "26px 34px", boxShadow: "0 30px 80px -20px rgba(0,0,0,.6)", display: "flex", gap: 26, alignItems: "center",
+                padding: "22px 30px", boxShadow: "0 30px 80px -20px rgba(0,0,0,.6)",
               }}
             >
-              <span style={{ fontSize: 30, fontWeight: 800 }}>Account</span>
-              <span style={{ fontSize: 24, fontWeight: 700, color: ELECTRIC, letterSpacing: ".08em" }}>STANDARD ALIGNMENT</span>
-              <span style={{ fontSize: 26, fontFamily: "ui-monospace, monospace" }}>schema.org/Organization</span>
-              <span style={{ fontSize: 24, fontStyle: "italic", opacity: 0.6 }}>skos:closeMatch</span>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 18, marginBottom: 14 }}>
+                <span style={{ fontSize: 28, fontWeight: 800 }}>Account</span>
+                <span style={{ fontSize: 19, fontWeight: 700, color: ELECTRIC, letterSpacing: ".1em" }}>
+                  STANDARD ALIGNMENT · LIVE FROM THE PROGRAMME
+                </span>
+              </div>
+              <Img src={staticFile("align-row.png")} style={{ width: 1340, display: "block", borderRadius: 10 }} />
             </div>
           </Rise>
           <Rise start={200} style={{ position: "absolute", right: 150, top: 220 }}>
@@ -253,6 +260,18 @@ export const SceneAlignment: React.FC = () => {
             <span style={{ fontSize: 28, color: MUTED }}>
               “pricing approval takes two weeks” vs “our SLA is three days — and we hit it” — <b style={{ color: "#fff" }}>a finding, not noise</b>
             </span>
+          </div>
+        </Rise>
+        {/* The receipt: the live coverage ledger, real pixels — every voice on
+            the record. */}
+        <Rise start={300}>
+          <div style={{ marginTop: 36, display: "flex", gap: 20, alignItems: "center" }}>
+            <span style={{ fontFamily: FONT, fontSize: 21, fontWeight: 800, letterSpacing: ".12em", color: ELECTRIC }}>
+              LIVE · THE COVERAGE LEDGER
+            </span>
+            <div style={{ background: "#fff", borderRadius: 14, padding: "14px 22px", boxShadow: "0 24px 60px -24px rgba(0,0,0,.6)" }}>
+              <Img src={staticFile("cov-strip-wide.png")} style={{ width: 760, display: "block" }} />
+            </div>
           </div>
         </Rise>
       </div>
