@@ -297,7 +297,13 @@ export function IntervieweeDiscovery({ program, movementId, captureField, areaFi
   // must agree with them), else the ontology-inferred area canonicalised to
   // the kit's vocabulary. A "no one covers Delivery" lane while the matrix
   // shows Delivery covered was exactly this disagreement.
-  const kitAreas = listenCoverageAreas(program).map((area) => area.label);
+  // Clean single-domain areas only — a compound coverage label
+  // ("Sales / Practices / Delivery") is a spanning TAG on a person or entity,
+  // never a lane of its own; its members canonicalise into their segment
+  // areas. Without this filter, roster-joined voices' compound labels mint
+  // empty mega-lanes that blow the Area selector out of its deck.
+  const kitAreas = listenCoverageAreas(program).map((area) => area.label)
+    .filter((label) => !label.includes("/"));
   const kitCoverage = listenAreaCoverage(program);
   const coverageAreaOf = (label: string): string | null => {
     const key = label.trim().toLowerCase();
