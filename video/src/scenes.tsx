@@ -164,7 +164,7 @@ export const SceneReveal: React.FC = () => {
         </div>
         <div style={{ height: 40 }} />
         <div style={{ opacity: counter, transform: `translateY(${(1 - counter) * 16}px)` }}>
-          <Chip tone="violet">21 days to a working POC</Chip>
+          <Chip tone="violet">21 days to a working pilot</Chip>
         </div>
       </div>
     </Ground>
@@ -488,7 +488,7 @@ export const SceneNumbers: React.FC = () => {
     "15 stakeholders heard",
     "34 entities",
     "10 business areas",
-    "21 days → working Sales POC",
+    "21 days → working Sales pilot",
   ];
   return (
     <Ground>
@@ -501,7 +501,7 @@ export const SceneNumbers: React.FC = () => {
           const last = i === stamps.length - 1;
           // The film's most important stat rolls up 0→21 as it lands.
           const label = last
-            ? `${Math.round(interpolate(frame, [at, at + 22], [0, 21], LIN))} days → working Sales POC`
+            ? `${Math.round(interpolate(frame, [at, at + 22], [0, 21], LIN))} days → working Sales pilot`
             : s;
           return (
             <div
