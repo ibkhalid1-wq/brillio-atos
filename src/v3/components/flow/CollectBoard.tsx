@@ -313,7 +313,10 @@ export function IntervieweeDiscovery({ program, movementId, captureField, areaFi
   const primaryAreaOf = new Map(evaluated.map((e) =>
     [e.s.id, coverageAreaOf(e.s.role || e.s.name) ?? coverageAreaOf(e.s.name)
       ?? canonicalFrameArea(kitAreas, stakeholderPrimaryArea(program, e.s.name, e.s.role))] as const));
-  const heardCount = evaluated.filter((e) => e.coll.heard && !e.s.questions.length).length;
+  // "Heard" = their evidence is on the record. Open follow-ups are a
+  // separate fact (the to-collect/open counts) — requiring both made every
+  // heard voice read unheard the moment a regen minted new questions.
+  const heardCount = evaluated.filter((e) => e.coll.heard).length;
   const word = movementId === "show" ? "reviewed" : movementId === "listen" || movementId === "frame" ? "heard" : "consulted";
   // Only cards with OUTSTANDING questions render — the board is the question
   // worklist, not a directory (the People page holds the full roster).
@@ -390,7 +393,7 @@ export function IntervieweeDiscovery({ program, movementId, captureField, areaFi
     const lanes = filtered.map((area) => {
       const list = (groups.get(area) ?? []).slice().sort((a, b) => STATUS_RANK[a.coll.status] - STATUS_RANK[b.coll.status]);
       const open = list.filter((e) => openQuestionCount(program, movementId, e.s) > 0);
-      const heard = list.filter((e) => e.coll.heard && !e.s.questions.length).length;
+      const heard = list.filter((e) => e.coll.heard).length;
       const toReach = list.filter((e) => e.coll.status === "toreach").length;
       const waiting = list.filter((e) => e.coll.status === "waiting").length;
       return { area, row: areaRows.get(area), list, open, heard, total: list.length, toReach, waiting };
@@ -452,7 +455,7 @@ export function IntervieweeDiscovery({ program, movementId, captureField, areaFi
   // Whole-movement coverage — the header meter and count read from the SAME
   // evaluated set the lanes do, so header and lanes can never disagree.
   const cov = {
-    heard: evaluated.filter((e) => e.coll.heard && !e.s.questions.length).length,
+    heard: evaluated.filter((e) => e.coll.heard).length,
     waiting: evaluated.filter((e) => e.coll.status === "waiting").length,
     toReach: evaluated.filter((e) => e.coll.status === "toreach" && !e.s.isRole).length,
     total: evaluated.length,

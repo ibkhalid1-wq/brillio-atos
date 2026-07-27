@@ -3,7 +3,6 @@ import type { ProgramSummary } from "@/new/types";
 import FlowCanvas from "@/v3/components/flow/FlowCanvas";
 import FlowGrounding from "@/v3/components/flow/FlowGrounding";
 import BrilioLogo from "@/v3/components/BrilioLogo";
-import AtosMark from "@/v3/components/AtosMark";
 import { AttachFileButton, copyTextFromAction } from "@/v3/components/flow/flowCapture";
 const FlowArtifactStudio = lazy(() => import("@/v3/components/flow/studio/FlowArtifactStudio"));
 import type { ArtifactEditInput } from "@/v3/components/flow/studio/FlowArtifactStudio";
@@ -656,10 +655,11 @@ export default function FlowShell(props: FlowShellProps) {
           {/* Brand + breadcrumb: Portfolio / (parent) / programme. The trail IS
               the location — the hero no longer repeats it. The programme crumb
               opens the switcher; a drill-down shows its parent as a hop. */}
-          {/* The lockup reads "brillio - [mark] AURA" — company first, then the
-              product as ONE unit: the Drawn Line glyph sits with its own
-              wordmark, not orphaned ahead of Brillio's. */}
-          <span className="v3fs-appbar-brandlock"><BrilioLogo className="v3fs-appbar-logo" title="Brillio" /><span className="v3fs-appbar-brandsep" aria-hidden="true">-</span><AtosMark className="v3fs-appbar-mark" /><span className="v3fs-appbar-brand">AURA</span></span>
+          {/* The lockup reads "brillio - ⟑URA" — the Drawn Line glyph IS the
+              wordmark's leading A: cap-height sized, baseline-set, stroke
+              weight matched to the 800 letters. Screen readers still hear
+              "AURA" (role=img label); the glyph is decorative to them. */}
+          <span className="v3fs-appbar-brandlock"><BrilioLogo className="v3fs-appbar-logo" title="Brillio" /><span className="v3fs-appbar-brandsep" aria-hidden="true">-</span><span className="v3fs-appbar-brand" role="img" aria-label="AURA"><svg className="v3fs-brand-a" viewBox="0 0 68 49" aria-hidden="true"><polyline points="4,44 18,44 34,10 50,44 64,44" fill="none" stroke="var(--aura-mark-ink, #1D1545)" strokeWidth="7.5" strokeLinecap="round" strokeLinejoin="round" /><line x1="25" y1="32" x2="43" y2="32" stroke="#6E5BFF" strokeWidth="7.5" strokeLinecap="round" /><circle cx="4" cy="44" r="4.5" fill="#6E5BFF" /><circle cx="64" cy="44" r="4.5" fill="#6E5BFF" /></svg>URA</span></span>
           <nav className="v3fs-appbar-crumbs" aria-label="Breadcrumb">
             <button type="button" className={`v3fs-appbar-nav${view === "portfolio" ? " on" : ""}`}
               title={DOCK_TIPS.portfolio} aria-label="Portfolio"
