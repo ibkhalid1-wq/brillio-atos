@@ -149,7 +149,6 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program,
     return [...groups.entries()].sort(([a], [b]) =>
       a === GENERAL_AREA ? 1 : b === GENERAL_AREA ? -1 : a.localeCompare(b));
   }, [workflows, frameAreaFor]);
-  const multiArea = groupedTabs.length > 1;
   // Areas the FRAME's coverage plan promises but the atlas hasn't mapped a
   // workflow for yet — e.g. Talent, whose SME hasn't been heard. Surfacing
   // them keeps the atlas honest: the domain is in scope, its workflow is
@@ -261,31 +260,43 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program,
     setSelected(null);
   };
 
+  const activeArea = workflow ? frameAreaFor(workflowArea(workflow)) : "";
+  const areaWorkflows = groupedTabs.find(([area]) => area === activeArea)?.[1] ?? [];
+
   return (
     <div className="v3fs-wf">
-      <div className={`v3fs-wf-tabs${multiArea ? " grouped" : ""}`} role="tablist" aria-label="Workflows">
-        {groupedTabs.map(([area, items]) => (
-          <div key={area} className="v3fs-wf-tabgroup">
-            {multiArea ? <span className="v3fs-wf-tabgroup-l" title={`${area} workflows`}>{area}</span> : null}
-            {multiArea ? <em className="v3fs-wf-tabgroup-n">{items.length}</em> : null}
-            {items.map(({ name, index }) => (
-              <button key={index} type="button" role="tab" aria-selected={index === active}
-                className={index === active ? "on" : ""}
-                onClick={() => { setActive(index); setSelected(null); }}>
-                {name}
-              </button>
+      {/* Cascading filters: pick the AREA, then one of ITS workflows — the
+          grouped pill strip outgrew the tab metaphor once every area mapped. */}
+      <div className="v3fs-wf-filters">
+        <label className="v3fs-wf-filter">
+          <span>Area</span>
+          <select value={activeArea} aria-label="Filter by area"
+            onChange={(e) => {
+              const first = groupedTabs.find(([area]) => area === e.target.value)?.[1]?.[0];
+              if (first) { setActive(first.index); setSelected(null); }
+            }}>
+            {groupedTabs.map(([area, items]) => (
+              <option key={area} value={area}>{area} ({items.length})</option>
             ))}
-          </div>
-        ))}
-        {unmappedAreas.map((area) => (
-          <div key={`unmapped-${area}`} className="v3fs-wf-tabgroup unmapped"
-            title={`${area} is defined in the Domain Ontology but has no current-state workflow yet — hear the ${area} SME, then regenerate the Atlas to map it`}>
-            <span className="v3fs-wf-tabgroup-l">{area}</span>
-            <span className="v3fs-wf-unmapped">not mapped yet</span>
-          </div>
-        ))}
+          </select>
+        </label>
+        <label className="v3fs-wf-filter grow">
+          <span>Workflow</span>
+          <select value={String(active)} aria-label="Pick a workflow"
+            onChange={(e) => { setActive(Number(e.target.value)); setSelected(null); }}>
+            {areaWorkflows.map(({ name, index }) => (
+              <option key={index} value={String(index)}>{name}</option>
+            ))}
+          </select>
+        </label>
         {locked || !authoring ? null : <button type="button" className="v3fs-a" onClick={addWorkflow}>＋ workflow</button>}
       </div>
+      {unmappedAreas.length ? (
+        <div className="v3fs-wf-unmapped-row"
+          title="Areas the Frame covers whose current-state workflow has no evidence yet — hear their SMEs, then regenerate the Atlas (or assign a workflow's Area below)">
+          Not mapped yet: {unmappedAreas.map((area) => <span key={area} className="v3fs-wf-unmapped">{area}</span>)}
+        </div>
+      ) : null}
 
       {!workflow ? (
         <EmptyState icon="🔀" title="No workflows on record yet" hint="Add one above, or regenerate the Current-State Atlas once the SME transcripts are in." />
@@ -314,6 +325,39 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program,
               ) : null}
               {asText(workflow.owner) ? <span className="v3fs-wf-ckpt-owner">{asText(workflow.owner)}</span> : null}
             </div>
+          </div>
+          {/* WORKFLOW SUMMARY — the whole flow's editable facts, ABOVE the
+              diagram: the read goes summary → swimlane → one step's form.
+              Indigo card; the step form below is the white working card with
+              the accent spine, so the two levels never look alike. */}
+          <div className="v3fs-wf-details">
+            <div className="v3fs-wf-card-eyebrow">Workflow summary</div>
+            <div className="v3fs-wf-head">
+              <TextField label="Name" value={asText(workflow.name)} onChange={(next) => patchWorkflow({ name: next })} />
+              <TextField label="Trigger" value={asText(workflow.trigger)} onChange={(next) => patchWorkflow({ trigger: next })} />
+              <TextField label="Owner" value={asText(workflow.owner)} onChange={(next) => patchWorkflow({ owner: next })} />
+              {/* Reassigning the area moves this workflow's tab group — how an
+                  "unmapped" frame area gets its first workflow. */}
+              {frameAreas.length ? (
+                <SelectField label="Area (from the Frame)" value={frameAreaFor(workflowArea(workflow))}
+                  options={[...frameAreas, GENERAL_AREA]}
+                  onChange={(next) => patchWorkflow({ area: next })} />
+              ) : null}
+            </div>
+            <div className="v3fs-wf-head">
+              <ChipsField label="Hand-offs" values={asStrings(workflow.handoffs)} onChange={(next) => patchWorkflow({ handoffs: next })} />
+              <ChipsField label="Failure modes" values={asStrings(workflow.failureModes)} onChange={(next) => patchWorkflow({ failureModes: next })} />
+            </div>
+            <DismissControl label="Dismiss this workflow" confirmLabel="Dismiss workflow"
+              onDismiss={(reason) => {
+                onChange({
+                  ...doc,
+                  workflows: workflows.filter((_, index) => index !== active),
+                  ...curationNote(doc, `Dismissed workflow “${asText(workflow.name) || `#${active + 1}`}”`, reason),
+                });
+                setActive(Math.max(0, active - 1));
+                setSelected(null);
+              }} />
           </div>
           {steps.length === 0 ? (
             <div className="v3fs-stu-empty">No steps yet — add the first one below.</div>
@@ -412,36 +456,6 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program,
               </div>
             </div>
           ) : null}
-
-          <div className="v3fs-wf-details">
-            <div className="v3fs-wf-head">
-              <TextField label="Name" value={asText(workflow.name)} onChange={(next) => patchWorkflow({ name: next })} />
-              <TextField label="Trigger" value={asText(workflow.trigger)} onChange={(next) => patchWorkflow({ trigger: next })} />
-              <TextField label="Owner" value={asText(workflow.owner)} onChange={(next) => patchWorkflow({ owner: next })} />
-              {/* Reassigning the area moves this workflow's tab group — the
-                  way an "unmapped" frame area gets its first workflow, and
-                  the fix when the generator filed one under the wrong area. */}
-              {frameAreas.length ? (
-                <SelectField label="Area (from the Frame)" value={frameAreaFor(workflowArea(workflow))}
-                  options={[...frameAreas, GENERAL_AREA]}
-                  onChange={(next) => patchWorkflow({ area: next })} />
-              ) : null}
-            </div>
-            <div className="v3fs-wf-head">
-              <ChipsField label="Hand-offs" values={asStrings(workflow.handoffs)} onChange={(next) => patchWorkflow({ handoffs: next })} />
-              <ChipsField label="Failure modes" values={asStrings(workflow.failureModes)} onChange={(next) => patchWorkflow({ failureModes: next })} />
-            </div>
-            <DismissControl label="Dismiss this workflow" confirmLabel="Dismiss workflow"
-              onDismiss={(reason) => {
-                onChange({
-                  ...doc,
-                  workflows: workflows.filter((_, index) => index !== active),
-                  ...curationNote(doc, `Dismissed workflow “${asText(workflow.name) || `#${active + 1}`}”`, reason),
-                });
-                setActive(Math.max(0, active - 1));
-                setSelected(null);
-              }} />
-          </div>
 
           {/* Hover evidence peek — the step's verbatim grounding without a
               click. Fixed-position and pointer-transparent (same pattern as
