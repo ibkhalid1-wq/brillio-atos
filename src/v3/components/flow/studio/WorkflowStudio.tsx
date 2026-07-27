@@ -301,6 +301,7 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program 
                             onMouseLeave={() => setPeek(null)}
                           >
                             <span className="v3fs-swim-n" aria-hidden="true">{index + 1}</span>
+                            {pain ? <span className={`v3fs-swim-paindot ${pain.severity}`} aria-label={`${pain.severity} pain: ${pain.pain}`} role="img" /> : null}
                             <span className="v3fs-swim-action">{asText(step.action) || "—"}</span>
                             <span className="v3fs-swim-meta">
                               {asText(step.system) ? <span className="v3fs-wf-system">{asText(step.system)}</span> : null}

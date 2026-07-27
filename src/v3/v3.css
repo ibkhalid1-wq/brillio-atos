@@ -7627,6 +7627,13 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-swim-tile.pain-medium {border-left-color:var(--v3-amber)}
 .v3fs-swim-tile.pain-low {border-left-color:var(--v3-text-muted)}
 .v3fs-swim-n {position:absolute;top:-8px;left:-8px;width:18px;height:18px;border-radius:50%;background:var(--v3-accent);color:#fff;font-size:9.5px;font-weight:700;display:grid;place-items:center;box-shadow:var(--fs-shadow)}
+/* Pain marker on a step tile — the heatmap's signal AT the step: a severity
+   dot on the corner (the left edge tint stays as the low-key cue). */
+.v3fs-swim-paindot {position:absolute;top:-5px;right:-5px;width:13px;height:13px;border-radius:50%;
+  border:2px solid var(--fs-card);box-shadow:0 1px 3px rgba(23,26,46,.3)}
+.v3fs-swim-paindot.high {background:var(--v3-red,#dc2626)}
+.v3fs-swim-paindot.medium {background:var(--v3-amber,#b26a00)}
+.v3fs-swim-paindot.low {background:var(--v3-text-muted)}
 .v3fs-swim-action {font-weight:650;color:var(--v3-text-primary);line-height:1.4}
 .v3fs-swim-meta {display:flex;flex-wrap:wrap;gap:5px}
 .v3fs-swim-pain {font-size:10px;line-height:1.4;color:var(--v3-amber);font-weight:600}

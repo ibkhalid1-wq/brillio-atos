@@ -317,33 +317,35 @@ function AtlasStudio({ doc, onChange, onOpenArtifact, program, gapRoutes, onRout
       <Section label="Workflows — the diagram" hint="each step: who does what, in which system; entity chips open the ontology">
         <WorkflowStudio doc={doc} onChange={onChange} onOpenArtifact={onOpenArtifact} program={program} />
       </Section>
-      {/* Business events live HERE, beside the workflows they punctuate (moved
-          from the ontology tab). Steps reference them as ⚡ chips above; a
-          workflow started by one names it as its trigger. Legacy programmes
-          whose events still sit on the ontology doc see them read-through;
-          the first edit materialises the list onto this document. */}
-      <Section label="Business events" hint="what happens, what causes it, what it changes — steps carry them as ⚡ chips">
-        {(() => {
-          const own = asArray(doc.events).map(asRecord);
-          const legacy = own.length === 0 && program
-            ? asArray(readArtifactDoc(program, "domainOntology")?.events).map(asRecord)
-            : [];
-          return (
+      {/* The three supporting registers fold under the diagram — the steps
+          already carry their signals (⚡ event chips, the pain edge + dot,
+          the system tag), so the tables are reference, not the main read.
+          Business events moved here from the ontology tab; legacy programmes
+          whose events still sit on the ontology doc see them read-through
+          until the first edit materialises the list onto this document. */}
+      {(() => {
+        const own = asArray(doc.events).map(asRecord);
+        const legacy = own.length === 0 && program
+          ? asArray(readArtifactDoc(program, "domainOntology")?.events).map(asRecord)
+          : [];
+        const events = own.length ? own : legacy;
+        return (
+          <CollapsibleCard label="Business events" badge={events.length} hint="what happens, what causes it, what it changes — steps carry them as ⚡ chips">
             <TableEditor
               columns={[
                 { key: "name", label: "Event" },
                 { key: "triggers", label: "Triggered by", grow: 1.4 },
                 { key: "produces", label: "Produces", grow: 1.4 },
               ]}
-              rows={own.length ? own : legacy}
+              rows={events}
               onChange={(next) => patch({ events: next })}
               addLabel="Add event"
               emptyHint="No business events captured yet."
             />
-          );
-        })()}
-      </Section>
-      <Section label="Pain heatmap" hint="colour = severity">
+          </CollapsibleCard>
+        );
+      })()}
+      <CollapsibleCard label="Pain heatmap" badge={pains.items.length} hint="colour = severity — each pain also marks its step in the diagram">
         <div className="v3fs-stu-heat">
           {pains.items.map((pain, index) => (
             <div key={index} className={`v3fs-stu-heat-row sev-${asText(pain.severity) || "medium"}`}>
@@ -360,8 +362,8 @@ function AtlasStudio({ doc, onChange, onOpenArtifact, program, gapRoutes, onRout
           ))}
           {locked || !authoring ? null : <button type="button" className="v3fs-a" onClick={() => pains.add({ area: "", pain: "", severity: "medium", voicedBy: [] })}>＋ Add pain</button>}
         </div>
-      </Section>
-      <Section label="Systems inventory">
+      </CollapsibleCard>
+      <CollapsibleCard label="Systems inventory" badge={asArray(doc.systemsInventory).length}>
         <TableEditor
           columns={[{ key: "system", label: "System" }, { key: "usedFor", label: "Used for", grow: 2 }]}
           rows={asArray(doc.systemsInventory).map(asRecord)}
@@ -369,7 +371,7 @@ function AtlasStudio({ doc, onChange, onOpenArtifact, program, gapRoutes, onRout
           addLabel="Add system"
           emptyHint="No systems captured."
         />
-      </Section>
+      </CollapsibleCard>
       <Section label="Open questions" hint="redirect each to the stakeholder or role who can answer it">
         <GapRoutingEditor values={asStrings(doc.openQuestions)} onChange={(next) => patch({ openQuestions: next })} program={program}
           movementId="listen" gapRoutes={gapRoutes} onRoute={onRouteGap} addLabel="Add question" placeholder="the open question" emptyHint="No open questions." />
