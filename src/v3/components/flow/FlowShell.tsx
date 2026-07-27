@@ -656,9 +656,10 @@ export default function FlowShell(props: FlowShellProps) {
           {/* Brand + breadcrumb: Portfolio / (parent) / programme. The trail IS
               the location — the hero no longer repeats it. The programme crumb
               opens the switcher; a drill-down shows its parent as a hop. */}
-          {/* The lockup reads "[mark] brillio · AURA" — the network tile is the
-              product mark (same artwork as the favicon), the wordmark is Brillio. */}
-          <span className="v3fs-appbar-brandlock"><AtosMark className="v3fs-appbar-mark" /><BrilioLogo className="v3fs-appbar-logo" title="Brillio" /><span className="v3fs-appbar-brand">AURA</span></span>
+          {/* The lockup reads "[mark] brillio - AURA" — the network tile is the
+              product mark (same artwork as the favicon), the wordmark is Brillio,
+              AURA sized to the wordmark's height. */}
+          <span className="v3fs-appbar-brandlock"><AtosMark className="v3fs-appbar-mark" /><BrilioLogo className="v3fs-appbar-logo" title="Brillio" /><span className="v3fs-appbar-brandsep" aria-hidden="true">-</span><span className="v3fs-appbar-brand">AURA</span></span>
           <nav className="v3fs-appbar-crumbs" aria-label="Breadcrumb">
             <button type="button" className={`v3fs-appbar-nav${view === "portfolio" ? " on" : ""}`}
               title={DOCK_TIPS.portfolio} aria-label="Portfolio"
