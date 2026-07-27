@@ -342,10 +342,18 @@ export const SceneClose: React.FC = () => {
           style={{ fontSize: 56, fontWeight: 800, color: "#fff", fontStyle: "italic" }}
         />
         <div style={{ height: 90 }} />
+        {/* The bookend: the opening question, answered. No ask — the film
+            closes on the claim it spent ninety seconds earning. */}
         <div style={{ opacity: cardP, transform: `translateY(${(1 - cardP) * 24}px)` }}>
-          <span style={{ fontFamily: FONT, fontSize: 40, fontWeight: 650, color: MUTED }}>
-            The evidence is in. The decision is yours.
-          </span>
+          <div style={{ fontFamily: FONT, fontSize: 30, fontWeight: 600, color: MUTED, marginBottom: 18 }}>
+            Would two teams draw the same picture?
+          </div>
+          <Typed
+            start={cardAt + 30}
+            cps={16}
+            text="They would."
+            style={{ fontSize: 58, fontWeight: 800, color: "#fff" }}
+          />
         </div>
       </div>
     </Ground>
