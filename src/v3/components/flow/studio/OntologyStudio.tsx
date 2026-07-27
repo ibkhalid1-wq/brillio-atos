@@ -404,8 +404,10 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
         <label className="v3fs-wf-filter">
           <span>Area</span>
           <select value={areaFilter} aria-label="Filter ontology by area" onChange={(e) => setAreaFilter(e.target.value)}>
-            <option value="">All areas ({entities.length})</option>
-            {entityAreas.map((area) => <option key={area} value={area}>{area}</option>)}
+            <option value="">All areas · {entities.length} entities</option>
+            {entityAreas.map((area) => (
+              <option key={area} value={area}>{area} · {entities.filter((entity) => entityAreaOf(entity) === area).length}</option>
+            ))}
             {hasNoArea ? <option value="__none__">(no area assigned)</option> : null}
           </select>
         </label>
