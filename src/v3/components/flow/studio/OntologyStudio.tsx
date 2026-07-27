@@ -18,7 +18,7 @@ import {
   curationNote, DismissControl, type StudioProps,
 } from "./StudioKit";
 
-import { ONTOLOGY_CARDINALITIES } from "@/v3/components/flow/flowOntologyConstraints";
+import { ONTOLOGY_CARDINALITIES, ONTOLOGY_RELATION_VERBS } from "@/v3/components/flow/flowOntologyConstraints";
 import { GapRoutingEditor } from "./GapRoutingEditor";
 
 type Selection = { kind: "entity"; id: string } | { kind: "relation"; index: number } | { kind: "candidate"; id: string } | null;
@@ -29,6 +29,10 @@ const CAND_PREFIX = "cand:";
 // One vocabulary, shared with the write-time gate — the dropdown can always
 // represent what the gate accepts (incl. the generator's N:1 / 0:N forms).
 const CARDINALITIES = [...ONTOLOGY_CARDINALITIES];
+const RELATION_VERBS: string[] = [...ONTOLOGY_RELATION_VERBS];
+/** The verb menu with an off-menu stored phrase kept selectable, never lost. */
+const verbOptions = (current: string): string[] =>
+  current && !RELATION_VERBS.includes(current) ? [current, ...RELATION_VERBS] : RELATION_VERBS;
 
 function entityId(entity: Record<string, unknown>, index: number): string {
   const name = asText(entity.name).trim();
@@ -417,7 +421,8 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
         {selectedRelation && selected?.kind === "relation" ? (
           <>
             <div className="v3fs-stu-sec-h"><h3>Relation</h3><span>{asText(selectedRelation.from)} → {asText(selectedRelation.to)}</span></div>
-            <TextField label="Relation (verb phrase)" value={asText(selectedRelation.relation)}
+            <SelectField label="Relation" value={asText(selectedRelation.relation) || "relates to"}
+              options={verbOptions(asText(selectedRelation.relation))}
               onChange={(next) => updateRelation(selected.index, { relation: next })} />
             <SelectField label="Cardinality" value={asText(selectedRelation.cardinality) || "unknown"} options={CARDINALITIES}
               onChange={(next) => updateRelation(selected.index, { cardinality: next })} />
@@ -505,9 +510,11 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
                             <div key={ri} className="v3fs-onto-relrow">
                               {endChip(other, outgoing)}
                               <span className="v3fs-onto-relmid">
-                                <input className="v3fs-onto-relverb" value={verb} size={Math.max(6, verb.length)}
-                                  aria-label={`Relation type with ${other}`} disabled={locked} placeholder="relates to"
-                                  onChange={(e) => updateRelation(ri, { relation: e.target.value })} />
+                                <select className="v3fs-onto-relverb" value={verb || "relates to"}
+                                  aria-label={`Relation type with ${other}`} disabled={locked}
+                                  onChange={(e) => updateRelation(ri, { relation: e.target.value })}>
+                                  {verbOptions(verb).map((option) => <option key={option} value={option}>{option}</option>)}
+                                </select>
                                 <span className="v3fs-onto-relarrow" aria-hidden="true">→</span>
                               </span>
                               {endChip(other, !outgoing)}

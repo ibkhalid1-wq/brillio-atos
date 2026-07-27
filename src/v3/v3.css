@@ -6381,7 +6381,8 @@ details[open] > summary .v3fs-disc-c::after {display:none}
   border-radius:99px;padding:3px 11px}
 .v3fs-onto-relend.self {color:#fff;background:var(--v3-accent-2)}
 .v3fs-onto-relmid {display:inline-flex;align-items:center;gap:7px;min-width:0}
-.v3fs-onto-relverb {border:0;background:transparent;font:inherit;font-size:12.5px;font-style:italic;
+.v3fs-onto-relverb {appearance:none;-webkit-appearance:none;cursor:pointer;
+  border:0;background:transparent;font:inherit;font-size:12.5px;font-style:italic;
   color:var(--v3-text-secondary);padding:2px 1px;min-width:0;border-bottom:1px dashed transparent;outline:0}
 .v3fs-onto-relrow:hover .v3fs-onto-relverb {border-bottom-color:color-mix(in srgb,var(--v3-accent-2) 45%,transparent)}
 .v3fs-onto-relverb:focus {color:var(--v3-text-primary);border-bottom:1px solid var(--v3-accent-2)}
