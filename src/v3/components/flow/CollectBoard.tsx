@@ -260,6 +260,9 @@ export function IntervieweeDiscovery({ program, movementId, captureField, areaFi
   // area headers; expand opens every lane to its stakeholder cards (kept
   // collapsed — the scripts stay closed until a card is tapped).
   const [openAreas, setOpenAreas] = useState<Set<string> | null>(null);
+  // The deck's area selector — ONE lane shows at a time. Null = the neediest
+  // lane (laneData sorts most-open-work first).
+  const [areaPick, setAreaPick] = useState<string | null>(null);
   // The area whose "invite everyone" is minting — disables that lane's button.
   const [inviteBusyArea, setInviteBusyArea] = useState<string | null>(null);
   // The movement-wide "invite all not-contacted" is minting.
@@ -397,6 +400,7 @@ export function IntervieweeDiscovery({ program, movementId, captureField, areaFi
       return (b.toReach + b.waiting) - (a.toReach + a.waiting);
     });
   })() : [];
+  const pickedLane = laneData.find((lane) => lane.area === areaPick) ?? laneData[0] ?? null;
   // Lane open/close, driven by the header's Expand all / Collapse all. Default
   // (null) keeps the per-lane rule (an area still collecting opens itself).
   const laneDefaultOpen = (l: { total: number; heard: number }) => l.total === 0 || l.heard < l.total;
@@ -523,27 +527,47 @@ export function IntervieweeDiscovery({ program, movementId, captureField, areaFi
                 ? <>No open questions under {areaFilter.join(" · ")}. Tap the area card again above to clear the filter.</>
                 : <>No outstanding questions — every script is settled. Ask a question above to put someone back on the board; the full roster lives on the People page.</>}
             </div>
-          ) : null}
-          {laneData.map((lane, i) => (
-            <AreaLane key={lane.area} area={lane.area} row={lane.row} heard={lane.heard} total={lane.total} waiting={lane.waiting}
-              accent={laneAccentAt(lane.area, i)} monogram={areaMonogram(lane.area)}
-              readyLabel={movementId === "listen" ? "Ready to envision" : movementId === "envision" ? "Ready to show" : "All reviewed"}
-              open={laneIsOpen(lane.area, laneDefaultOpen(lane))} onToggle={(o) => setLaneOpen(lane.area, o)}
-              toReach={lane.toReach} inviting={inviteBusyArea === lane.area}
-              extras={laneExtras?.(lane.area)}
-              onInvite={canInvite && lane.toReach > 0 ? async () => {
-                setInviteBusyArea(lane.area);
-                try { await inviteArea(lane.list); } finally { setInviteBusyArea(null); }
-              } : undefined}>
-              {lane.open.length ? lane.open.map(renderCard) : (
-                <div className="v3fs-lanes-empty" role="note">
-                  {lane.total === 0
-                    ? "No one covers this area yet — assign coverage on the Discovery Kit matrix."
-                    : "Nothing outstanding here — every voice in this area is settled."}
-                </div>
-              )}
-            </AreaLane>
-          ))}
+          ) : (
+            <>
+              {/* ONE area at a time: the deck's selector picks it (options carry
+                  each area's live counts), the picked area's lane renders below
+                  — instead of every lane stacked. Default = the neediest lane
+                  (laneData is already sorted most-open-work first). */}
+              <div className="v3fs-wf-filters">
+                <label className="v3fs-wf-filter grow">
+                  <span>Area</span>
+                  <select value={pickedLane?.area ?? ""} aria-label="Pick an area"
+                    onChange={(e) => setAreaPick(e.target.value)}>
+                    {laneData.map((lane) => (
+                      <option key={lane.area} value={lane.area}>
+                        {lane.area} — {lane.heard}/{lane.total} heard{lane.open.length ? ` · ${lane.open.length} to collect` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              {pickedLane ? (
+                <AreaLane key={pickedLane.area} area={pickedLane.area} row={pickedLane.row} heard={pickedLane.heard} total={pickedLane.total} waiting={pickedLane.waiting}
+                  accent={laneAccentAt(pickedLane.area, laneData.indexOf(pickedLane))} monogram={areaMonogram(pickedLane.area)}
+                  readyLabel={movementId === "listen" ? "Ready to envision" : movementId === "envision" ? "Ready to show" : "All reviewed"}
+                  open={laneIsOpen(pickedLane.area, true)} onToggle={(o) => setLaneOpen(pickedLane.area, o)}
+                  toReach={pickedLane.toReach} inviting={inviteBusyArea === pickedLane.area}
+                  extras={laneExtras?.(pickedLane.area)}
+                  onInvite={canInvite && pickedLane.toReach > 0 ? async () => {
+                    setInviteBusyArea(pickedLane.area);
+                    try { await inviteArea(pickedLane.list); } finally { setInviteBusyArea(null); }
+                  } : undefined}>
+                  {pickedLane.open.length ? pickedLane.open.map(renderCard) : (
+                    <div className="v3fs-lanes-empty" role="note">
+                      {pickedLane.total === 0
+                        ? "No one covers this area yet — assign coverage on the Discovery Kit matrix."
+                        : "Nothing outstanding here — every voice in this area is settled."}
+                    </div>
+                  )}
+                </AreaLane>
+              ) : null}
+            </>
+          )}
         </div>
       ) : columns.length === 0 ? (
         <div className="v3fs-lanes-empty" role="note">
