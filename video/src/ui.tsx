@@ -9,15 +9,41 @@ export const Typed: React.FC<{
   cps?: number; // characters per second at 30fps
   style?: React.CSSProperties;
   cursor?: boolean;
-}> = ({ text, start, cps = 24, style, cursor = true }) => {
+  /** Substrings rendered in the electric accent — the load-bearing words. */
+  accents?: string[];
+}> = ({ text, start, cps = 24, style, cursor = true, accents }) => {
   const frame = useCurrentFrame();
   const chars = Math.max(0, Math.floor(((frame - start) / 30) * cps));
-  const shown = text.slice(0, chars);
   const done = chars >= text.length;
   const blink = Math.floor(frame / 16) % 2 === 0;
+  // Split the text into plain/accent segments (first occurrence of each).
+  const segs: Array<{ str: string; acc: boolean }> = [];
+  const ranges: Array<[number, number]> = [];
+  for (const a of accents ?? []) {
+    const i = text.indexOf(a);
+    if (i >= 0) ranges.push([i, i + a.length]);
+  }
+  ranges.sort((x, y) => x[0] - y[0]);
+  let pos = 0;
+  for (const [s0, e0] of ranges) {
+    if (s0 > pos) segs.push({ str: text.slice(pos, s0), acc: false });
+    segs.push({ str: text.slice(s0, e0), acc: true });
+    pos = e0;
+  }
+  if (pos < text.length) segs.push({ str: text.slice(pos), acc: false });
+  let consumed = 0;
   return (
     <span style={{ fontFamily: FONT, whiteSpace: "pre-wrap", ...style }}>
-      {shown}
+      {segs.map((sg, i) => {
+        const startC = consumed;
+        consumed += sg.str.length;
+        const vis = Math.max(0, Math.min(sg.str.length, chars - startC));
+        return (
+          <span key={i} style={sg.acc ? { color: ELECTRIC } : undefined}>
+            {sg.str.slice(0, vis)}
+          </span>
+        );
+      })}
       {cursor && frame >= start ? (
         <span style={{ opacity: !done || blink ? 1 : 0 }}>▌</span>
       ) : null}

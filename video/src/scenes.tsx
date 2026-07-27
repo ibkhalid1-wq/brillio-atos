@@ -37,7 +37,7 @@ const Ground: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
 /* ── 1 · The question (0:00–0:14) ───────────────────────────────────── */
 export const SceneQuestion: React.FC = () => {
   const frame = useCurrentFrame();
-  const grave = ["Copilot nobody adopted", "Solution in search of a problem", "POC that proved nothing"];
+  const grave = ["A copilot nobody adopted", "A solution in search of a problem", "A POC that proved nothing"];
   return (
     <Ground>
       <div style={{ width: 1680, textAlign: "center" }}>
@@ -45,6 +45,7 @@ export const SceneQuestion: React.FC = () => {
           start={10}
           cps={26}
           text={"If two teams mapped your business today —\nwould they draw the same picture?"}
+          accents={["same picture?"]}
           style={{ fontSize: 60, fontWeight: 800, color: "#fff", lineHeight: 1.4, letterSpacing: "-0.01em" }}
         />
         <div style={{ height: 70 }} />
@@ -144,6 +145,7 @@ export const SceneReveal: React.FC = () => {
               start={175}
               cps={30}
               text={"Meet AURA — Brillio\u2019s AI-native delivery methodology."}
+              accents={["AURA"]}
               style={{ fontSize: 38, fontWeight: 700, color: "rgba(255,255,255,0.85)" }}
             />
           ) : null}
@@ -155,6 +157,7 @@ export const SceneReveal: React.FC = () => {
               start={265}
               cps={30}
               text={"AURA derived Laila from evidence."}
+              accents={["Laila", "evidence"]}
               style={{ fontSize: 54, fontWeight: 800, color: "#fff", lineHeight: 1.4 }}
             />
           ) : null}
@@ -496,6 +499,10 @@ export const SceneNumbers: React.FC = () => {
           // Eased landing, no overshoot — buttery, not bouncy.
           const p = interpolate(frame, [at, at + 26], [0, 1], EASE);
           const last = i === stamps.length - 1;
+          // The film's most important stat rolls up 0→21 as it lands.
+          const label = last
+            ? `${Math.round(interpolate(frame, [at, at + 22], [0, 21], LIN))} days → working Sales POC`
+            : s;
           return (
             <div
               key={s}
@@ -509,7 +516,7 @@ export const SceneNumbers: React.FC = () => {
                 letterSpacing: "-0.01em",
               }}
             >
-              {s}
+              {label}
             </div>
           );
         })}
@@ -662,6 +669,7 @@ export const SceneClose: React.FC = () => {
             start={108}
             cps={18}
             text="They now would… with AURA."
+            accents={["with AURA."]}
             style={{ fontSize: 62, fontWeight: 800, color: "#fff" }}
           />
         </div>
