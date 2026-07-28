@@ -1,10 +1,15 @@
 {
   "name": "aura-board-film",
   "private": true,
-  "description": "AURA board demo film — Remotion project rendering the 90-second cut",
+  "description": "AURA board demo film \u2014 Remotion project rendering the 90-second cut",
   "scripts": {
     "studio": "remotion studio src/index.ts",
-    "render": "remotion render src/index.ts BoardCut90 out/aura-board-90.mp4"
+    "vo": "node scripts/prepare-vo.mjs",
+    "render": "remotion render src/index.ts BoardCut90 out/aura-board-90.mp4 --overwrite --concurrency=6",
+    "mix": "node scripts/mix.mjs --out out/aura-board.mp4",
+    "mix:music": "node scripts/mix.mjs --music --out out/aura-board.mp4",
+    "build:film": "npm run render && npm run mix",
+    "check": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "@remotion/cli": "4.0.245",

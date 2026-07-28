@@ -16,32 +16,32 @@ import { FadeScene, Grain, ProgressLine } from "./ui";
 
 const BoardCut: React.FC = () => (
   <AbsoluteFill style={{ background: "#0D0A22" }}>
-    <Sequence from={T.question.from} durationInFrames={T.question.dur}>
-      <FadeScene dur={T.question.dur}><SceneQuestion /></FadeScene>
+    <Sequence from={T.seg1.from} durationInFrames={T.seg1.dur}>
+      <FadeScene dur={T.seg1.dur}><SceneQuestion /></FadeScene>
     </Sequence>
-    <Sequence from={T.diagnosis.from} durationInFrames={T.diagnosis.dur}>
-      <FadeScene dur={T.diagnosis.dur}><SceneDiagnosis /></FadeScene>
+    <Sequence from={T.seg2.from} durationInFrames={T.seg2.dur}>
+      <FadeScene dur={T.seg2.dur}><SceneDiagnosis /></FadeScene>
     </Sequence>
-    <Sequence from={T.reveal.from} durationInFrames={T.reveal.dur}>
-      <FadeScene dur={T.reveal.dur}><SceneReveal /></FadeScene>
+    <Sequence from={T.seg3.from} durationInFrames={T.seg3.dur}>
+      <FadeScene dur={T.seg3.dur}><SceneReveal /></FadeScene>
     </Sequence>
-    <Sequence from={T.alignment.from} durationInFrames={T.alignment.dur}>
-      <FadeScene dur={T.alignment.dur}><SceneAlignment /></FadeScene>
+    <Sequence from={T.seg4.from} durationInFrames={T.seg4.dur}>
+      <FadeScene dur={T.seg4.dur}><SceneAlignment /></FadeScene>
     </Sequence>
-    <Sequence from={T.grounding.from} durationInFrames={T.grounding.dur}>
-      <FadeScene dur={T.grounding.dur}><SceneGrounding /></FadeScene>
+    <Sequence from={T.seg5.from} durationInFrames={T.seg5.dur}>
+      <FadeScene dur={T.seg5.dur}><SceneGrounding /></FadeScene>
     </Sequence>
-    <Sequence from={T.journey.from} durationInFrames={T.journey.dur}>
-      <FadeScene dur={T.journey.dur}><SceneJourney /></FadeScene>
+    <Sequence from={T.seg6.from} durationInFrames={T.seg6.dur}>
+      <FadeScene dur={T.seg6.dur}><SceneJourney /></FadeScene>
     </Sequence>
-    <Sequence from={T.numbers.from} durationInFrames={T.numbers.dur}>
-      <FadeScene dur={T.numbers.dur}><SceneNumbers /></FadeScene>
+    <Sequence from={T.seg7.from} durationInFrames={T.seg7.dur}>
+      <FadeScene dur={T.seg7.dur}><SceneNumbers /></FadeScene>
     </Sequence>
-    <Sequence from={T.industries.from} durationInFrames={T.industries.dur}>
-      <FadeScene dur={T.industries.dur}><SceneIndustries /></FadeScene>
+    <Sequence from={T.seg8.from} durationInFrames={T.seg8.dur}>
+      <FadeScene dur={T.seg8.dur}><SceneIndustries /></FadeScene>
     </Sequence>
-    <Sequence from={T.close.from} durationInFrames={T.close.dur}>
-      <FadeScene dur={T.close.dur}><SceneClose /></FadeScene>
+    <Sequence from={T.seg9.from} durationInFrames={T.seg9.dur}>
+      <FadeScene dur={T.seg9.dur}><SceneClose /></FadeScene>
     </Sequence>
     <Grain />
     <ProgressLine total={TOTAL_FRAMES} />
