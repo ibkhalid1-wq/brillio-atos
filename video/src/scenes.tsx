@@ -584,15 +584,25 @@ export const SceneNumbers: React.FC = () => {
  */
 export const SceneArc: React.FC = () => {
   const frame = useCurrentFrame();
-  const line = interpolate(frame, [b(2), b(9)], [0, 1], EASE);
-  const stage = (label: string, i: number, lit: boolean, at: number) => {
+
+  /* The pull-back. The spine the board learned in scene 3 opens oversized and
+     alone, filling the frame; the camera then pulls back until it is the
+     middle third of a much longer line, and the stages either side fade up on
+     the extensions. One continuous move, no cut — the same grammar as the
+     receipt in scene 6, so the film keeps one visual language for "there is
+     more here than you are currently seeing". */
+  const pull = interpolate(frame, [b(4), b(13)], [1.62, 1], EASE);
+  const lineP = interpolate(frame, [b(10), b(18)], [0, 1], EASE);
+  const outer = interpolate(frame, [b(13), b(17)], [0, 1], EASE);
+
+  const stage = (label: string, lit: boolean, at: number) => {
     const p = interpolate(frame, [at, at + b(1.5)], [0, 1], EASE);
     return (
       <div
         key={label}
         style={{
-          opacity: p * (lit ? 1 : 0.42),
-          transform: `translateY(${(1 - p) * 16}px)`,
+          opacity: p * (lit ? 1 : outer * 0.5),
+          transform: `translateY(${(1 - p) * 14}px)`,
           fontFamily: FONT,
           fontSize: lit ? 26 : 22,
           fontWeight: lit ? 750 : 600,
@@ -608,6 +618,7 @@ export const SceneArc: React.FC = () => {
       </div>
     );
   };
+
   return (
     <Ground>
       <Glow size={1100} x="50%" y="52%" opacity={0.26} />
@@ -622,29 +633,32 @@ export const SceneArc: React.FC = () => {
           </div>
         </Rise>
 
-        <div style={{ height: 78 }} />
+        <div style={{ height: 92 }} />
 
-        <div style={{ position: "relative" }}>
-          {/* The arc draws through everything before any stage lands on it. */}
-          <div
-            style={{
-              position: "absolute", left: 40, top: "50%", height: 2,
-              width: `calc((100% - 80px) * ${line})`,
-              background: `linear-gradient(90deg, ${FAINT}, ${ELECTRIC} 28%, ${ELECTRIC} 72%, ${FAINT})`,
-              opacity: 0.7,
-            }}
-          />
-          <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14 }}>
-            {LIFECYCLE.before.map((l, i) => stage(l, i, false, b(8) + i * b(0.75)))}
-            {LIFECYCLE.today.map((l, i) => stage(l, i, true, b(10) + i * b(0.9)))}
-            {LIFECYCLE.after.map((l, i) => stage(l, i, false, b(15) + i * b(0.75)))}
+        {/* Only this layer scales, so the type above stays put while the
+            diagram beneath it pulls back. */}
+        <div style={{ transform: `scale(${pull})`, transformOrigin: "50% 50%" }}>
+          <div style={{ position: "relative" }}>
+            <div
+              style={{
+                position: "absolute", left: "50%", top: "50%",
+                height: 2, width: `${lineP * 100}%`, transform: "translate(-50%, -50%)",
+                background: `linear-gradient(90deg, ${FAINT}, ${ELECTRIC} 30%, ${ELECTRIC} 70%, ${FAINT})`,
+                opacity: 0.7,
+              }}
+            />
+            <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14 }}>
+              {LIFECYCLE.before.map((l, i) => stage(l, false, b(13) + i * b(0.6)))}
+              {LIFECYCLE.today.map((l, i) => stage(l, true, b(1) + i * b(0.9)))}
+              {LIFECYCLE.after.map((l, i) => stage(l, false, b(14) + i * b(0.6)))}
+            </div>
           </div>
         </div>
 
-        <div style={{ height: 40 }} />
-        <Rise start={b(18)}>
+        <div style={{ height: 54 }} />
+        <Rise start={b(19)}>
           <div style={{ display: "flex", justifyContent: "center", gap: 44, fontFamily: FONT, fontSize: 19, fontWeight: 800, letterSpacing: ".2em" }}>
-            <span style={{ color: ELECTRIC_TEXT }}>■ TODAY · DELIVERY</span>
+            <span style={{ color: ELECTRIC_TEXT }}>■ TODAY · AI-NATIVE SOLUTIONS</span>
             <span style={{ color: MUTED }}>□ NEXT · THE FULL LIFECYCLE</span>
           </div>
         </Rise>
