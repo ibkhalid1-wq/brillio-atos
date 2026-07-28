@@ -11,7 +11,7 @@ import { ELECTRIC, FAINT, FONT, INK, INK_2, MUTED, T } from "./tokens";
 import { AuraWord, Chip, DrawnLine, Eyebrow, Glow, Ontology3D, Plate, Rise, ScreenInset, Typed } from "./ui";
 import {
   b, copy, CONTRADICTION, DIAGNOSIS_POLES, DOMAINS, GOVERNANCE_CHIPS, GRAVEYARD,
-  JOURNEY, NUMBERS, ONTOLOGY_LABELS, RECEIPTS, TRANSCRIPT, REVEAL_CHIP, SPINE, STAKEHOLDERS, STANDARDS, TEAM,
+  JOURNEY, NUMBERS, ONTOLOGY_LABELS, RECEIPTS, TRANSCRIPT, SPINE, STAKEHOLDERS, STANDARDS, TEAM,
 } from "./content";
 
 /**
@@ -79,7 +79,7 @@ export const SceneQuestion: React.FC = () => {
             // problem", 12.0s "proof of concepts that prove nothing".
             const at = [b(15), b(19), b(24)][i];
             const p = interpolate(frame, [at, at + b(1)], [0, 1], EASE);
-            const grey = interpolate(frame, [at + b(2), at + b(4)], [1, 0.34], LIN);
+            const grey = interpolate(frame, [at + b(2), at + b(4)], [1, 0.58], LIN);
             return (
               <div
                 key={g}
@@ -88,6 +88,7 @@ export const SceneQuestion: React.FC = () => {
                   transform: `translateY(${(1 - p) * 22}px)`,
                   fontFamily: FONT, fontSize: 27, fontWeight: 650, color: "#fff",
                   padding: "14px 26px", borderRadius: 14, border: `1px solid ${FAINT}`,
+                  background: "rgba(13,10,34,0.5)",
                 }}
               >
                 {g}
@@ -148,7 +149,6 @@ export const SceneReveal: React.FC = () => {
   const draw = interpolate(frame, [b(1), b(8)], [0, 1], EASE);
   const spine = SPINE;
   // The chip lands on "in twenty-one days" — the fourth sentence, not the third.
-  const counter = interpolate(frame, [b(30), b(31.5)], [0, 1], EASE);
   return (
     <Ground plate={<Plate src="plate-draw.mp4" dur={T.seg3.dur} opacity={0.5} />}>
       <Glow size={900} x="50%" y="34%" />
@@ -189,10 +189,35 @@ export const SceneReveal: React.FC = () => {
             />
           ) : null}
         </div>
-        <div style={{ height: 40 }} />
-        <div style={{ opacity: counter, transform: `translateY(${(1 - counter) * 16}px)` }}>
-          <Chip tone="violet">{REVEAL_CHIP}</Chip>
+      </div>
+    </Ground>
+  );
+};
+
+/* ── 3b · The scope of the evidence ──────────────────────────────────────
+ * A single statement card, deliberately bare. Everything after it is one
+ * programme's worth of evidence; saying so here is what lets the rest of
+ * the film be believed rather than discounted.
+ */
+export const SceneScope: React.FC = () => {
+  const rule = interpolate(useCurrentFrame(), [b(3), b(12)], [0, 1], EASE);
+  return (
+    <Ground plate={<Plate src="plate-assemble.mp4" dur={T["seg3b"].dur} opacity={0.26} />}>
+      <Glow size={820} x="50%" y="48%" opacity={0.34} />
+      <div style={{ textAlign: "center", fontFamily: FONT }}>
+        <Rise start={0}>
+          <div style={{ fontSize: 74, fontWeight: 800, color: "#fff", letterSpacing: "-0.02em" }}>
+            {copy("seg3b").headline}
+          </div>
+        </Rise>
+        <div style={{ display: "flex", justifyContent: "center", margin: "34px 0 30px" }}>
+          <div style={{ width: 200 * rule, height: 2, background: ELECTRIC, opacity: 0.85 }} />
         </div>
+        <Rise start={b(4)}>
+          <div style={{ fontSize: 30, fontWeight: 600, color: MUTED }}>
+            {copy("seg3b").subline}
+          </div>
+        </Rise>
       </div>
     </Ground>
   );
@@ -275,9 +300,12 @@ export const SceneAlignment: React.FC = () => {
       <div style={{ position: "absolute", left: 64, top: 330 }}>
         <ScreenInset
           src="screen-stakeholder.mp4"
-          width={560}
+          width={470}
           start={b(6)}
           from={1.5}
+          zoom={1.9}
+          origin="30% 25%"
+          rate={0.75}
           label="LIVE · STAKEHOLDERS VALIDATE"
         />
       </div>
@@ -387,21 +415,24 @@ export const SceneGrounding: React.FC = () => {
                 <div
                   key={r}
                   style={{
-                    width: 700, height: 500, borderRadius: 22, border: `1px solid ${FAINT}`,
+                    width: 760, height: 430, borderRadius: 22, border: `1px solid ${FAINT}`,
                     position: "relative", overflow: "hidden",
                   }}
                 >
                   <span style={{ position: "absolute", top: 20, left: 26, fontFamily: FONT, fontSize: 26, fontWeight: 800, color: MUTED, letterSpacing: ".14em" }}>
                     {r}
                   </span>
-                  <div style={{ position: "absolute", left: -40, top: -30, transform: "scale(0.56)", transformOrigin: "top left" }}>
-                    <Ontology3D labels={ONTOLOGY_LABELS} start={285} period={1100} radius={280} width={1300} height={900} />
+                  {/* Sized to the panel rather than scaled down into it —
+                      the labels now render at full size, which is the whole
+                      point of showing the same model twice. */}
+                  <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <Ontology3D labels={ONTOLOGY_LABELS} start={285} period={1100} radius={196} width={720} height={400} />
                   </div>
                 </div>
               ))}
             </div>
             {/* Lands on the closing sentence, not four seconds after it. */}
-            <Rise start={b(28)}>
+            <Rise start={b(26)}>
               <div style={{ marginTop: 38, fontFamily: FONT, fontSize: 46, fontWeight: 800, color: "#fff" }}>
                 {copy("seg5").headline!.replace(" Every time.", " ")}<span style={{ color: ELECTRIC }}>Every time.</span>
               </div>
@@ -430,15 +461,15 @@ export const SceneJourney: React.FC = () => {
         </Rise>
         <div style={{ display: "flex", gap: 22, justifyContent: "center", alignItems: "stretch" }}>
           {JOURNEY.map((col, i) => {
-            const at = b(1) + i * b(0.75);
+            const at = b(1) + i * b(2);
             const p = interpolate(frame, [at, at + b(1)], [0, 1], EASE);
-            const humanAt = at + b(4);
+            const humanAt = at + b(2.5);
             const hp = interpolate(frame, [humanAt, humanAt + b(1)], [0, 1], EASE);
             // The narration reaches Evolve last and dwells there; lift that
             // column while it does, so the words have something to point at.
             const isEvolve = i === JOURNEY.length - 1;
             const lift = isEvolve
-              ? interpolate(frame, [b(20), b(23), b(33), b(36)], [0, 1, 1, 0], LIN)
+              ? interpolate(frame, [b(26), b(29), b(42), b(45)], [0, 1, 1, 0], LIN)
               : 0;
             return (
               <div
@@ -453,7 +484,7 @@ export const SceneJourney: React.FC = () => {
               >
                 <div style={{
                   borderRadius: 16, border: `1px solid ${ELECTRIC}`, background: "rgba(110,91,255,0.14)",
-                  padding: "16px 18px", minHeight: 104, display: "flex", flexDirection: "column", justifyContent: "center",
+                  padding: "16px 18px", height: 116, display: "flex", flexDirection: "column", justifyContent: "center",
                 }}>
                   <div style={{ fontSize: 15, fontWeight: 800, letterSpacing: ".13em", color: ELECTRIC, marginBottom: 8 }}>AURA · AUTONOMOUS</div>
                   <div style={{ fontSize: 20.5, color: "#fff", lineHeight: 1.35 }}>{col.aura}</div>
@@ -464,7 +495,7 @@ export const SceneJourney: React.FC = () => {
                 <div style={{
                   opacity: hp, transform: `translateY(${(1 - hp) * 16}px)`,
                   borderRadius: 16, border: "1px solid rgba(110,220,150,0.65)", background: "rgba(46,160,90,0.16)",
-                  padding: "16px 18px", minHeight: 86, display: "flex", flexDirection: "column", justifyContent: "center",
+                  padding: "16px 18px", height: 98, display: "flex", flexDirection: "column", justifyContent: "center",
                 }}>
                   <div style={{ fontSize: 15, fontWeight: 800, letterSpacing: ".13em", color: "#7EDCA0", marginBottom: 8 }}>HUMAN · IN THE LOOP</div>
                   <div style={{ fontSize: 20.5, color: "#fff", lineHeight: 1.35 }}>{col.human}</div>
@@ -475,11 +506,11 @@ export const SceneJourney: React.FC = () => {
         </div>
 
         {/* The record accumulates: each human decision stamps onto the trail. */}
-        <div style={{ marginTop: 36, position: "relative", height: 62 }}>
+        <div style={{ marginTop: 20, position: "relative", height: 52 }}>
           <div style={{ position: "absolute", left: 140, right: 140, top: 11, height: 2, background: "rgba(255,255,255,0.18)" }} />
           <div style={{ position: "absolute", left: 100, right: 100, top: 0, display: "flex", justifyContent: "space-between" }}>
             {JOURNEY.map((col, i) => {
-              const at = b(1) + i * b(0.75) + b(6);
+              const at = b(1) + i * b(2) + b(4);
               const p = interpolate(frame, [at, at + b(1)], [0, 1], EASE);
               return (
                 <div key={col.stamp} style={{ opacity: p, transform: `translateY(${(1 - p) * 12}px)`, textAlign: "center", fontFamily: FONT }}>
@@ -496,12 +527,15 @@ export const SceneJourney: React.FC = () => {
             three architectures scored by AURA, one crowned, an operator free
             to refine it. Replaces the governance chips, which restated the
             narration word for word. */}
-        <div style={{ marginTop: 24, display: "flex", justifyContent: "center" }}>
+        <div style={{ marginTop: 14, display: "flex", justifyContent: "center" }}>
           <ScreenInset
             src="screen-architecture.mp4"
-            width={840}
-            start={b(11)}
+            width={660}
+            start={b(20)}
             from={2}
+            rate={0.58}
+            zoom={1.55}
+            origin="50% 44%"
             label="LIVE · OPERATORS MAKE THE CHOICE"
           />
         </div>
@@ -516,6 +550,8 @@ export const SceneNumbers: React.FC = () => {
   const stamps = NUMBERS;
   return (
     <Ground plate={<Plate src="plate-demo.mp4" dur={T.seg7.dur} tone="people" opacity={1} />}>
+      {/* Local scrim so the figures never sit on the plate's highlights. */}
+      <AbsoluteFill style={{ background: "radial-gradient(ellipse 54% 46% at 50% 50%, rgba(10,7,28,0.76), transparent 74%)" }} />
       <Glow size={1100} x="50%" y="50%" opacity={0.28} />
       <div style={{ display: "flex", flexDirection: "column", gap: 34, alignItems: "center" }}>
         {stamps.map((s, i) => {
@@ -527,8 +563,11 @@ export const SceneNumbers: React.FC = () => {
           // Roll the leading number up as it lands, but take the wording from
           // the content library — it used to be hardcoded here, which is why
           // "in Laila" never appeared on screen.
+          // The roll lands in under half a second: it is the film's best
+          // beat, but any longer and a still pulled for a deck can catch a
+          // half-counted number on the one claim the film exists to make.
           const label = last
-            ? s.replace(/^\d+/, String(Math.round(interpolate(frame, [at, at + b(1.5)], [0, 21], LIN))))
+            ? s.replace(/^\d+/, String(Math.round(interpolate(frame, [at, at + b(0.8)], [0, 21], EASE))))
             : s;
           return (
             <div
@@ -537,10 +576,13 @@ export const SceneNumbers: React.FC = () => {
                 opacity: p,
                 transform: `translateY(${(1 - p) * 34}px) scale(${0.94 + p * 0.06})`,
                 fontFamily: FONT,
-                fontSize: last ? 78 : 58,
+                fontSize: last ? 66 : 54,
                 fontWeight: 800,
-                color: last ? ELECTRIC : "#fff",
+                // Electric on a live plate measures about 2:1 and greys out on
+                // a projector. The accent carries as a rule underneath instead.
+                color: "#fff",
                 letterSpacing: "-0.01em",
+                fontVariantNumeric: "tabular-nums",
               }}
             >
               {label}
@@ -676,7 +718,6 @@ export const SceneClose: React.FC = () => {
  */
 export const SceneValue: React.FC = () => {
   const frame = useCurrentFrame();
-  const days = Math.round(interpolate(frame, [b(2), b(5)], [0, 21], EASE));
   const rule = interpolate(frame, [b(6), b(9)], [0, 1], EASE);
   const so = interpolate(frame, [b(9), b(12)], [0, 1], EASE);
   return (
@@ -689,9 +730,13 @@ export const SceneValue: React.FC = () => {
           </div>
         </Rise>
         <div style={{ height: 46 }} />
-        <div style={{ fontSize: 168, fontWeight: 800, color: "#fff", lineHeight: 1, letterSpacing: "-0.03em" }}>
-          {days} days
-        </div>
+        {/* Stated, not counted: the 0→21 roll belongs to scene 7 and loses
+            its force if the film performs it twice. */}
+        <Rise start={b(2)}>
+          <div style={{ fontSize: 168, fontWeight: 800, color: "#fff", lineHeight: 1, letterSpacing: "-0.03em" }}>
+            21 days
+          </div>
+        </Rise>
         <div style={{ height: 26 }} />
         <div style={{ fontSize: 40, fontWeight: 700, color: "rgba(255,255,255,0.82)" }}>
           from problem to working pilot

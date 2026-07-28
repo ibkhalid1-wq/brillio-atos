@@ -10,6 +10,7 @@ import {
   SceneNumbers,
   SceneQuestion,
   SceneReveal,
+  SceneScope,
   SceneTeam,
   SceneValue,
 } from "./scenes";
@@ -26,6 +27,9 @@ const BoardCut: React.FC = () => (
     </Sequence>
     <Sequence from={T.seg3.from} durationInFrames={T.seg3.dur}>
       <FadeScene dur={T.seg3.dur}><SceneReveal /></FadeScene>
+    </Sequence>
+    <Sequence from={T["seg3b"].from} durationInFrames={T["seg3b"].dur}>
+      <FadeScene dur={T["seg3b"].dur}><SceneScope /></FadeScene>
     </Sequence>
     <Sequence from={T.seg4.from} durationInFrames={T.seg4.dur}>
       <FadeScene dur={T.seg4.dur}><SceneAlignment /></FadeScene>

@@ -118,7 +118,7 @@ const src = readFileSync(join(ROOT, "src/content.ts"), "utf8");
 const lines = [];
 for (const block of src.split(/\bid: "/).slice(1)) {
   const id = block.slice(0, block.indexOf('"'));
-  if (!/^seg\d+$/.test(id)) continue;
+  if (!/^seg\d+[a-z]?$/.test(id)) continue;
   const vo = block.match(/\n\s+vo:\s*\n?\s*"((?:[^"\\]|\\.)*)"/);
   if (vo) lines.push({ id, text: vo[1].replace(/\\"/g, '"') });
 }

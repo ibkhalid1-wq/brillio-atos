@@ -26,7 +26,7 @@ const TARGET_RMS_DB = -18;
 const AUDIO_EXT = /\.(m4a|mp3|wav|aac|aif|aiff|caf|mov|mp4)$/i;
 
 const SRC_TS = readFileSync(join(ROOT, "src/content.ts"), "utf8");
-const IDS = SRC_TS.match(/id: "(seg\d+)"/g).map((m) => m.slice(5, -1));
+const IDS = SRC_TS.match(/id: "(seg\d+[a-z]?)"/g).map((m) => m.slice(5, -1));
 
 /**
  * Words per scene, so each take can be levelled to a common speaking rate.
@@ -39,7 +39,7 @@ const WORDS = {};
 const RATE = {};
 for (const block of SRC_TS.split(/\bid: "/).slice(1)) {
   const id = block.slice(0, block.indexOf('"'));
-  if (!/^seg\d+$/.test(id)) continue;
+  if (!/^seg\d+[a-z]?$/.test(id)) continue;
   const vo = block.match(/\n\s+vo:\s*\n?\s*"((?:[^"\\]|\\.)*)"/);
   if (vo) WORDS[id] = vo[1].replace(/…/g, " ").split(/\s+/).filter(Boolean).length;
   const rate = block.match(/\n\s+wpm:\s*(\d+)/);

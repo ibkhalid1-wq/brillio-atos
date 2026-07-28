@@ -107,8 +107,19 @@ export const SCENES: Scene[] = [
     voAt: 11,
   },
   {
+    // Everything after this point is one programme's worth of evidence, and
+    // the film says so before it starts making claims. Scoping the sample is
+    // what lets the rest of the film be believed rather than discounted.
+    id: "seg3b",
+    headline: "One programme. Ours.",
+    subline: "Brillio's own sales CRM. Still in development.",
+    vo: "One programme. Ours. Still being built. Everything that follows is what we measured on it.",
+    animFloor: 180,
+    tail: 1.6,
+  },
+  {
     id: "seg4",
-    eyebrow: "02 · It starts with people",
+    eyebrow: "01 · It starts with people",
     headline: "AURA is designed to engage with stakeholders autonomously.",
     subline:
       "Every gap becomes a plain-language question — routed on a no-login link, answered in their own words, folded back in.",
@@ -118,7 +129,7 @@ export const SCENES: Scene[] = [
   },
   {
     id: "seg5",
-    eyebrow: "03 · In the business's own language",
+    eyebrow: "02 · In the business's own language",
     headline: "Same mandate. Same model. Every time.",
     vo: "From those voices, Aura draws the business in its own language — every entity grounded in the industry's standards. That model isn't a document. It's what the working system is generated from … Run it twice: the same model, every time.",
     animFloor: 380,
@@ -126,7 +137,7 @@ export const SCENES: Scene[] = [
   },
   {
     id: "seg6",
-    eyebrow: "04 · Governed by design",
+    eyebrow: "03 · Governed by design",
     headline: "Autonomous — with a human in the loop, end to end.",
     subline: "Machine proposes. The business validates. Every judgment recorded as evidence.",
     vo: "And control is the architecture. The machine proposes — the business validates. Every phase gates on a demonstration. Every judgment lands on a permanent record. And it doesn't stop at go-live: Aura watches the model drift as the business changes, and proposes the correction for your team to accept. Autonomy you can audit.",
@@ -140,8 +151,16 @@ export const SCENES: Scene[] = [
     tail: 1.4,
   },
   {
+    id: "seg9",
+    headline: "21 days from problem to working pilot.",
+    subline: "Delivery economics that would be a differentiator for Brillio.",
+    vo: "Twenty-one days from problem to working pilot. That's delivery economics that would be a differentiator for Brillio.",
+    animFloor: 300,
+    tail: 1.6,
+  },
+  {
     id: "seg8",
-    eyebrow: "05 · Any business",
+    eyebrow: "04 · Any business",
     headline: "One method. Every industry.",
     subline:
       "Different industries. Different problems. The same discipline — start from the business.",
@@ -149,14 +168,6 @@ export const SCENES: Scene[] = [
     animFloor: 200,
     tail: 1.6,
     wpm: 132,
-  },
-  {
-    id: "seg9",
-    headline: "21 days from problem to working pilot.",
-    subline: "Delivery economics that would be a differentiator for Brillio.",
-    vo: "Twenty-one days from problem to working pilot. That's delivery economics that would be a differentiator for Brillio.",
-    animFloor: 300,
-    tail: 1.6,
   },
   {
     id: "seg10",
@@ -240,7 +251,6 @@ export const DIAGNOSIS_POLES = ["BUSINESS NEEDS", "AI SOLUTION"];
 
 /** Scene 3 — the methodology spine. */
 export const SPINE = ["Frame", "Listen", "Prototype ⟳", "Ship", "Evolve"];
-export const REVEAL_CHIP = "21 days to a working pilot";
 
 /** Scene 4 — the stakeholders AURA engages, placed clockwise from top-left. */
 export const STAKEHOLDERS = [

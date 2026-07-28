@@ -46,9 +46,9 @@ export const Ontology3D: React.FC<{
     // even sphere puts them on top of each other. Stretch x/z, squash y.
     return {
       label,
-      x: Math.cos(theta) * r * radius * 1.34,
-      y: y * radius * 0.62,
-      z: Math.sin(theta) * r * radius * 1.34,
+      x: Math.cos(theta) * r * radius * 1.18,
+      y: y * radius * 0.86,
+      z: Math.sin(theta) * r * radius * 1.18,
     };
   });
 
@@ -104,22 +104,28 @@ export const Ontology3D: React.FC<{
         const w = 176 * p.s;
         const h = 58 * p.s;
         // Depth cue: things further away are dimmer as well as smaller.
-        const dim = interpolate(p.s, [0.72, 1.24], [0.42, 1], {
+        const dim = interpolate(p.s, [0.72, 1.24], [0.12, 1], {
           extrapolateLeft: "clamp",
           extrapolateRight: "clamp",
         });
         return (
           <g key={p.label} opacity={p.enter * dim}>
+            {/* Opaque backing first, so the painter's sort genuinely occludes
+                rather than letting far labels read through near ones. */}
+            <rect x={p.sx - w / 2} y={p.sy - h / 2} width={w} height={h} rx={14 * p.s} fill="#241A54" />
             <rect
               x={p.sx - w / 2} y={p.sy - h / 2} width={w} height={h} rx={14 * p.s}
               fill="rgba(255,255,255,0.07)" stroke="rgba(255,255,255,0.38)" strokeWidth={1.2}
             />
-            <text
-              x={p.sx} y={p.sy + 9 * p.s} textAnchor="middle" fill="#fff"
-              fontFamily={FONT} fontSize={25 * p.s} fontWeight={700}
-            >
-              {p.label}
-            </text>
+            {/* Back-hemisphere nodes read as depth, not as competing words. */}
+            {p.s >= 0.82 ? (
+              <text
+                x={p.sx} y={p.sy + 9 * p.s} textAnchor="middle" fill="#fff"
+                fontFamily={FONT} fontSize={25 * p.s} fontWeight={700}
+              >
+                {p.label}
+              </text>
+            ) : null}
           </g>
         );
       })}
@@ -143,7 +149,16 @@ export const ScreenInset: React.FC<{
   label?: string;
   /** Seconds into the recording to begin — skip dead air at the head. */
   from?: number;
-}> = ({ src, width, start, label, from = 0 }) => {
+  /**
+   * Punch in on the part of the screen that matters. A product recording
+   * shown whole is texture; a receipt nobody can read scores as no receipt
+   * at all, which is worse than not showing one.
+   */
+  zoom?: number;
+  origin?: string;
+  /** Slow the recording so it never runs out and freezes on its last frame. */
+  rate?: number;
+}> = ({ src, width, start, label, from = 0, zoom = 1, origin = "50% 50%", rate = 1 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const p = interpolate(frame, [start, start + 30], [0, 1], {
@@ -178,12 +193,18 @@ export const ScreenInset: React.FC<{
           lineHeight: 0,
         }}
       >
-        <OffthreadVideo
-          src={staticFile(src)}
-          startFrom={Math.round(from * fps)}
-          muted
-          style={{ width: "100%", display: "block" }}
-        />
+        <div style={{ overflow: "hidden", aspectRatio: "1600 / 802" }}>
+          <OffthreadVideo
+            src={staticFile(src)}
+            startFrom={Math.round(from * fps)}
+            playbackRate={rate}
+            muted
+            style={{
+              width: "100%", display: "block",
+              transform: `scale(${zoom})`, transformOrigin: origin,
+            }}
+          />
+        </div>
       </div>
     </div>
   );
@@ -315,7 +336,7 @@ export const Typed: React.FC<{
           </span>
         );
       })}
-      {cursor && frame >= start ? (
+      {cursor && chars > 0 && frame < start + (text.length / cps) * 30 + 30 ? (
         <span style={{ opacity: !done || blink ? 1 : 0 }}>▌</span>
       ) : null}
     </span>
@@ -383,8 +404,8 @@ export const Rise: React.FC<{
 export const Eyebrow: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <div
     style={{
-      fontFamily: FONT, fontSize: 17, fontWeight: 800, letterSpacing: "0.34em",
-      color: ELECTRIC, textTransform: "uppercase", marginBottom: 16,
+      fontFamily: FONT, fontSize: 21, fontWeight: 700, letterSpacing: "0.32em",
+      color: "#9B8CFF", textTransform: "uppercase", marginBottom: 16,
     }}
   >
     {children}
@@ -406,10 +427,10 @@ export const Glow: React.FC<{ size: number; x: string; y: string; opacity?: numb
 /** Scene shell: eased fade/scale in, fade out at the tail — no hard cuts. */
 export const FadeScene: React.FC<{ dur: number; children: React.ReactNode }> = ({ dur, children }) => {
   const frame = useCurrentFrame();
-  const inP = interpolate(frame, [0, 14], [0, 1], {
+  const inP = interpolate(frame, [0, 8], [0, 1], {
     extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: Easing.bezier(0.16, 1, 0.3, 1),
   });
-  const outP = interpolate(frame, [dur - 12, dur - 1], [1, 0], {
+  const outP = interpolate(frame, [dur - 7, dur - 1], [1, 0], {
     extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: Easing.in(Easing.cubic),
   });
   const o = Math.min(inP, outP);
@@ -438,10 +459,11 @@ export const Grain: React.FC = () => (
 export const ProgressLine: React.FC<{ total: number }> = ({ total }) => {
   const frame = useCurrentFrame();
   useVideoConfig();
-  return (
-    <div style={{ position: "absolute", left: 0, bottom: 0, height: 4, width: `${(frame / total) * 100}%`,
-      background: `linear-gradient(90deg, ${ELECTRIC}00, ${ELECTRIC})`, opacity: 0.75, pointerEvents: "none" }} />
-  );
+  // Retired: a scrubber bar reads as a video player, not as a film, and it
+  // was the clearest tell that this came off a template. Kept as a component
+  // so the Root call site and TOTAL_FRAMES wiring stay intact.
+  void frame; void total;
+  return null;
 };
 
 /** A small AURA product wordmark: glyph-as-A + URA, light-on-dark. */
