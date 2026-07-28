@@ -11,7 +11,7 @@ import { ELECTRIC, ELECTRIC_TEXT, FAINT, FONT, INK, INK_2, MUTED, T } from "./to
 import { AuraWord, Chip, DrawnLine, Eyebrow, Glow, Ontology3D, Plate, Rise, ScreenInset, Typed } from "./ui";
 import {
   b, copy, CONTRADICTION, DIAGNOSIS_POLES, DOMAINS, GOVERNANCE_CHIPS, GRAVEYARD,
-  JOURNEY, NUMBERS, ONTOLOGY_LABELS, RECEIPTS, TRANSCRIPT, SPINE, STAKEHOLDERS, STANDARDS, TEAM,
+  JOURNEY, LIFECYCLE, NUMBERS, ONTOLOGY_LABELS, RECEIPTS, TRANSCRIPT, SPINE, STAKEHOLDERS, STANDARDS, TEAM,
 } from "./content";
 
 /**
@@ -194,34 +194,6 @@ export const SceneReveal: React.FC = () => {
   );
 };
 
-/* ── 3b · The scope of the evidence ──────────────────────────────────────
- * A single statement card, deliberately bare. Everything after it is one
- * programme's worth of evidence; saying so here is what lets the rest of
- * the film be believed rather than discounted.
- */
-export const SceneScope: React.FC = () => {
-  const rule = interpolate(useCurrentFrame(), [b(3), b(12)], [0, 1], EASE);
-  return (
-    <Ground plate={<Plate src="plate-assemble.mp4" dur={T["seg3b"].dur} opacity={0.26} />}>
-      <Glow size={820} x="50%" y="48%" opacity={0.34} />
-      <div style={{ textAlign: "center", fontFamily: FONT }}>
-        <Rise start={0}>
-          <div style={{ fontSize: 74, fontWeight: 800, color: "#fff", letterSpacing: "-0.02em" }}>
-            {copy("seg3b").headline}
-          </div>
-        </Rise>
-        <div style={{ display: "flex", justifyContent: "center", margin: "34px 0 30px" }}>
-          <div style={{ width: 200 * rule, height: 2, background: ELECTRIC, opacity: 0.85 }} />
-        </div>
-        <Rise start={b(4)}>
-          <div style={{ fontSize: 30, fontWeight: 600, color: MUTED }}>
-            {copy("seg3b").subline}
-          </div>
-        </Rise>
-      </div>
-    </Ground>
-  );
-};
 
 /* ── 4 · It starts with people (0:42–0:56) ──────────────────────────── */
 export const SceneAlignment: React.FC = () => {
@@ -541,7 +513,9 @@ export const SceneJourney: React.FC = () => {
             start={b(14)}
             from={2}
             rate={0.52}
-            zoom={1.9}
+            zoom={2.0}
+            zoomTo={1.0}
+            zoomDur={150}
             origin="50% 42%"
             label="LIVE · OPERATORS MAKE THE CHOICE"
           />
@@ -596,6 +570,84 @@ export const SceneNumbers: React.FC = () => {
             </div>
           );
         })}
+      </div>
+    </Ground>
+  );
+};
+
+/* ── 7b · The arc ────────────────────────────────────────────────────────
+ * The one forward-looking beat. Today's five movements are lit in the
+ * middle of a longer line; the stages either side are dimmed and dashed,
+ * because they are the possibility being described, not anything run. The
+ * film is careful everywhere else about not claiming what it hasn't done,
+ * and this scene has to hold that line while still opening the door.
+ */
+export const SceneArc: React.FC = () => {
+  const frame = useCurrentFrame();
+  const line = interpolate(frame, [b(2), b(9)], [0, 1], EASE);
+  const stage = (label: string, i: number, lit: boolean, at: number) => {
+    const p = interpolate(frame, [at, at + b(1.5)], [0, 1], EASE);
+    return (
+      <div
+        key={label}
+        style={{
+          opacity: p * (lit ? 1 : 0.42),
+          transform: `translateY(${(1 - p) * 16}px)`,
+          fontFamily: FONT,
+          fontSize: lit ? 26 : 22,
+          fontWeight: lit ? 750 : 600,
+          color: "#fff",
+          whiteSpace: "nowrap",
+          padding: lit ? "16px 26px" : "13px 22px",
+          borderRadius: 99,
+          border: lit ? `1.5px solid ${ELECTRIC}` : `1.5px dashed ${FAINT}`,
+          background: lit ? "rgba(110,91,255,0.18)" : "rgba(255,255,255,0.03)",
+        }}
+      >
+        {label}
+      </div>
+    );
+  };
+  return (
+    <Ground>
+      <Glow size={1100} x="50%" y="52%" opacity={0.26} />
+      <div style={{ width: 1720, textAlign: "center" }}>
+        <Rise start={0}>
+          <Eyebrow>{copy("seg7b").eyebrow}</Eyebrow>
+          <div style={{ fontFamily: FONT, fontSize: 54, fontWeight: 800, color: "#fff", letterSpacing: "-0.02em" }}>
+            {copy("seg7b").headline}
+          </div>
+          <div style={{ fontFamily: FONT, fontSize: 27, fontWeight: 600, color: MUTED, marginTop: 14 }}>
+            {copy("seg7b").subline}
+          </div>
+        </Rise>
+
+        <div style={{ height: 78 }} />
+
+        <div style={{ position: "relative" }}>
+          {/* The arc draws through everything before any stage lands on it. */}
+          <div
+            style={{
+              position: "absolute", left: 40, top: "50%", height: 2,
+              width: `calc((100% - 80px) * ${line})`,
+              background: `linear-gradient(90deg, ${FAINT}, ${ELECTRIC} 28%, ${ELECTRIC} 72%, ${FAINT})`,
+              opacity: 0.7,
+            }}
+          />
+          <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14 }}>
+            {LIFECYCLE.before.map((l, i) => stage(l, i, false, b(8) + i * b(0.75)))}
+            {LIFECYCLE.today.map((l, i) => stage(l, i, true, b(10) + i * b(0.9)))}
+            {LIFECYCLE.after.map((l, i) => stage(l, i, false, b(15) + i * b(0.75)))}
+          </div>
+        </div>
+
+        <div style={{ height: 40 }} />
+        <Rise start={b(18)}>
+          <div style={{ display: "flex", justifyContent: "center", gap: 44, fontFamily: FONT, fontSize: 19, fontWeight: 800, letterSpacing: ".2em" }}>
+            <span style={{ color: ELECTRIC_TEXT }}>■ TODAY · DELIVERY</span>
+            <span style={{ color: MUTED }}>□ NEXT · THE FULL LIFECYCLE</span>
+          </div>
+        </Rise>
       </div>
     </Ground>
   );
@@ -746,7 +798,7 @@ export const SceneValue: React.FC = () => {
         </Rise>
         <div style={{ height: 26 }} />
         <div style={{ fontSize: 40, fontWeight: 700, color: "rgba(255,255,255,0.82)" }}>
-          from problem to working pilot
+          from problem to working prototype
         </div>
         <div style={{ display: "flex", justifyContent: "center", margin: "48px 0 40px" }}>
           <div style={{ width: 280 * rule, height: 2, background: ELECTRIC, opacity: 0.85 }} />
