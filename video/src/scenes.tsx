@@ -431,8 +431,23 @@ export const SceneJourney: React.FC = () => {
             const p = interpolate(frame, [at, at + b(1)], [0, 1], EASE);
             const humanAt = at + b(4);
             const hp = interpolate(frame, [humanAt, humanAt + b(1)], [0, 1], EASE);
+            // The narration reaches Evolve last and dwells there; lift that
+            // column while it does, so the words have something to point at.
+            const isEvolve = i === JOURNEY.length - 1;
+            const lift = isEvolve
+              ? interpolate(frame, [b(20), b(23), b(33), b(36)], [0, 1, 1, 0], LIN)
+              : 0;
             return (
-              <div key={col.phase} style={{ width: 320, opacity: p, transform: `translateY(${(1 - p) * 30}px)`, fontFamily: FONT }}>
+              <div
+                key={col.phase}
+                style={{
+                  width: 320,
+                  opacity: p,
+                  transform: `translateY(${(1 - p) * 30 - lift * 10}px) scale(${1 + lift * 0.035})`,
+                  fontFamily: FONT,
+                  filter: lift > 0.01 ? `drop-shadow(0 18px 46px rgba(110,91,255,${0.5 * lift}))` : undefined,
+                }}
+              >
                 <div style={{
                   borderRadius: 16, border: `1px solid ${ELECTRIC}`, background: "rgba(110,91,255,0.14)",
                   padding: "16px 18px", minHeight: 104, display: "flex", flexDirection: "column", justifyContent: "center",
@@ -477,7 +492,7 @@ export const SceneJourney: React.FC = () => {
         {/* Governance band — the three claims that survive the meeting. */}
         <div style={{ marginTop: 28, display: "flex", gap: 20, justifyContent: "center" }}>
           {GOVERNANCE_CHIPS.map((c, i) => {
-            const at = 420 + i * 24;
+            const at = b(10) + i * b(2);
             const p = interpolate(frame, [at, at + b(1)], [0, 1], EASE);
             return (
               <div key={c} style={{
