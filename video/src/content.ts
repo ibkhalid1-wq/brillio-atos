@@ -153,8 +153,8 @@ export const SCENES: Scene[] = [
   {
     id: "seg9",
     headline: "21 days from problem to working pilot.",
-    subline: "Delivery economics that becomes a Brillio differentiator.",
-    vo: "Twenty-one days from problem to working pilot. That's delivery economics that becomes a Brillio differentiator.",
+    subline: "Delivery economics that would be a differentiator for Brillio.",
+    vo: "Twenty-one days from problem to working pilot. That's delivery economics that would be a differentiator for Brillio.",
     animFloor: 300,
     tail: 1.6,
   },
@@ -323,16 +323,6 @@ export const DOMAINS = [
     flow: ["Order", "Pick", "Pack", "Ship", "Deliver"],
   },
 ];
-
-/**
- * Scene 9 — the commercial beat, between the question and its answer. The
- * only place in the film that talks about what this is worth rather than
- * how it works.
- */
-export const CLOSE_ECONOMICS = {
-  claim: "21 days from problem to working pilot",
-  so: "Delivery economics that changes what Brillio can bid for.",
-};
 
 /** Real screenshots from the live programme — receipts, not recreations. */
 export const RECEIPTS = {
