@@ -8,10 +8,10 @@ import {
   useCurrentFrame,
 } from "remotion";
 import { ELECTRIC, FAINT, FONT, INK, INK_2, MUTED, T } from "./tokens";
-import { AuraWord, Chip, DrawnLine, Eyebrow, Glow, Ontology3D, Plate, Rise, Typed } from "./ui";
+import { AuraWord, Chip, DrawnLine, Eyebrow, Glow, Ontology3D, Plate, Rise, ScreenInset, Typed } from "./ui";
 import {
   b, copy, CONTRADICTION, DIAGNOSIS_POLES, DOMAINS, GOVERNANCE_CHIPS, GRAVEYARD,
-  CLOSE_ECONOMICS, JOURNEY, NUMBERS, ONTOLOGY_LABELS, RECEIPTS, TRANSCRIPT, REVEAL_CHIP, SPINE, STAKEHOLDERS, STANDARDS, TEAM,
+  JOURNEY, NUMBERS, ONTOLOGY_LABELS, RECEIPTS, TRANSCRIPT, REVEAL_CHIP, SPINE, STAKEHOLDERS, STANDARDS, TEAM,
 } from "./content";
 
 /**
@@ -75,7 +75,9 @@ export const SceneQuestion: React.FC = () => {
         <div style={{ height: 70 }} />
         <div style={{ display: "flex", gap: 22, justifyContent: "center" }}>
           {grave.map((g, i) => {
-            const at = b(18) + i * b(2);
+            // 8.0s "a graveyard of pilots", 9.5s "solutions in search of a
+            // problem", 12.0s "proof of concepts that prove nothing".
+            const at = [b(15), b(19), b(24)][i];
             const p = interpolate(frame, [at, at + b(1)], [0, 1], EASE);
             const grey = interpolate(frame, [at + b(2), at + b(4)], [1, 0.34], LIN);
             return (
@@ -107,7 +109,7 @@ export const SceneDiagnosis: React.FC = () => {
   const lineP = interpolate(frame, [b(4), b(7)], [0, 1], EASE);
   const qP = interpolate(frame, [b(8), b(9.5)], [0, 1], EASE);
   const pulse = 0.6 + Math.sin(frame / 15) * 0.18;
-  const capP = interpolate(frame, [b(12), b(13.5)], [0, 1], EASE);
+  const capP = interpolate(frame, [b(3), b(4.5)], [0, 1], EASE);
   const pill = (p: number): React.CSSProperties => ({
     opacity: p, transform: `translateY(${(1 - p) * 24}px)`,
     fontFamily: FONT, fontSize: 34, fontWeight: 800, color: "#fff",
@@ -146,7 +148,7 @@ export const SceneReveal: React.FC = () => {
   const draw = interpolate(frame, [b(1), b(8)], [0, 1], EASE);
   const spine = SPINE;
   // The chip lands on "in twenty-one days" — the fourth sentence, not the third.
-  const counter = interpolate(frame, [b(38), b(39.5)], [0, 1], EASE);
+  const counter = interpolate(frame, [b(30), b(31.5)], [0, 1], EASE);
   return (
     <Ground plate={<Plate src="plate-draw.mp4" dur={T.seg3.dur} opacity={0.5} />}>
       <Glow size={900} x="50%" y="34%" />
@@ -177,9 +179,9 @@ export const SceneReveal: React.FC = () => {
         </div>
         <div style={{ height: 26 }} />
         <div style={{ minHeight: 90 }}>
-          {frame >= b(30) ? (
+          {frame >= b(21) ? (
             <Typed
-              start={b(30)}
+              start={b(21)}
               cps={30}
               text={copy("seg3").headline!}
               accents={copy("seg3").accents}
@@ -268,16 +270,17 @@ export const SceneAlignment: React.FC = () => {
         <DrawnLine size={92} progress={1} />
       </div>
 
-      <Rise start={b(6)} style={{ position: "absolute", left: 70, top: 400 }}>
-        <div style={{ fontFamily: FONT }}>
-          <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: ".12em", color: ELECTRIC, marginBottom: 10 }}>
-            {RECEIPTS.routedQuestion.label}
-          </div>
-          <div style={{ background: "#fff", borderRadius: 14, padding: "12px 16px", boxShadow: "0 24px 60px -24px rgba(0,0,0,.6)" }}>
-            <Img src={staticFile(RECEIPTS.routedQuestion.file)} style={{ width: 400, display: "block", borderRadius: 8 }} />
-          </div>
-        </div>
-      </Rise>
+      {/* A stakeholder working through the workflow AURA routed to them —
+          marking what is right, what doesn't happen, in their own words. */}
+      <div style={{ position: "absolute", left: 64, top: 330 }}>
+        <ScreenInset
+          src="screen-stakeholder.mp4"
+          width={560}
+          start={b(6)}
+          from={1.5}
+          label="LIVE · STAKEHOLDERS VALIDATE"
+        />
+      </div>
       {/* The plate shows someone talking to a laptop; this is the laptop
           hearing them. The line is the "two weeks" half of the
           contradiction the scene surfaces a few beats later. */}
@@ -489,23 +492,18 @@ export const SceneJourney: React.FC = () => {
           </div>
         </div>
 
-        {/* Governance band — the three claims that survive the meeting. */}
-        <div style={{ marginTop: 28, display: "flex", gap: 20, justifyContent: "center" }}>
-          {GOVERNANCE_CHIPS.map((c, i) => {
-            const at = b(10) + i * b(2);
-            const p = interpolate(frame, [at, at + b(1)], [0, 1], EASE);
-            return (
-              <div key={c} style={{
-                opacity: p, transform: `translateY(${(1 - p) * 18}px)`,
-                fontFamily: FONT, fontSize: 22, fontWeight: 750, color: "#fff",
-                padding: "14px 26px", borderRadius: 99,
-                border: `1px solid ${ELECTRIC}`, background: "rgba(110,91,255,0.16)",
-                whiteSpace: "nowrap",
-              }}>
-                {c}
-              </div>
-            );
-          })}
+        {/* The other half of "the machine proposes, the business validates":
+            three architectures scored by AURA, one crowned, an operator free
+            to refine it. Replaces the governance chips, which restated the
+            narration word for word. */}
+        <div style={{ marginTop: 24, display: "flex", justifyContent: "center" }}>
+          <ScreenInset
+            src="screen-architecture.mp4"
+            width={840}
+            start={b(11)}
+            from={2}
+            label="LIVE · OPERATORS MAKE THE CHOICE"
+          />
         </div>
       </div>
     </Ground>
@@ -521,7 +519,7 @@ export const SceneNumbers: React.FC = () => {
       <Glow size={1100} x="50%" y="50%" opacity={0.28} />
       <div style={{ display: "flex", flexDirection: "column", gap: 34, alignItems: "center" }}>
         {stamps.map((s, i) => {
-          const at = b(4) + i * b(5);
+          const at = b(1) + i * b(2.5);
           // Eased landing, no overshoot — buttery, not bouncy.
           const p = interpolate(frame, [at, at + b(1.5)], [0, 1], EASE);
           const last = i === stamps.length - 1;
@@ -631,7 +629,7 @@ export const SceneIndustries: React.FC = () => {
         </Rise>
         <div style={{ display: "flex", gap: 36, justifyContent: "center" }}>
           {DOMAINS.map((d, i) => (
-            <MiniDomain key={d.industry} d={d} start={18 + i * 46} />
+            <MiniDomain key={d.industry} d={d} start={15 + i * 24} />
           ))}
         </div>
       </div>
@@ -642,21 +640,14 @@ export const SceneIndustries: React.FC = () => {
 /* ── 9 · Close (2:00–2:10) ──────────────────────────────────────────── */
 export const SceneClose: React.FC = () => {
   const frame = useCurrentFrame();
-  const qP = interpolate(frame, [70, 94], [0, 1], EASE);
-  const econ = interpolate(frame, [b(9), b(11), b(19), b(21)], [0, 1, 1, 0], EASE);
+  const qP = interpolate(frame, [b(2), b(4)], [0, 1], EASE);
   return (
-    <Ground plate={<Plate src="plate-converge.mp4" dur={T.seg9.dur} opacity={0.5} />}>
+    <Ground plate={<Plate src="plate-converge.mp4" dur={T.seg10.dur} opacity={0.5} />}>
       <Glow size={800} x="50%" y="42%" opacity={0.25} />
       <div style={{ textAlign: "center" }}>
         <Rise start={b(1)}>
           <div style={{ display: "flex", alignItems: "center", gap: 26, justifyContent: "center" }}>
-            {/* The real wordmark, not the typeface approximation. Its two
-                green dots sit below the baseline, so the mark is nudged up
-                to line its letterforms up with AURA's. */}
-            <Img
-              src={staticFile("brillio.png")}
-              style={{ height: 58, display: "block", marginBottom: -12 }}
-            />
+            <Img src={staticFile("brillio.png")} style={{ height: 58, display: "block", marginBottom: -12 }} />
             <span style={{ color: MUTED, fontSize: 44 }}>–</span>
             <AuraWord height={46} />
           </div>
@@ -665,31 +656,13 @@ export const SceneClose: React.FC = () => {
         {/* The bookend: the opening question, answered. Nothing else. */}
         <div style={{ opacity: qP, transform: `translateY(${(1 - qP) * 24}px)` }}>
           <div style={{ fontFamily: FONT, fontSize: 32, fontWeight: 600, color: MUTED, marginBottom: 22 }}>
-            {copy("seg9").subline}
+            {copy("seg10").subline}
           </div>
-
-          {/* The commercial beat sits in the gap the narration opens between
-              the question and its answer, and clears before the answer types
-              so the bookend still lands alone. */}
-          <div
-            style={{
-              position: "absolute", left: 0, right: 0,
-              opacity: econ, transform: `translateY(${(1 - econ) * 18}px)`,
-            }}
-          >
-            <div style={{ fontFamily: FONT, fontSize: 54, fontWeight: 800, color: "#fff", letterSpacing: "-0.01em" }}>
-              {CLOSE_ECONOMICS.claim}
-            </div>
-            <div style={{ fontFamily: FONT, fontSize: 30, fontWeight: 600, color: ELECTRIC, marginTop: 18 }}>
-              {CLOSE_ECONOMICS.so}
-            </div>
-          </div>
-
           <Typed
-            start={b(22)}
+            start={b(8)}
             cps={18}
-            text={copy("seg9").headline!}
-            accents={copy("seg9").accents}
+            text={copy("seg10").headline!}
+            accents={copy("seg10").accents}
             style={{ fontSize: 62, fontWeight: 800, color: "#fff" }}
           />
         </div>
@@ -697,6 +670,43 @@ export const SceneClose: React.FC = () => {
     </Ground>
   );
 };
+/* ── 9 · What it's worth ─────────────────────────────────────────────────
+ * The film's only commercial claim, given a scene rather than a corner of
+ * one. Deliberately bare: a number that large earns silence around it.
+ */
+export const SceneValue: React.FC = () => {
+  const frame = useCurrentFrame();
+  const days = Math.round(interpolate(frame, [b(2), b(5)], [0, 21], EASE));
+  const rule = interpolate(frame, [b(6), b(9)], [0, 1], EASE);
+  const so = interpolate(frame, [b(9), b(12)], [0, 1], EASE);
+  return (
+    <Ground>
+      <Glow size={1000} x="50%" y="46%" opacity={0.3} />
+      <div style={{ textAlign: "center", fontFamily: FONT }}>
+        <Rise start={0}>
+          <div style={{ fontSize: 21, fontWeight: 800, letterSpacing: ".3em", color: ELECTRIC }}>
+            THE ECONOMICS
+          </div>
+        </Rise>
+        <div style={{ height: 46 }} />
+        <div style={{ fontSize: 168, fontWeight: 800, color: "#fff", lineHeight: 1, letterSpacing: "-0.03em" }}>
+          {days} days
+        </div>
+        <div style={{ height: 26 }} />
+        <div style={{ fontSize: 40, fontWeight: 700, color: "rgba(255,255,255,0.82)" }}>
+          from problem to working pilot
+        </div>
+        <div style={{ display: "flex", justifyContent: "center", margin: "48px 0 40px" }}>
+          <div style={{ width: 280 * rule, height: 2, background: ELECTRIC, opacity: 0.85 }} />
+        </div>
+        <div style={{ opacity: so, transform: `translateY(${(1 - so) * 18}px)`, fontSize: 34, fontWeight: 700, color: ELECTRIC }}>
+          {copy("seg9").subline}
+        </div>
+      </div>
+    </Ground>
+  );
+};
+
 
 /* ── 10 · The team ───────────────────────────────────────────────────────
  * The one scene about people rather than method, so it earns a slower hand:
@@ -706,7 +716,7 @@ export const SceneClose: React.FC = () => {
  */
 export const SceneTeam: React.FC = () => {
   const frame = useCurrentFrame();
-  const dur = T.seg10.dur;
+  const dur = T.seg11.dur;
 
   /* Motion-picture end credits: department heading, then role right-aligned
      against a centre gutter with the name left-aligned across it, the whole
@@ -733,7 +743,7 @@ export const SceneTeam: React.FC = () => {
         <div style={{ width: 1500, margin: "0 auto", fontFamily: FONT }}>
           <div style={{ height: TITLE_H, textAlign: "center" }}>
             <div style={{ fontSize: 21, fontWeight: 800, letterSpacing: ".34em", color: ELECTRIC }}>
-              {copy("seg10").headline!.toUpperCase()}
+              {copy("seg11").headline!.toUpperCase()}
             </div>
             <div style={{ width: 120, height: 1, background: FAINT, margin: "30px auto 0" }} />
           </div>

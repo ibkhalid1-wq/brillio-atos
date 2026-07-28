@@ -11,6 +11,7 @@ import {
   SceneQuestion,
   SceneReveal,
   SceneTeam,
+  SceneValue,
 } from "./scenes";
 import { FPS, T, TOTAL_FRAMES } from "./tokens";
 import { FadeScene, Grain, ProgressLine } from "./ui";
@@ -42,10 +43,13 @@ const BoardCut: React.FC = () => (
       <FadeScene dur={T.seg8.dur}><SceneIndustries /></FadeScene>
     </Sequence>
     <Sequence from={T.seg9.from} durationInFrames={T.seg9.dur}>
-      <FadeScene dur={T.seg9.dur}><SceneClose /></FadeScene>
+      <FadeScene dur={T.seg9.dur}><SceneValue /></FadeScene>
     </Sequence>
     <Sequence from={T.seg10.from} durationInFrames={T.seg10.dur}>
-      <FadeScene dur={T.seg10.dur}><SceneTeam /></FadeScene>
+      <FadeScene dur={T.seg10.dur}><SceneClose /></FadeScene>
+    </Sequence>
+    <Sequence from={T.seg11.from} durationInFrames={T.seg11.dur}>
+      <FadeScene dur={T.seg11.dur}><SceneTeam /></FadeScene>
     </Sequence>
     <Grain />
     <ProgressLine total={TOTAL_FRAMES} />
