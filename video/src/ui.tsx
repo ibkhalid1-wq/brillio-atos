@@ -161,11 +161,22 @@ export const Plate: React.FC<{
     extrapolateRight: "clamp",
   });
   const people = tone === "people";
-  return (
-    <AbsoluteFill style={{ opacity: fade * opacity }}>
+
+  /* Frame blending. At this much slowdown each source frame is held for
+     roughly five output frames, and the plate steps rather than moves —
+     the single most visible thing stopping the film reading as smooth.
+     Neither Remotion's ffmpeg nor the system has motion interpolation
+     available, so blend it here: two copies of the clip one source frame
+     apart, cross-faded by where we are between them. Not true optical
+     flow, but it turns a step into a slide. */
+  const srcFrame = frame * rate;
+  const mix = srcFrame - Math.floor(srcFrame);
+  const layer = (startFrom: number, o: number) => (
+    <AbsoluteFill style={{ opacity: o }}>
       <OffthreadVideo
         src={staticFile(src)}
         playbackRate={rate}
+        startFrom={startFrom}
         muted
         style={{
           width: "100%",
@@ -175,6 +186,13 @@ export const Plate: React.FC<{
           filter: people ? "saturate(0.45) contrast(1.1)" : undefined,
         }}
       />
+    </AbsoluteFill>
+  );
+
+  return (
+    <AbsoluteFill style={{ opacity: fade * opacity }}>
+      {layer(0, 1)}
+      {layer(1, mix)}
       {people ? (
         // Flat indigo at high opacity, not a blend mode: mix-blend-mode
         // "color" keeps the backdrop's luminance, so it tinted the office
@@ -285,7 +303,7 @@ export const Rise: React.FC<{
   dur?: number;
   children: React.ReactNode;
   style?: React.CSSProperties;
-}> = ({ start, dur = 22, children, style }) => {
+}> = ({ start, dur = 34, children, style }) => {
   const frame = useCurrentFrame();
   const p = interpolate(frame, [start, start + dur], [0, 1], {
     extrapolateLeft: "clamp",
@@ -293,7 +311,7 @@ export const Rise: React.FC<{
     easing: Easing.bezier(0.16, 1, 0.3, 1),
   });
   return (
-    <div style={{ opacity: p, transform: `translateY(${(1 - p) * 30}px)`, ...style }}>
+    <div style={{ opacity: p, transform: `translateY(${(1 - p) * 22}px)`, ...style }}>
       {children}
     </div>
   );

@@ -89,9 +89,9 @@ export const SCENES: Scene[] = [
   {
     id: "seg3",
     headline: "AURA derived Laila from evidence.",
-    subline: "Meet AURA — Brillio's AI-native delivery methodology.",
+    subline: "Meet AURA — Brillio's AI-native delivery methodology, and the system that runs it.",
     accents: ["Laila", "evidence"],
-    vo: "Meet Aura — Brillio's AI-native delivery methodology, and the system that runs it. Laila, the sales CRM you just saw, was never handed to us as a specification. Aura derived it from the business's own evidence — and built it. A working pilot, in twenty-one days.",
+    vo: "Meet Aura — Brillio's AI-native delivery methodology, and the system that runs it. Laila — a working sales CRM — was derived from evidence by Aura, and built by Aura. A working pilot, in twenty-one days.",
     animFloor: 360,
     tail: 1.4,
     // The mark draws, then the spine assembles, and only then does the name
@@ -122,14 +122,14 @@ export const SCENES: Scene[] = [
     id: "seg6",
     eyebrow: "04 · Governed by design",
     headline: "Autonomous — with a human in the loop, end to end.",
-    subline: "Machine proposes. Humans decide. Every judgment recorded as evidence.",
-    vo: "And control is the architecture. The machine proposes — the business decides. Every phase gates on a demonstration. Every judgment lands on a permanent record. Autonomy you can audit.",
+    subline: "Machine proposes. The business validates. Every judgment recorded as evidence.",
+    vo: "And control is the architecture. The machine proposes — the business validates. Every phase gates on a demonstration. Every judgment lands on a permanent record. And it doesn't stop at go-live: Aura watches the model drift as the business changes, and proposes the correction — for your team to accept. Autonomy you can audit.",
     animFloor: 380,
     tail: 1.4,
   },
   {
     id: "seg7",
-    vo: "One real business problem. Fifteen stakeholders heard. Thirty-four entities across ten business areas — and every one of them reusable on the next programme. A working system in twenty-one days, validated by the people who named the problem.",
+    vo: "One real business problem. Fifteen stakeholders heard. Thirty-four entities across ten business areas. A working system in twenty-one days, validated by the people who named the problem.",
     animFloor: 360,
     tail: 1.4,
   },
@@ -159,7 +159,7 @@ export const SCENES: Scene[] = [
     // A crawl has to be readable, and there are twelve names plus three
     // department headings to get past the frame. This is the one scene whose
     // length is set by how long people need, not by the narration.
-    animFloor: 660,
+    animFloor: 930,
     tail: 3.5,
   },
 ];
@@ -173,9 +173,9 @@ export const TEAM: Array<{ group: string; people: Array<{ name: string; role: st
     group: "Product",
     people: [
       { name: "Ibrahim Khalid", role: "Product Owner" },
-      { name: "Prasoon Gupta", role: "Project Manager" },
       { name: "Nayana Pai", role: "Solution Architect" },
       { name: "Vasudev Bhat", role: "Technical Architect" },
+      { name: "Prasoon Gupta", role: "Project Manager" },
     ],
   },
   {
@@ -194,6 +194,19 @@ export const TEAM: Array<{ group: string; people: Array<{ name: string; role: st
       { name: "Shweta Desai", role: "UX Designer" },
       { name: "Nithish R", role: "UX Designer" },
       { name: "Rishabh Bajaj", role: "UX Designer" },
+    ],
+  },
+  {
+    group: "Business SMEs",
+    people: [
+      { name: "Smitha B V", role: "Marketing" },
+      { name: "Prakash TM", role: "Practices Sales" },
+      { name: "Brindtiha RAI", role: "Practices Sales" },
+      { name: "Hema Panneerselvam", role: "Delivery Manager" },
+      { name: "Shripad Dixit", role: "Delivery Lead" },
+      { name: "Tejwasvi Mohan", role: "Alliances" },
+      { name: "Vimal Pandey", role: "Revenue Operation" },
+      { name: "Ahmed Abouelkhir", role: "Talent Acquisition" },
     ],
   },
 ];
