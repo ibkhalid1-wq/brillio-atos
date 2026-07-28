@@ -666,38 +666,91 @@ export const SceneClose: React.FC = () => {
  */
 export const SceneTeam: React.FC = () => {
   const frame = useCurrentFrame();
-  const rule = interpolate(frame, [b(2), b(6)], [0, 1], EASE);
+  const dur = T.seg10.dur;
+
+  /* Motion-picture end credits: department heading, then role right-aligned
+     against a centre gutter with the name left-aligned across it, the whole
+     block crawling upward at constant speed. Constant speed is what makes it
+     read as credits — anything eased reads as a slide animating in. The crawl
+     stops with the lockup centred and holds, so the film ends on the mark
+     rather than on an empty screen. */
+  const TITLE_H = 240;
+  const GROUP_H = 116;
+  const ROW_H = 104;
+  const GAP = 150;
+  const LOCKUP_H = 150;
+  const people = TEAM.reduce((n, g) => n + g.people.length, 0);
+  const lockupCentre =
+    TITLE_H + TEAM.length * GROUP_H + people * ROW_H + GAP + LOCKUP_H / 2;
+
+  const from = 1140;
+  const to = 540 - lockupCentre;
+  const y = interpolate(frame, [b(1), dur - b(5)], [from, to], LIN);
+
   return (
-    <Ground>
-      <div style={{ width: 1560, textAlign: "center" }}>
-        <Rise start={b(1)}>
-          <div style={{ fontFamily: FONT, fontSize: 46, fontWeight: 700, color: "#fff", letterSpacing: "-0.02em" }}>
-            {copy("seg10").headline}
+    <AbsoluteFill style={{ background: "#08061A", overflow: "hidden" }}>
+      <AbsoluteFill style={{ transform: `translateY(${y}px)` }}>
+        <div style={{ width: 1500, margin: "0 auto", fontFamily: FONT }}>
+          <div style={{ height: TITLE_H, textAlign: "center" }}>
+            <div style={{ fontSize: 21, fontWeight: 800, letterSpacing: ".34em", color: ELECTRIC }}>
+              {copy("seg10").headline!.toUpperCase()}
+            </div>
+            <div style={{ width: 120, height: 1, background: FAINT, margin: "30px auto 0" }} />
           </div>
-        </Rise>
 
-        <div style={{ display: "flex", justifyContent: "center", margin: "34px 0 54px" }}>
-          <div style={{ width: 240 * rule, height: 2, background: ELECTRIC, opacity: 0.85 }} />
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", rowGap: 46, columnGap: 40 }}>
-          {TEAM.map((p, i) => {
-            // Down the columns of each row, a name every half-beat.
-            const at = b(4) + i * Math.round(b(0.5));
-            const p0 = interpolate(frame, [at, at + b(1.5)], [0, 1], EASE);
-            return (
-              <div key={p.name} style={{ opacity: p0, transform: `translateY(${(1 - p0) * 14}px)` }}>
-                <div style={{ fontFamily: FONT, fontSize: 30, fontWeight: 700, color: "#fff", letterSpacing: "-0.01em" }}>
-                  {p.name}
-                </div>
-                <div style={{ fontFamily: FONT, fontSize: 19, fontWeight: 500, color: MUTED, marginTop: 7 }}>
-                  {p.role}
-                </div>
+          {TEAM.map((group) => (
+            <div key={group.group}>
+              <div
+                style={{
+                  height: GROUP_H,
+                  display: "flex",
+                  alignItems: "flex-end",
+                  justifyContent: "center",
+                  paddingBottom: 26,
+                }}
+              >
+                <span style={{ fontSize: 19, fontWeight: 800, letterSpacing: ".3em", color: FAINT }}>
+                  {group.group.toUpperCase()}
+                </span>
               </div>
-            );
-          })}
+              {group.people.map((p) => (
+                <div
+                  key={p.name}
+                  style={{
+                    height: ROW_H,
+                    display: "grid",
+                    gridTemplateColumns: "1fr 60px 1fr",
+                    alignItems: "baseline",
+                  }}
+                >
+                  <div style={{ textAlign: "right", fontSize: 20, fontWeight: 600, letterSpacing: ".14em", color: MUTED }}>
+                    {p.role.toUpperCase()}
+                  </div>
+                  <div />
+                  <div style={{ textAlign: "left", fontSize: 33, fontWeight: 700, color: "#fff", letterSpacing: "-0.01em" }}>
+                    {p.name}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
+
+          <div style={{ height: GAP }} />
+          <div style={{ height: LOCKUP_H, display: "flex", alignItems: "center", justifyContent: "center", gap: 26 }}>
+            <Img src={staticFile("brillio.png")} style={{ height: 52, display: "block", marginBottom: -11 }} />
+            <span style={{ color: MUTED, fontSize: 40 }}>–</span>
+            <AuraWord height={42} />
+          </div>
         </div>
-      </div>
-    </Ground>
+      </AbsoluteFill>
+
+      {/* Names arrive and leave through darkness, never at a hard frame edge. */}
+      <AbsoluteFill
+        style={{
+          background:
+            "linear-gradient(180deg, #08061A 0%, rgba(8,6,26,0) 17%, rgba(8,6,26,0) 83%, #08061A 100%)",
+        }}
+      />
+    </AbsoluteFill>
   );
 };
