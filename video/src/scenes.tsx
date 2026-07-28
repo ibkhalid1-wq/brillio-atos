@@ -10,7 +10,7 @@ import {
 import { ELECTRIC, FAINT, FONT, INK, INK_2, MUTED } from "./tokens";
 import { AuraWord, Chip, DrawnLine, Eyebrow, Glow, Rise, Typed } from "./ui";
 import {
-  copy, CONTRADICTION, DIAGNOSIS_POLES, DOMAINS, GOVERNANCE_CHIPS, GRAVEYARD,
+  b, copy, CONTRADICTION, DIAGNOSIS_POLES, DOMAINS, GOVERNANCE_CHIPS, GRAVEYARD,
   JOURNEY, NUMBERS, ONTOLOGY_NODES, RECEIPTS, REVEAL_CHIP, SPINE, STAKEHOLDERS, STANDARDS,
 } from "./content";
 
@@ -55,9 +55,9 @@ export const SceneQuestion: React.FC = () => {
         <div style={{ height: 70 }} />
         <div style={{ display: "flex", gap: 22, justifyContent: "center" }}>
           {grave.map((g, i) => {
-            const at = 300 + i * 40;
-            const p = interpolate(frame, [at, at + 20], [0, 1], EASE);
-            const grey = interpolate(frame, [at + 36, at + 64], [1, 0.34], LIN);
+            const at = b(18) + i * b(2);
+            const p = interpolate(frame, [at, at + b(1)], [0, 1], EASE);
+            const grey = interpolate(frame, [at + b(2), at + b(4)], [1, 0.34], LIN);
             return (
               <div
                 key={g}
@@ -81,13 +81,13 @@ export const SceneQuestion: React.FC = () => {
 /* ── 2 · The diagnosis — the missing middle (0:14–0:26) ─────────────── */
 export const SceneDiagnosis: React.FC = () => {
   const frame = useCurrentFrame();
-  const leftP = interpolate(frame, [20, 46], [0, 1], EASE);
-  const rightP = interpolate(frame, [34, 60], [0, 1], EASE);
+  const leftP = interpolate(frame, [b(1), b(2.5)], [0, 1], EASE);
+  const rightP = interpolate(frame, [b(2), b(3.5)], [0, 1], EASE);
   // The lines draw toward the centre from both sides — and never meet.
-  const lineP = interpolate(frame, [62, 112], [0, 1], EASE);
-  const qP = interpolate(frame, [120, 146], [0, 1], EASE);
+  const lineP = interpolate(frame, [b(4), b(7)], [0, 1], EASE);
+  const qP = interpolate(frame, [b(8), b(9.5)], [0, 1], EASE);
   const pulse = 0.6 + Math.sin(frame / 15) * 0.18;
-  const capP = interpolate(frame, [172, 198], [0, 1], EASE);
+  const capP = interpolate(frame, [b(12), b(13.5)], [0, 1], EASE);
   const pill = (p: number): React.CSSProperties => ({
     opacity: p, transform: `translateY(${(1 - p) * 24}px)`,
     fontFamily: FONT, fontSize: 34, fontWeight: 800, color: "#fff",
@@ -123,9 +123,9 @@ export const SceneDiagnosis: React.FC = () => {
 /* ── 3 · The reveal (0:26–0:42) ─────────────────────────────────────── */
 export const SceneReveal: React.FC = () => {
   const frame = useCurrentFrame();
-  const draw = interpolate(frame, [20, 110], [0, 1], EASE);
+  const draw = interpolate(frame, [b(1), b(8)], [0, 1], EASE);
   const spine = SPINE;
-  const counter = interpolate(frame, [320, 348], [0, 1], EASE);
+  const counter = interpolate(frame, [b(23), b(24.5)], [0, 1], EASE);
   return (
     <Ground>
       <Glow size={900} x="50%" y="34%" />
@@ -134,7 +134,7 @@ export const SceneReveal: React.FC = () => {
         <div style={{ height: 26 }} />
         <div style={{ display: "flex", gap: 34, justifyContent: "center" }}>
           {spine.map((s, i) => (
-            <Rise key={s} start={110 + i * 12} dur={16}>
+            <Rise key={s} start={b(8) + i * b(0.5)} dur={b(1)}>
               <span style={{ fontFamily: FONT, fontSize: 30, fontWeight: 700, color: MUTED, letterSpacing: "0.06em" }}>
                 {s}
                 {i < spine.length - 1 ? <span style={{ color: FAINT, marginLeft: 34 }}>→</span> : null}
@@ -144,9 +144,9 @@ export const SceneReveal: React.FC = () => {
         </div>
         <div style={{ height: 56 }} />
         <div style={{ minHeight: 70 }}>
-          {frame >= 175 ? (
+          {frame >= b(12) ? (
             <Typed
-              start={175}
+              start={b(12)}
               cps={30}
               text={copy("seg3").subline!}
               accents={["AURA"]}
@@ -156,9 +156,9 @@ export const SceneReveal: React.FC = () => {
         </div>
         <div style={{ height: 26 }} />
         <div style={{ minHeight: 90 }}>
-          {frame >= 265 ? (
+          {frame >= b(18) ? (
             <Typed
-              start={265}
+              start={b(18)}
               cps={30}
               text={copy("seg3").headline!}
               accents={copy("seg3").accents}
@@ -199,12 +199,12 @@ export const SceneAlignment: React.FC = () => {
       <svg viewBox="0 0 1920 1080" width={1920} height={1080} style={{ position: "absolute", inset: 0 }}>
         {STAKEHOLDERS.map((st, i) => {
           const p2 = pos(st.angle);
-          const spokeAt = 26 + i * 8;
-          const spokeO = interpolate(frame, [spokeAt, spokeAt + 14], [0, 0.3], EASE);
-          const outAt = 70 + i * 22;
-          const outP = interpolate(frame, [outAt, outAt + 38], [0, 1], LIN);
-          const backAt = outAt + 64;
-          const backP = interpolate(frame, [backAt, backAt + 38], [0, 1], LIN);
+          const spokeAt = b(1) + i * b(0.5);
+          const spokeO = interpolate(frame, [spokeAt, spokeAt + b(0.75)], [0, 0.3], EASE);
+          const outAt = b(4) + i * b(1);
+          const outP = interpolate(frame, [outAt, outAt + b(2)], [0, 1], LIN);
+          const backAt = outAt + b(3);
+          const backP = interpolate(frame, [backAt, backAt + b(2)], [0, 1], LIN);
           const qx = cx + (p2.x - cx) * outP, qy = cy + (p2.y - cy) * outP;
           const rx = p2.x + (cx - p2.x) * backP, ry = p2.y + (cy - p2.y) * backP;
           // Dots fade in and out along their travel — no popping at endpoints.
@@ -222,10 +222,10 @@ export const SceneAlignment: React.FC = () => {
 
       {STAKEHOLDERS.map((st, i) => {
         const p2 = pos(st.angle);
-        const at = 26 + i * 8;
-        const o = interpolate(frame, [at, at + 16], [0, 1], EASE);
-        const heardAt = 70 + i * 22 + 96;
-        const hp = interpolate(frame, [heardAt, heardAt + 16], [0, 1], EASE);
+        const at = b(1) + i * b(0.5);
+        const o = interpolate(frame, [at, at + b(1)], [0, 1], EASE);
+        const heardAt = b(4) + i * b(1) + b(5);
+        const hp = interpolate(frame, [heardAt, heardAt + b(1)], [0, 1], EASE);
         return (
           <div key={st.label}
             style={{
@@ -247,7 +247,7 @@ export const SceneAlignment: React.FC = () => {
         <DrawnLine size={92} progress={1} />
       </div>
 
-      <Rise start={150} style={{ position: "absolute", left: 70, top: 400 }}>
+      <Rise start={b(6)} style={{ position: "absolute", left: 70, top: 400 }}>
         <div style={{ fontFamily: FONT }}>
           <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: ".12em", color: ELECTRIC, marginBottom: 10 }}>
             {RECEIPTS.routedQuestion.label}
@@ -257,7 +257,7 @@ export const SceneAlignment: React.FC = () => {
           </div>
         </div>
       </Rise>
-      <Rise start={280} style={{ position: "absolute", bottom: 140, width: "100%", display: "flex", justifyContent: "center" }}>
+      <Rise start={b(15)} style={{ position: "absolute", bottom: 140, width: "100%", display: "flex", justifyContent: "center" }}>
         <div style={{ display: "flex", gap: 18, alignItems: "center", fontFamily: FONT, color: "#fff" }}>
           <span style={{ fontSize: 23, fontWeight: 800, background: "#B4541E", borderRadius: 10, padding: "7px 14px" }}>{CONTRADICTION.tag}</span>
           <span style={{ fontSize: 24, color: MUTED }}>
@@ -265,7 +265,7 @@ export const SceneAlignment: React.FC = () => {
           </span>
         </div>
       </Rise>
-      <Rise start={320} style={{ position: "absolute", bottom: 56, width: "100%", display: "flex", justifyContent: "center" }}>
+      <Rise start={b(18)} style={{ position: "absolute", bottom: 56, width: "100%", display: "flex", justifyContent: "center" }}>
         <div style={{ display: "flex", gap: 18, alignItems: "center" }}>
           <span style={{ fontFamily: FONT, fontSize: 19, fontWeight: 800, letterSpacing: ".12em", color: ELECTRIC }}>
             {RECEIPTS.coverageLedger.label}
@@ -289,14 +289,14 @@ export const SceneGrounding: React.FC = () => {
     <svg viewBox="0 0 1600 700" width={1600} height={700}>
       {ONTOLOGY_NODES.map(([x1, y1], i) =>
         ONTOLOGY_NODES.slice(i + 1, i + 3).map(([x2, y2], j) => {
-          const at = seed + 10 + (i * 2 + j) * 7;
-          const o = interpolate(frame, [at, at + 14], [0, 0.4], EASE);
+          const at = seed + b(0.5) + (i * 2 + j) * 4;
+          const o = interpolate(frame, [at, at + b(0.75)], [0, 0.4], EASE);
           return <line key={`${i}-${j}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#fff" strokeWidth={2} opacity={o} />;
         }),
       )}
       {ONTOLOGY_NODES.map(([x, y, label], i) => {
-        const at = seed + i * 9;
-        const o = interpolate(frame, [at, at + 14], [0, 1], EASE);
+        const at = seed + i * 5;
+        const o = interpolate(frame, [at, at + b(0.75)], [0, 1], EASE);
         return (
           <g key={label} opacity={o}>
             <rect x={x - 92} y={y - 30} width={184} height={60} rx={14} fill="rgba(255,255,255,0.07)" stroke="rgba(255,255,255,0.35)" />
@@ -316,7 +316,7 @@ export const SceneGrounding: React.FC = () => {
       {mapO > 0.01 ? (
         <div style={{ position: "absolute", inset: 0, opacity: mapO }}>
           <div style={{ position: "absolute", left: 160, top: 130 }}>{graph(0)}</div>
-          <Rise start={130} style={{ position: "absolute", left: 260, top: 680 }}>
+          <Rise start={b(5)} style={{ position: "absolute", left: 260, top: 680 }}>
             <div
               style={{
                 fontFamily: FONT, background: "#fff", color: INK, borderRadius: 18,
@@ -332,7 +332,7 @@ export const SceneGrounding: React.FC = () => {
               <Img src={staticFile(RECEIPTS.standardAlignment.file)} style={{ width: 1340, display: "block", borderRadius: 10 }} />
             </div>
           </Rise>
-          <Rise start={200} style={{ position: "absolute", right: 150, top: 230 }}>
+          <Rise start={b(8)} style={{ position: "absolute", right: 150, top: 230 }}>
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               {STANDARDS.map((s) => (
                 <Chip key={s}>{s}</Chip>
@@ -389,10 +389,10 @@ export const SceneJourney: React.FC = () => {
         </Rise>
         <div style={{ display: "flex", gap: 22, justifyContent: "center", alignItems: "stretch" }}>
           {JOURNEY.map((col, i) => {
-            const at = 30 + i * 24;
-            const p = interpolate(frame, [at, at + 20], [0, 1], EASE);
-            const humanAt = at + 60;
-            const hp = interpolate(frame, [humanAt, humanAt + 20], [0, 1], EASE);
+            const at = b(1) + i * b(0.75);
+            const p = interpolate(frame, [at, at + b(1)], [0, 1], EASE);
+            const humanAt = at + b(4);
+            const hp = interpolate(frame, [humanAt, humanAt + b(1)], [0, 1], EASE);
             return (
               <div key={col.phase} style={{ width: 320, opacity: p, transform: `translateY(${(1 - p) * 30}px)`, fontFamily: FONT }}>
                 <div style={{
@@ -423,8 +423,8 @@ export const SceneJourney: React.FC = () => {
           <div style={{ position: "absolute", left: 140, right: 140, top: 11, height: 2, background: "rgba(255,255,255,0.18)" }} />
           <div style={{ position: "absolute", left: 100, right: 100, top: 0, display: "flex", justifyContent: "space-between" }}>
             {JOURNEY.map((col, i) => {
-              const at = 30 + i * 24 + 60 + 30;
-              const p = interpolate(frame, [at, at + 18], [0, 1], EASE);
+              const at = b(1) + i * b(0.75) + b(6);
+              const p = interpolate(frame, [at, at + b(1)], [0, 1], EASE);
               return (
                 <div key={col.stamp} style={{ opacity: p, transform: `translateY(${(1 - p) * 12}px)`, textAlign: "center", fontFamily: FONT }}>
                   <div style={{ width: 22, height: 22, borderRadius: "50%", margin: "0 auto 8px", background: "rgba(46,160,90,0.9)",
@@ -440,7 +440,7 @@ export const SceneJourney: React.FC = () => {
         <div style={{ marginTop: 28, display: "flex", gap: 20, justifyContent: "center" }}>
           {GOVERNANCE_CHIPS.map((c, i) => {
             const at = 420 + i * 24;
-            const p = interpolate(frame, [at, at + 20], [0, 1], EASE);
+            const p = interpolate(frame, [at, at + b(1)], [0, 1], EASE);
             return (
               <div key={c} style={{
                 opacity: p, transform: `translateY(${(1 - p) * 18}px)`,
@@ -468,13 +468,13 @@ export const SceneNumbers: React.FC = () => {
       <Glow size={1100} x="50%" y="50%" opacity={0.28} />
       <div style={{ display: "flex", flexDirection: "column", gap: 34, alignItems: "center" }}>
         {stamps.map((s, i) => {
-          const at = 30 + i * 74;
+          const at = b(4) + i * b(4);
           // Eased landing, no overshoot — buttery, not bouncy.
-          const p = interpolate(frame, [at, at + 26], [0, 1], EASE);
+          const p = interpolate(frame, [at, at + b(1.5)], [0, 1], EASE);
           const last = i === stamps.length - 1;
           // The film's most important stat rolls up 0→21 as it lands.
           const label = last
-            ? `${Math.round(interpolate(frame, [at, at + 22], [0, 21], LIN))} days → working Sales pilot`
+            ? `${Math.round(interpolate(frame, [at, at + b(1.5)], [0, 21], LIN))} days → working Sales pilot`
             : s;
           return (
             <div
@@ -502,7 +502,7 @@ export const SceneNumbers: React.FC = () => {
 
 const MiniDomain: React.FC<{ d: (typeof DOMAINS)[number]; start: number }> = ({ d, start }) => {
   const frame = useCurrentFrame();
-  const panelP = interpolate(frame, [start, start + 22], [0, 1], EASE);
+  const panelP = interpolate(frame, [start, start + b(1)], [0, 1], EASE);
   return (
     <div
       style={{
@@ -518,13 +518,13 @@ const MiniDomain: React.FC<{ d: (typeof DOMAINS)[number]; start: number }> = ({ 
       </div>
       <div style={{ fontSize: 19, color: MUTED, marginBottom: 10 }}>{d.programme}</div>
       <svg viewBox="0 0 460 250" width={464} height={252}>
-        {d.edges.map(([a, b], i) => {
-          const at = start + 24 + i * 6;
+        {d.edges.map(([from_, to_], i) => {
+          const at = start + b(1.5) + i * 3;
           const o = interpolate(frame, [at, at + 12], [0, 0.5], EASE);
-          return <line key={i} x1={d.nodes[a][0]} y1={d.nodes[a][1]} x2={d.nodes[b][0]} y2={d.nodes[b][1]} stroke="#fff" strokeWidth={2} opacity={o} />;
+          return <line key={i} x1={d.nodes[from_][0]} y1={d.nodes[from_][1]} x2={d.nodes[to_][0]} y2={d.nodes[to_][1]} stroke="#fff" strokeWidth={2} opacity={o} />;
         })}
         {d.nodes.map(([x, y, label], i) => {
-          const at = start + 18 + i * 7;
+          const at = start + b(1) + i * 4;
           const o = interpolate(frame, [at, at + 12], [0, 1], EASE);
           return (
             <g key={label} opacity={o}>
@@ -538,7 +538,7 @@ const MiniDomain: React.FC<{ d: (typeof DOMAINS)[number]; start: number }> = ({ 
         {d.flow.map((step, i) => {
           const at = start + 80 + i * 12;
           // Chips light with a soft ease, not a binary pop.
-          const lp = interpolate(frame, [at, at + 12], [0, 1], EASE);
+          const lp = interpolate(frame, [at, at + b(0.5)], [0, 1], EASE);
           return (
             <React.Fragment key={step}>
               <span
@@ -591,7 +591,7 @@ export const SceneClose: React.FC = () => {
     <Ground>
       <Glow size={800} x="50%" y="42%" opacity={0.25} />
       <div style={{ textAlign: "center" }}>
-        <Rise start={6}>
+        <Rise start={b(1)}>
           <div style={{ display: "flex", alignItems: "center", gap: 26, justifyContent: "center" }}>
             <span style={{ fontFamily: FONT, fontSize: 52, fontWeight: 700, color: "#fff", letterSpacing: "-0.02em" }}>brillio</span>
             <span style={{ color: MUTED, fontSize: 44 }}>–</span>

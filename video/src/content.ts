@@ -20,6 +20,19 @@ export const FPS = 30;
 /** Seconds of silence before a scene's narration begins. */
 export const LEAD_IN = 0.4;
 
+/* ── The beat grid ──────────────────────────────────────────────────────
+ * The score runs at 120 BPM: a beat every 0.5s, a bar every 2s. Every cut
+ * lands on a bar line and every element enters on a beat, so the edit
+ * breathes with the music instead of alongside it.
+ */
+export const BPM = 120;
+export const BEAT = Math.round((60 / BPM) * FPS);   // 15 frames
+export const BAR = BEAT * 4;                        // 60 frames = 2s
+/** n beats, in frames — the unit every animation is written in. */
+export const b = (n: number): number => Math.round(n * BEAT);
+/** Round up to the next bar line. */
+export const toBar = (frames: number): number => Math.ceil(frames / BAR) * BAR;
+
 export const BRAND = {
   company: "brillio",
   product: "AURA",
@@ -231,7 +244,8 @@ const secs = (id: string): number => (durations as Record<string, number>)[id] ?
 /** Frames a scene needs: its narration with breathing room, or its animation. */
 export const sceneFrames = (s: Scene): number => {
   const voFrames = Math.ceil((LEAD_IN + secs(s.id) + s.tail) * FPS);
-  return Math.max(s.animFloor, voFrames, 120);
+  // Fit the narration and the animation, then snap the cut to a bar line.
+  return toBar(Math.max(s.animFloor, voFrames, BAR * 2));
 };
 
 export type Timeline = {
