@@ -145,18 +145,26 @@ export const SCENES: Scene[] = [
   },
   {
     id: "seg9",
-    headline: "They now would… with AURA.",
-    subline: "Would two teams draw the same picture?",
-    accents: ["with AURA."],
-    vo: "So — would two teams draw the same picture? … Twenty-one days from problem to working pilot. That's delivery economics that changes what Brillio can bid for. … They now would… with Aura.",
-    animFloor: 220,
+    headline: "21 days from problem to working pilot.",
+    subline: "Delivery economics that changes what Brillio can bid for.",
+    vo: "Twenty-one days from problem to working pilot. That's delivery economics that changes what Brillio can bid for.",
+    animFloor: 300,
     tail: 1.6,
   },
   {
     id: "seg10",
+    headline: "They now would… with AURA.",
+    subline: "Would two teams draw the same picture?",
+    accents: ["with AURA."],
+    vo: "So — would two teams draw the same picture? … They now would… with Aura.",
+    animFloor: 300,
+    tail: 2.0,
+  },
+  {
+    id: "seg11",
     headline: "The team that made Laila happen.",
     vo: "Meet the team that worked behind the scenes to make it all happen.",
-    // A crawl has to be readable, and there are twelve names plus three
+    // A crawl has to be readable, and there are twenty names plus four
     // department headings to get past the frame. This is the one scene whose
     // length is set by how long people need, not by the narration.
     animFloor: 930,

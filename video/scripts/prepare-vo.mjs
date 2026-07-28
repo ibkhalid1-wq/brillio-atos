@@ -15,7 +15,7 @@
  * The film re-times itself from those durations on the next render.
  */
 import { execFileSync } from "node:child_process";
-import { readdirSync, readFileSync, writeFileSync, mkdirSync, existsSync, rmSync } from "node:fs";
+import { readdirSync, readFileSync, writeFileSync, mkdirSync, existsSync, renameSync, rmSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -25,9 +25,22 @@ const SRC_DIR = process.argv[2] || join(ROOT, "vo-raw");
 const TARGET_RMS_DB = -18;
 const AUDIO_EXT = /\.(m4a|mp3|wav|aac|aif|aiff|caf|mov|mp4)$/i;
 
-const IDS = readFileSync(join(ROOT, "src/content.ts"), "utf8")
-  .match(/id: "(seg\d+)"/g)
-  .map((m) => m.slice(5, -1));
+const SRC_TS = readFileSync(join(ROOT, "src/content.ts"), "utf8");
+const IDS = SRC_TS.match(/id: "(seg\d+)"/g).map((m) => m.slice(5, -1));
+
+/**
+ * Words per scene, so each take can be levelled to a common speaking rate.
+ * Generated takes came back anywhere between 139 and 174 wpm, and the film
+ * read as speeding up and slowing down between scenes for no reason.
+ */
+const TARGET_WPM = 152;
+const WORDS = {};
+for (const block of SRC_TS.split(/\bid: "/).slice(1)) {
+  const id = block.slice(0, block.indexOf('"'));
+  if (!/^seg\d+$/.test(id)) continue;
+  const vo = block.match(/\n\s+vo:\s*\n?\s*"((?:[^"\\]|\\.)*)"/);
+  if (vo) WORDS[id] = vo[1].replace(/…/g, " ").split(/\s+/).filter(Boolean).length;
+}
 
 const ffmpeg = (args) =>
   execFileSync("npx", ["remotion", "ffmpeg", "-y", ...args], { cwd: ROOT, stdio: "pipe" });
@@ -79,6 +92,23 @@ for (const id of IDS) {
 
   const tmp = join(OUT_DIR, `.${id}.tmp.wav`);
   ffmpeg(["-i", join(SRC_DIR, match), "-ac", "1", "-ar", "44100", "-c:a", "pcm_s16le", tmp]);
+
+  // Level the speaking rate. atempo is pitch-preserving, and the correction
+  // is capped: past about 12% the artefacts cost more than the evenness buys.
+  let tempoNote = "";
+  if (WORDS[id]) {
+    const probe = readWav(tmp);
+    const wpm = WORDS[id] / (probe.samples.length / probe.rate / 60);
+    const tempo = Math.max(0.88, Math.min(1.12, TARGET_WPM / wpm));
+    if (Math.abs(tempo - 1) > 0.01) {
+      const paced = join(OUT_DIR, `.${id}.pace.wav`);
+      ffmpeg(["-i", tmp, "-filter:a", `atempo=${tempo.toFixed(4)}`, "-c:a", "pcm_s16le", paced]);
+      rmSync(tmp);
+      renameSync(paced, tmp);
+      tempoNote = `, ${wpm.toFixed(0)}→${TARGET_WPM}wpm`;
+    }
+  }
+
   const { rate, samples: a } = readWav(tmp);
   rmSync(tmp);
 
@@ -120,7 +150,7 @@ for (const id of IDS) {
 
   const dur = seg.length / rate;
   durations[id] = Math.round(dur * 100) / 100;
-  console.log(`  ${id}: ${dur.toFixed(1)}s  (trimmed ${((a.length - seg.length) / rate).toFixed(1)}s, gain ${(20 * Math.log10(gain)).toFixed(1)}dB)`);
+  console.log(`  ${id}: ${dur.toFixed(1)}s  (trimmed ${((a.length - seg.length) / rate).toFixed(1)}s, gain ${(20 * Math.log10(gain)).toFixed(1)}dB${tempoNote})`);
 }
 
 writeFileSync(join(ROOT, "src/vo-durations.json"), JSON.stringify(durations, null, 2) + "\n");

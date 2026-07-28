@@ -128,6 +128,68 @@ export const Ontology3D: React.FC<{
 };
 
 /**
+ * A recording of the product actually being operated, framed as a screen.
+ *
+ * These are the film's only footage of a person using AURA rather than of
+ * its outputs, so they are deliberately left bright and ungraded — a receipt
+ * that has been colour-matched into the film stops reading as a receipt.
+ * The frame and shadow do the work of belonging instead.
+ */
+export const ScreenInset: React.FC<{
+  src: string;
+  width: number;
+  /** Frame at which it fades up. */
+  start: number;
+  label?: string;
+  /** Seconds into the recording to begin — skip dead air at the head. */
+  from?: number;
+}> = ({ src, width, start, label, from = 0 }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const p = interpolate(frame, [start, start + 30], [0, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+    easing: Easing.bezier(0.16, 1, 0.3, 1),
+  });
+  return (
+    <div style={{ opacity: p, transform: `translateY(${(1 - p) * 20}px)`, fontFamily: FONT }}>
+      {label ? (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+          <span
+            style={{
+              width: 9, height: 9, borderRadius: "50%", background: "#E0553B",
+              opacity: 0.45 + 0.55 * (0.5 + 0.5 * Math.sin(frame / 9)),
+            }}
+          />
+          <span style={{ fontSize: 17, fontWeight: 800, letterSpacing: ".12em", color: ELECTRIC }}>
+            {label}
+          </span>
+        </div>
+      ) : null}
+      <div
+        style={{
+          width,
+          borderRadius: 16,
+          overflow: "hidden",
+          border: "1px solid rgba(255,255,255,0.22)",
+          boxShadow: "0 40px 90px -30px rgba(0,0,0,0.75)",
+          background: "#fff",
+          display: "block",
+          lineHeight: 0,
+        }}
+      >
+        <OffthreadVideo
+          src={staticFile(src)}
+          startFrom={Math.round(from * fps)}
+          muted
+          style={{ width: "100%", display: "block" }}
+        />
+      </div>
+    </div>
+  );
+};
+
+/**
  * A generated backing plate behind a scene's type.
  *
  * The three plates carry the film's argument in pictures: the opening
