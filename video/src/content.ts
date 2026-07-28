@@ -97,7 +97,7 @@ export const SCENES: Scene[] = [
     headline: "AURA derived Laila from evidence.",
     subline: "Meet AURA — Brillio's AI-native delivery methodology, and the system that runs it.",
     accents: ["Laila", "evidence"],
-    vo: "Meet Aura — Brillio's AI-native delivery methodology, and the system that runs it … Laila, a sales CRM, was derived from evidence and built by Aura. A working pilot, in twenty-one days.",
+    vo: "Meet Aura — Brillio's AI-native delivery methodology, and the system that runs it … Laila, a sales CRM, was derived from evidence and built by Aura. A working prototype, in twenty-one days.",
     animFloor: 360,
     tail: 1.4,
     // The mark draws, then the spine assembles, and only then does the name
@@ -105,17 +105,6 @@ export const SCENES: Scene[] = [
     // seconds after it was said. Now the three sentences land with the
     // subline, the headline and the 21-days chip in turn.
     voAt: 11,
-  },
-  {
-    // Everything after this point is one programme's worth of evidence, and
-    // the film says so before it starts making claims. Scoping the sample is
-    // what lets the rest of the film be believed rather than discounted.
-    id: "seg3b",
-    headline: "One programme. Ours.",
-    subline: "Brillio's own sales CRM. Still in development.",
-    vo: "One programme. Ours. Still being built. Everything that follows is what we measured on it.",
-    animFloor: 180,
-    tail: 1.6,
   },
   {
     id: "seg4",
@@ -146,21 +135,27 @@ export const SCENES: Scene[] = [
   },
   {
     id: "seg7",
-    vo: "One real business problem. Fifteen stakeholders heard. Thirty-four entities across ten business areas. A working pilot in twenty-one days, validated by the people who named the problem.",
+    vo: "One real business problem. Fifteen stakeholders heard. Thirty-four entities across ten business areas. A working prototype in twenty-one days, validated by the people who named the problem.",
     animFloor: 360,
     tail: 1.4,
   },
   {
-    id: "seg9",
-    headline: "21 days from problem to working pilot.",
-    subline: "Delivery economics that would be a differentiator for Brillio.",
-    vo: "Twenty-one days from problem to working pilot. That's delivery economics that would be a differentiator for Brillio.",
-    animFloor: 300,
-    tail: 1.6,
+    // The film has just proved one delivery. This is the only forward-looking
+    // beat in it: what the same orchestration does across a whole product
+    // life, with today's five movements shown as one segment of a longer arc.
+    id: "seg7b",
+    eyebrow: "04 · What comes next",
+    headline: "Imagine the possibilities.",
+    subline: "Extending AURA to orchestrate the full product lifecycle.",
+    vo: "Today, Aura orchestrates delivery. Imagine the possibilities — Aura orchestrating the full product lifecycle.",
+    // The arc has to draw, nine stages have to land and the key has to
+    // register; the narration is short, so the scene is sized by the build.
+    animFloor: 450,
+    tail: 1.8,
   },
   {
     id: "seg8",
-    eyebrow: "04 · Any business",
+    eyebrow: "05 · Any business",
     headline: "One method. Every industry.",
     subline:
       "Different industries. Different problems. The same discipline — start from the business.",
@@ -168,6 +163,14 @@ export const SCENES: Scene[] = [
     animFloor: 200,
     tail: 1.6,
     wpm: 132,
+  },
+  {
+    id: "seg9",
+    headline: "21 days from problem to working prototype.",
+    subline: "Delivery economics that would be a Brillio Differentiator.",
+    vo: "Twenty-one days from problem to working prototype. That's delivery economics that would be a Brillio Differentiator.",
+    animFloor: 300,
+    tail: 1.6,
   },
   {
     id: "seg10",
@@ -297,6 +300,17 @@ export const JOURNEY = [
   { phase: "Ship", aura: "Drafts hardening + runbook", human: "Go / no-go on the record", stamp: "Go recorded" },
   { phase: "Evolve", aura: "Watches drift, proposes fixes", human: "Team accepts each change", stamp: "Changes accepted" },
 ];
+/**
+ * Scene 7b — the arc. The five movements the film has just demonstrated sit
+ * lit in the middle; the stages either side are dimmed, because they are the
+ * possibility being described rather than anything that has been run.
+ */
+export const LIFECYCLE = {
+  before: ["Strategy", "Roadmap"],
+  today: ["Frame", "Listen", "Prototype", "Ship", "Evolve"],
+  after: ["Adoption", "Scale"],
+};
+
 export const GOVERNANCE_CHIPS = [
   "Every phase gates on a demonstration",
   "Every judgment on a permanent record",
@@ -309,7 +323,7 @@ export const NUMBERS = [
   "15 stakeholders heard",
   "34 entities",
   "10 business areas",
-  "21 days → working Sales pilot in Laila",
+  "21 days → working Sales prototype in Laila",
 ];
 
 /** Scene 8 — the cross-industry proof. */

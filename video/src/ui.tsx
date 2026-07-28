@@ -155,10 +155,19 @@ export const ScreenInset: React.FC<{
    * at all, which is worse than not showing one.
    */
   zoom?: number;
+  /**
+   * Pull back to this scale. The shot opens on the detail that carries the
+   * claim — the recommended option and its scores — and then reveals the
+   * whole screen, so the viewer reads the decision first and the context
+   * second rather than hunting for it.
+   */
+  zoomTo?: number;
+  /** Frames the pull-back takes, once the inset has settled. */
+  zoomDur?: number;
   origin?: string;
   /** Slow the recording so it never runs out and freezes on its last frame. */
   rate?: number;
-}> = ({ src, width, start, label, from = 0, zoom = 1, origin = "50% 50%", rate = 1 }) => {
+}> = ({ src, width, start, label, from = 0, zoom = 1, zoomTo, zoomDur = 120, origin = "50% 50%", rate = 1 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const p = interpolate(frame, [start, start + 30], [0, 1], {
@@ -166,6 +175,15 @@ export const ScreenInset: React.FC<{
     extrapolateRight: "clamp",
     easing: Easing.bezier(0.16, 1, 0.3, 1),
   });
+  // The pull-back begins once the frame has settled, and uses the film's
+  // one shared curve so it decelerates like everything else on screen.
+  const scale = zoomTo === undefined
+    ? zoom
+    : interpolate(frame, [start + 34, start + 34 + zoomDur], [zoom, zoomTo], {
+        extrapolateLeft: "clamp",
+        extrapolateRight: "clamp",
+        easing: Easing.bezier(0.16, 1, 0.3, 1),
+      });
   return (
     <div style={{ opacity: p, transform: `translateY(${(1 - p) * 20}px)`, fontFamily: FONT }}>
       {label ? (
@@ -201,7 +219,7 @@ export const ScreenInset: React.FC<{
             muted
             style={{
               width: "100%", display: "block",
-              transform: `scale(${zoom})`, transformOrigin: origin,
+              transform: `scale(${scale})`, transformOrigin: origin,
             }}
           />
         </div>
