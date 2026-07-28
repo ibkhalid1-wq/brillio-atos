@@ -63,6 +63,12 @@ export type Scene = {
    * animation has to build something first.
    */
   voAt?: number;
+  /**
+   * Words per minute for this scene's read. Defaults to the film's rate;
+   * lower it where a line needs room — a list of three industries and a
+   * conclusion wants space that the average rate doesn't give it.
+   */
+  wpm?: number;
 };
 
 /** Default narration entry: half a beat past the cut. */
@@ -73,7 +79,7 @@ export const SCENES: Scene[] = [
     id: "seg1",
     headline: "If two teams mapped your business today —\nwould they draw the same picture?",
     accents: ["same picture?"],
-    vo: "If two teams mapped your business today … would they draw the same picture? … That's where AI transformation quietly fails. A graveyard of pilots. Solutions in search of a problem. Proof of concepts that prove nothing.",
+    vo: "If two teams mapped your business today … would they draw the same picture? … … That's where AI transformation quietly fails. A graveyard of pilots. Solutions in search of a problem. Proof of concepts that prove nothing.",
     animFloor: 444,
     tail: 1.4,
   },
@@ -91,7 +97,7 @@ export const SCENES: Scene[] = [
     headline: "AURA derived Laila from evidence.",
     subline: "Meet AURA — Brillio's AI-native delivery methodology, and the system that runs it.",
     accents: ["Laila", "evidence"],
-    vo: "Meet Aura — Brillio's AI-native delivery methodology, and the system that runs it. Laila, a sales CRM, was derived from evidence and built by Aura. A working pilot, in twenty-one days.",
+    vo: "Meet Aura — Brillio's AI-native delivery methodology, and the system that runs it … Laila, a sales CRM, was derived from evidence and built by Aura. A working pilot, in twenty-one days.",
     animFloor: 360,
     tail: 1.4,
     // The mark draws, then the spine assembles, and only then does the name
@@ -114,7 +120,7 @@ export const SCENES: Scene[] = [
     id: "seg5",
     eyebrow: "03 · In the business's own language",
     headline: "Same mandate. Same model. Every time.",
-    vo: "From those voices, Aura draws the business in its own language — every entity grounded in the industry's standards. That model isn't a document. It's what the working system is generated from. Run it twice: the same model, every time.",
+    vo: "From those voices, Aura draws the business in its own language — every entity grounded in the industry's standards. That model isn't a document. It's what the working system is generated from … Run it twice: the same model, every time.",
     animFloor: 380,
     tail: 1.4,
   },
@@ -123,7 +129,7 @@ export const SCENES: Scene[] = [
     eyebrow: "04 · Governed by design",
     headline: "Autonomous — with a human in the loop, end to end.",
     subline: "Machine proposes. The business validates. Every judgment recorded as evidence.",
-    vo: "And control is the architecture. The machine proposes — the business validates. Every phase gates on a demonstration. Every judgment lands on a permanent record. And it doesn't stop at go-live: Aura watches the model drift as the business changes, and proposes the correction — for your team to accept. Autonomy you can audit.",
+    vo: "And control is the architecture. The machine proposes — the business validates. Every phase gates on a demonstration. Every judgment lands on a permanent record. And it doesn't stop at go-live: Aura watches the model drift as the business changes, and proposes the correction for your team to accept. Autonomy you can audit.",
     animFloor: 380,
     tail: 1.4,
   },
@@ -139,15 +145,16 @@ export const SCENES: Scene[] = [
     headline: "One method. Every industry.",
     subline:
       "Different industries. Different problems. The same discipline — start from the business.",
-    vo: "Patient referrals. Loan origination. Order fulfillment. Different problems — the same discipline: start from the business.",
+    vo: "Patient referrals. Loan origination. Order fulfillment. Different problems — the same discipline … start from the business.",
     animFloor: 200,
-    tail: 1.4,
+    tail: 1.6,
+    wpm: 132,
   },
   {
     id: "seg9",
     headline: "21 days from problem to working pilot.",
-    subline: "Delivery economics that changes what Brillio can bid for.",
-    vo: "Twenty-one days from problem to working pilot. That's delivery economics that changes what Brillio can bid for.",
+    subline: "Delivery economics that becomes a Brillio differentiator.",
+    vo: "Twenty-one days from problem to working pilot. That's delivery economics that becomes a Brillio differentiator.",
     animFloor: 300,
     tail: 1.6,
   },
