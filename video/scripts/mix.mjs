@@ -66,13 +66,30 @@ const labels = present.map((_, i) => `[a${i}]`).join("");
 let chain = `${delays};${labels}amix=inputs=${present.length}:normalize=0[vo]`;
 let mapAudio = "[vo]";
 
-if (withMusic && existsSync(join(ROOT, "music/bed.wav"))) {
-  inputs.push("-i", join(ROOT, "music/bed.wav"));
-  // Duck the bed 3.5dB under every narration window — precise, no pumping.
+/* ── Music ──────────────────────────────────────────────────────────────
+ * MUSIC_GAIN is measured, not chosen: the supplied track is a loud master
+ * (median −5.1 dBFS), and −18.9 dB puts it at −24 dBFS in the gaps — about
+ * 6 dB under the −18 dBFS narration, which is present without competing.
+ * An earlier bed was set by ear and came out inaudible on laptop speakers;
+ * don't guess this number, re-measure if the track changes.
+ */
+const MUSIC_GAIN = 0.113;
+const DUCK = 0.5; // −6 dB under speech
+const TRACK = existsSync(join(ROOT, "music/track.wav"))
+  ? join(ROOT, "music/track.wav")
+  : join(ROOT, "music/bed.wav");
+
+if (withMusic && existsSync(TRACK)) {
+  // The track is shorter than the film, so loop it; the cut points fall on
+  // bar lines because both the track and the edit are 120 BPM.
+  inputs.push("-stream_loop", "-1", "-i", TRACK);
   const duck = present
     .map((p) => `between(t,${(p.atMs / 1000).toFixed(2)},${(p.atMs / 1000 + (durations[p.id] || 0)).toFixed(2)})`)
     .join("+");
-  chain += `;[${present.length + 1}:a]volume='(1-0.33*(${duck}))':eval=frame[bed];[vo][bed]amix=inputs=2:normalize=0[mix]`;
+  const fade = `min(1,t/1.5)*min(1,max(0,(${totalSec.toFixed(2)}-t)/3))`;
+  chain +=
+    `;[${present.length + 1}:a]volume='${MUSIC_GAIN}*${fade}*(1-${DUCK}*(${duck}))':eval=frame,` +
+    `atrim=0:${totalSec.toFixed(3)}[bed];[vo][bed]amix=inputs=2:normalize=0[mix]`;
   mapAudio = "[mix]";
 }
 

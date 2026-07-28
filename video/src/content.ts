@@ -81,7 +81,7 @@ export const SCENES: Scene[] = [
     headline: "AURA derived Laila from evidence.",
     subline: "Meet AURA — Brillio's AI-native delivery methodology.",
     accents: ["Laila", "evidence"],
-    vo: "Meet AURA — Brillio's AI-native delivery methodology. The demo you just saw — Laila — AURA derived it from evidence. A working pilot, in twenty-one days.",
+    vo: "Meet Aura — Brillio's AI-native delivery methodology. The demo you just saw — Laila — Aura derived it from evidence. A working pilot, in twenty-one days.",
     animFloor: 360,
     tail: 1.4,
   },
@@ -91,7 +91,7 @@ export const SCENES: Scene[] = [
     headline: "AURA is designed to engage with stakeholders autonomously.",
     subline:
       "Every gap becomes a plain-language question — routed on a no-login link, answered in their own words, folded back in.",
-    vo: "It starts with people. AURA is designed to engage with stakeholders autonomously — every gap a plain-language question, every disagreement a finding, not noise.",
+    vo: "It starts with people. Aura is designed to engage with stakeholders autonomously — every gap a plain-language question, every disagreement a finding, not noise.",
     animFloor: 360,
     tail: 1.4,
   },
@@ -99,7 +99,7 @@ export const SCENES: Scene[] = [
     id: "seg5",
     eyebrow: "03 · In the business's own language",
     headline: "Same mandate. Same model. Every time.",
-    vo: "From those voices, AURA draws the business in its own language — every entity grounded in the industry's standards. Run it twice: the same model, every time.",
+    vo: "From those voices, Aura draws the business in its own language — every entity grounded in the industry's standards. Run it twice: the same model, every time.",
     animFloor: 380,
     tail: 1.4,
   },
@@ -133,10 +133,37 @@ export const SCENES: Scene[] = [
     headline: "They now would… with AURA.",
     subline: "Would two teams draw the same picture?",
     accents: ["with AURA."],
-    vo: "So — would two teams draw the same picture? … They now would… with AURA.",
+    vo: "So — would two teams draw the same picture? … They now would… with Aura.",
     animFloor: 220,
     tail: 1.6,
   },
+  {
+    id: "seg10",
+    headline: "The team that made Laila happen.",
+    vo: "And none of it built itself. This is the team that made Laila happen.",
+    animFloor: 300,
+    tail: 2.2,
+  },
+];
+
+/**
+ * Scene 10 — the credits, in the deck's own reading order: the people who
+ * shaped the work first, then the people who built it, then the people who
+ * designed it. Roles as written on the slide.
+ */
+export const TEAM = [
+  { name: "Ibrahim Khalid", role: "Product Manager" },
+  { name: "Nayana Pai", role: "Solution Architect" },
+  { name: "Prasoon Gupta", role: "Project Manager" },
+  { name: "Vasudev Bhat", role: "Technical Architect" },
+  { name: "Deepankar Nath", role: "Tech Lead" },
+  { name: "Sunil Thukkaram", role: "Developer" },
+  { name: "Farheen Fatima", role: "Developer" },
+  { name: "Shashank Verma", role: "Developer" },
+  { name: "Alejandra Soto", role: "UX Designer" },
+  { name: "Shweta Desai", role: "UX Designer" },
+  { name: "Nithish R", role: "UX Designer" },
+  { name: "Rishabh Bajaj", role: "UX Designer" },
 ];
 
 /* ── Scene-specific content ────────────────────────────────────────────── */

@@ -11,7 +11,7 @@ import { ELECTRIC, FAINT, FONT, INK, INK_2, MUTED } from "./tokens";
 import { AuraWord, Chip, DrawnLine, Eyebrow, Glow, Rise, Typed } from "./ui";
 import {
   b, copy, CONTRADICTION, DIAGNOSIS_POLES, DOMAINS, GOVERNANCE_CHIPS, GRAVEYARD,
-  JOURNEY, NUMBERS, ONTOLOGY_NODES, RECEIPTS, REVEAL_CHIP, SPINE, STAKEHOLDERS, STANDARDS,
+  JOURNEY, NUMBERS, ONTOLOGY_NODES, RECEIPTS, REVEAL_CHIP, SPINE, STAKEHOLDERS, STANDARDS, TEAM,
 } from "./content";
 
 const EASE = { extrapolateLeft: "clamp" as const, extrapolateRight: "clamp" as const, easing: Easing.out(Easing.cubic) };
@@ -611,6 +611,50 @@ export const SceneClose: React.FC = () => {
             accents={copy("seg9").accents}
             style={{ fontSize: 62, fontWeight: 800, color: "#fff" }}
           />
+        </div>
+      </div>
+    </Ground>
+  );
+};
+
+/* ── 10 · The team ───────────────────────────────────────────────────────
+ * The one scene about people rather than method, so it earns a slower hand:
+ * names arrive a beat apart in the deck's reading order, and the rule above
+ * them draws itself rather than appearing. No photographs — the film is
+ * typographic throughout, and twelve headshots would break it.
+ */
+export const SceneTeam: React.FC = () => {
+  const frame = useCurrentFrame();
+  const rule = interpolate(frame, [b(2), b(6)], [0, 1], EASE);
+  return (
+    <Ground>
+      <div style={{ width: 1560, textAlign: "center" }}>
+        <Rise start={b(1)}>
+          <div style={{ fontFamily: FONT, fontSize: 46, fontWeight: 700, color: "#fff", letterSpacing: "-0.02em" }}>
+            {copy("seg10").headline}
+          </div>
+        </Rise>
+
+        <div style={{ display: "flex", justifyContent: "center", margin: "34px 0 54px" }}>
+          <div style={{ width: 240 * rule, height: 2, background: ELECTRIC, opacity: 0.85 }} />
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", rowGap: 46, columnGap: 40 }}>
+          {TEAM.map((p, i) => {
+            // Down the columns of each row, a name every half-beat.
+            const at = b(4) + i * Math.round(b(0.5));
+            const p0 = interpolate(frame, [at, at + b(1.5)], [0, 1], EASE);
+            return (
+              <div key={p.name} style={{ opacity: p0, transform: `translateY(${(1 - p0) * 14}px)` }}>
+                <div style={{ fontFamily: FONT, fontSize: 30, fontWeight: 700, color: "#fff", letterSpacing: "-0.01em" }}>
+                  {p.name}
+                </div>
+                <div style={{ fontFamily: FONT, fontSize: 19, fontWeight: 500, color: MUTED, marginTop: 7 }}>
+                  {p.role}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </Ground>
