@@ -155,7 +155,7 @@ export const SCENES: Scene[] = [
   {
     id: "seg10",
     headline: "The team that made Laila happen.",
-    vo: "Meet the team that made Laila happen.",
+    vo: "Meet the team that worked behind the scenes to make Laila happen.",
     // The credits are the one card people actually want to read — twelve
     // names at a glance isn't enough. Hold it well past the narration.
     animFloor: 480,
