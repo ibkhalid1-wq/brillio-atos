@@ -33,7 +33,7 @@ const toBar = (frames) => Math.ceil(frames / BAR) * BAR;
 const scenes = [];
 for (const block of src.split(/\bid: "/).slice(1)) {
   const id = block.slice(0, block.indexOf('"'));
-  if (!/^seg\d+$/.test(id)) continue;
+  if (!/^seg\d+[a-z]?$/.test(id)) continue;
   const num = (key, fallback) => {
     const m = block.match(new RegExp(`\\n\\s+${key}: ([\\d.]+)`));
     return m ? +m[1] : fallback;
