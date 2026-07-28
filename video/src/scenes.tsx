@@ -145,7 +145,8 @@ export const SceneReveal: React.FC = () => {
   const frame = useCurrentFrame();
   const draw = interpolate(frame, [b(1), b(8)], [0, 1], EASE);
   const spine = SPINE;
-  const counter = interpolate(frame, [b(23), b(24.5)], [0, 1], EASE);
+  // The chip lands on "in twenty-one days" — the fourth sentence, not the third.
+  const counter = interpolate(frame, [b(38), b(39.5)], [0, 1], EASE);
   return (
     <Ground plate={<Plate src="plate-draw.mp4" dur={T.seg3.dur} opacity={0.5} />}>
       <Glow size={900} x="50%" y="34%" />
@@ -176,9 +177,9 @@ export const SceneReveal: React.FC = () => {
         </div>
         <div style={{ height: 26 }} />
         <div style={{ minHeight: 90 }}>
-          {frame >= b(18) ? (
+          {frame >= b(30) ? (
             <Typed
-              start={b(18)}
+              start={b(30)}
               cps={30}
               text={copy("seg3").headline!}
               accents={copy("seg3").accents}
@@ -334,8 +335,10 @@ export const SceneAlignment: React.FC = () => {
 export const SceneGrounding: React.FC = () => {
   const frame = useCurrentFrame();
   // Crossfade between the map view and the RUN1|RUN2 view — no hard flip.
-  const mapO = interpolate(frame, [252, 278], [1, 0], LIN);
-  const runO = interpolate(frame, [266, 292], [0, 1], LIN);
+  // The comparison appears on "Run it twice", which is now the third
+  // sentence rather than the second.
+  const mapO = interpolate(frame, [b(24), b(26)], [1, 0], LIN);
+  const runO = interpolate(frame, [b(25), b(27)], [0, 1], LIN);
   return (
     <Ground>
       <Rise start={0} style={{ position: "absolute", top: 58, width: "100%", textAlign: "center" }}>
@@ -395,7 +398,7 @@ export const SceneGrounding: React.FC = () => {
               ))}
             </div>
             {/* Lands on the closing sentence, not four seconds after it. */}
-            <Rise start={b(15)}>
+            <Rise start={b(28)}>
               <div style={{ marginTop: 38, fontFamily: FONT, fontSize: 46, fontWeight: 800, color: "#fff" }}>
                 {copy("seg5").headline!.replace(" Every time.", " ")}<span style={{ color: ELECTRIC }}>Every time.</span>
               </div>
@@ -503,13 +506,16 @@ export const SceneNumbers: React.FC = () => {
       <Glow size={1100} x="50%" y="50%" opacity={0.28} />
       <div style={{ display: "flex", flexDirection: "column", gap: 34, alignItems: "center" }}>
         {stamps.map((s, i) => {
-          const at = b(4) + i * b(4);
+          const at = b(4) + i * b(5);
           // Eased landing, no overshoot — buttery, not bouncy.
           const p = interpolate(frame, [at, at + b(1.5)], [0, 1], EASE);
           const last = i === stamps.length - 1;
           // The film's most important stat rolls up 0→21 as it lands.
+          // Roll the leading number up as it lands, but take the wording from
+          // the content library — it used to be hardcoded here, which is why
+          // "in Laila" never appeared on screen.
           const label = last
-            ? `${Math.round(interpolate(frame, [at, at + b(1.5)], [0, 21], LIN))} days → working Sales pilot`
+            ? s.replace(/^\d+/, String(Math.round(interpolate(frame, [at, at + b(1.5)], [0, 21], LIN))))
             : s;
           return (
             <div

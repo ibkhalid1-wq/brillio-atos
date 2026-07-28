@@ -91,7 +91,7 @@ export const SCENES: Scene[] = [
     headline: "AURA derived Laila from evidence.",
     subline: "Meet AURA — Brillio's AI-native delivery methodology.",
     accents: ["Laila", "evidence"],
-    vo: "Meet Aura — Brillio's AI-native delivery methodology. The demo you just saw — Laila — Aura derived it from evidence. A working pilot, in twenty-one days.",
+    vo: "Meet Aura — Brillio's AI-native delivery methodology, and the system that runs it. Laila, the sales CRM you just saw, was never handed to us as a specification. Aura derived it from the business's own evidence — and built it. A working pilot, in twenty-one days.",
     animFloor: 360,
     tail: 1.4,
     // The mark draws, then the spine assembles, and only then does the name
@@ -114,7 +114,7 @@ export const SCENES: Scene[] = [
     id: "seg5",
     eyebrow: "03 · In the business's own language",
     headline: "Same mandate. Same model. Every time.",
-    vo: "From those voices, Aura draws the business in its own language — every entity grounded in the industry's standards. Run it twice: the same model, every time.",
+    vo: "From those voices, Aura draws the business in its own language — every entity grounded in the industry's standards. That model isn't a document. It's what the working system is generated from. Run it twice: the same model, every time.",
     animFloor: 380,
     tail: 1.4,
   },
@@ -129,7 +129,7 @@ export const SCENES: Scene[] = [
   },
   {
     id: "seg7",
-    vo: "One real business problem. Fifteen stakeholders heard. Thirty-four entities across ten business areas. A working system in twenty-one days — validated by the people who named the problem.",
+    vo: "One real business problem. Fifteen stakeholders heard. Thirty-four entities across ten business areas — and every one of them reusable on the next programme. A working system in twenty-one days, validated by the people who named the problem.",
     animFloor: 360,
     tail: 1.4,
   },
