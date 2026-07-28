@@ -156,31 +156,46 @@ export const SCENES: Scene[] = [
     id: "seg10",
     headline: "The team that made Laila happen.",
     vo: "Meet the team that worked behind the scenes to make it all happen.",
-    // The credits are the one card people actually want to read — twelve
-    // names at a glance isn't enough. Hold it well past the narration.
-    animFloor: 480,
+    // A crawl has to be readable, and there are twelve names plus three
+    // department headings to get past the frame. This is the one scene whose
+    // length is set by how long people need, not by the narration.
+    animFloor: 660,
     tail: 3.5,
   },
 ];
 
 /**
- * Scene 10 — the credits, in the deck's own reading order: the people who
- * shaped the work first, then the people who built it, then the people who
- * designed it. Roles as written on the slide.
+ * Scene 10 — the credits, grouped by discipline the way a film's end titles
+ * are: who shaped it, who built it, who designed it.
  */
-export const TEAM = [
-  { name: "Ibrahim Khalid", role: "Product Owner" },
-  { name: "Nayana Pai", role: "Solution Architect" },
-  { name: "Prasoon Gupta", role: "Project Manager" },
-  { name: "Vasudev Bhat", role: "Technical Architect" },
-  { name: "Deepankar Nath", role: "Tech Lead" },
-  { name: "Sunil Thukkaram", role: "Developer" },
-  { name: "Farheen Fatima", role: "Developer" },
-  { name: "Shashank Verma", role: "Developer" },
-  { name: "Alejandra Soto", role: "UX Designer" },
-  { name: "Shweta Desai", role: "UX Designer" },
-  { name: "Nithish R", role: "UX Designer" },
-  { name: "Rishabh Bajaj", role: "UX Designer" },
+export const TEAM: Array<{ group: string; people: Array<{ name: string; role: string }> }> = [
+  {
+    group: "Product",
+    people: [
+      { name: "Ibrahim Khalid", role: "Product Owner" },
+      { name: "Prasoon Gupta", role: "Project Manager" },
+      { name: "Nayana Pai", role: "Solution Architect" },
+      { name: "Vasudev Bhat", role: "Technical Architect" },
+    ],
+  },
+  {
+    group: "Engineering",
+    people: [
+      { name: "Deepankar Nath", role: "Tech Lead" },
+      { name: "Sunil Thukkaram", role: "Developer" },
+      { name: "Farheen Fatima", role: "Developer" },
+      { name: "Shashank Verma", role: "Developer" },
+    ],
+  },
+  {
+    group: "Design",
+    people: [
+      { name: "Alejandra Soto", role: "UX Designer" },
+      { name: "Shweta Desai", role: "UX Designer" },
+      { name: "Nithish R", role: "UX Designer" },
+      { name: "Rishabh Bajaj", role: "UX Designer" },
+    ],
+  },
 ];
 
 /* ── Scene-specific content ────────────────────────────────────────────── */
