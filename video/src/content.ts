@@ -155,7 +155,7 @@ export const SCENES: Scene[] = [
   {
     id: "seg10",
     headline: "The team that made Laila happen.",
-    vo: "Meet the team that worked behind the scenes to make Laila happen.",
+    vo: "Meet the team that worked behind the scenes to make it all happen.",
     // The credits are the one card people actually want to read — twelve
     // names at a glance isn't enough. Hold it well past the narration.
     animFloor: 480,
@@ -208,6 +208,17 @@ export const STAKEHOLDERS = [
   { label: "Delivery", angle: 90 },
   { label: "Talent", angle: 150 },
 ];
+/**
+ * Scene 4 — what the machine is hearing while the stakeholder talks. The
+ * line is the "two weeks" half of the contradiction the scene then surfaces,
+ * so the transcript is where the finding actually comes from.
+ */
+export const TRANSCRIPT = {
+  label: "LIVE · TRANSCRIBING",
+  speaker: "Sales lead",
+  text: "We can't quote until Legal clears the terms — that's usually two weeks.",
+};
+
 export const CONTRADICTION = {
   tag: "⚖ CONTRADICTION",
   body: "“two weeks” vs “three-day SLA” — surfaced as ",
@@ -220,6 +231,9 @@ export const ONTOLOGY_NODES: Array<[number, number, string]> = [
   [560, 470, "Contact"], [830, 500, "Contract"], [1120, 210, "Campaign"],
   [1180, 460, "Invoice"], [300, 480, "Partner"], [1330, 330, "Engagement"],
 ];
+/** Just the entity names — what the 3D model of the ontology renders. */
+export const ONTOLOGY_LABELS: string[] = ONTOLOGY_NODES.map(([, , label]) => label);
+
 export const STANDARDS = ["FHIR", "FIBO", "GS1", "schema.org"];
 
 /** Scene 6 — what AURA does alone, and what a human decides, per movement. */
@@ -242,7 +256,7 @@ export const NUMBERS = [
   "15 stakeholders heard",
   "34 entities",
   "10 business areas",
-  "21 days → working Sales pilot",
+  "21 days → working Sales pilot in Laila",
 ];
 
 /** Scene 8 — the cross-industry proof. */

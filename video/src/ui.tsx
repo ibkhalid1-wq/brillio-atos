@@ -11,6 +11,123 @@ import {
 import { ELECTRIC, FONT, INK } from "./tokens";
 
 /**
+ * The business ontology as an actual object in space: entities distributed
+ * over a sphere, rotating at constant angular velocity, drawn with real
+ * perspective projection so near nodes are larger, brighter and in front.
+ *
+ * Constant velocity is the point — an eased rotation reads as an animation
+ * playing, a steady one reads as a model you could reach out and turn. The
+ * only easing is on the entrance.
+ */
+export const Ontology3D: React.FC<{
+  labels: string[];
+  /** Frames for one full revolution. Slower is calmer; 900 is ~30s. */
+  period?: number;
+  /** Entrance: nodes fade up in sequence from this frame. */
+  start?: number;
+  radius?: number;
+  width?: number;
+  height?: number;
+}> = ({ labels, period = 900, start = 0, radius = 300, width = 1500, height = 620 }) => {
+  const frame = useCurrentFrame();
+  const cx = width / 2;
+  const cy = height / 2;
+  const FOCAL = 1100;
+  const CAM = 1150;
+
+  // Fibonacci sphere: an even spread without clumping at the poles, which is
+  // what a naive lat/long grid gives you.
+  const golden = Math.PI * (3 - Math.sqrt(5));
+  const base = labels.map((label, i) => {
+    const y = 1 - (i / Math.max(1, labels.length - 1)) * 2;
+    const r = Math.sqrt(Math.max(0, 1 - y * y));
+    const theta = golden * i;
+    // Wider than tall: the frame is 16:9 and the labels are wide boxes, so an
+    // even sphere puts them on top of each other. Stretch x/z, squash y.
+    return {
+      label,
+      x: Math.cos(theta) * r * radius * 1.34,
+      y: y * radius * 0.62,
+      z: Math.sin(theta) * r * radius * 1.34,
+    };
+  });
+
+  const spin = (frame / period) * Math.PI * 2;
+  const tilt = -0.22; // a touch of downward look, so it reads as an object
+
+  const pts = base.map((n, i) => {
+    const x = n.x * Math.cos(spin) + n.z * Math.sin(spin);
+    const z = -n.x * Math.sin(spin) + n.z * Math.cos(spin);
+    const y = n.y * Math.cos(tilt) - z * Math.sin(tilt);
+    const zz = z * Math.cos(tilt) + n.y * Math.sin(tilt) + CAM;
+    const s = FOCAL / zz;
+    const at = start + i * 4;
+    return {
+      label: n.label,
+      sx: cx + x * s,
+      sy: cy + y * s,
+      s,
+      depth: zz,
+      enter: interpolate(frame, [at, at + 34], [0, 1], {
+        extrapolateLeft: "clamp",
+        extrapolateRight: "clamp",
+        easing: Easing.bezier(0.16, 1, 0.3, 1),
+      }),
+    };
+  });
+
+  // Edges to the two following nodes, matching the flat map this replaced.
+  const edges: Array<[number, number]> = [];
+  pts.forEach((_, i) => {
+    for (let k = 1; k <= 2; k++) if (i + k < pts.length) edges.push([i, i + k]);
+  });
+
+  // Painter's algorithm: far nodes first, so nearer ones genuinely occlude.
+  const order = pts.map((p, i) => i).sort((a, c) => pts[c].depth - pts[a].depth);
+
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} width={width} height={height}>
+      {edges.map(([a, c], i) => {
+        const p = pts[a];
+        const q = pts[c];
+        const o = Math.min(p.enter, q.enter) * 0.3 * ((p.s + q.s) / 2);
+        return (
+          <line
+            key={i}
+            x1={p.sx} y1={p.sy} x2={q.sx} y2={q.sy}
+            stroke="#fff" strokeWidth={1.4} opacity={o}
+          />
+        );
+      })}
+      {order.map((i) => {
+        const p = pts[i];
+        const w = 176 * p.s;
+        const h = 58 * p.s;
+        // Depth cue: things further away are dimmer as well as smaller.
+        const dim = interpolate(p.s, [0.72, 1.24], [0.42, 1], {
+          extrapolateLeft: "clamp",
+          extrapolateRight: "clamp",
+        });
+        return (
+          <g key={p.label} opacity={p.enter * dim}>
+            <rect
+              x={p.sx - w / 2} y={p.sy - h / 2} width={w} height={h} rx={14 * p.s}
+              fill="rgba(255,255,255,0.07)" stroke="rgba(255,255,255,0.38)" strokeWidth={1.2}
+            />
+            <text
+              x={p.sx} y={p.sy + 9 * p.s} textAnchor="middle" fill="#fff"
+              fontFamily={FONT} fontSize={25 * p.s} fontWeight={700}
+            >
+              {p.label}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+};
+
+/**
  * A generated backing plate behind a scene's type.
  *
  * The three plates carry the film's argument in pictures: the opening
@@ -173,7 +290,7 @@ export const Rise: React.FC<{
   const p = interpolate(frame, [start, start + dur], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
-    easing: Easing.out(Easing.cubic),
+    easing: Easing.bezier(0.16, 1, 0.3, 1),
   });
   return (
     <div style={{ opacity: p, transform: `translateY(${(1 - p) * 30}px)`, ...style }}>
@@ -210,7 +327,7 @@ export const Glow: React.FC<{ size: number; x: string; y: string; opacity?: numb
 export const FadeScene: React.FC<{ dur: number; children: React.ReactNode }> = ({ dur, children }) => {
   const frame = useCurrentFrame();
   const inP = interpolate(frame, [0, 14], [0, 1], {
-    extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: Easing.out(Easing.cubic),
+    extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: Easing.bezier(0.16, 1, 0.3, 1),
   });
   const outP = interpolate(frame, [dur - 12, dur - 1], [1, 0], {
     extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: Easing.in(Easing.cubic),
