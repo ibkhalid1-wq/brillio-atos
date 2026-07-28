@@ -8,13 +8,23 @@ import {
   useCurrentFrame,
 } from "remotion";
 import { ELECTRIC, FAINT, FONT, INK, INK_2, MUTED, T } from "./tokens";
-import { AuraWord, Chip, DrawnLine, Eyebrow, Glow, Plate, Rise, Typed } from "./ui";
+import { AuraWord, Chip, DrawnLine, Eyebrow, Glow, Ontology3D, Plate, Rise, Typed } from "./ui";
 import {
   b, copy, CONTRADICTION, DIAGNOSIS_POLES, DOMAINS, GOVERNANCE_CHIPS, GRAVEYARD,
-  JOURNEY, NUMBERS, ONTOLOGY_NODES, RECEIPTS, REVEAL_CHIP, SPINE, STAKEHOLDERS, STANDARDS, TEAM,
+  JOURNEY, NUMBERS, ONTOLOGY_LABELS, RECEIPTS, TRANSCRIPT, REVEAL_CHIP, SPINE, STAKEHOLDERS, STANDARDS, TEAM,
 } from "./content";
 
-const EASE = { extrapolateLeft: "clamp" as const, extrapolateRight: "clamp" as const, easing: Easing.out(Easing.cubic) };
+/**
+ * The film's easing curve. Expo-out rather than cubic-out: it leaves faster
+ * and settles far more gently, so elements arrive without the small visible
+ * stop that cubic gives at this scale. Everything on screen shares it, which
+ * is most of why the cut reads as one piece rather than a stack of effects.
+ */
+const EASE = {
+  extrapolateLeft: "clamp" as const,
+  extrapolateRight: "clamp" as const,
+  easing: Easing.bezier(0.16, 1, 0.3, 1),
+};
 const LIN = { extrapolateLeft: "clamp" as const, extrapolateRight: "clamp" as const };
 
 const Ground: React.FC<{
@@ -105,7 +115,7 @@ export const SceneDiagnosis: React.FC = () => {
     background: "rgba(255,255,255,0.05)", whiteSpace: "nowrap",
   });
   return (
-    <Ground plate={<Plate src="plate-diverge.mp4" dur={T.seg2.dur} opacity={0.45} />}>
+    <Ground plate={<Plate src="plate-gap.mp4" dur={T.seg2.dur} opacity={0.45} />}>
       <div style={{ textAlign: "center" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div style={pill(leftP)}>{DIAGNOSIS_POLES[0]}</div>
@@ -137,7 +147,7 @@ export const SceneReveal: React.FC = () => {
   const spine = SPINE;
   const counter = interpolate(frame, [b(23), b(24.5)], [0, 1], EASE);
   return (
-    <Ground plate={<Plate src="plate-assemble.mp4" dur={T.seg3.dur} opacity={0.5} />}>
+    <Ground plate={<Plate src="plate-draw.mp4" dur={T.seg3.dur} opacity={0.5} />}>
       <Glow size={900} x="50%" y="34%" />
       <div style={{ textAlign: "center" }}>
         <DrawnLine size={330} progress={draw} />
@@ -195,7 +205,7 @@ export const SceneAlignment: React.FC = () => {
     return { x: cx + Math.cos(a) * R, y: cy + Math.sin(a) * R * 0.62 };
   };
   return (
-    <Ground plate={<Plate src="plate-listen.mp4" dur={T.seg4.dur} tone="people" opacity={1} />}>
+    <Ground plate={<Plate src="plate-speaking.mp4" dur={T.seg4.dur} tone="people" opacity={1} />}>
       <Rise start={0} style={{ position: "absolute", top: 86, width: "100%", textAlign: "center" }}>
         <Eyebrow>{copy("seg4").eyebrow}</Eyebrow>
         <div style={{ fontFamily: FONT, fontSize: 40, fontWeight: 800, color: "#fff", marginBottom: 8 }}>
@@ -267,6 +277,37 @@ export const SceneAlignment: React.FC = () => {
           </div>
         </div>
       </Rise>
+      {/* The plate shows someone talking to a laptop; this is the laptop
+          hearing them. The line is the "two weeks" half of the
+          contradiction the scene surfaces a few beats later. */}
+      <Rise start={b(7)} style={{ position: "absolute", right: 70, top: 400 }}>
+        <div style={{ fontFamily: FONT, width: 430 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+            <span style={{
+              width: 10, height: 10, borderRadius: "50%", background: "#E0553B",
+              opacity: 0.45 + 0.55 * (0.5 + 0.5 * Math.sin(frame / 9)),
+            }} />
+            <span style={{ fontSize: 17, fontWeight: 800, letterSpacing: ".12em", color: ELECTRIC }}>
+              {TRANSCRIPT.label}
+            </span>
+          </div>
+          <div style={{
+            background: "rgba(255,255,255,0.06)", border: `1px solid ${FAINT}`,
+            borderRadius: 14, padding: "18px 20px",
+          }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: MUTED, letterSpacing: ".06em", marginBottom: 10 }}>
+              {TRANSCRIPT.speaker.toUpperCase()}
+            </div>
+            <Typed
+              start={b(8)}
+              cps={19}
+              text={TRANSCRIPT.text}
+              style={{ fontSize: 22, fontWeight: 600, color: "#fff", lineHeight: 1.5 }}
+            />
+          </div>
+        </div>
+      </Rise>
+
       <Rise start={b(15)} style={{ position: "absolute", bottom: 140, width: "100%", display: "flex", justifyContent: "center" }}>
         <div style={{ display: "flex", gap: 18, alignItems: "center", fontFamily: FONT, color: "#fff" }}>
           <span style={{ fontSize: 23, fontWeight: 800, background: "#B4541E", borderRadius: 10, padding: "7px 14px" }}>{CONTRADICTION.tag}</span>
@@ -295,29 +336,6 @@ export const SceneGrounding: React.FC = () => {
   // Crossfade between the map view and the RUN1|RUN2 view — no hard flip.
   const mapO = interpolate(frame, [252, 278], [1, 0], LIN);
   const runO = interpolate(frame, [266, 292], [0, 1], LIN);
-  const graph = (seed: number) => (
-    <svg viewBox="0 0 1600 700" width={1600} height={700}>
-      {ONTOLOGY_NODES.map(([x1, y1], i) =>
-        ONTOLOGY_NODES.slice(i + 1, i + 3).map(([x2, y2], j) => {
-          const at = seed + b(0.5) + (i * 2 + j) * 4;
-          const o = interpolate(frame, [at, at + b(0.75)], [0, 0.4], EASE);
-          return <line key={`${i}-${j}`} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#fff" strokeWidth={2} opacity={o} />;
-        }),
-      )}
-      {ONTOLOGY_NODES.map(([x, y, label], i) => {
-        const at = seed + i * 5;
-        const o = interpolate(frame, [at, at + b(0.75)], [0, 1], EASE);
-        return (
-          <g key={label} opacity={o}>
-            <rect x={x - 92} y={y - 30} width={184} height={60} rx={14} fill="rgba(255,255,255,0.07)" stroke="rgba(255,255,255,0.35)" />
-            <text x={x} y={y + 9} textAnchor="middle" fill="#fff" fontFamily={FONT} fontSize={26} fontWeight={700}>
-              {label}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
-  );
   return (
     <Ground>
       <Rise start={0} style={{ position: "absolute", top: 58, width: "100%", textAlign: "center" }}>
@@ -325,7 +343,11 @@ export const SceneGrounding: React.FC = () => {
       </Rise>
       {mapO > 0.01 ? (
         <div style={{ position: "absolute", inset: 0, opacity: mapO }}>
-          <div style={{ position: "absolute", left: 160, top: 130 }}>{graph(0)}</div>
+          {/* The ontology as an object in space, turning slowly, rather than
+              a flat diagram that happens to fade in. */}
+          <div style={{ position: "absolute", left: 210, top: 78 }}>
+            <Ontology3D labels={ONTOLOGY_LABELS} start={0} period={1100} radius={252} height={560} />
+          </div>
           <Rise start={b(5)} style={{ position: "absolute", left: 260, top: 680 }}>
             <div
               style={{
@@ -366,7 +388,9 @@ export const SceneGrounding: React.FC = () => {
                   <span style={{ position: "absolute", top: 20, left: 26, fontFamily: FONT, fontSize: 26, fontWeight: 800, color: MUTED, letterSpacing: ".14em" }}>
                     {r}
                   </span>
-                  <div style={{ position: "absolute", left: -60, top: -10, transform: "scale(0.55)", transformOrigin: "top left" }}>{graph(285)}</div>
+                  <div style={{ position: "absolute", left: -40, top: -30, transform: "scale(0.56)", transformOrigin: "top left" }}>
+                    <Ontology3D labels={ONTOLOGY_LABELS} start={285} period={1100} radius={280} width={1300} height={900} />
+                  </div>
                 </div>
               ))}
             </div>
