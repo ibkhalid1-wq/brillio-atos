@@ -11,7 +11,7 @@ import { ELECTRIC, FAINT, FONT, INK, INK_2, MUTED, T } from "./tokens";
 import { AuraWord, Chip, DrawnLine, Eyebrow, Glow, Ontology3D, Plate, Rise, Typed } from "./ui";
 import {
   b, copy, CONTRADICTION, DIAGNOSIS_POLES, DOMAINS, GOVERNANCE_CHIPS, GRAVEYARD,
-  JOURNEY, NUMBERS, ONTOLOGY_LABELS, RECEIPTS, TRANSCRIPT, REVEAL_CHIP, SPINE, STAKEHOLDERS, STANDARDS, TEAM,
+  CLOSE_ECONOMICS, JOURNEY, NUMBERS, ONTOLOGY_LABELS, RECEIPTS, TRANSCRIPT, REVEAL_CHIP, SPINE, STAKEHOLDERS, STANDARDS, TEAM,
 } from "./content";
 
 /**
@@ -643,6 +643,7 @@ export const SceneIndustries: React.FC = () => {
 export const SceneClose: React.FC = () => {
   const frame = useCurrentFrame();
   const qP = interpolate(frame, [70, 94], [0, 1], EASE);
+  const econ = interpolate(frame, [b(9), b(11), b(19), b(21)], [0, 1, 1, 0], EASE);
   return (
     <Ground plate={<Plate src="plate-converge.mp4" dur={T.seg9.dur} opacity={0.5} />}>
       <Glow size={800} x="50%" y="42%" opacity={0.25} />
@@ -666,8 +667,26 @@ export const SceneClose: React.FC = () => {
           <div style={{ fontFamily: FONT, fontSize: 32, fontWeight: 600, color: MUTED, marginBottom: 22 }}>
             {copy("seg9").subline}
           </div>
+
+          {/* The commercial beat sits in the gap the narration opens between
+              the question and its answer, and clears before the answer types
+              so the bookend still lands alone. */}
+          <div
+            style={{
+              position: "absolute", left: 0, right: 0,
+              opacity: econ, transform: `translateY(${(1 - econ) * 18}px)`,
+            }}
+          >
+            <div style={{ fontFamily: FONT, fontSize: 54, fontWeight: 800, color: "#fff", letterSpacing: "-0.01em" }}>
+              {CLOSE_ECONOMICS.claim}
+            </div>
+            <div style={{ fontFamily: FONT, fontSize: 30, fontWeight: 600, color: ELECTRIC, marginTop: 18 }}>
+              {CLOSE_ECONOMICS.so}
+            </div>
+          </div>
+
           <Typed
-            start={b(5.5)}
+            start={b(22)}
             cps={18}
             text={copy("seg9").headline!}
             accents={copy("seg9").accents}

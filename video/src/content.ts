@@ -91,7 +91,7 @@ export const SCENES: Scene[] = [
     headline: "AURA derived Laila from evidence.",
     subline: "Meet AURA — Brillio's AI-native delivery methodology, and the system that runs it.",
     accents: ["Laila", "evidence"],
-    vo: "Meet Aura — Brillio's AI-native delivery methodology, and the system that runs it. Laila — a working sales CRM — was derived from evidence by Aura, and built by Aura. A working pilot, in twenty-one days.",
+    vo: "Meet Aura — Brillio's AI-native delivery methodology, and the system that runs it. Laila, a sales CRM, was derived from evidence and built by Aura. A working pilot, in twenty-one days.",
     animFloor: 360,
     tail: 1.4,
     // The mark draws, then the spine assembles, and only then does the name
@@ -129,7 +129,7 @@ export const SCENES: Scene[] = [
   },
   {
     id: "seg7",
-    vo: "One real business problem. Fifteen stakeholders heard. Thirty-four entities across ten business areas. A working system in twenty-one days, validated by the people who named the problem.",
+    vo: "One real business problem. Fifteen stakeholders heard. Thirty-four entities across ten business areas. A working pilot in twenty-one days, validated by the people who named the problem.",
     animFloor: 360,
     tail: 1.4,
   },
@@ -148,7 +148,7 @@ export const SCENES: Scene[] = [
     headline: "They now would… with AURA.",
     subline: "Would two teams draw the same picture?",
     accents: ["with AURA."],
-    vo: "So — would two teams draw the same picture? … They now would… with Aura.",
+    vo: "So — would two teams draw the same picture? … Twenty-one days from problem to working pilot. That's delivery economics that changes what Brillio can bid for. … They now would… with Aura.",
     animFloor: 220,
     tail: 1.6,
   },
@@ -308,6 +308,16 @@ export const DOMAINS = [
     flow: ["Order", "Pick", "Pack", "Ship", "Deliver"],
   },
 ];
+
+/**
+ * Scene 9 — the commercial beat, between the question and its answer. The
+ * only place in the film that talks about what this is worth rather than
+ * how it works.
+ */
+export const CLOSE_ECONOMICS = {
+  claim: "21 days from problem to working pilot",
+  so: "Delivery economics that changes what Brillio can bid for.",
+};
 
 /** Real screenshots from the live programme — receipts, not recreations. */
 export const RECEIPTS = {
