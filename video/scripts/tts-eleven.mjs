@@ -30,11 +30,24 @@ const API = "https://api.elevenlabs.io/v1";
 /** English-only. This single choice is the accent fix. */
 const MODEL = "eleven_turbo_v2";
 const VOICE_SETTINGS = {
-  stability: 0.38,
+  // Steady enough to sound like a presenter rather than a reader, but not so
+  // steady that it flattens into the model's own cadence.
+  stability: 0.45,
   similarity_boost: 0.97,
   style: 0,
   use_speaker_boost: true,
+  // The clone reads ~25% faster than Ibrahim does live, which is what made
+  // the first cut feel rushed against the animation.
+  speed: 0.9,
 };
+
+/**
+ * "…" in the content library marks a deliberate beat — the two the film
+ * depends on, after the opening question and before the final answer. The
+ * model treats an ellipsis as ordinary punctuation and hurries through it,
+ * so make the pause explicit.
+ */
+const withPauses = (text) => text.replace(/\s*…\s*/g, ' <break time="0.8s" /> ');
 
 const arg = (flag) => {
   const i = process.argv.indexOf(flag);
@@ -111,7 +124,7 @@ for (const { id, text } of todo) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      text,
+      text: withPauses(text),
       model_id: MODEL,
       voice_settings: VOICE_SETTINGS,
       // Neighbouring lines condition prosody, so each take lands in the same

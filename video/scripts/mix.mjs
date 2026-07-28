@@ -25,15 +25,27 @@ const FPS = 30, LEAD_IN = 0.4;
 // Must match content.ts exactly — including the bar snap, or the narration
 // walks away from the picture a bar at a time. The assertion below is what
 // actually keeps the two honest.
-const BAR = Math.round((60 / 120) * FPS) * 4;
+const BEAT = Math.round((60 / 120) * FPS);
+const BAR = BEAT * 4;
+const VO_AT_DEFAULT = 1;
 const toBar = (frames) => Math.ceil(frames / BAR) * BAR;
-const scenes = [...src.matchAll(/id: "(seg\d+)"[\s\S]*?animFloor: (\d+),\s*\n\s*tail: ([\d.]+)/g)]
-  .map((m) => ({ id: m[1], animFloor: +m[2], tail: +m[3] }));
+
+const scenes = [];
+for (const block of src.split(/\bid: "/).slice(1)) {
+  const id = block.slice(0, block.indexOf('"'));
+  if (!/^seg\d+$/.test(id)) continue;
+  const num = (key, fallback) => {
+    const m = block.match(new RegExp(`\\n\\s+${key}: ([\\d.]+)`));
+    return m ? +m[1] : fallback;
+  };
+  scenes.push({ id, animFloor: num("animFloor", 0), tail: num("tail", 0), voAt: num("voAt", VO_AT_DEFAULT) });
+}
 
 let cursor = 0;
 const plan = scenes.map((s) => {
-  const dur = toBar(Math.max(s.animFloor, Math.ceil((LEAD_IN + (durations[s.id] || 0) + s.tail) * FPS), BAR * 2));
-  const lead = s.id === "seg1" ? 0.5 : LEAD_IN;
+  // Narration begins where its visual lands, not a fixed lead after the cut.
+  const lead = (s.voAt * BEAT) / FPS;
+  const dur = toBar(Math.max(s.animFloor, Math.ceil((lead + (durations[s.id] || 0) + s.tail) * FPS), BAR * 2));
   const at = Math.round((cursor / FPS + lead) * 1000);
   cursor += dur;
   return { ...s, atMs: at, from: cursor - dur, dur };
@@ -68,13 +80,14 @@ let mapAudio = "[vo]";
 
 /* ── Music ──────────────────────────────────────────────────────────────
  * MUSIC_GAIN is measured, not chosen: the supplied track is a loud master
- * (median −5.1 dBFS), and −18.9 dB puts it at −24 dBFS in the gaps — about
- * 6 dB under the −18 dBFS narration, which is present without competing.
- * An earlier bed was set by ear and came out inaudible on laptop speakers;
- * don't guess this number, re-measure if the track changes.
+ * (median −5.1 dBFS), and −24.9 dB puts it at −30 dBFS in the gaps — the
+ * usual place for a bed under narration, quiet enough to sit beneath the
+ * room. An earlier bed set by ear landed at −40 and was inaudible; −24 was
+ * audible but too present. Don't guess this number — measure the track's
+ * median RMS and subtract, and re-measure whenever the track changes.
  */
-const MUSIC_GAIN = 0.113;
-const DUCK = 0.5; // −6 dB under speech
+const MUSIC_GAIN = 0.057;
+const DUCK = 0.6; // −4.4 dB under speech
 const TRACK = existsSync(join(ROOT, "music/track.wav"))
   ? join(ROOT, "music/track.wav")
   : join(ROOT, "music/bed.wav");

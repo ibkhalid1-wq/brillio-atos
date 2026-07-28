@@ -56,7 +56,17 @@ export type Scene = {
   animFloor: number;
   /** Seconds of breath after the line lands, before the cut. */
   tail: number;
+  /**
+   * Beats to wait before the narration starts, so the words arrive with the
+   * visual they describe rather than ahead of it. Most scenes put their
+   * subject on screen immediately and use the default; raise it where the
+   * animation has to build something first.
+   */
+  voAt?: number;
 };
+
+/** Default narration entry: half a beat past the cut. */
+const VO_AT_DEFAULT = 1;
 
 export const SCENES: Scene[] = [
   {
@@ -84,6 +94,11 @@ export const SCENES: Scene[] = [
     vo: "Meet Aura — Brillio's AI-native delivery methodology. The demo you just saw — Laila — Aura derived it from evidence. A working pilot, in twenty-one days.",
     animFloor: 360,
     tail: 1.4,
+    // The mark draws, then the spine assembles, and only then does the name
+    // type on at b(12). Speaking before that had the line arriving five
+    // seconds after it was said. Now the three sentences land with the
+    // subline, the headline and the 21-days chip in turn.
+    voAt: 11,
   },
   {
     id: "seg4",
@@ -140,9 +155,14 @@ export const SCENES: Scene[] = [
   {
     id: "seg10",
     headline: "The team that made Laila happen.",
-    vo: "And none of it built itself. This is the team that made Laila happen.",
-    animFloor: 300,
-    tail: 2.2,
+    // Closes the loop on scene 4's opening words. The film has spent two
+    // minutes arguing that systems should start from people; the credits
+    // are the moment to point out that this one did too.
+    vo: "It starts with people — that was the whole idea. Meet the team that made Laila happen.",
+    // The credits are the one card people actually want to read — twelve
+    // names at a glance isn't enough. Hold it well past the narration.
+    animFloor: 480,
+    tail: 3.5,
   },
 ];
 
@@ -152,7 +172,7 @@ export const SCENES: Scene[] = [
  * designed it. Roles as written on the slide.
  */
 export const TEAM = [
-  { name: "Ibrahim Khalid", role: "Product Manager" },
+  { name: "Ibrahim Khalid", role: "Product Owner" },
   { name: "Nayana Pai", role: "Solution Architect" },
   { name: "Prasoon Gupta", role: "Project Manager" },
   { name: "Vasudev Bhat", role: "Technical Architect" },
@@ -268,9 +288,12 @@ import durations from "./vo-durations.json";
 
 const secs = (id: string): number => (durations as Record<string, number>)[id] ?? 0;
 
+/** Seconds into a scene at which its narration begins. */
+export const voLead = (s: Scene): number => ((s.voAt ?? VO_AT_DEFAULT) * BEAT) / FPS;
+
 /** Frames a scene needs: its narration with breathing room, or its animation. */
 export const sceneFrames = (s: Scene): number => {
-  const voFrames = Math.ceil((LEAD_IN + secs(s.id) + s.tail) * FPS);
+  const voFrames = Math.ceil((voLead(s) + secs(s.id) + s.tail) * FPS);
   // Fit the narration and the animation, then snap the cut to a bar line.
   return toBar(Math.max(s.animFloor, voFrames, BAR * 2));
 };
@@ -289,9 +312,7 @@ export const timeline = (): Timeline => {
   for (const s of SCENES) {
     const dur = sceneFrames(s);
     T[s.id] = { from: cursor, dur };
-    // The opening line starts almost immediately; later scenes take the lead-in.
-    const lead = s.id === "seg1" ? 0.5 : LEAD_IN;
-    voOffsetsMs[s.id] = Math.round(((cursor / FPS) + lead) * 1000);
+    voOffsetsMs[s.id] = Math.round(((cursor / FPS) + voLead(s)) * 1000);
     cursor += dur;
   }
   return { T, totalFrames: cursor, voOffsetsMs };

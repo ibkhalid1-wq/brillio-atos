@@ -360,7 +360,8 @@ export const SceneGrounding: React.FC = () => {
                 </div>
               ))}
             </div>
-            <Rise start={392}>
+            {/* Lands on the closing sentence, not four seconds after it. */}
+            <Rise start={b(15)}>
               <div style={{ marginTop: 38, fontFamily: FONT, fontSize: 46, fontWeight: 800, color: "#fff" }}>
                 {copy("seg5").headline!.replace(" Every time.", " ")}<span style={{ color: ELECTRIC }}>Every time.</span>
               </div>
@@ -593,7 +594,13 @@ export const SceneClose: React.FC = () => {
       <div style={{ textAlign: "center" }}>
         <Rise start={b(1)}>
           <div style={{ display: "flex", alignItems: "center", gap: 26, justifyContent: "center" }}>
-            <span style={{ fontFamily: FONT, fontSize: 52, fontWeight: 700, color: "#fff", letterSpacing: "-0.02em" }}>brillio</span>
+            {/* The real wordmark, not the typeface approximation. Its two
+                green dots sit below the baseline, so the mark is nudged up
+                to line its letterforms up with AURA's. */}
+            <Img
+              src={staticFile("brillio.png")}
+              style={{ height: 58, display: "block", marginBottom: -12 }}
+            />
             <span style={{ color: MUTED, fontSize: 44 }}>–</span>
             <AuraWord height={46} />
           </div>
@@ -605,7 +612,7 @@ export const SceneClose: React.FC = () => {
             {copy("seg9").subline}
           </div>
           <Typed
-            start={108}
+            start={b(5.5)}
             cps={18}
             text={copy("seg9").headline!}
             accents={copy("seg9").accents}
