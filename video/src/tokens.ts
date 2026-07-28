@@ -9,6 +9,13 @@ import { timeline } from "./content";
 export const INK = "#1D1545";
 export const INK_2 = "#2E2364";
 export const ELECTRIC = "#6E5BFF";
+/**
+ * The same violet, lifted for small type. #6E5BFF on the indigo ground
+ * measures ~3.7:1 — fine for a rule or a fill, not for a 15px label. Every
+ * small violet label uses this; ELECTRIC stays for fills, rules and large
+ * accented words.
+ */
+export const ELECTRIC_TEXT = "#9B8CFF";
 export const PAPER = "#FBFBFE";
 export const MUTED = "rgba(255,255,255,0.55)";
 export const FAINT = "rgba(255,255,255,0.28)";
