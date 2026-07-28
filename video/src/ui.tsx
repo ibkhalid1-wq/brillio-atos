@@ -1,6 +1,80 @@
 import React from "react";
-import { Easing, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
+import {
+  AbsoluteFill,
+  Easing,
+  interpolate,
+  OffthreadVideo,
+  staticFile,
+  useCurrentFrame,
+  useVideoConfig,
+} from "remotion";
 import { ELECTRIC, FONT, INK } from "./tokens";
+
+/**
+ * A generated backing plate behind a scene's type.
+ *
+ * The three plates carry the film's argument in pictures: the opening
+ * diverges, the reveal assembles, the close converges. They are deliberately
+ * held under the type — a plate that competes with the words has failed.
+ *
+ * Source clips are 5s and scenes run three times that, so playback is slowed
+ * to fit rather than looped, which would read as a repeat. Slowing repeats
+ * source frames, so a continuous scale drift runs on top: the sub-pixel
+ * movement keeps the image alive between them.
+ */
+export const Plate: React.FC<{
+  src: string;
+  dur: number;
+  /** Length of the source clip in seconds. */
+  clip?: number;
+  opacity?: number;
+  /**
+   * Live-action footage arrives in its own daylight palette and has to be
+   * pulled into the film's world; the generated abstracts are already there.
+   */
+  tone?: "abstract" | "people";
+}> = ({ src, dur, clip = 5, opacity = 0.55, tone = "abstract" }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  // Stretch the clip just past the scene so it never freezes on its last frame.
+  const rate = Math.min(1, (clip * fps) / (dur * 1.04));
+  const scale = 1.04 + (frame / dur) * 0.09;
+  const fade = interpolate(frame, [0, 18, dur - 24, dur], [0, 1, 1, 0], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+  const people = tone === "people";
+  return (
+    <AbsoluteFill style={{ opacity: fade * opacity }}>
+      <OffthreadVideo
+        src={staticFile(src)}
+        playbackRate={rate}
+        muted
+        style={{
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          transform: `scale(${scale})`,
+          filter: people ? "saturate(0.45) contrast(1.1)" : undefined,
+        }}
+      />
+      {people ? (
+        // Flat indigo at high opacity, not a blend mode: mix-blend-mode
+        // "color" keeps the backdrop's luminance, so it tinted the office
+        // without ever darkening it and the headline had nothing to sit on.
+        <AbsoluteFill style={{ background: "rgba(16,11,44,0.76)" }} />
+      ) : null}
+      {/* Scrim: the type sits centre-frame, so darken there hardest. */}
+      <AbsoluteFill
+        style={{
+          background: `radial-gradient(ellipse 64% 54% at 50% 50%, rgba(13,10,34,${
+            people ? 0.62 : 0.86
+          }), rgba(13,10,34,0.34) 72%, rgba(13,10,34,0.16) 100%)`,
+        }}
+      />
+    </AbsoluteFill>
+  );
+};
 
 /** Monospace-feel typed text with a blinking block cursor — the film's motif. */
 export const Typed: React.FC<{

@@ -7,8 +7,8 @@ import {
   staticFile,
   useCurrentFrame,
 } from "remotion";
-import { ELECTRIC, FAINT, FONT, INK, INK_2, MUTED } from "./tokens";
-import { AuraWord, Chip, DrawnLine, Eyebrow, Glow, Rise, Typed } from "./ui";
+import { ELECTRIC, FAINT, FONT, INK, INK_2, MUTED, T } from "./tokens";
+import { AuraWord, Chip, DrawnLine, Eyebrow, Glow, Plate, Rise, Typed } from "./ui";
 import {
   b, copy, CONTRADICTION, DIAGNOSIS_POLES, DOMAINS, GOVERNANCE_CHIPS, GRAVEYARD,
   JOURNEY, NUMBERS, ONTOLOGY_NODES, RECEIPTS, REVEAL_CHIP, SPINE, STAKEHOLDERS, STANDARDS, TEAM,
@@ -17,7 +17,16 @@ import {
 const EASE = { extrapolateLeft: "clamp" as const, extrapolateRight: "clamp" as const, easing: Easing.out(Easing.cubic) };
 const LIN = { extrapolateLeft: "clamp" as const, extrapolateRight: "clamp" as const };
 
-const Ground: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
+const Ground: React.FC<{
+  children?: React.ReactNode;
+  /**
+   * Backing footage, passed here rather than dropped in with the content:
+   * a plate is absolutely positioned and the scene copy mostly isn't, so as
+   * a sibling it painted straight over the type. As a named layer it stays
+   * where it belongs — under everything.
+   */
+  plate?: React.ReactNode;
+}> = ({ children, plate }) => {
   const frame = useCurrentFrame();
   // Ambient aurora: two slow-drifting glows so no frame is ever static.
   const gx = 30 + Math.sin(frame / 210) * 12;
@@ -29,11 +38,12 @@ const Ground: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
         background: `radial-gradient(ellipse 60% 52% at ${gx}% ${gy}%, rgba(110,91,255,0.16), transparent 70%),
           radial-gradient(ellipse 55% 60% at ${hx}% 82%, rgba(46,35,100,0.9), transparent 75%),
           linear-gradient(150deg, ${INK_2} 0%, ${INK} 62%)`,
-        alignItems: "center",
-        justifyContent: "center",
       }}
     >
-      {children}
+      {plate}
+      <AbsoluteFill style={{ alignItems: "center", justifyContent: "center" }}>
+        {children}
+      </AbsoluteFill>
     </AbsoluteFill>
   );
 };
@@ -43,7 +53,7 @@ export const SceneQuestion: React.FC = () => {
   const frame = useCurrentFrame();
   const grave = GRAVEYARD;
   return (
-    <Ground>
+    <Ground plate={<Plate src="plate-teams.mp4" dur={T.seg1.dur} tone="people" opacity={1} />}>
       <div style={{ width: 1680, textAlign: "center" }}>
         <Typed
           start={10}
@@ -95,7 +105,7 @@ export const SceneDiagnosis: React.FC = () => {
     background: "rgba(255,255,255,0.05)", whiteSpace: "nowrap",
   });
   return (
-    <Ground>
+    <Ground plate={<Plate src="plate-diverge.mp4" dur={T.seg2.dur} opacity={0.45} />}>
       <div style={{ textAlign: "center" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div style={pill(leftP)}>{DIAGNOSIS_POLES[0]}</div>
@@ -127,7 +137,7 @@ export const SceneReveal: React.FC = () => {
   const spine = SPINE;
   const counter = interpolate(frame, [b(23), b(24.5)], [0, 1], EASE);
   return (
-    <Ground>
+    <Ground plate={<Plate src="plate-assemble.mp4" dur={T.seg3.dur} opacity={0.5} />}>
       <Glow size={900} x="50%" y="34%" />
       <div style={{ textAlign: "center" }}>
         <DrawnLine size={330} progress={draw} />
@@ -185,7 +195,7 @@ export const SceneAlignment: React.FC = () => {
     return { x: cx + Math.cos(a) * R, y: cy + Math.sin(a) * R * 0.62 };
   };
   return (
-    <Ground>
+    <Ground plate={<Plate src="plate-listen.mp4" dur={T.seg4.dur} tone="people" opacity={1} />}>
       <Rise start={0} style={{ position: "absolute", top: 86, width: "100%", textAlign: "center" }}>
         <Eyebrow>{copy("seg4").eyebrow}</Eyebrow>
         <div style={{ fontFamily: FONT, fontSize: 40, fontWeight: 800, color: "#fff", marginBottom: 8 }}>
@@ -465,7 +475,7 @@ export const SceneNumbers: React.FC = () => {
   const frame = useCurrentFrame();
   const stamps = NUMBERS;
   return (
-    <Ground>
+    <Ground plate={<Plate src="plate-demo.mp4" dur={T.seg7.dur} tone="people" opacity={1} />}>
       <Glow size={1100} x="50%" y="50%" opacity={0.28} />
       <div style={{ display: "flex", flexDirection: "column", gap: 34, alignItems: "center" }}>
         {stamps.map((s, i) => {
@@ -589,7 +599,7 @@ export const SceneClose: React.FC = () => {
   const frame = useCurrentFrame();
   const qP = interpolate(frame, [70, 94], [0, 1], EASE);
   return (
-    <Ground>
+    <Ground plate={<Plate src="plate-converge.mp4" dur={T.seg9.dur} opacity={0.5} />}>
       <Glow size={800} x="50%" y="42%" opacity={0.25} />
       <div style={{ textAlign: "center" }}>
         <Rise start={b(1)}>

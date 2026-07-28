@@ -73,7 +73,7 @@ export const SCENES: Scene[] = [
     id: "seg1",
     headline: "If two teams mapped your business today —\nwould they draw the same picture?",
     accents: ["same picture?"],
-    vo: "If two teams mapped your business today … would they draw the same picture? … That's where AI transformation quietly fails. A graveyard of pilots. Solutions in search of a problem.",
+    vo: "If two teams mapped your business today … would they draw the same picture? … That's where AI transformation quietly fails. A graveyard of pilots. Solutions in search of a problem. Proof of concepts that prove nothing.",
     animFloor: 444,
     tail: 1.4,
   },
@@ -81,8 +81,8 @@ export const SCENES: Scene[] = [
     id: "seg2",
     headline: "The failure was never AI.",
     subline:
-      "An agent is only as good as its model of the business — and that model lives in heads, decks, and disagreement.",
-    vo: "The failure was never AI. An agent is only as good as its model of the business — and that model lives in heads, decks, and disagreement.",
+      "An agent is only as good as its model of the business — and that model lives in heads, decks, and disagreements.",
+    vo: "The failure was never AI. An agent is only as good as its model of the business — and that model lives in heads, decks, and disagreements.",
     animFloor: 220,
     tail: 1.4,
   },
@@ -155,10 +155,7 @@ export const SCENES: Scene[] = [
   {
     id: "seg10",
     headline: "The team that made Laila happen.",
-    // Closes the loop on scene 4's opening words. The film has spent two
-    // minutes arguing that systems should start from people; the credits
-    // are the moment to point out that this one did too.
-    vo: "It starts with people — that was the whole idea. Meet the team that made Laila happen.",
+    vo: "Meet the team that made Laila happen.",
     // The credits are the one card people actually want to read — twelve
     // names at a glance isn't enough. Hold it well past the narration.
     animFloor: 480,

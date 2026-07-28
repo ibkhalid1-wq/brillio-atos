@@ -49,6 +49,29 @@ const VOICE_SETTINGS = {
  */
 const withPauses = (text) => text.replace(/\s*…\s*/g, ' <break time="0.8s" /> ');
 
+/**
+ * Words the model gets wrong, pinned in CMU Arpabet. English-only models
+ * honour phoneme tags; the multilingual ones ignore them, which is another
+ * reason this script stays on turbo_v2.
+ *
+ *   two      — was landing somewhere between "two" and "tuh"
+ *   Aura     — AW-ruh, not A-U-R-A and not "ow-ra"
+ *   proposes — pruh-POH-ziz, with a voiced final s
+ */
+const SAY = {
+  two: "T UW1",
+  aura: "AO1 R AH0",
+  proposes: "P R AH0 P OW1 Z AH0 Z",
+};
+
+const withPronunciation = (text) =>
+  text.replace(/\b(two|aura|proposes)\b/gi, (word) => {
+    const ph = SAY[word.toLowerCase()];
+    return `<phoneme alphabet="cmu-arpabet" ph="${ph}">${word}</phoneme>`;
+  });
+
+const speak = (text) => withPronunciation(withPauses(text));
+
 const arg = (flag) => {
   const i = process.argv.indexOf(flag);
   return i > -1 ? process.argv[i + 1] : undefined;
@@ -124,7 +147,7 @@ for (const { id, text } of todo) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      text: withPauses(text),
+      text: speak(text),
       model_id: MODEL,
       voice_settings: VOICE_SETTINGS,
       // Neighbouring lines condition prosody, so each take lands in the same
