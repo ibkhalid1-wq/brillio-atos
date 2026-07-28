@@ -7,7 +7,7 @@ import {
   staticFile,
   useCurrentFrame,
 } from "remotion";
-import { ELECTRIC, FAINT, FONT, INK, INK_2, MUTED, T } from "./tokens";
+import { ELECTRIC, ELECTRIC_TEXT, FAINT, FONT, INK, INK_2, MUTED, T } from "./tokens";
 import { AuraWord, Chip, DrawnLine, Eyebrow, Glow, Ontology3D, Plate, Rise, ScreenInset, Typed } from "./ui";
 import {
   b, copy, CONTRADICTION, DIAGNOSIS_POLES, DOMAINS, GOVERNANCE_CHIPS, GRAVEYARD,
@@ -303,8 +303,8 @@ export const SceneAlignment: React.FC = () => {
           width={470}
           start={b(6)}
           from={1.5}
-          zoom={1.9}
-          origin="30% 25%"
+          zoom={2.05}
+          origin="46% 30%"
           rate={0.75}
           label="LIVE · STAKEHOLDERS VALIDATE"
         />
@@ -319,7 +319,7 @@ export const SceneAlignment: React.FC = () => {
               width: 10, height: 10, borderRadius: "50%", background: "#E0553B",
               opacity: 0.45 + 0.55 * (0.5 + 0.5 * Math.sin(frame / 9)),
             }} />
-            <span style={{ fontSize: 17, fontWeight: 800, letterSpacing: ".12em", color: ELECTRIC }}>
+            <span style={{ fontSize: 17, fontWeight: 800, letterSpacing: ".12em", color: ELECTRIC_TEXT }}>
               {TRANSCRIPT.label}
             </span>
           </div>
@@ -350,7 +350,7 @@ export const SceneAlignment: React.FC = () => {
       </Rise>
       <Rise start={b(18)} style={{ position: "absolute", bottom: 56, width: "100%", display: "flex", justifyContent: "center" }}>
         <div style={{ display: "flex", gap: 18, alignItems: "center" }}>
-          <span style={{ fontFamily: FONT, fontSize: 19, fontWeight: 800, letterSpacing: ".12em", color: ELECTRIC }}>
+          <span style={{ fontFamily: FONT, fontSize: 19, fontWeight: 800, letterSpacing: ".12em", color: ELECTRIC_TEXT }}>
             {RECEIPTS.coverageLedger.label}
           </span>
           <div style={{ background: "#fff", borderRadius: 12, padding: "10px 18px", boxShadow: "0 24px 60px -24px rgba(0,0,0,.6)" }}>
@@ -391,7 +391,7 @@ export const SceneGrounding: React.FC = () => {
             >
               <div style={{ display: "flex", alignItems: "baseline", gap: 18, marginBottom: 14 }}>
                 <span style={{ fontSize: 28, fontWeight: 800 }}>Account</span>
-                <span style={{ fontSize: 19, fontWeight: 700, color: ELECTRIC, letterSpacing: ".1em" }}>
+                <span style={{ fontSize: 19, fontWeight: 700, color: ELECTRIC_TEXT, letterSpacing: ".1em" }}>
                   {RECEIPTS.standardAlignment.label}
                 </span>
               </div>
@@ -467,6 +467,9 @@ export const SceneJourney: React.FC = () => {
             const hp = interpolate(frame, [humanAt, humanAt + b(1)], [0, 1], EASE);
             // The narration reaches Evolve last and dwells there; lift that
             // column while it does, so the words have something to point at.
+            // The narration dwells on Evolve, so its column brightens — it
+            // does NOT move. Lifting one card out of a five-column grid
+            // breaks the row in the scene whose entire argument is rigour.
             const isEvolve = i === JOURNEY.length - 1;
             const lift = isEvolve
               ? interpolate(frame, [b(26), b(29), b(42), b(45)], [0, 1, 1, 0], LIN)
@@ -477,16 +480,16 @@ export const SceneJourney: React.FC = () => {
                 style={{
                   width: 320,
                   opacity: p,
-                  transform: `translateY(${(1 - p) * 30 - lift * 10}px) scale(${1 + lift * 0.035})`,
+                  transform: `translateY(${(1 - p) * 30}px)`,
                   fontFamily: FONT,
-                  filter: lift > 0.01 ? `drop-shadow(0 18px 46px rgba(110,91,255,${0.5 * lift}))` : undefined,
+                  filter: lift > 0.01 ? `drop-shadow(0 14px 40px rgba(110,91,255,${0.62 * lift}))` : undefined,
                 }}
               >
                 <div style={{
                   borderRadius: 16, border: `1px solid ${ELECTRIC}`, background: "rgba(110,91,255,0.14)",
                   padding: "16px 18px", height: 116, display: "flex", flexDirection: "column", justifyContent: "center",
                 }}>
-                  <div style={{ fontSize: 15, fontWeight: 800, letterSpacing: ".13em", color: ELECTRIC, marginBottom: 8 }}>AURA · AUTONOMOUS</div>
+                  <div style={{ fontSize: 15, fontWeight: 800, letterSpacing: ".13em", color: ELECTRIC_TEXT, marginBottom: 8 }}>AURA · AUTONOMOUS</div>
                   <div style={{ fontSize: 20.5, color: "#fff", lineHeight: 1.35 }}>{col.aura}</div>
                 </div>
                 <div style={{ padding: "12px 0", fontSize: 24, fontWeight: 800, color: "#fff", letterSpacing: ".02em" }}>
@@ -527,15 +530,19 @@ export const SceneJourney: React.FC = () => {
             three architectures scored by AURA, one crowned, an operator free
             to refine it. Replaces the governance chips, which restated the
             narration word for word. */}
-        <div style={{ marginTop: 14, display: "flex", justifyContent: "center" }}>
+        {/* The receipt arrives as the last stamp settles and then takes the
+            room: the table dims behind it so the scene ends on evidence
+            rather than on a diagram of itself. 0.52x also keeps the
+            recording from exhausting if the narration is ever re-cut longer. */}
+        <div style={{ marginTop: 12, display: "flex", justifyContent: "center" }}>
           <ScreenInset
             src="screen-architecture.mp4"
-            width={660}
-            start={b(20)}
+            width={980}
+            start={b(14)}
             from={2}
-            rate={0.58}
-            zoom={1.55}
-            origin="50% 44%"
+            rate={0.52}
+            zoom={1.9}
+            origin="50% 42%"
             label="LIVE · OPERATORS MAKE THE CHOICE"
           />
         </div>
@@ -610,7 +617,7 @@ const MiniDomain: React.FC<{ d: (typeof DOMAINS)[number]; start: number }> = ({ 
     >
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 4 }}>
         <span style={{ fontSize: 27, fontWeight: 800, color: "#fff" }}>{d.industry}</span>
-        <span style={{ fontSize: 17, fontWeight: 800, letterSpacing: ".1em", color: ELECTRIC }}>{d.standard}</span>
+        <span style={{ fontSize: 17, fontWeight: 800, letterSpacing: ".1em", color: ELECTRIC_TEXT }}>{d.standard}</span>
       </div>
       <div style={{ fontSize: 19, color: MUTED, marginBottom: 10 }}>{d.programme}</div>
       <svg viewBox="0 0 460 250" width={464} height={252}>
@@ -725,7 +732,7 @@ export const SceneValue: React.FC = () => {
       <Glow size={1000} x="50%" y="46%" opacity={0.3} />
       <div style={{ textAlign: "center", fontFamily: FONT }}>
         <Rise start={0}>
-          <div style={{ fontSize: 21, fontWeight: 800, letterSpacing: ".3em", color: ELECTRIC }}>
+          <div style={{ fontSize: 21, fontWeight: 800, letterSpacing: ".3em", color: ELECTRIC_TEXT }}>
             THE ECONOMICS
           </div>
         </Rise>
@@ -787,7 +794,7 @@ export const SceneTeam: React.FC = () => {
       <AbsoluteFill style={{ transform: `translateY(${y}px)` }}>
         <div style={{ width: 1500, margin: "0 auto", fontFamily: FONT }}>
           <div style={{ height: TITLE_H, textAlign: "center" }}>
-            <div style={{ fontSize: 21, fontWeight: 800, letterSpacing: ".34em", color: ELECTRIC }}>
+            <div style={{ fontSize: 21, fontWeight: 800, letterSpacing: ".34em", color: ELECTRIC_TEXT }}>
               {copy("seg11").headline!.toUpperCase()}
             </div>
             <div style={{ width: 120, height: 1, background: FAINT, margin: "30px auto 0" }} />

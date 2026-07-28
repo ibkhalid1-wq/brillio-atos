@@ -8,7 +8,7 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
-import { ELECTRIC, FONT, INK } from "./tokens";
+import { ELECTRIC, ELECTRIC_TEXT, FONT, INK } from "./tokens";
 
 /**
  * The business ontology as an actual object in space: entities distributed
@@ -104,7 +104,7 @@ export const Ontology3D: React.FC<{
         const w = 176 * p.s;
         const h = 58 * p.s;
         // Depth cue: things further away are dimmer as well as smaller.
-        const dim = interpolate(p.s, [0.72, 1.24], [0.12, 1], {
+        const dim = interpolate(p.s, [0.72, 1.24], [0.45, 1], {
           extrapolateLeft: "clamp",
           extrapolateRight: "clamp",
         });
@@ -117,15 +117,15 @@ export const Ontology3D: React.FC<{
               x={p.sx - w / 2} y={p.sy - h / 2} width={w} height={h} rx={14 * p.s}
               fill="rgba(255,255,255,0.07)" stroke="rgba(255,255,255,0.38)" strokeWidth={1.2}
             />
-            {/* Back-hemisphere nodes read as depth, not as competing words. */}
-            {p.s >= 0.82 ? (
-              <text
-                x={p.sx} y={p.sy + 9 * p.s} textAnchor="middle" fill="#fff"
-                fontFamily={FONT} fontSize={25 * p.s} fontWeight={700}
-              >
-                {p.label}
-              </text>
-            ) : null}
+            {/* Always labelled. A plate drawn without its word in it reads as
+                a failed render, not as depth — the opaque backing above and
+                the depth dimming below are what separate near from far. */}
+            <text
+              x={p.sx} y={p.sy + 9 * p.s} textAnchor="middle" fill="#fff"
+              fontFamily={FONT} fontSize={25 * p.s} fontWeight={700}
+            >
+              {p.label}
+            </text>
           </g>
         );
       })}
@@ -176,7 +176,7 @@ export const ScreenInset: React.FC<{
               opacity: 0.45 + 0.55 * (0.5 + 0.5 * Math.sin(frame / 9)),
             }}
           />
-          <span style={{ fontSize: 17, fontWeight: 800, letterSpacing: ".12em", color: ELECTRIC }}>
+          <span style={{ fontSize: 17, fontWeight: 800, letterSpacing: ".12em", color: ELECTRIC_TEXT }}>
             {label}
           </span>
         </div>
