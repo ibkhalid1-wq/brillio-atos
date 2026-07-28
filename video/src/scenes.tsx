@@ -51,7 +51,7 @@ export const SceneQuestion: React.FC = () => {
         <div style={{ height: 70 }} />
         <div style={{ display: "flex", gap: 22, justifyContent: "center" }}>
           {grave.map((g, i) => {
-            const at = 230 + i * 36;
+            const at = 300 + i * 40;
             const p = interpolate(frame, [at, at + 20], [0, 1], EASE);
             const grey = interpolate(frame, [at + 36, at + 64], [1, 0.34], LIN);
             return (
