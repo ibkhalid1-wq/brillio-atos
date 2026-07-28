@@ -118,7 +118,7 @@ export const SCENES: Scene[] = [
   },
   {
     id: "seg5",
-    eyebrow: "02 · In the business's own language",
+    eyebrow: "02 · In the business's own language — deterministically",
     headline: "Same mandate. Same model. Every time.",
     vo: "From those voices, Aura draws the business in its own language — every entity grounded in the industry's standards. That model isn't a document. It's what the working system is generated from … Run it twice: the same model, every time.",
     animFloor: 380,
@@ -140,22 +140,8 @@ export const SCENES: Scene[] = [
     tail: 1.4,
   },
   {
-    // The film has just proved one delivery. This is the only forward-looking
-    // beat in it: what the same orchestration does across a whole product
-    // life, with today's five movements shown as one segment of a longer arc.
-    id: "seg7b",
-    eyebrow: "04 · What comes next",
-    headline: "Imagine the possibilities.",
-    subline: "Extending AURA to orchestrate the full product lifecycle.",
-    vo: "Today, Aura orchestrates delivery. Imagine the possibilities — Aura orchestrating the full product lifecycle.",
-    // The arc has to draw, nine stages have to land and the key has to
-    // register; the narration is short, so the scene is sized by the build.
-    animFloor: 450,
-    tail: 1.8,
-  },
-  {
     id: "seg8",
-    eyebrow: "05 · Any business",
+    eyebrow: "04 · Any business",
     headline: "One method. Every industry.",
     subline:
       "Different industries. Different problems. The same discipline — start from the business.",
@@ -167,10 +153,24 @@ export const SCENES: Scene[] = [
   {
     id: "seg9",
     headline: "21 days from problem to working prototype.",
-    subline: "Delivery economics that would be a Brillio Differentiator.",
-    vo: "Twenty-one days from problem to working prototype. That's delivery economics that would be a Brillio Differentiator.",
+    subline: "Delivery economics that would be a Brillio differentiator today.",
+    vo: "Twenty-one days from problem to working prototype. That's delivery economics that would be a Brillio differentiator today.",
     animFloor: 300,
     tail: 1.6,
+  },
+  {
+    // The film has just proved one delivery. This is the only forward-looking
+    // beat in it: what the same orchestration does across a whole product
+    // life, with today's five movements shown as one segment of a longer arc.
+    id: "seg7b",
+    eyebrow: "05 · What comes next",
+    headline: "Imagine the possibilities.",
+    subline: "Today, AI-native solutions to complex business problems. Next, the full product lifecycle.",
+    vo: "Today, Aura orchestrates the design of AI-native solutions to complex business problems. Imagine extending it to deliver the full product lifecycle.",
+    // The arc has to draw, nine stages have to land and the key has to
+    // register; the narration is short, so the scene is sized by the build.
+    animFloor: 450,
+    tail: 1.8,
   },
   {
     id: "seg10",
