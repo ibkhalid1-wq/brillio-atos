@@ -35,11 +35,15 @@ const IDS = SRC_TS.match(/id: "(seg\d+)"/g).map((m) => m.slice(5, -1));
  */
 const TARGET_WPM = 152;
 const WORDS = {};
+/** Per-scene overrides, for lines that need more room than the average. */
+const RATE = {};
 for (const block of SRC_TS.split(/\bid: "/).slice(1)) {
   const id = block.slice(0, block.indexOf('"'));
   if (!/^seg\d+$/.test(id)) continue;
   const vo = block.match(/\n\s+vo:\s*\n?\s*"((?:[^"\\]|\\.)*)"/);
   if (vo) WORDS[id] = vo[1].replace(/…/g, " ").split(/\s+/).filter(Boolean).length;
+  const rate = block.match(/\n\s+wpm:\s*(\d+)/);
+  if (rate) RATE[id] = +rate[1];
 }
 
 const ffmpeg = (args) =>
@@ -99,13 +103,17 @@ for (const id of IDS) {
   if (WORDS[id]) {
     const probe = readWav(tmp);
     const wpm = WORDS[id] / (probe.samples.length / probe.rate / 60);
-    const tempo = Math.max(0.88, Math.min(1.12, TARGET_WPM / wpm));
+    const target = RATE[id] ?? TARGET_WPM;
+    const tempo = Math.max(0.88, Math.min(1.12, target / wpm));
     if (Math.abs(tempo - 1) > 0.01) {
       const paced = join(OUT_DIR, `.${id}.pace.wav`);
       ffmpeg(["-i", tmp, "-filter:a", `atempo=${tempo.toFixed(4)}`, "-c:a", "pcm_s16le", paced]);
       rmSync(tmp);
       renameSync(paced, tmp);
-      tempoNote = `, ${wpm.toFixed(0)}→${TARGET_WPM}wpm`;
+      // Report what was achieved, not what was asked for: the clamp means a
+      // very fast or very slow take does not land on target, and saying it
+      // did would hide the one thing worth knowing.
+      tempoNote = `, ${wpm.toFixed(0)}→${(wpm * tempo).toFixed(0)}wpm`;
     }
   }
 

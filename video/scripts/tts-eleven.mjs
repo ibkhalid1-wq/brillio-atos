@@ -47,7 +47,14 @@ const VOICE_SETTINGS = {
  * model treats an ellipsis as ordinary punctuation and hurries through it,
  * so make the pause explicit.
  */
-const withPauses = (text) => text.replace(/\s*…\s*/g, ' <break time="0.8s" /> ');
+const withPauses = (text) =>
+  // One ellipsis is a beat; repeat it for a longer one. The model treats an
+  // ellipsis as ordinary punctuation and hurries through it, so the pause has
+  // to be stated rather than implied.
+  text.replace(/\s*(…(?:\s*…)*)\s*/g, (_, run) => {
+    const n = (run.match(/…/g) || []).length;
+    return ` <break time="${(0.7 + 0.55 * (n - 1)).toFixed(2)}s" /> `;
+  });
 
 /**
  * Words the model gets wrong, pinned in CMU Arpabet. English-only models
@@ -57,15 +64,19 @@ const withPauses = (text) => text.replace(/\s*…\s*/g, ' <break time="0.8s" /> 
  *   two      — was landing somewhere between "two" and "tuh"
  *   Aura     — AW-ruh, not A-U-R-A and not "ow-ra"
  *   proposes — pruh-POH-ziz, with a voiced final s
+ *   live     — as in "go-live": LYVE, not the verb "to live"
  */
 const SAY = {
   two: "T UW1",
   aura: "AO1 R AH0",
   proposes: "P R AH0 P OW1 Z AH0 Z",
+  live: "L AY1 V",
+  autonomously: "AO0 T AA1 N AH0 M AH0 S L IY0",
+  autonomous: "AO0 T AA1 N AH0 M AH0 S",
 };
 
 const withPronunciation = (text) =>
-  text.replace(/\b(two|aura|proposes)\b/gi, (word) => {
+  text.replace(/\b(two|aura|proposes|live|autonomously|autonomous)\b/gi, (word) => {
     const ph = SAY[word.toLowerCase()];
     return `<phoneme alphabet="cmu-arpabet" ph="${ph}">${word}</phoneme>`;
   });
@@ -135,6 +146,15 @@ const pick = () => {
     );
   return cloned[0];
 };
+
+/**
+ * Per-take speed override. The levelling pass in prepare-vo fixes the average
+ * rate, but not a take that drags internally — long gaps between words that
+ * average out fine. Regenerating that one at a livelier base speed fixes the
+ * prosody at source.
+ */
+const speedArg = arg("--speed");
+if (speedArg) VOICE_SETTINGS.speed = Number(speedArg);
 
 const voice = pick();
 console.log(`Voice: ${voice.name} (${voice.voice_id})`);
