@@ -5,6 +5,8 @@
   "scripts": {
     "studio": "remotion studio src/index.ts",
     "vo": "node scripts/prepare-vo.mjs",
+    "vo:eleven": "node scripts/tts-eleven.mjs",
+    "vo:mine": "rm -rf vo-you && cp -R vo-recorded-ibrahim vo-you && node -e \"require('fs').copyFileSync('vo-recorded-ibrahim/durations.json','src/vo-durations.json')\"",
     "render": "remotion render src/index.ts BoardCut90 out/aura-board-90.mp4 --overwrite --concurrency=6",
     "mix": "node scripts/mix.mjs --out out/aura-board.mp4",
     "mix:music": "node scripts/mix.mjs --music --out out/aura-board.mp4",

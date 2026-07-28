@@ -107,7 +107,11 @@ for (const id of IDS) {
   blocks.sort((x, y) => x - y);
   const active = blocks.slice(Math.floor(blocks.length * 0.45));
   const rms = Math.sqrt(active.reduce((x, y) => x + y, 0) / active.length) / 32768;
-  const peak = Math.max(...seg.map(Math.abs)) / 32768;
+  // Loop, not spread: a minute of audio is millions of samples and the
+  // argument list would overflow the stack.
+  let peakRaw = 1;
+  for (let i = 0; i < seg.length; i++) { const v = seg[i] < 0 ? -seg[i] : seg[i]; if (v > peakRaw) peakRaw = v; }
+  const peak = peakRaw / 32768;
   const gain = Math.min(10 ** (TARGET_RMS_DB / 20) / rms, 0.97 / peak);
 
   const out = new Int16Array(seg.length);

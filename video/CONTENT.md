@@ -37,14 +37,48 @@ npm run build:film
 
 ### Change a narration line
 1. Edit the scene's `vo` in `src/content.ts` (keep it as the record of truth).
-2. Re-record just that segment. Name the file so it contains the scene id
-   — `seg4`, `Seg 4 - people.m4a`, anything that matches.
-3. Drop it in `vo-raw/` and run:
+2. Get audio for it, either way:
+```bash
+# your cloned voice, regenerated in seconds
+ELEVENLABS_API_KEY=sk_… npm run vo:eleven -- --only seg4
+
+# or re-record it yourself — any format, filename containing the scene id
+#   "Seg 4 - people.m4a" → vo-raw/
+```
+3. Then:
 ```bash
 npm run vo          # trims, level-matches, measures
 npm run build:film  # re-times the film to the new length and mixes
 ```
-Only the segment you re-recorded changes; the rest are untouched.
+Only the segment you changed moves; the rest are untouched.
+
+### Which voice the film is using
+Both narrations live side by side and the film is built from whichever is
+in `vo-you/`:
+
+| | source | how to select |
+|---|---|---|
+| Cloned | ElevenLabs "Ib Voice" | `npm run vo:eleven` then `npm run vo` |
+| Recorded | your own takes, kept in `vo-recorded-ibrahim/` | `npm run vo:mine` |
+
+Follow either with `npm run build:film`.
+
+### Keeping the accent American
+The first cloned pass drifted British. The cause was the model, not the
+clone: `eleven_multilingual_v2` shares one phoneme space across 29
+languages and pulls a cloned voice toward that average.
+`scripts/tts-eleven.mjs` pins it down:
+
+- **`eleven_turbo_v2`** — English-only, so there is no foreign phonetics to
+  drift into. This is the fix that matters.
+- **`similarity_boost` 0.97** — holds timbre and vowel colour to your samples.
+- **`style` 0** — style exaggeration re-introduces the model's average voice.
+- **`stability` 0.38** — low enough to follow your prosody rather than the
+  model's.
+
+Spelling counts too: British forms in the copy cue British pronunciation, so
+the content library uses *fulfillment* and *judgment*, not *fulfilment* and
+*judgement*. Watch for that when you add a line.
 
 ### Change the pacing
 - `tail` — seconds of breath after a line before the cut. Raise it for a

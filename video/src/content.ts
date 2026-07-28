@@ -107,8 +107,8 @@ export const SCENES: Scene[] = [
     id: "seg6",
     eyebrow: "04 · Governed by design",
     headline: "Autonomous — with a human in the loop, end to end.",
-    subline: "Machine proposes. Humans decide. Every judgement recorded as evidence.",
-    vo: "And control is the architecture. The machine proposes — the business decides. Every phase gates on a demonstration. Every judgement lands on a permanent record. Autonomy you can audit.",
+    subline: "Machine proposes. Humans decide. Every judgment recorded as evidence.",
+    vo: "And control is the architecture. The machine proposes — the business decides. Every phase gates on a demonstration. Every judgment lands on a permanent record. Autonomy you can audit.",
     animFloor: 380,
     tail: 1.4,
   },
@@ -124,7 +124,7 @@ export const SCENES: Scene[] = [
     headline: "One method. Every industry.",
     subline:
       "Different industries. Different problems. The same discipline — start from the business.",
-    vo: "Patient referrals. Loan origination. Order fulfilment. Different problems — the same discipline: start from the business.",
+    vo: "Patient referrals. Loan origination. Order fulfillment. Different problems — the same discipline: start from the business.",
     animFloor: 200,
     tail: 1.4,
   },
@@ -188,7 +188,7 @@ export const JOURNEY = [
 ];
 export const GOVERNANCE_CHIPS = [
   "Every phase gates on a demonstration",
-  "Every judgement on a permanent record",
+  "Every judgment on a permanent record",
   "“Working” defined before a line of code",
 ];
 
@@ -216,7 +216,7 @@ export const DOMAINS = [
     flow: ["Apply", "Underwrite", "Approve", "Fund", "Service"],
   },
   {
-    industry: "Supply Chain", standard: "GS1", programme: "Order fulfilment",
+    industry: "Supply Chain", standard: "GS1", programme: "Order fulfillment",
     nodes: [[120,40,"Order"],[340,40,"Shipment"],[120,130,"SKU"],[340,130,"Carrier"],[230,210,"Warehouse"]] as Array<[number,number,string]>,
     edges: [[0,1],[0,2],[1,3],[2,4],[1,4]] as Array<[number,number]>,
     flow: ["Order", "Pick", "Pack", "Ship", "Deliver"],
