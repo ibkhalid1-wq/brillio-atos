@@ -637,20 +637,19 @@ export const SceneArc: React.FC = () => {
 
         {/* Only this layer scales, so the type above stays put while the
             diagram beneath it pulls back. */}
-        <div style={{ transform: `scale(${pull})`, transformOrigin: "50% 50%" }}>
+        <div style={{ transform: `scale(${pull})`, transformOrigin: "21% 50%" }}>
           <div style={{ position: "relative" }}>
             <div
               style={{
-                position: "absolute", left: "50%", top: "50%",
-                height: 2, width: `${lineP * 100}%`, transform: "translate(-50%, -50%)",
+                position: "absolute", left: 0, top: "50%",
+                height: 2, width: `${lineP * 100}%`, transform: "translateY(-50%)",
                 background: `linear-gradient(90deg, ${FAINT}, ${ELECTRIC} 30%, ${ELECTRIC} 70%, ${FAINT})`,
                 opacity: 0.7,
               }}
             />
             <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14 }}>
-              {LIFECYCLE.before.map((l, i) => stage(l, false, b(13) + i * b(0.6)))}
               {LIFECYCLE.today.map((l, i) => stage(l, true, b(1) + i * b(0.9)))}
-              {LIFECYCLE.after.map((l, i) => stage(l, false, b(14) + i * b(0.6)))}
+              {LIFECYCLE.after.map((l, i) => stage(l, false, b(13) + i * b(0.6)))}
             </div>
           </div>
         </div>

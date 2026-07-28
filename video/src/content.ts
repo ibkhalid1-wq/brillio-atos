@@ -97,7 +97,7 @@ export const SCENES: Scene[] = [
     headline: "AURA derived Laila from evidence.",
     subline: "Meet AURA — Brillio's AI-native delivery methodology, and the system that runs it.",
     accents: ["Laila", "evidence"],
-    vo: "Meet Aura — Brillio's AI-native delivery methodology, and the system that runs it … Laila, a sales CRM, was derived from evidence and built by Aura. A working prototype, in twenty-one days.",
+    vo: "Meet Aura — Brillio's AI-native delivery methodology, and the system that runs it … Laila, a sales CRM prototype, was derived from evidence and built by Aura.",
     animFloor: 360,
     tail: 1.4,
     // The mark draws, then the spine assembles, and only then does the name
@@ -120,7 +120,7 @@ export const SCENES: Scene[] = [
     id: "seg5",
     eyebrow: "02 · In the business's own language — deterministically",
     headline: "Same mandate. Same model. Every time.",
-    vo: "From those voices, Aura draws the business in its own language — every entity grounded in the industry's standards. That model isn't a document. It's what the working system is generated from … Run it twice: the same model, every time.",
+    vo: "From those voices, Aura draws the business in its own language, deterministically — every entity grounded in the industry's standards. That model isn't a document. It's what the working system is generated from … Run it twice: the same model, every time.",
     animFloor: 380,
     tail: 1.4,
   },
@@ -185,6 +185,10 @@ export const SCENES: Scene[] = [
     id: "seg11",
     headline: "The team that made Laila happen.",
     vo: "Meet the team that worked behind the scenes to make it all happen.",
+    // Generated near its target so the levelling pass barely touches it:
+    // stretching this line 12% to reach the film rate produced a drawl that
+    // reads as slow even though it is the fastest line in the cut.
+    wpm: 180,
     // A crawl has to be readable, and there are twenty names plus four
     // department headings to get past the frame. This is the one scene whose
     // length is set by how long people need, not by the narration.
@@ -306,9 +310,8 @@ export const JOURNEY = [
  * possibility being described rather than anything that has been run.
  */
 export const LIFECYCLE = {
-  before: ["Strategy", "Roadmap"],
-  today: ["Frame", "Listen", "Prototype", "Ship", "Evolve"],
-  after: ["Adoption", "Scale"],
+  today: ["Frame", "Listen", "Prototype"],
+  after: ["Ship", "Evolve", "Adoption", "Scale"],
 };
 
 export const GOVERNANCE_CHIPS = [
