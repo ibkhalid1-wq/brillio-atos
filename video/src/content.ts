@@ -87,8 +87,8 @@ export const SCENES: Scene[] = [
     id: "seg2",
     headline: "The failure was never AI.",
     subline:
-      "An agent is only as good as its model of the business — and that model lives in heads, decks, and disagreements.",
-    vo: "The failure was never AI. An agent is only as good as its model of the business — and that model lives in heads, decks, and disagreements.",
+      "An agent is only as good as its model of the business — and that model was never written down. No two people describe it the same way.",
+    vo: "The failure was never AI. An agent is only as good as its model of the business — and that model was never written down. No two people describe it the same way.",
     animFloor: 220,
     tail: 1.4,
   },
