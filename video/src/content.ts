@@ -360,6 +360,16 @@ export const ONTOLOGY_SPHERE: string[] = [
   "Partner", "Signal", "Signal Action", "Document", "Event",
 ];
 
+/** The same 32 nodes for the closing ring, but only eight named. At that size
+ * the centre has to read as the OBJECT the board already met in the map scene,
+ * not as text — 32 labels at 11px is a grey blob. Density carries the
+ * recognition; the eight names carry the vocabulary. */
+const RING_NAMED = ["Lead", "Opportunity", "Contract", "SOW", "Engagement", "Invoice", "Delivery Health", "Forecast Snapshot"];
+export const ONTOLOGY_RING: string[] = Array.from(
+  { length: 32 },
+  (_, i) => (i % 4 === 0 ? RING_NAMED[i / 4] ?? "" : ""),
+);
+
 /**
  * The twenty-four the core stands for, in the app's own order — kept so the
  * claim "every node is real" is checkable rather than asserted.

@@ -11,7 +11,7 @@ import { ELECTRIC, ELECTRIC_TEXT, FAINT, FONT, INK, INK_2, MUTED, T } from "./to
 import { AuraWord, Chip, DrawnLine, Eyebrow, Glow, Ontology3D, Plate, Rise, ScreenInset, Typed } from "./ui";
 import {
   b, copy, CONTRADICTION, DIAGNOSIS_POLES, DOMAINS, GOVERNANCE_CHIPS, GRAVEYARD,
-  JOURNEY, LIFECYCLE, NUMBERS, ONTOLOGY_SPHERE, PROVISIONAL_LABELS, RECEIPTS, TRANSCRIPT, SPINE, STAKEHOLDERS, STANDARDS, TEAM,
+  JOURNEY, LIFECYCLE, NUMBERS, ONTOLOGY_RING, ONTOLOGY_SPHERE, PROVISIONAL_LABELS, RECEIPTS, TRANSCRIPT, SPINE, STAKEHOLDERS, STANDARDS, TEAM,
 } from "./content";
 
 /**
@@ -609,33 +609,53 @@ export const SceneNumbers: React.FC = () => {
 export const SceneArc: React.FC = () => {
   const frame = useCurrentFrame();
 
-  /* The pull-back. The spine the board learned in scene 3 opens oversized and
-     alone, filling the frame; the camera then pulls back until it is the
-     middle third of a much longer line, and the stages either side fade up on
-     the extensions. One continuous move, no cut — the same grammar as the
-     receipt in scene 6, so the film keeps one visual language for "there is
-     more here than you are currently seeing". */
-  const pull = interpolate(frame, [b(4), b(13)], [1.62, 1], EASE);
-  const lineP = interpolate(frame, [b(10), b(18)], [0, 1], EASE);
-  const outer = interpolate(frame, [b(13), b(17)], [0, 1], EASE);
+  /* The map is the constant; the phases are what you attach to it.
+   *
+   * The earlier version pulled back along a LINE, which said "more stages" —
+   * true, but it is the weaker claim and it argued for a longer project. This
+   * one puts the ontology the film has just spent two minutes proving at the
+   * centre, unchanged, and completes a RING of phases around it. What the
+   * board should take away is that the asset is the model, and delivery
+   * phases are things you hang off it — so extending to the full lifecycle
+   * costs nothing already banked.
+   *
+   * Today's three arrive first and leave the ring visibly open. The four that
+   * follow close it. An incomplete circle becoming a complete one is the
+   * whole argument, made without a caption.
+   */
+  const PHASES = [...LIFECYCLE.today, ...LIFECYCLE.after];
+  const R = 322;
+  const TODAY_N = LIFECYCLE.today.length;
 
-  const stage = (label: string, lit: boolean, at: number) => {
+  // The ring draws in two moves: today's arc, then the closure.
+  const arcToday = interpolate(frame, [b(2), b(7)], [0, TODAY_N / PHASES.length], EASE);
+  const arcAll = interpolate(frame, [b(13), b(20)], [0, 1 - TODAY_N / PHASES.length], EASE);
+  const circ = 2 * Math.PI * R;
+  const drawn = (arcToday + arcAll) * circ;
+
+  const pill = (label: string, i: number, lit: boolean, at: number) => {
     const p = interpolate(frame, [at, at + b(1.5)], [0, 1], EASE);
+    // Start at twelve o'clock and go clockwise, so the ring reads the way a
+    // lifecycle diagram is expected to.
+    const a = (-90 + (i * 360) / PHASES.length) * (Math.PI / 180);
     return (
       <div
         key={label}
         style={{
-          opacity: p * (lit ? 1 : outer * 0.5),
-          transform: `translateY(${(1 - p) * 14}px)`,
+          position: "absolute",
+          left: `calc(50% + ${Math.cos(a) * R}px)`,
+          top: `calc(50% + ${Math.sin(a) * R}px)`,
+          transform: `translate(-50%, -50%) scale(${0.86 + p * 0.14})`,
+          opacity: p,
           fontFamily: FONT,
-          fontSize: lit ? 26 : 22,
+          fontSize: lit ? 25 : 22,
           fontWeight: lit ? 750 : 600,
           color: "#fff",
           whiteSpace: "nowrap",
-          padding: lit ? "16px 26px" : "13px 22px",
+          padding: lit ? "14px 26px" : "12px 22px",
           borderRadius: 99,
           border: lit ? `1.5px solid ${ELECTRIC}` : `1.5px dashed ${FAINT}`,
-          background: lit ? "rgba(110,91,255,0.18)" : "rgba(255,255,255,0.03)",
+          background: lit ? "rgba(110,91,255,0.20)" : "rgba(12,9,32,0.82)",
         }}
       >
         {label}
@@ -645,7 +665,7 @@ export const SceneArc: React.FC = () => {
 
   return (
     <Ground>
-      <Glow size={1100} x="50%" y="52%" opacity={0.26} />
+      <Glow size={980} x="50%" y="54%" opacity={0.24} />
       <div style={{ width: 1720, textAlign: "center" }}>
         <Rise start={0}>
           <Eyebrow>{copy("seg7b").eyebrow}</Eyebrow>
@@ -657,29 +677,37 @@ export const SceneArc: React.FC = () => {
           </div>
         </Rise>
 
-        <div style={{ height: 92 }} />
+        <div style={{ height: 30 }} />
 
-        {/* Only this layer scales, so the type above stays put while the
-            diagram beneath it pulls back. */}
-        <div style={{ transform: `scale(${pull})`, transformOrigin: "21% 50%" }}>
-          <div style={{ position: "relative" }}>
-            <div
-              style={{
-                position: "absolute", left: 0, top: "50%",
-                height: 2, width: `${lineP * 100}%`, transform: "translateY(-50%)",
-                background: `linear-gradient(90deg, ${FAINT}, ${ELECTRIC} 30%, ${ELECTRIC} 70%, ${FAINT})`,
-                opacity: 0.7,
-              }}
+        <div style={{ position: "relative", height: 760 }}>
+          {/* The ring, drawn from twelve o'clock clockwise. */}
+          <svg
+            width={R * 2 + 60} height={R * 2 + 60}
+            viewBox={`0 0 ${R * 2 + 60} ${R * 2 + 60}`}
+            style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -50%) rotate(-90deg)" }}
+          >
+            <circle cx={R + 30} cy={R + 30} r={R} fill="none" stroke={FAINT} strokeWidth={1.5} opacity={0.35} />
+            <circle
+              cx={R + 30} cy={R + 30} r={R} fill="none" stroke={ELECTRIC} strokeWidth={3}
+              strokeLinecap="round" strokeDasharray={`${drawn} ${circ}`} opacity={0.85}
             />
-            <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14 }}>
-              {LIFECYCLE.today.map((l, i) => stage(l, true, b(1) + i * b(0.9)))}
-              {LIFECYCLE.after.map((l, i) => stage(l, false, b(13) + i * b(0.6)))}
-            </div>
+          </svg>
+
+          {/* The constant at the centre — the same object from the map scene,
+              unchanged while everything around it multiplies. */}
+          <div style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -50%)" }}>
+            <Ontology3D
+              labels={ONTOLOGY_RING} start={b(1)} period={900}
+              radius={150} width={560} height={460} fontSize={15}
+            />
           </div>
+
+          {PHASES.map((label, i) =>
+            pill(label, i, i < TODAY_N, i < TODAY_N ? b(3) + i * b(0.9) : b(14) + (i - TODAY_N) * b(0.7)),
+          )}
         </div>
 
-        <div style={{ height: 54 }} />
-        <Rise start={b(19)}>
+        <Rise start={b(21)}>
           <div style={{ display: "flex", justifyContent: "center", gap: 44, fontFamily: FONT, fontSize: 19, fontWeight: 800, letterSpacing: ".2em" }}>
             <span style={{ color: ELECTRIC_TEXT }}>■ TODAY · AI-NATIVE SOLUTIONS</span>
             <span style={{ color: MUTED }}>□ NEXT · THE FULL LIFECYCLE</span>
