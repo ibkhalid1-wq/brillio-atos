@@ -159,7 +159,7 @@ export const SCENES: Scene[] = [
   },
   {
     id: "seg7",
-    vo: "One real business problem. Sixteen stakeholders heard. Thirty-two entities across ten business areas. A working prototype in twenty-one days, validated by the people who named the problem.",
+    vo: "One real business problem. Ten stakeholders heard. Thirty-two entities across ten business areas. A working prototype in twenty-one days, validated by the people who named the problem.",
     animFloor: 360,
     tail: 1.4,
   },
@@ -392,7 +392,7 @@ export const GOVERNANCE_CHIPS = [
 /** Scene 7 — the proof. Last entry rolls 0→21 as it lands. */
 export const NUMBERS = [
   "1 mandate",
-  "16 stakeholders heard",
+  "10 stakeholders heard",
   "32 entities",
   "10 business areas",
   "21 days → working Sales prototype in Laila",
