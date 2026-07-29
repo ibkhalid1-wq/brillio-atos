@@ -97,7 +97,7 @@ export const SCENES: Scene[] = [
     headline: "AURA derived Laila from evidence.",
     subline: "Meet AURA — Brillio's AI-native delivery methodology, and the system that runs it.",
     accents: ["Laila", "evidence"],
-    vo: "Meet Aura — Brillio's AI-native delivery methodology, and the system that runs it … Laila, a sales CRM prototype, was derived from evidence and built by Aura.",
+    vo: "Meet Aura — Brillio's AI-native delivery methodology, and the system that runs it … Laila, a functional CRM prototype, was derived from evidence and built by Aura.",
     animFloor: 360,
     tail: 1.4,
     // The mark draws, then the spine assembles, and only then does the name
