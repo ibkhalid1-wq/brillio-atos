@@ -859,7 +859,7 @@ export const SceneTeam: React.FC = () => {
      rather than on an empty screen. */
   const TITLE_H = 240;
   const GROUP_H = 116;
-  const ROW_H = 104;
+  const ROW_H = 76;
   const GAP = 150;
   const LOCKUP_H = 150;
   const people = TEAM.reduce((n, g) => n + g.people.length, 0);
