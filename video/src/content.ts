@@ -136,7 +136,7 @@ export const SCENES: Scene[] = [
     headline: "AURA is designed to engage with stakeholders autonomously.",
     subline:
       "Every gap becomes a plain-language question — routed on a no-login link, answered in their own words, folded back in.",
-    vo: "From there it engages your stakeholders autonomously — every gap a plain-language question, every disagreement a finding, not noise. The provisional becomes yours.",
+    vo: "From there it engages your stakeholders autonomously — writing the agenda from its own gaps, drafting the invitation, transcribing the conversation, folding every answer back into the model. Every disagreement a finding, not noise. The provisional becomes yours.",
     animFloor: 360,
     tail: 1.4,
   },
