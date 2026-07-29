@@ -425,7 +425,7 @@ export const SceneFabric: React.FC = () => {
                   worried that rotation broke the proof — it does not. The claim
                   is run 1 == run 2 at a given frame, not frame N == frame N+1. */}
               <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <Ontology3D labels={ONTOLOGY_SPHERE} start={b(4)} period={1100} radius={196} width={740} height={420} />
+                <Ontology3D labels={ONTOLOGY_SPHERE} start={b(4)} period={720} radius={196} width={740} height={420} />
               </div>
             </div>
           ))}
