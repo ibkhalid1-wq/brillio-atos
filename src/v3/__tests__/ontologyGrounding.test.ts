@@ -27,7 +27,7 @@ const js = ts.transpileModule(
   `return { reconcileVotedOntology, resolveProvisionalPacks, ontologyVocabularySteering, clientVocabularyPack, ontologyNameKey, ontologyStandardKey, ONTOLOGY_VOTE_N, ONTOLOGY_VOTE_THRESHOLD, ONTOLOGY_MENU_VERBS };`,
   { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.None } },
 ).outputText;
-type ResolvedPack = { vocabulary: string; entities: Array<{ name: string; uri: string; definition?: string; aliases: string[]; core?: boolean }>; relations: Array<{ from: string; verb: string; to: string }> };
+type ResolvedPack = { vocabulary: string; entities: Array<{ name: string; uri: string; definition?: string; aliases: string[]; core?: boolean; areaHints?: string[] }>; relations: Array<{ from: string; verb: string; to: string }> };
 const sandbox = new Function(js)() as {
   reconcileVotedOntology: (drafts: Array<Record<string, unknown>>, opts: Record<string, unknown>) => Record<string, unknown>;
   resolveProvisionalPacks: (steering: string) => ResolvedPack[];
@@ -58,7 +58,7 @@ const ALL_PACKS = [...new Map(
 const MANDATE = "Accelerate clinical trial recruitment through an AI-powered CRM that improves patient identification, engagement, and enrollment, reducing time-to-enrollment by 30% and increasing enrollment conversion by 20%.";
 
 // Grounding facts, built exactly as the runner builds them.
-function groundingFor(resolved: ResolvedPack[], mandate: string, sponsor = "the sponsor") {
+function groundingFor(resolved: ResolvedPack[], mandate: string, sponsor = "the sponsor", programAreas?: string[]) {
   const allowedUris = new Set<string>();
   const packClasses = new Map<string, string>();
   const uriToClass = new Map<string, string>();
@@ -78,12 +78,14 @@ function groundingFor(resolved: ResolvedPack[], mandate: string, sponsor = "the 
   const coreClasses = new Set<string>();
   for (const entity of resolved[0].entities) if (entity.core) coreClasses.add(entity.name);
   const packEntityByClass = new Map<string, { name: string; uri: string; definition: string; vocabulary: string }>();
+  const packAreaHintsByClass = new Map<string, string[]>();
   for (const pack of resolved) {
     for (const entity of pack.entities) {
       if (!packEntityByClass.has(entity.name)) packEntityByClass.set(entity.name, { name: entity.name, uri: entity.uri, definition: String(entity.definition ?? ""), vocabulary: pack.vocabulary });
+      if (entity.areaHints?.length && !packAreaHintsByClass.has(entity.name)) packAreaHintsByClass.set(entity.name, entity.areaHints);
     }
   }
-  return { threshold: 3, total: 5, mandate, sponsor, programName: "test", allowedUris, packClasses, uriToClass, packAssociations, coreClasses, packEntityByClass };
+  return { threshold: 3, total: 5, mandate, sponsor, programName: "test", allowedUris, packClasses, uriToClass, packAssociations, coreClasses, packEntityByClass, packAreaHintsByClass, programAreas };
 }
 // The REAL clinical steering (FHIR with the research module + schema.org fallback).
 const packs = packsFor("Life Sciences & Pharma", "Clinical");
@@ -498,5 +500,104 @@ describe("prompt ↔ reconciler lockstep", () => {
     expect(EDGE).toContain("standardBackbone: backbonePacks.map");
     expect(EDGE).toContain("const clientBackbonePack = clientVocabularyPack(inner)");
     expect(EDGE).toContain('The input context carries "standardBackbone"');
+  });
+});
+
+/**
+ * The commerce backbone — schema.org as PRIMARY vs schema.org as FALLBACK.
+ *
+ * A nine-area CRM programme came back with two entities (Customer,
+ * Organization) and nothing else. Not a model failure: schema.org shipped two
+ * core classes, and extended classes are demoted to gaps by policy however many
+ * drafts vote for them — so two was the ceiling, not the outcome. These tests
+ * pin the wider core for schema-primary steering AND the containment that keeps
+ * every specialist industry exactly as it was.
+ */
+describe("commerce backbone (schema.org primary)", () => {
+  const COMMERCE = ["Person", "Organization", "Product", "Service", "Order", "Invoice", "Offer"];
+  // Every industry whose steering names no specialist vocabulary first.
+  const SCHEMA_PRIMARY: Array<[string, string?]> = [
+    ["Technology & Software"], ["Professional Services"], ["Education"],
+    ["Travel & Hospitality"], ["Other"], ["Life Sciences & Pharma", "Commercial"],
+  ];
+
+  it.each(SCHEMA_PRIMARY)("%s %s carries the commercial backbone as core", (industry, segment) => {
+    const primary = packsFor(industry, segment)[0];
+    expect(primary.vocabulary).toBe("schema.org");
+    expect(coresOf(primary).sort()).toEqual([...COMMERCE].sort());
+  });
+
+  it("an industry with no dedicated vocabulary still gets the backbone", () => {
+    // The steering table's fallthrough branch, not an "other" table entry.
+    expect(coresOf(packsFor("Underwater Basket Weaving")[0]).sort()).toEqual([...COMMERCE].sort());
+  });
+
+  // ── Containment: the fallback pack must NOT widen. ──
+  const SPECIALIST: Array<[string, string?]> = [
+    ["Healthcare"], ["Banking"], ["Insurance"], ["Retail & Consumer Goods"],
+    ["Energy & Utilities"], ["Telecommunications"], ["Manufacturing"],
+    ["Media & Entertainment"], ["Public Sector & Government"],
+  ];
+  it.each(SPECIALIST)("%s %s keeps schema.org as a two-core fallback", (industry, segment) => {
+    const resolved = packsFor(industry, segment);
+    expect(resolved[0].vocabulary).not.toBe("schema.org");
+    const fallback = resolved.find((p) => p.vocabulary === "schema.org");
+    expect(fallback && coresOf(fallback).sort()).toEqual(["Organization", "Person"]);
+  });
+
+  it("commerce and schema differ ONLY in core flags — same classes, URIs, relations", () => {
+    const primary = packsFor("Technology & Software")[0];
+    const fallback = packsFor("Healthcare").find((p) => p.vocabulary === "schema.org")!;
+    expect(primary.entities.map((e) => `${e.name}|${e.uri}`)).toEqual(fallback.entities.map((e) => `${e.name}|${e.uri}`));
+    expect(primary.relations).toEqual(fallback.relations);
+  });
+
+  // ── The reported symptom, end to end. ──
+  const CRM_MANDATE = "Replace the spreadsheet sales process with a CRM that gives revenue leadership one view of the pipeline.";
+  const AREAS = ["Sales", "Marketing", "Delivery", "Finance", "Partner Alliances", "Product Management"];
+  /** Two drafts' worth of agreement on the two obvious nouns — the exact input
+   * that used to yield a two-entity ontology. */
+  const thinDrafts = () => Array.from({ length: 5 }, () => ({
+    entities: [
+      { name: "Customer", definition: "A buyer.", area: "Sales", attributes: [], systemOfRecord: null, aliases: [], evidence: "from the sponsor mandate — to confirm" },
+      { name: "Organization", definition: "A company.", area: "Sales", attributes: [], systemOfRecord: null, aliases: [], evidence: "from the sponsor mandate — to confirm" },
+    ],
+    relations: [], events: [],
+    standardAlignment: [{ entity: "Customer", standard: "https://schema.org/Person", vocabulary: "schema.org", relation: "skos:closeMatch", confidence: 0.8 }],
+    gaps: [],
+  }));
+
+  it("lifts the two-entity ceiling: the backbone is asserted from the pack", () => {
+    const opts = groundingFor(packsFor("Technology & Software"), CRM_MANDATE, "the sponsor", AREAS);
+    const got = names(sandbox.reconcileVotedOntology(thinDrafts(), opts));
+    // Drafts that agreed on two nouns; the pack supplies the rest. ("Customer"
+    // reconciles to its pack class Person — this mandate never says the word,
+    // so the verbatim-naming rule does not hold the draft's label.)
+    expect([...got].sort()).toEqual([...COMMERCE].sort());
+  });
+
+  it("places synthesised cores onto the kit's declared areas, not General", () => {
+    const opts = groundingFor(packsFor("Technology & Software"), CRM_MANDATE, "the sponsor", AREAS);
+    const doc = sandbox.reconcileVotedOntology(thinDrafts(), opts);
+    const areaOf = (n: string) => (doc.entities as Array<{ name: string; area: string }>).find((e) => e.name === n)?.area;
+    expect(areaOf("Invoice")).toBe("Finance");
+    expect(areaOf("Order")).toBe("Sales");
+    expect(areaOf("Service")).toBe("Delivery");
+    // More than one area covered is the whole point — the Listen triangle's
+    // kit and atlas guidance both key off these.
+    const areas = new Set((doc.entities as Array<{ area: string }>).map((e) => e.area));
+    expect(areas.size).toBeGreaterThan(1);
+  });
+
+  it("falls back to General when the programme declared no areas", () => {
+    const opts = groundingFor(packsFor("Technology & Software"), CRM_MANDATE);
+    const doc = sandbox.reconcileVotedOntology(thinDrafts(), opts);
+    const invoice = (doc.entities as Array<{ name: string; area: string }>).find((e) => e.name === "Invoice");
+    expect(invoice?.area).toBe("General");
+  });
+
+  it("a clinical programme gains no commerce entities", () => {
+    const got = names(sandbox.reconcileVotedOntology([draft(BASE, CHAIN), draft(BASE, CHAIN), draft(BASE, CHAIN)], OPTS));
+    for (const cls of ["Order", "Invoice", "Offer", "Product"]) expect(got).not.toContain(cls);
   });
 });

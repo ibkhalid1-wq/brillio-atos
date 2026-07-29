@@ -203,6 +203,34 @@ export function kitAreaEntityGuidance(program: ProgramSummary): string | null {
   ].join("\n");
 }
 
+/** The ontology is the ROOT of the Listen triangle: the kit probes its
+ * entities and the atlas moves them, and BOTH of those guidances bail out
+ * when it is empty. So an ontology that covers one area silently starves the
+ * other two — which is why the coverage checklist has to exist here, at the
+ * source, and not only downstream.
+ *
+ * Unlike the kit and atlas guidance this deliberately does NOT depend on
+ * existing entities: the case it exists for is the provisional programme that
+ * has none yet. */
+export function ontologyAreaCoverageGuidance(program: ProgramSummary): string | null {
+  // Compound labels ("Marketing / Sales") are spanning tags, not areas to own.
+  const areas = listenCoverageAreas(program).map((area) => area.label).filter((label) => !label.includes("/"));
+  if (areas.length < 2) return null;
+  const { byArea } = entitiesByFrameArea(program);
+  const uncovered = areas.filter((area) => !byArea.has(area));
+  return [
+    "## AREA COVERAGE — the ontology owes an entity to EVERY area the Frame names",
+    `This programme's business areas are: ${areas.join(", ")}.`,
+    `Each one MUST carry at least one entity in the returned entities array, with that area's label VERBATIM in the entity's "area" field. An area whose interviews have not happened yet still gets its provisional entities — the backbone concepts the steered standard defines for that area's work, evidence "industry-standard practice — to confirm in interviews", plus a gap question naming whom to ask.`,
+    // The conservatism rules above are all one-directional (drop, omit,
+    // prefer a gap). Without this sentence they read as licence to return an
+    // area empty, which is how a nine-area programme ends up with two
+    // entities in one area.
+    "The conservative rules above decide WHICH noun is admissible for an area. They never license returning an area with no entity at all — an uncovered area is a failed ontology, not a cautious one.",
+    ...(uncovered.length ? ["", `Currently UNCOVERED and owed entities: ${uncovered.join(", ")}.`] : []),
+  ].join("\n");
+}
+
 /** The same per-area entity map for the ATLAS regenerator: an area's
  * workflows must move ITS entities — steps reference them verbatim, and a
  * noun outside the list is an open question, never an invention. */
