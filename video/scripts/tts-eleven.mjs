@@ -32,9 +32,19 @@ const MODEL = "eleven_turbo_v2";
 const VOICE_SETTINGS = {
   // Steady enough to sound like a presenter rather than a reader, but not so
   // steady that it flattens into the model's own cadence.
-  stability: 0.45,
-  similarity_boost: 0.97,
-  style: 0,
+  // Chosen by A/B on the real scene-2 line, not by theory. A clone held at
+  // 0.97 similarity reproduces its source's AVERAGE and loses the range, which
+  // is most of what reads as synthetic; letting it off that leash while adding
+  // style exaggeration gets prosody that follows the sentence instead of
+  // settling into one register.
+  //
+  // The cost is real: at this stability the model varies more between runs, so
+  // NEVER re-record a single segment. Regenerate all thirteen in one
+  // invocation or the film ends up with two voices in it — which is exactly
+  // what happened when takes were patched individually.
+  stability: 0.22,
+  similarity_boost: 0.82,
+  style: 0.38,
   use_speaker_boost: true,
   // The clone reads ~25% faster than Ibrahim does live, which is what made
   // the first cut feel rushed against the animation.
