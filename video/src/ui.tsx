@@ -142,8 +142,17 @@ export const Ontology3D: React.FC<{
 
   const spin = (frame / period) * Math.PI * 2;
   const tilt = -0.22; // a touch of downward look, so it reads as an object
+  // The map ASSEMBLES: the sphere expands from a knot to full radius as the
+  // nodes arrive. Fading nodes up at a fixed radius reads as a picture being
+  // revealed; growing it reads as a model being built, which is the claim.
+  const grow = interpolate(frame, [start, start + 52], [0.18, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+    easing: Easing.bezier(0.16, 1, 0.3, 1),
+  });
 
-  const pts = base.map((n, i) => {
+  const pts = base.map((b0, i) => {
+    const n = { label: b0.label, x: b0.x * grow, y: b0.y * grow, z: b0.z * grow };
     const x = n.x * Math.cos(spin) + n.z * Math.sin(spin);
     const z = -n.x * Math.sin(spin) + n.z * Math.cos(spin);
     const y = n.y * Math.cos(tilt) - z * Math.sin(tilt);
@@ -196,7 +205,7 @@ export const Ontology3D: React.FC<{
         const w = Math.max(120, p.label.length * fs * 0.56 + 26) * p.s;
         const h = 52 * p.s;
         // Depth cue: things further away are dimmer as well as smaller.
-        const dim = interpolate(p.s, [0.72, 1.24], [0.45, 1], {
+        const dim = interpolate(p.s, [0.72, 1.24], [0.62, 1], {
           extrapolateLeft: "clamp",
           extrapolateRight: "clamp",
         });
