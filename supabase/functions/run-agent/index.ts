@@ -6912,7 +6912,10 @@ PROVISIONAL_BACKBONE_PACKS.fiboInsurance = {
  * likely to have named its areas with rather than one canonical label. */
 const COMMERCE_CORE_AREA_HINTS: Record<string, string[]> = {
   Person: ["customer", "client", "sales", "account", "crm"],
-  Organization: ["account", "customer", "partner", "alliance", "sales"],
+  // Hint ORDER is precedence — first match wins. "sales" outranks "alliance"
+  // deliberately: a counterparty belongs with the people who sell to it, and a
+  // programme with an Alliances area would otherwise capture every Organization.
+  Organization: ["account", "customer", "sales", "partner", "alliance"],
   Product: ["product", "catalog", "catalogue", "offering", "portfolio"],
   Service: ["service", "delivery", "offering", "support", "operations"],
   Offer: ["sales", "pricing", "quote", "proposal", "deal", "pursuit", "marketing"],
