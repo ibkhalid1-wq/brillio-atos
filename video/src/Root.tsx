@@ -4,7 +4,8 @@ import {
   SceneAlignment,
   SceneClose,
   SceneDiagnosis,
-  SceneGrounding,
+  SceneFabric,
+  SceneGrounded,
   SceneIndustries,
   SceneJourney,
   SceneNumbers,
@@ -28,11 +29,14 @@ const BoardCut: React.FC = () => (
     <Sequence from={T.seg3.from} durationInFrames={T.seg3.dur}>
       <FadeScene dur={T.seg3.dur}><SceneReveal /></FadeScene>
     </Sequence>
+    <Sequence from={T["seg4a"].from} durationInFrames={T["seg4a"].dur}>
+      <FadeScene dur={T["seg4a"].dur}><SceneGrounded /></FadeScene>
+    </Sequence>
     <Sequence from={T.seg4.from} durationInFrames={T.seg4.dur}>
       <FadeScene dur={T.seg4.dur}><SceneAlignment /></FadeScene>
     </Sequence>
     <Sequence from={T.seg5.from} durationInFrames={T.seg5.dur}>
-      <FadeScene dur={T.seg5.dur}><SceneGrounding /></FadeScene>
+      <FadeScene dur={T.seg5.dur}><SceneFabric /></FadeScene>
     </Sequence>
     <Sequence from={T.seg6.from} durationInFrames={T.seg6.dur}>
       <FadeScene dur={T.seg6.dur}><SceneJourney /></FadeScene>

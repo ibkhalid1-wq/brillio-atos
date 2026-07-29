@@ -335,83 +335,94 @@ export const SceneAlignment: React.FC = () => {
 };
 
 /* ── 5 · The business's own language (0:56–1:12) ────────────────────── */
-export const SceneGrounding: React.FC = () => {
+/* ── 4a · Grounded ───────────────────────────────────────────────────────
+ * The cold-start answer. AURA does not begin from nothing: it begins from
+ * the industry's accumulated standards and has a provisional model of the
+ * business before it has spoken to a single person. This scene used to be
+ * the front half of the fabric scene, which put it after the stakeholders
+ * and told the mechanism backwards.
+ */
+export const SceneGrounded: React.FC = () => {
+  return (
+    <Ground>
+      <Rise start={0} style={{ position: "absolute", top: 58, width: "100%", textAlign: "center" }}>
+        <Eyebrow>{copy("seg4a").eyebrow}</Eyebrow>
+        <div style={{ fontFamily: FONT, fontSize: 40, fontWeight: 800, color: "#fff", marginBottom: 8 }}>
+          {copy("seg4a").headline}
+        </div>
+        <div style={{ fontFamily: FONT, fontSize: 22, color: MUTED }}>
+          {copy("seg4a").subline}
+        </div>
+      </Rise>
+      <div style={{ position: "absolute", left: 210, top: 190 }}>
+        <Ontology3D labels={ONTOLOGY_LABELS} start={b(2)} period={1100} radius={240} height={520} />
+      </div>
+      <Rise start={b(6)} style={{ position: "absolute", left: 260, top: 700 }}>
+        <div
+          style={{
+            fontFamily: FONT, background: "#fff", color: INK, borderRadius: 18,
+            padding: "22px 30px", boxShadow: "0 30px 80px -20px rgba(0,0,0,.6)",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "baseline", gap: 18, marginBottom: 14 }}>
+            <span style={{ fontSize: 28, fontWeight: 800 }}>Account</span>
+            <span style={{ fontSize: 19, fontWeight: 700, color: ELECTRIC_TEXT, letterSpacing: ".1em" }}>
+              {RECEIPTS.standardAlignment.label}
+            </span>
+          </div>
+          <Img src={staticFile(RECEIPTS.standardAlignment.file)} style={{ width: 1340, display: "block", borderRadius: 10 }} />
+        </div>
+      </Rise>
+      <Rise start={b(9)} style={{ position: "absolute", right: 150, top: 300 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {STANDARDS.map((s) => (
+            <Chip key={s}>{s}</Chip>
+          ))}
+        </div>
+      </Rise>
+    </Ground>
+  );
+};
+
+/* ── 5 · The fabric ──────────────────────────────────────────────────────
+ * What comes back from the people, and what everything downstream is
+ * generated from. The two runs are the proof that "generated" means
+ * reproducible rather than merely automated.
+ */
+export const SceneFabric: React.FC = () => {
   const frame = useCurrentFrame();
-  // Crossfade between the map view and the RUN1|RUN2 view — no hard flip.
-  // The comparison appears on "Run it twice", which is now the third
-  // sentence rather than the second.
-  const mapO = interpolate(frame, [b(24), b(26)], [1, 0], LIN);
-  const runO = interpolate(frame, [b(25), b(27)], [0, 1], LIN);
+  const pair = interpolate(frame, [b(4), b(7)], [0, 1], EASE);
   return (
     <Ground>
       <Rise start={0} style={{ position: "absolute", top: 58, width: "100%", textAlign: "center" }}>
         <Eyebrow>{copy("seg5").eyebrow}</Eyebrow>
       </Rise>
-      {mapO > 0.01 ? (
-        <div style={{ position: "absolute", inset: 0, opacity: mapO }}>
-          {/* The ontology as an object in space, turning slowly, rather than
-              a flat diagram that happens to fade in. */}
-          <div style={{ position: "absolute", left: 210, top: 78 }}>
-            <Ontology3D labels={ONTOLOGY_LABELS} start={0} period={1100} radius={252} height={560} />
-          </div>
-          <Rise start={b(5)} style={{ position: "absolute", left: 260, top: 680 }}>
+      <div style={{ width: 1620, textAlign: "center", opacity: pair, transform: `translateY(${(1 - pair) * 18}px)` }}>
+        <div style={{ display: "flex", gap: 40, justifyContent: "center" }}>
+          {["RUN 1", "RUN 2"].map((r) => (
             <div
+              key={r}
               style={{
-                fontFamily: FONT, background: "#fff", color: INK, borderRadius: 18,
-                padding: "22px 30px", boxShadow: "0 30px 80px -20px rgba(0,0,0,.6)",
+                width: 760, height: 430, borderRadius: 22, border: `1px solid ${FAINT}`,
+                position: "relative", overflow: "hidden",
               }}
             >
-              <div style={{ display: "flex", alignItems: "baseline", gap: 18, marginBottom: 14 }}>
-                <span style={{ fontSize: 28, fontWeight: 800 }}>Account</span>
-                <span style={{ fontSize: 19, fontWeight: 700, color: ELECTRIC_TEXT, letterSpacing: ".1em" }}>
-                  {RECEIPTS.standardAlignment.label}
-                </span>
+              <span style={{ position: "absolute", top: 20, left: 26, fontFamily: FONT, fontSize: 26, fontWeight: 800, color: MUTED, letterSpacing: ".14em" }}>
+                {r}
+              </span>
+              <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Ontology3D labels={ONTOLOGY_LABELS} start={b(4)} period={1100} radius={196} width={720} height={400} />
               </div>
-              <Img src={staticFile(RECEIPTS.standardAlignment.file)} style={{ width: 1340, display: "block", borderRadius: 10 }} />
             </div>
-          </Rise>
-          <Rise start={b(8)} style={{ position: "absolute", right: 150, top: 230 }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              {STANDARDS.map((s) => (
-                <Chip key={s}>{s}</Chip>
-              ))}
-            </div>
-          </Rise>
+          ))}
         </div>
-      ) : null}
-      {runO > 0.01 ? (
-        <div style={{ position: "absolute", inset: 0, opacity: runO, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div style={{ width: 1620, textAlign: "center" }}>
-            <div style={{ display: "flex", gap: 40, justifyContent: "center" }}>
-              {["RUN 1", "RUN 2"].map((r) => (
-                <div
-                  key={r}
-                  style={{
-                    width: 760, height: 430, borderRadius: 22, border: `1px solid ${FAINT}`,
-                    position: "relative", overflow: "hidden",
-                  }}
-                >
-                  <span style={{ position: "absolute", top: 20, left: 26, fontFamily: FONT, fontSize: 26, fontWeight: 800, color: MUTED, letterSpacing: ".14em" }}>
-                    {r}
-                  </span>
-                  {/* Sized to the panel rather than scaled down into it —
-                      the labels now render at full size, which is the whole
-                      point of showing the same model twice. */}
-                  <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <Ontology3D labels={ONTOLOGY_LABELS} start={285} period={1100} radius={196} width={720} height={400} />
-                  </div>
-                </div>
-              ))}
-            </div>
-            {/* Lands on the closing sentence, not four seconds after it. */}
-            <Rise start={b(26)}>
-              <div style={{ marginTop: 38, fontFamily: FONT, fontSize: 46, fontWeight: 800, color: "#fff" }}>
-                {copy("seg5").headline!.replace(" Every time.", " ")}<span style={{ color: ELECTRIC }}>Every time.</span>
-              </div>
-            </Rise>
+        {/* Lands on the closing sentence, not before it. */}
+        <Rise start={b(16)}>
+          <div style={{ marginTop: 38, fontFamily: FONT, fontSize: 46, fontWeight: 800, color: "#fff" }}>
+            {copy("seg5").headline!.replace(" Every time.", " ")}<span style={{ color: ELECTRIC }}>Every time.</span>
           </div>
-        </div>
-      ) : null}
+        </Rise>
+      </div>
     </Ground>
   );
 };
