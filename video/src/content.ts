@@ -210,7 +210,13 @@ export const SCENES: Scene[] = [
     // A crawl has to be readable, and there are twenty names plus four
     // department headings to get past the frame. This is the one scene whose
     // length is set by how long people need, not by the narration.
-    animFloor: 930,
+    //
+    // 930 kept each name legible for 10.3s — about a THIRD of cinema speed,
+    // which is why the close dragged. The crawl is a linear interpolation over
+    // [b(1), dur - b(5)], so this number alone sets the rate: 570 puts a name
+    // on screen for 6s, still a fifth longer than a real end-credit roll,
+    // which suits a room where people are looking for their own name.
+    animFloor: 570,
     tail: 3.5,
   },
 ];
