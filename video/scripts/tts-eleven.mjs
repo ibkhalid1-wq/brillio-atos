@@ -61,22 +61,27 @@ const withPauses = (text) =>
  * honour phoneme tags; the multilingual ones ignore them, which is another
  * reason this script stays on turbo_v2.
  *
- *   two      — was landing somewhere between "two" and "tuh"
- *   Aura     — AW-ruh, not A-U-R-A and not "ow-ra"
- *   proposes — pruh-POH-ziz, with a voiced final s
- *   live     — as in "go-live": LYVE, not the verb "to live"
+ *   two  — was landing somewhere between "two" and "tuh"
+ *   Aura — AW-ruh, not A-U-R-A and not "ow-ra"
+ *   live — as in "go-live": LYVE, not the verb "to live"
+ *
+ * REMOVED, and the reason matters: "autonomously", "autonomous" and
+ * "proposes" were pinned here and all three read WORSE tagged than plain.
+ * A/B clips of the same sentence settled it. The tag also damages the word
+ * NEXT to it — "machine" was mispronounced only because "proposes" carried
+ * a tag two words later, which is why it was never in this table itself.
+ * Reach for a tag only when the plain read is genuinely wrong, and A/B it
+ * before pinning: turbo_v2's own pronunciation has improved to the point
+ * where these corrections mostly cost more than they buy.
  */
 const SAY = {
   two: "T UW1",
   aura: "AO1 R AH0",
-  proposes: "P R AH0 P OW1 Z AH0 Z",
   live: "L AY1 V",
-  autonomously: "AO0 T AA1 N AH0 M AH0 S L IY0",
-  autonomous: "AO0 T AA1 N AH0 M AH0 S",
 };
 
 const withPronunciation = (text) =>
-  text.replace(/\b(two|aura|proposes|live|autonomously|autonomous)\b/gi, (word) => {
+  text.replace(/\b(two|aura|live)\b/gi, (word) => {
     const ph = SAY[word.toLowerCase()];
     return `<phoneme alphabet="cmu-arpabet" ph="${ph}">${word}</phoneme>`;
   });
