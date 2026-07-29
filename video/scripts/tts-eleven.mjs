@@ -155,7 +155,15 @@ const pick = () => {
     if (byName) return byName;
     throw new Error(`No voice matching "${wanted}". Available: ${voices.map((v) => v.name).join(", ")}`);
   }
+  // The account holds TWO clones of the same speaker: "Ib Voice" and
+  // "Ibrahim US". Only the second carries an american accent label, and it is
+  // the one this film wants — picking cloned[0] silently took the other for
+  // every take up to this point, which is why the read kept coming back
+  // British no matter what the model or settings were. Prefer an
+  // american-labelled clone; fall back to the first only if none exists.
   const cloned = voices.filter((v) => v.category === "cloned" || v.category === "professional");
+  const american = cloned.find((v) => (v.labels?.accent || "").toLowerCase() === "american");
+  if (american) return american;
   if (!cloned.length)
     throw new Error(
       `No cloned voice in this account. Available: ${voices.map((v) => `${v.name} (${v.category})`).join(", ")}`
