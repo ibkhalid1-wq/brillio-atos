@@ -11,6 +11,54 @@ import {
 import { ELECTRIC, ELECTRIC_TEXT, FONT, INK } from "./tokens";
 
 /**
+ * The ontology drawn flat.
+ *
+ * Used where two copies have to read as identical: a rotating model shows a
+ * different silhouette at every frame, so a pair of them proves nothing about
+ * determinism no matter how well synchronised they are. Flat and still, the
+ * two runs are provably the same picture.
+ */
+export const Ontology2D: React.FC<{
+  nodes: Array<[number, number, string]>;
+  start?: number;
+  width?: number;
+  height?: number;
+}> = ({ nodes, start = 0, width = 730, height = 230 }) => {
+  const frame = useCurrentFrame();
+  const enter = (at: number) =>
+    interpolate(frame, [at, at + 22], [0, 1], {
+      extrapolateLeft: "clamp",
+      extrapolateRight: "clamp",
+      easing: Easing.bezier(0.16, 1, 0.3, 1),
+    });
+  return (
+    <svg viewBox="200 145 1270 400" width={width} height={height}>
+      {nodes.map(([x1, y1], i) =>
+        nodes.slice(i + 1, i + 3).map(([x2, y2], j) => (
+          <line
+            key={`${i}-${j}`}
+            x1={x1} y1={y1} x2={x2} y2={y2}
+            stroke="#fff" strokeWidth={2}
+            opacity={enter(start + i * 5 + j * 3) * 0.34}
+          />
+        )),
+      )}
+      {nodes.map(([x, y, label], i) => (
+        <g key={label} opacity={enter(start + i * 5)}>
+          <rect
+            x={x - 92} y={y - 30} width={184} height={60} rx={14}
+            fill="rgba(255,255,255,0.07)" stroke="rgba(255,255,255,0.35)"
+          />
+          <text x={x} y={y + 10} textAnchor="middle" fill="#fff" fontFamily={FONT} fontSize={32} fontWeight={700}>
+            {label}
+          </text>
+        </g>
+      ))}
+    </svg>
+  );
+};
+
+/**
  * The business ontology as an actual object in space: entities distributed
  * over a sphere, rotating at constant angular velocity, drawn with real
  * perspective projection so near nodes are larger, brighter and in front.
