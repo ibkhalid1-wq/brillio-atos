@@ -91,11 +91,6 @@ export const SCENES: Scene[] = [
     vo: "The failure was never AI. Every one of those pilots was built on somebody's opinion of how the business works. Never on evidence.",
     animFloor: 220,
     tail: 1.4,
-    // An accusation, not an explanation — it should run ahead of the film's
-    // average, not level with it. Generated at 0.92 so the raw take lands near
-    // this target and the levelling pass barely corrects: slowing at source AND
-    // stretching in post is what made the earlier take drawl.
-    wpm: 168,
   },
   {
     id: "seg3",
