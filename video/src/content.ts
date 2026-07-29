@@ -87,8 +87,8 @@ export const SCENES: Scene[] = [
     id: "seg2",
     headline: "The failure was never AI.",
     subline:
-      "An agent is only as good as its model of the business — and that model was never written down. No two people describe it the same way.",
-    vo: "The failure was never AI. An agent is only as good as its model of the business — and that model was never written down. No two people describe it the same way.",
+      "Every one of those pilots was built on somebody's opinion of how the business works. Never on evidence.",
+    vo: "The failure was never AI. Every one of those pilots was built on somebody's opinion of how the business works. Never on evidence.",
     animFloor: 220,
     tail: 1.4,
   },
@@ -144,7 +144,7 @@ export const SCENES: Scene[] = [
     id: "seg5",
     eyebrow: "Your business, mapped",
     headline: "Same mandate. Same map. Every time.",
-    vo: "What comes back is your company's own map. Not a document — the foundation the architecture, the solutions and the prototype are all generated from … Run it twice: the same map, every time.",
+    vo: "What comes back is your company's own map. Not a document — the foundation. The architecture, the solutions and the prototype are all generated from it … Run it twice: the same map, every time.",
     animFloor: 380,
     tail: 1.4,
   },
@@ -337,19 +337,17 @@ export const PROVISIONAL_LABELS: string[] = [
  */
 /** The eight the map names — every one a noun sixteen interviews produced and
  * schema.org has never heard of, plus the anchors that orient the value chain. */
-export const ONTOLOGY_NAMED: string[] = [
-  "Lead", "Buying Committee", "Opportunity", "SOW", "Timesheet", "Practice Forecast Split",
+/** All 32 of Laila CRM's live entities, in the app's own order. Every name on
+ * the map is a name the business uses; none is a placeholder. */
+export const ONTOLOGY_SPHERE: string[] = [
+  "Lead", "Lead Score", "Campaign", "Campaign Member", "Buying Committee",
+  "Contact", "Account", "Competitor", "Opportunity", "Opportunity Line Item",
+  "Quote", "Proposal", "Contract", "SOW", "Engagement",
+  "Milestone", "Delivery Health", "Escalation", "Staffing", "Timesheet",
+  "Invoice", "Billing Schedule", "Revenue Recognition", "Revenue Projection",
+  "Practice Contribution", "Practice Forecast Split", "Forecast Snapshot",
+  "Partner", "Signal", "Signal Action", "Document", "Event",
 ];
-
-/**
- * The same 32 for the rotating map. Ontology3D lays nodes out by index on a
- * Fibonacci spiral, so the named ones are spaced every fourth slot — bunching
- * them at the head would pile all eight labels onto one pole of the sphere.
- */
-export const ONTOLOGY_SPHERE: string[] = Array.from(
-  { length: 32 },
-  (_, i) => (i % 5 === 0 ? ONTOLOGY_NAMED[i / 5] ?? "" : ""),
-);
 
 /**
  * The twenty-four the core stands for, in the app's own order — kept so the

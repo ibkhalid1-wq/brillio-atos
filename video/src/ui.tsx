@@ -116,7 +116,10 @@ export const Ontology3D: React.FC<{
   radius?: number;
   width?: number;
   height?: number;
-}> = ({ labels, period = 900, start = 0, radius = 300, width = 1500, height = 620 }) => {
+  /** Plate type size. Drops for a dense map: 32 names on one sphere need
+   *  smaller plates than 13 do, and every name has to stay readable. */
+  fontSize?: number;
+}> = ({ labels, period = 900, start = 0, radius = 300, width = 1500, height = 620, fontSize = 22 }) => {
   const frame = useCurrentFrame();
   const cx = width / 2;
   const cy = height / 2;
@@ -201,7 +204,7 @@ export const Ontology3D: React.FC<{
         // Plates size to their word, as on the flat map: a real ontology runs
         // from "SOW" to "Practice Forecast Split", and one fixed width either
         // clips the long names or floats the short ones in empty box.
-        const fs = 22;
+        const fs = fontSize;
         const w = Math.max(120, p.label.length * fs * 0.56 + 26) * p.s;
         const h = 52 * p.s;
         // Depth cue: things further away are dimmer as well as smaller.
