@@ -11,7 +11,7 @@ import { ELECTRIC, ELECTRIC_TEXT, FAINT, FONT, INK, INK_2, MUTED, T } from "./to
 import { AuraWord, Chip, DrawnLine, Eyebrow, Glow, Ontology2D, Ontology3D, Plate, Rise, ScreenInset, Typed } from "./ui";
 import {
   b, copy, CONTRADICTION, DIAGNOSIS_POLES, DOMAINS, GOVERNANCE_CHIPS, GRAVEYARD,
-  JOURNEY, LIFECYCLE, NUMBERS, ONTOLOGY_LABELS, ONTOLOGY_NODES, RECEIPTS, TRANSCRIPT, SPINE, STAKEHOLDERS, STANDARDS, TEAM,
+  JOURNEY, LIFECYCLE, NUMBERS, ONTOLOGY_NODES, PROVISIONAL_LABELS, RECEIPTS, TRANSCRIPT, SPINE, STAKEHOLDERS, STANDARDS, TEAM,
 } from "./content";
 
 /**
@@ -355,7 +355,12 @@ export const SceneGrounded: React.FC = () => {
         </div>
       </Rise>
       <div style={{ position: "absolute", left: 210, top: 190 }}>
-        <Ontology3D labels={ONTOLOGY_LABELS} start={b(2)} period={1100} radius={240} height={520} />
+        {/* The PROVISIONAL programme, not the finished map: this scene is the
+            cold-start answer, so it has to show what AURA knows before anyone
+            has spoken. Rendering the map here was the flaw four board
+            reviewers each flagged independently — the two ontologies looked
+            identical, so the stakeholders appeared to change nothing. */}
+        <Ontology3D labels={PROVISIONAL_LABELS} start={b(2)} period={1100} radius={240} height={520} />
       </div>
       <Rise start={b(6)} style={{ position: "absolute", left: 260, top: 700 }}>
         <div
