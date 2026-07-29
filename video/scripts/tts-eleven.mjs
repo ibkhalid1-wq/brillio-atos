@@ -86,7 +86,18 @@ const withPronunciation = (text) =>
     return `<phoneme alphabet="cmu-arpabet" ph="${ph}">${word}</phoneme>`;
   });
 
-const speak = (text) => withPronunciation(withPauses(text));
+/**
+ * A possessive running straight into a vowel elides: "Brillio's AI-native"
+ * came out as one slurred word, taking "delivery" down with it because the
+ * whole phrase then had to be caught up on. A quarter-second is enough to
+ * separate them and is inaudible as a pause — far cheaper than a phoneme tag,
+ * which this project has already learned degrades its neighbours.
+ */
+const BREATHE_AFTER = ["Brillio’s", "Brillio's"];
+const withMicroPauses = (text) =>
+  BREATHE_AFTER.reduce((t, w) => t.split(w).join(`${w} <break time="0.25s" /> `), text);
+
+const speak = (text) => withPronunciation(withMicroPauses(withPauses(text)));
 
 const arg = (flag) => {
   const i = process.argv.indexOf(flag);
