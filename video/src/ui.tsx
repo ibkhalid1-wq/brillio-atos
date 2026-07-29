@@ -31,29 +31,58 @@ export const Ontology2D: React.FC<{
       extrapolateRight: "clamp",
       easing: Easing.bezier(0.16, 1, 0.3, 1),
     });
+  // A real ontology does not have uniformly short names: "Practice Forecast
+  // Split" is 23 characters and "SOW" is 3. A fixed pill either clips the long
+  // ones or wastes the frame on the short ones, so each pill is sized to its
+  // label and the type steps down to keep the widest inside the 320 column
+  // pitch rather than overrunning its neighbour.
+  const box = (label: string) => {
+    const fs = label.length > 20 ? 19 : label.length > 15 ? 23 : label.length > 11 ? 27 : 32;
+    return { fs, w: Math.max(170, Math.min(300, label.length * fs * 0.58 + 34)) };
+  };
+  /** True when the segment a→b passes through node c's pill. Sampling beats a
+   * closed-form clip here: the pills are axis-aligned and few, and a miss shows
+   * up as a line struck through a word — which reads as deleted text, the one
+   * thing an ontology slide must never imply. */
+  const crosses = (ax: number, ay: number, bx: number, by: number, ci: number) => {
+    const [cx, cy, label] = nodes[ci];
+    const { w } = box(label);
+    const hw = w / 2 + 6, hh = 36;
+    for (let t = 0.06; t < 0.95; t += 0.02) {
+      if (Math.abs(ax + (bx - ax) * t - cx) < hw && Math.abs(ay + (by - ay) * t - cy) < hh) return true;
+    }
+    return false;
+  };
   return (
     <svg viewBox="200 145 1270 400" width={width} height={height}>
       {nodes.map(([x1, y1], i) =>
-        nodes.slice(i + 1, i + 3).map(([x2, y2], j) => (
-          <line
-            key={`${i}-${j}`}
-            x1={x1} y1={y1} x2={x2} y2={y2}
-            stroke="#fff" strokeWidth={2}
-            opacity={enter(start + i * 5 + j * 3) * 0.34}
-          />
-        )),
+        nodes.slice(i + 1, i + 3).map(([x2, y2], j) => {
+          const k = i + 1 + j;
+          if (nodes.some((_, ci) => ci !== i && ci !== k && crosses(x1, y1, x2, y2, ci))) return null;
+          return (
+            <line
+              key={`${i}-${j}`}
+              x1={x1} y1={y1} x2={x2} y2={y2}
+              stroke="#fff" strokeWidth={2}
+              opacity={enter(start + i * 5 + j * 3) * 0.34}
+            />
+          );
+        }),
       )}
-      {nodes.map(([x, y, label], i) => (
-        <g key={label} opacity={enter(start + i * 5)}>
-          <rect
-            x={x - 92} y={y - 30} width={184} height={60} rx={14}
-            fill="rgba(255,255,255,0.07)" stroke="rgba(255,255,255,0.35)"
-          />
-          <text x={x} y={y + 10} textAnchor="middle" fill="#fff" fontFamily={FONT} fontSize={32} fontWeight={700}>
-            {label}
-          </text>
-        </g>
-      ))}
+      {nodes.map(([x, y, label], i) => {
+        const { fs, w } = box(label);
+        return (
+          <g key={label} opacity={enter(start + i * 5)}>
+            <rect
+              x={x - w / 2} y={y - 30} width={w} height={60} rx={14}
+              fill="rgba(255,255,255,0.07)" stroke="rgba(255,255,255,0.35)"
+            />
+            <text x={x} y={y + fs / 3 + 1} textAnchor="middle" fill="#fff" fontFamily={FONT} fontSize={fs} fontWeight={700}>
+              {label}
+            </text>
+          </g>
+        );
+      })}
     </svg>
   );
 };

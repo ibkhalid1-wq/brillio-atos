@@ -298,6 +298,24 @@ export const CONTRADICTION = {
   emphasis: "a finding, not noise",
 };
 
+/**
+ * Scene 4a — the PROVISIONAL ontology, before anyone has been interviewed.
+ *
+ * All thirteen entities of the live "Laila - Provisional" programme, verbatim:
+ * a standards-derived seed generated from the sponsor's mandate alone, with
+ * zero voices heard. Read them and the point makes itself — Person,
+ * Organization, Product, Order — these are textbook nouns. ANY business could
+ * have this list, which is exactly what a provisional model should look like.
+ *
+ * The contrast with ONTOLOGY_NODES below is the whole mechanism of the film,
+ * and it is carried by the words themselves rather than by a caption. Both
+ * lists are real; neither is illustrative.
+ */
+export const PROVISIONAL_LABELS: string[] = [
+  "Person", "Organization", "Account", "Contact", "Lead", "Opportunity",
+  "Offer", "Order", "Contract", "Invoice", "Campaign", "Product", "Service",
+];
+
 /** Scene 5 — the entities that bloom on the ontology map. */
 /**
  * Twelve entities lifted from Laila's real domain ontology — the live one has
@@ -306,16 +324,18 @@ export const CONTRADICTION = {
  * four systems: CRM, contract management, project management and finance.
  * Laid out so consecutive entities are genuinely related, because Ontology2D
  * links each node to the next two.
+ *
+ * Chosen to be the ones the STANDARDS could never have supplied. Buying
+ * Committee, Delivery Health, Practice Forecast Split and Revenue Recognition
+ * came out of sixteen interviews and exist nowhere in schema.org — set against
+ * the provisional list above, they are the visible proof that the stakeholders
+ * changed something.
  */
 export const ONTOLOGY_NODES: Array<[number, number, string]> = [
-  [330, 230, "Lead"],        [640, 190, "Opportunity"],  [950, 230, "Quote"],
-  [1270, 190, "Proposal"],   [1330, 350, "Contract"],    [1040, 390, "SOW"],
-  [740, 390, "Engagement"],  [430, 380, "Invoice"],
-  [330, 520, "Account"],     [660, 520, "Contact"],      [980, 520, "Partner"],
-  [1300, 510, "Forecast"],
+  [370, 210, "Lead"],     [690, 210, "Buying Committee"], [1010, 210, "Opportunity"], [1310, 210, "Proposal"],
+  [1310, 360, "SOW"],     [1010, 360, "Engagement"],      [690, 360, "Delivery Health"], [370, 360, "Timesheet"],
+  [370, 510, "Invoice"],  [690, 510, "Revenue Recognition"], [1010, 510, "Practice Forecast Split"], [1310, 510, "Forecast Snapshot"],
 ];
-/** Just the entity names — what the 3D model of the ontology renders. */
-export const ONTOLOGY_LABELS: string[] = ONTOLOGY_NODES.map(([, , label]) => label);
 
 export const STANDARDS = ["FHIR", "FIBO", "GS1", "schema.org"];
 
@@ -376,7 +396,13 @@ export const DOMAINS = [
 
 /** Real screenshots from the live programme — receipts, not recreations. */
 export const RECEIPTS = {
-  standardAlignment: { file: "align-row.png", label: "STANDARD ALIGNMENT · LIVE FROM THE PROGRAMME", entity: "Account" },
+  // Organization, not Account. The card's row reads schema.org/Organization,
+  // and in the live provisional programme Account no longer carries that
+  // alignment — it resolves to a CRM class, and there is no public CRM URI
+  // namespace, so it aligns to nothing. Organization is the entity that
+  // genuinely holds this row (voted from the drafts, hence skos:closeMatch
+  // rather than the exactMatch a synthesised core would get).
+  standardAlignment: { file: "align-row.png", label: "STANDARD ALIGNMENT · LIVE FROM THE PROGRAMME", entity: "Organization" },
   coverageLedger: { file: "cov-strip-wide.png", label: "LIVE · THE COVERAGE LEDGER" },
   routedQuestion: { file: "ask-panel.png", label: "LIVE · A ROUTED QUESTION" },
 };
