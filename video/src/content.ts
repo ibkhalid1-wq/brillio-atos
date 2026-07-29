@@ -136,7 +136,7 @@ export const SCENES: Scene[] = [
     headline: "AURA is designed to engage with stakeholders autonomously.",
     subline:
       "Every gap becomes a plain-language question — routed on a no-login link, answered in their own words, folded back in.",
-    vo: "From there it engages your stakeholders autonomously — writing the agenda from its own gaps, drafting the invitation, transcribing the conversation, folding every answer back into the model. Every disagreement a finding, not noise. The provisional becomes yours.",
+    vo: "From there Aura engages your stakeholders autonomously — writing the agenda from its own gaps, drafting the invitation, transcribing the conversation, folding every answer back into the model. Every disagreement a finding, not noise. The provisional becomes yours.",
     animFloor: 360,
     tail: 1.4,
   },
@@ -153,7 +153,7 @@ export const SCENES: Scene[] = [
     eyebrow: "Governed by design",
     headline: "Autonomous — with a human in the loop, end to end.",
     subline: "Machine proposes. The business validates. Every judgment recorded as evidence.",
-    vo: "And control is the architecture. The machine proposes — the business validates. Every phase gates on a demonstration. Every judgment lands on a permanent record. And it doesn't stop at go-live: Aura watches the model drift as the business changes, and proposes the correction for your team to accept. Autonomy you can audit.",
+    vo: "And control is the architecture. The machine proposes — the business validates. Every phase gates on a demonstration. Every judgment lands on a permanent record. And it doesn't stop at go-live: Aura watches the model drift as the business changes, and proposes the correction for your team to accept … Autonomy you can audit.",
     animFloor: 380,
     tail: 1.4,
   },
