@@ -105,7 +105,14 @@ for (const id of IDS) {
     const wpm = WORDS[id] / (probe.samples.length / probe.rate / 60);
     const target = RATE[id] ?? TARGET_WPM;
     const tempo = Math.max(0.88, Math.min(1.12, target / wpm));
-    if (Math.abs(tempo - 1) > 0.01) {
+    // DEADBAND. Correcting a 1% deviation flattened all thirteen scenes onto
+    // one rate, and nobody narrates that way — a real reader runs faster
+    // through a list and slower into a conclusion. Forcing a single tempo is
+    // itself a synthetic tell, and the stretch that achieves it adds grain.
+    // 8% keeps the safety net for a take that is genuinely wrong while letting
+    // ordinary variation through untouched, so most takes now ship exactly as
+    // generated with no time-stretch at all.
+    if (Math.abs(tempo - 1) > 0.08) {
       const paced = join(OUT_DIR, `.${id}.pace.wav`);
       ffmpeg(["-i", tmp, "-filter:a", `atempo=${tempo.toFixed(4)}`, "-c:a", "pcm_s16le", paced]);
       rmSync(tmp);
