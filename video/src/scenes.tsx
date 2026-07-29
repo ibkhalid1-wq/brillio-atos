@@ -8,10 +8,10 @@ import {
   useCurrentFrame,
 } from "remotion";
 import { ELECTRIC, ELECTRIC_TEXT, FAINT, FONT, INK, INK_2, MUTED, T } from "./tokens";
-import { AuraWord, Chip, DrawnLine, Eyebrow, Glow, Ontology3D, Plate, Rise, ScreenInset, Typed } from "./ui";
+import { AuraWord, Chip, DrawnLine, Eyebrow, Glow, Ontology2D, Ontology3D, Plate, Rise, ScreenInset, Typed } from "./ui";
 import {
   b, copy, CONTRADICTION, DIAGNOSIS_POLES, DOMAINS, GOVERNANCE_CHIPS, GRAVEYARD,
-  JOURNEY, LIFECYCLE, NUMBERS, ONTOLOGY_LABELS, RECEIPTS, TRANSCRIPT, SPINE, STAKEHOLDERS, STANDARDS, TEAM,
+  JOURNEY, LIFECYCLE, NUMBERS, ONTOLOGY_LABELS, ONTOLOGY_NODES, RECEIPTS, TRANSCRIPT, SPINE, STAKEHOLDERS, STANDARDS, TEAM,
 } from "./content";
 
 /**
@@ -339,7 +339,7 @@ export const SceneAlignment: React.FC = () => {
  * The cold-start answer. AURA does not begin from nothing: it begins from
  * the industry's accumulated standards and has a provisional model of the
  * business before it has spoken to a single person. This scene used to be
- * the front half of the fabric scene, which put it after the stakeholders
+ * the front half of the map scene, which put it after the stakeholders
  * and told the mechanism backwards.
  */
 export const SceneGrounded: React.FC = () => {
@@ -384,10 +384,12 @@ export const SceneGrounded: React.FC = () => {
   );
 };
 
-/* ── 5 · The fabric ──────────────────────────────────────────────────────
+/* ── 5 · The map ─────────────────────────────────────────────────────────
  * What comes back from the people, and what everything downstream is
- * generated from. The two runs are the proof that "generated" means
- * reproducible rather than merely automated.
+ * generated from. "Map" rather than "fabric": it is the word a board already
+ * owns, and it closes the loop with the opening question, which is literally
+ * about two teams drawing the same picture. The two runs are the proof that
+ * "generated" means reproducible rather than merely automated.
  */
 export const SceneFabric: React.FC = () => {
   const frame = useCurrentFrame();
@@ -403,15 +405,18 @@ export const SceneFabric: React.FC = () => {
             <div
               key={r}
               style={{
-                width: 760, height: 430, borderRadius: 22, border: `1px solid ${FAINT}`,
+                width: 760, height: 340, borderRadius: 22, border: `1px solid ${FAINT}`,
                 position: "relative", overflow: "hidden",
               }}
             >
               <span style={{ position: "absolute", top: 20, left: 26, fontFamily: FONT, fontSize: 26, fontWeight: 800, color: MUTED, letterSpacing: ".14em" }}>
                 {r}
               </span>
+              {/* Flat, and therefore provably the same picture twice. A
+                  rotating pair shows a different silhouette every frame,
+                  which is the opposite of what this scene claims. */}
               <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <Ontology3D labels={ONTOLOGY_LABELS} start={b(4)} period={1100} radius={196} width={720} height={400} />
+                <Ontology2D nodes={ONTOLOGY_NODES} start={b(4)} width={730} height={230} />
               </div>
             </div>
           ))}
