@@ -403,16 +403,15 @@ export const SceneFabric: React.FC = () => {
   const pair = interpolate(frame, [b(4), b(7)], [0, 1], EASE);
   return (
     <Ground>
-      <Rise start={0} style={{ position: "absolute", top: 58, width: "100%", textAlign: "center" }}>
-        <Eyebrow>{copy("seg5").eyebrow}</Eyebrow>
-      </Rise>
-      <div style={{ width: 1620, textAlign: "center", opacity: pair, transform: `translateY(${(1 - pair) * 18}px)` }}>
+      <div style={{ width: 1660, textAlign: "center", opacity: pair, transform: `translateY(${(1 - pair) * 18}px)` }}>
+        <Rise start={0}><Eyebrow>{copy("seg5").eyebrow}</Eyebrow></Rise>
+        <div style={{ height: 24 }} />
         <div style={{ display: "flex", gap: 40, justifyContent: "center" }}>
           {["RUN 1", "RUN 2"].map((r) => (
             <div
               key={r}
               style={{
-                width: 760, height: 430, borderRadius: 22, border: `1px solid ${FAINT}`,
+                width: 780, height: 640, borderRadius: 22, border: `1px solid ${FAINT}`,
                 position: "relative", overflow: "hidden",
               }}
             >
@@ -425,7 +424,7 @@ export const SceneFabric: React.FC = () => {
                   worried that rotation broke the proof — it does not. The claim
                   is run 1 == run 2 at a given frame, not frame N == frame N+1. */}
               <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <Ontology3D labels={ONTOLOGY_SPHERE} start={b(4)} period={720} radius={196} width={740} height={420} />
+                <Ontology3D labels={ONTOLOGY_SPHERE} start={b(4)} period={720} radius={252} width={760} height={630} fontSize={15} />
               </div>
             </div>
           ))}
