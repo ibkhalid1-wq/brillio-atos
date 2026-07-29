@@ -24,7 +24,7 @@ const end = EDGE.indexOf("/** True when a Listen conversation is on record");
 const section = EDGE.slice(start, end);
 const js = ts.transpileModule(
   `const isRecord = (v: unknown) => typeof v === "object" && v !== null && !Array.isArray(v);\n${section}\n` +
-  `return { reconcileVotedOntology, resolveProvisionalPacks, ontologyVocabularySteering, clientVocabularyPack, ontologyNameKey, ontologyStandardKey, ONTOLOGY_VOTE_N, ONTOLOGY_VOTE_THRESHOLD, ONTOLOGY_MENU_VERBS };`,
+  `return { reconcileVotedOntology, resolveProvisionalPacks, ontologyVocabularySteering, clientVocabularyPack, crmDomainPack, ontologyNameKey, ontologyStandardKey, ONTOLOGY_VOTE_N, ONTOLOGY_VOTE_THRESHOLD, ONTOLOGY_MENU_VERBS };`,
   { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.None } },
 ).outputText;
 type ResolvedPack = { vocabulary: string; entities: Array<{ name: string; uri: string; definition?: string; aliases: string[]; core?: boolean; areaHints?: string[] }>; relations: Array<{ from: string; verb: string; to: string }> };
@@ -33,6 +33,7 @@ const sandbox = new Function(js)() as {
   resolveProvisionalPacks: (steering: string) => ResolvedPack[];
   ontologyVocabularySteering: (industry: unknown, segment?: unknown) => string;
   clientVocabularyPack: (inner: Record<string, unknown>) => ResolvedPack | null;
+  crmDomainPack: (mandate: string) => ResolvedPack | null;
   ontologyNameKey: (name: unknown) => string;
   ontologyStandardKey: (uri: unknown) => string;
   ONTOLOGY_VOTE_N: number;
@@ -599,5 +600,111 @@ describe("commerce backbone (schema.org primary)", () => {
   it("a clinical programme gains no commerce entities", () => {
     const got = names(sandbox.reconcileVotedOntology([draft(BASE, CHAIN), draft(BASE, CHAIN), draft(BASE, CHAIN)], OPTS));
     for (const cls of ["Order", "Invoice", "Offer", "Product"]) expect(got).not.toContain(cls);
+  });
+});
+
+/**
+ * The CRM pack — selection on a FUNCTIONAL axis, not the industry one.
+ *
+ * "Why is there no Lead?" had a precise answer: no pack in the manifest listed
+ * one, the mandate never said the word, and the grounding gate admits only
+ * pack- or mandate-grounded nouns. The drafts proposed Lead and it was
+ * discarded, every run. These tests pin the second selection axis, the
+ * two-signal threshold that keeps it from firing on programmes that merely
+ * mention a CRM, and the union-not-replace core policy.
+ */
+describe("CRM functional-domain pack", () => {
+  // The REAL Laila - Provisional mandate, read from the live charter.
+  const LAILA = "This programme is established to develop an agentic CRM system that will replace the current Salesforce CRM and manage the entire customer life cycle across all major business functions at Brillio. It is authorised by the executive sponsor to drive transformation across Marketing, Sales, GTM, Sales Operations, Delivery, Legal, Alliances, and Talent Acquisition.";
+  const CRM_CORE = ["Lead", "Opportunity", "Account", "Contact", "Campaign", "Contract"];
+
+  it("fires on a mandate to BUILD a CRM", () => {
+    expect(coresOf(sandbox.crmDomainPack(LAILA)!).sort()).toEqual([...CRM_CORE].sort());
+  });
+
+  it("does NOT fire on a clinical mandate that merely mentions a CRM", () => {
+    // One signal ("CRM"). This is the case the threshold exists for — the
+    // pinned clinical fixture must stay a FHIR programme.
+    expect(sandbox.crmDomainPack(MANDATE)).toBeNull();
+  });
+
+  it.each([
+    ["an order-management rewrite", "Replace the legacy order management system with a modern platform."],
+    ["a claims mandate", "Reduce claims cycle time across the insurance back office."],
+    ["one passing mention", "Integrate the warehouse system with our CRM."],
+    ["empty", ""],
+  ])("does not fire on %s", (_label, mandate) => {
+    expect(sandbox.crmDomainPack(mandate)).toBeNull();
+  });
+
+  it("needs two DISTINCT signals, not one repeated", () => {
+    expect(sandbox.crmDomainPack("CRM. CRM. CRM. CRM.")).toBeNull();
+    expect(sandbox.crmDomainPack("Replace the CRM and rebuild sales operations.")).not.toBeNull();
+  });
+
+  it("every relation uses a verb from the menu", () => {
+    for (const r of sandbox.crmDomainPack(LAILA)!.relations) {
+      expect(sandbox.ONTOLOGY_MENU_VERBS).toContain(r.verb);
+    }
+  });
+
+  it("relation endpoints all resolve to classes the pack defines", () => {
+    const pack = sandbox.crmDomainPack(LAILA)!;
+    const names = new Set(pack.entities.map((e) => e.name));
+    for (const r of pack.relations) {
+      expect(names.has(r.from), `${r.from} undefined`).toBe(true);
+      expect(names.has(r.to), `${r.to} undefined`).toBe(true);
+    }
+  });
+
+  it("claims no alias the schema.org pack already owns — first-wins would shadow it", () => {
+    const schemaAliases = new Set(
+      packsFor("Healthcare").find((p) => p.vocabulary === "schema.org")!
+        .entities.flatMap((e) => [e.name, ...e.aliases]).map((a) => sandbox.ontologyNameKey(a)),
+    );
+    for (const e of sandbox.crmDomainPack(LAILA)!.entities) {
+      for (const alias of [e.name, ...e.aliases]) {
+        expect(schemaAliases.has(sandbox.ontologyNameKey(alias)), `"${alias}" collides`).toBe(false);
+      }
+    }
+  });
+
+  // ── Union, not replace: the industry primary keeps its cores. ──
+  /** Build the runner's opts with the CRM pack appended, exactly as the edge
+   * function threads it — industry pack still packs[0]. */
+  function withCrm(industry: string, mandate: string, areas?: string[], segment?: string) {
+    const resolved = [...packsFor(industry, segment), sandbox.crmDomainPack(mandate)!].filter(Boolean);
+    const opts = groundingFor(resolved, mandate, "the sponsor", areas);
+    for (const e of sandbox.crmDomainPack(mandate)!.entities) if (e.core) opts.coreClasses.add(e.name);
+    return opts;
+  }
+  const emptyDrafts = () => Array.from({ length: 5 }, () => ({
+    entities: [{ name: "Customer", definition: "A buyer.", area: "Sales", attributes: [], systemOfRecord: null, aliases: [], evidence: "from the sponsor mandate — to confirm" }],
+    relations: [], events: [], standardAlignment: [], gaps: [],
+  }));
+
+  it("asserts the CRM backbone for a schema.org-steered programme", () => {
+    const got = names(sandbox.reconcileVotedOntology(emptyDrafts(), withCrm("Technology & Software", LAILA)));
+    for (const cls of CRM_CORE) expect(got).toContain(cls);
+  });
+
+  it("a healthcare CRM keeps Patient AND gains Lead", () => {
+    const mandate = `Give care navigators one view of the patient. ${LAILA}`;
+    const got = names(sandbox.reconcileVotedOntology(emptyDrafts(), withCrm("Healthcare", mandate)));
+    expect(got).toContain("Patient");      // FHIR primary cores survive…
+    expect(got).toContain("Practitioner");
+    expect(got).toContain("Lead");          // …and the functional axis adds its own
+    expect(got).toContain("Opportunity");
+  });
+
+  it("places the CRM backbone across the programme's real areas", () => {
+    // Laila's declared Discovery Kit domains.
+    const AREAS = ["Marketing", "Sales", "GTM", "Sales Operations", "Delivery", "Legal", "Alliances", "Talent Acquisition"];
+    const doc = sandbox.reconcileVotedOntology(emptyDrafts(), withCrm("Technology & Software", LAILA, AREAS));
+    const areaOf = (n: string) => (doc.entities as Array<{ name: string; area: string }>).find((e) => e.name === n)?.area;
+    expect(areaOf("Lead")).toBe("Marketing");
+    expect(areaOf("Campaign")).toBe("Marketing");
+    expect(areaOf("Contract")).toBe("Legal");
+    expect(new Set((doc.entities as Array<{ area: string }>).map((e) => e.area)).size).toBeGreaterThanOrEqual(3);
   });
 });

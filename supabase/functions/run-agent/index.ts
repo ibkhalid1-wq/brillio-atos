@@ -3151,6 +3151,12 @@ function buildSpecialAgentInputContext(
           // treats this list as authoritative for standardAlignment. The
           // client vocabulary (if attached) rides as one more pack of facts.
           const backbonePacks = resolveProvisionalPacks(steering);
+          // Same mandate fields ontologyMandateContext() reads, so the facts
+          // shipped here are the facts the reconciler will accept back.
+          const crmBackbonePack = crmDomainPack([
+            frameInputs.sponsorConversation, frameInputs.objective, frameInputs.businessObjective,
+          ].map((v) => typeof v === "string" ? v : "").join("\n"));
+          if (crmBackbonePack) backbonePacks.push(crmBackbonePack);
           const clientBackbonePack = clientVocabularyPack(inner);
           if (clientBackbonePack) backbonePacks.push(clientBackbonePack);
           return {
@@ -6941,6 +6947,89 @@ PROVISIONAL_BACKBONE_PACKS.commerce = {
   relations: PROVISIONAL_BACKBONE_PACKS.schema.relations,
 };
 
+/** CRM is a FUNCTIONAL domain, not an industry — which is why no industry key
+ * could ever select it. The manifest is indexed healthcare→FHIR, banking→FIBO,
+ * but a CRM programme can sit in any vertical, so its objects were unreachable
+ * from every steering path: no pack lists Lead, Opportunity, Account or
+ * Contact (FIBO's "Account" is a bank account), and the grounding gate admits
+ * only pack- or mandate-grounded nouns. Drafts proposed Lead every time and it
+ * was discarded every time.
+ *
+ * So this pack is selected on a SECOND axis — read from the mandate — and its
+ * cores are unioned ON TOP of the industry primary's rather than replacing
+ * them, exactly as the client vocabulary pack's are. A healthcare CRM keeps
+ * Patient and Practitioner AND gains Lead and Opportunity.
+ *
+ * No URIs: there is no public CRM ontology namespace, so these align by name
+ * in definitions only — the same treatment ISA-95 and TM Forum SID already get.
+ */
+PROVISIONAL_BACKBONE_PACKS.crm = {
+  vocabulary: "CRM / sales pipeline (no public URI namespace — align by name)",
+  entities: [
+    // Aliases deliberately avoid "customer", "prospect" and "partner": the
+    // schema.org pack already claims those for Person and Organization, and
+    // packClasses is first-wins, so duplicating them would silently shadow
+    // these classes rather than reach them.
+    { core: true, name: "Lead", uri: "", definition: "An unqualified enquiry not yet accepted into the pipeline", aliases: ["lead", "inquiry", "enquiry", "mql", "sql"], areaHints: ["marketing", "demand", "sales"] },
+    { core: true, name: "Opportunity", uri: "", definition: "A qualified deal being actively pursued", aliases: ["opportunity", "deal", "pursuit"], areaHints: ["sales", "pursuit", "gtm", "go-to-market"] },
+    { core: true, name: "Account", uri: "", definition: "The customer organisation a relationship is held with", aliases: ["account", "customer account", "client account"], areaHints: ["sales", "account", "customer"] },
+    { core: true, name: "Contact", uri: "", definition: "A named person at an account", aliases: ["contact", "buyer", "decision maker"], areaHints: ["sales", "marketing", "customer"] },
+    // No Quote class: schema.org's Offer already owns "quote"/"quotation" and
+    // is core for commerce-primary programmes, so a CRM Quote would be shadowed
+    // by first-wins alias resolution rather than reached. Offer IS the quote.
+    { core: true, name: "Campaign", uri: "", definition: "A marketing programme run to generate demand", aliases: ["campaign", "marketing campaign"], areaHints: ["marketing", "demand"] },
+    { core: true, name: "Contract", uri: "", definition: "The signed agreement that closes a deal", aliases: ["contract", "agreement", "msa", "sow", "statement of work"], areaHints: ["legal", "contract", "commercial"] },
+    // Extended: real CRM concepts, but scope a sponsor should confirm rather
+    // than the seed assert — they arrive as confirm gaps.
+    { name: "Activity", uri: "", definition: "A logged interaction — call, meeting or email", aliases: ["activity", "task", "interaction"] },
+    { name: "Pipeline", uri: "", definition: "The set of open opportunities at a point in time", aliases: ["pipeline", "funnel"] },
+    { name: "Forecast", uri: "", definition: "Projected revenue for a period", aliases: ["forecast", "revenue forecast"] },
+    { name: "Territory", uri: "", definition: "A market or segment assigned to a seller", aliases: ["territory", "patch"] },
+    // "Partner" alone is an Organization alias in schema.org; the qualified name
+    // is what makes this class reachable at all.
+    { name: "Alliance Partner", uri: "", definition: "An alliance or channel organisation selling with or through the business", aliases: ["alliance partner", "channel partner", "reseller"], areaHints: ["alliance", "partner", "channel"] },
+  ],
+  relations: [
+    { from: "Campaign", verb: "produces", to: "Lead" },
+    { from: "Lead", verb: "leads to", to: "Opportunity" },
+    { from: "Opportunity", verb: "leads to", to: "Contract" },
+    { from: "Contact", verb: "is part of", to: "Account" },
+    { from: "Opportunity", verb: "applies to", to: "Account" },
+    { from: "Contract", verb: "applies to", to: "Account" },
+    { from: "Activity", verb: "supports", to: "Opportunity" },
+    { from: "Opportunity", verb: "is part of", to: "Pipeline" },
+    { from: "Forecast", verb: "measures", to: "Pipeline" },
+    { from: "Alliance Partner", verb: "participates in", to: "Opportunity" },
+    { from: "Territory", verb: "applies to", to: "Account" },
+  ],
+};
+
+/** Phrases that mark a mandate as being ABOUT the sales/customer domain.
+ * TWO distinct hits are required, and that threshold is the whole design: a
+ * clinical-recruitment mandate that merely mentions "an AI-powered CRM" scores
+ * one and stays a FHIR programme, while a mandate to replace Salesforce and run
+ * the customer life cycle across Sales, Marketing and GTM scores six. One
+ * keyword would have mis-fired on the first; the second signal is what
+ * separates building a CRM from using one. */
+const CRM_DOMAIN_SIGNALS = [
+  "crm", "customer relationship management", "salesforce", "hubspot", "dynamics 365",
+  "sales pipeline", "pipeline management", "sales operations", "revenue operations",
+  "customer life cycle", "customer lifecycle", "go-to-market", "gtm",
+  "lead management", "opportunity management", "quote to cash", "quote-to-cash",
+];
+const CRM_DOMAIN_SIGNAL_THRESHOLD = 2;
+
+/** The CRM pack when the mandate is about the sales/customer domain, else null.
+ * Threaded alongside clientVocabularyPack at every site that resolves packs —
+ * the prompt's fact list, the reconciler's gate, and the grounding manifest —
+ * because a fact shipped to one and withheld from another is how a class gets
+ * asked for and then rejected. */
+function crmDomainPack(mandate: string): ProvisionalPack | null {
+  const hay = ` ${mandate.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ")} `;
+  const hits = new Set(CRM_DOMAIN_SIGNALS.filter((s) => hay.includes(` ${s.replace(/[^a-z0-9]+/g, " ")} `)));
+  return hits.size >= CRM_DOMAIN_SIGNAL_THRESHOLD ? PROVISIONAL_BACKBONE_PACKS.crm : null;
+}
+
 /** Deterministic pack selection: the packs ride in the SAME ORDER the steering
  * mentions the vocabularies — the FIRST named vocabulary is the primary whose
  * cores are always asserted. (A fixed check order used to decide this, which
@@ -7536,6 +7625,10 @@ async function runVotedProvisionalOntology(
     // class URIs, class names/aliases, and associations — so the acid test is
     // ENFORCED in code, not just requested in the prompt.
     const packs = resolveProvisionalPacks(ontologyVocabularySteering(mc.industry, mc.segment));
+    // The functional-domain axis: appended, not swapped, so the industry pack
+    // stays primary and its cores survive alongside the CRM ones.
+    const crmPack = crmDomainPack(mc.mandate);
+    if (crmPack) packs.push(crmPack);
     const clientPack = clientVocabularyPack(inner);
     if (clientPack) packs.push(clientPack);
     const allowedUris = new Set<string>();
@@ -7559,6 +7652,9 @@ async function runVotedProvisionalOntology(
     // guaranteed into every industry's ontology.
     const coreClasses = new Set<string>();
     for (const entity of (packs[0]?.entities ?? [])) if (entity.core) coreClasses.add(entity.name);
+    // The functional-domain cores are asserted too: the mandate named this
+    // domain, so its backbone is in scope whatever the industry primary is.
+    for (const entity of (crmPack?.entities ?? [])) if (entity.core) coreClasses.add(entity.name);
     // Client-pack cores are asserted too — the engagement declared them canonical.
     for (const entity of (clientPack?.entities ?? [])) if (entity.core) coreClasses.add(entity.name);
     const packEntityByClass = new Map<string, { name: string; uri: string; definition: string; vocabulary: string }>();
@@ -9754,6 +9850,8 @@ Deno.serve(async (req) => {
       const mc = ontologyMandateContext(innerContextProgramData, programRow as Record<string, unknown>);
       const steering = ontologyVocabularySteering(mc.industry, mc.segment);
       const standardPacks = resolveProvisionalPacks(steering);
+      const crmPack = crmDomainPack(mc.mandate);
+      if (crmPack) standardPacks.push(crmPack);
       const clientPack = clientVocabularyPack(innerContextProgramData);
       const packOut = (pack: ProvisionalPack, source: "standard" | "client") => ({
         vocabulary: pack.vocabulary,
