@@ -107,26 +107,39 @@ export const SCENES: Scene[] = [
     voAt: 11,
   },
   {
+    // AURA does not start from a blank page — it starts from the industry's
+    // accumulated standards and produces something provisional, fast. This
+    // answers the cold-start question a sceptic always asks: how does it know
+    // anything before it has spoken to anyone?
+    id: "seg4a",
+    eyebrow: "01 · It doesn't start from a blank page",
+    headline: "Provisional in minutes. Grounded in the standards.",
+    subline: "Entities, personas and workflows — drawn from the standards of your industry before a single conversation.",
+    vo: "Aura doesn't start from a blank page. It generates a provisional ontology — personas, workflows, entities — grounded in the standards of your industry.",
+    animFloor: 420,
+    tail: 1.6,
+  },
+  {
     id: "seg4",
-    eyebrow: "01 · It starts with people",
+    eyebrow: "02 · Then it goes to the people",
     headline: "AURA is designed to engage with stakeholders autonomously.",
     subline:
       "Every gap becomes a plain-language question — routed on a no-login link, answered in their own words, folded back in.",
-    vo: "It starts with people. Aura is designed to engage with stakeholders autonomously — every gap a plain-language question, every disagreement a finding, not noise.",
+    vo: "From there it engages your stakeholders autonomously — every gap a plain-language question, every disagreement a finding, not noise. The provisional becomes yours.",
     animFloor: 360,
     tail: 1.4,
   },
   {
     id: "seg5",
-    eyebrow: "02 · In the business's own language — deterministically",
-    headline: "Same mandate. Same model. Every time.",
-    vo: "From those voices, Aura draws the business in its own language, deterministically — every entity grounded in the industry's standards. That model isn't a document. It's what the working system is generated from … Run it twice: the same model, every time.",
+    eyebrow: "03 · Your fabric",
+    headline: "Same mandate. Same fabric. Every time.",
+    vo: "What comes back is your company's own fabric. Not a document — the foundation the architecture, the solutions and the prototype are all generated from … Run it twice: the same fabric, every time.",
     animFloor: 380,
     tail: 1.4,
   },
   {
     id: "seg6",
-    eyebrow: "03 · Governed by design",
+    eyebrow: "04 · Governed by design",
     headline: "Autonomous — with a human in the loop, end to end.",
     subline: "Machine proposes. The business validates. Every judgment recorded as evidence.",
     vo: "And control is the architecture. The machine proposes — the business validates. Every phase gates on a demonstration. Every judgment lands on a permanent record. And it doesn't stop at go-live: Aura watches the model drift as the business changes, and proposes the correction for your team to accept. Autonomy you can audit.",
@@ -141,7 +154,7 @@ export const SCENES: Scene[] = [
   },
   {
     id: "seg8",
-    eyebrow: "04 · Any business",
+    eyebrow: "05 · Any business",
     headline: "One method. Every industry.",
     subline:
       "Different industries. Different problems. The same discipline — start from the business.",
@@ -163,10 +176,10 @@ export const SCENES: Scene[] = [
     // beat in it: what the same orchestration does across a whole product
     // life, with today's five movements shown as one segment of a longer arc.
     id: "seg7b",
-    eyebrow: "05 · What comes next",
+    eyebrow: "06 · What comes next",
     headline: "Imagine the possibilities.",
     subline: "Today, AI-native solutions to complex business problems. Next, the full product lifecycle.",
-    vo: "Today, Aura orchestrates the design of AI-native solutions to complex business problems. Imagine extending it to deliver the full product lifecycle.",
+    vo: "Today, Aura orchestrates the design of AI-native solutions to complex business problems … Imagine extending it to deliver the full product lifecycle.",
     // The arc has to draw, nine stages have to land and the key has to
     // register; the narration is short, so the scene is sized by the build.
     animFloor: 450,
