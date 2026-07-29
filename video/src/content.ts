@@ -318,7 +318,12 @@ export const CONTRADICTION = {
  * lists are real; neither is illustrative.
  */
 export const PROVISIONAL_LABELS: string[] = [
-  "Person", "Organization", "Account", "Contact", "Lead", "Opportunity",
+  // Ontology3D links each node to the next two, so ORDER is what draws the
+  // relationships. Account sits beside Opportunity because "Opportunity
+  // applies to Account" is one of the eleven relations the live provisional
+  // programme actually returned — the pairing is real, not arranged. Lead
+  // precedes Opportunity for the same reason ("Lead leads to Opportunity").
+  "Person", "Organization", "Account", "Opportunity", "Lead", "Contact",
   "Offer", "Order", "Contract", "Invoice", "Campaign", "Product", "Service",
 ];
 

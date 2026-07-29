@@ -343,9 +343,14 @@ export const SceneAlignment: React.FC = () => {
  * and told the mechanism backwards.
  */
 export const SceneGrounded: React.FC = () => {
+  /* Every element here is absolutely positioned, so it opts out of Ground's
+     centring. Measured off the rendered frame the block sat at y=452 — 88px
+     high, with dead space beneath it. Each top carries that 88. The other
+     nine scenes measured within 20px of centre, six of them within 2, so
+     they were deliberately left alone rather than swept. */
   return (
     <Ground>
-      <Rise start={0} style={{ position: "absolute", top: 58, width: "100%", textAlign: "center" }}>
+      <Rise start={0} style={{ position: "absolute", top: 146, width: "100%", textAlign: "center" }}>
         <Eyebrow>{copy("seg4a").eyebrow}</Eyebrow>
         <div style={{ fontFamily: FONT, fontSize: 40, fontWeight: 800, color: "#fff", marginBottom: 8 }}>
           {copy("seg4a").headline}
@@ -354,7 +359,7 @@ export const SceneGrounded: React.FC = () => {
           {copy("seg4a").subline}
         </div>
       </Rise>
-      <div style={{ position: "absolute", left: 210, top: 190 }}>
+      <div style={{ position: "absolute", left: 210, top: 278 }}>
         {/* The PROVISIONAL programme, not the finished map: this scene is the
             cold-start answer, so it has to show what AURA knows before anyone
             has spoken. Rendering the map here was the flaw four board
@@ -362,7 +367,7 @@ export const SceneGrounded: React.FC = () => {
             identical, so the stakeholders appeared to change nothing. */}
         <Ontology3D labels={PROVISIONAL_LABELS} start={b(2)} period={1100} radius={240} height={520} />
       </div>
-      <Rise start={b(6)} style={{ position: "absolute", left: 260, top: 700 }}>
+      <Rise start={b(6)} style={{ position: "absolute", left: 260, top: 788 }}>
         <div
           style={{
             fontFamily: FONT, background: "#fff", color: INK, borderRadius: 18,
@@ -380,7 +385,7 @@ export const SceneGrounded: React.FC = () => {
           <Img src={staticFile(RECEIPTS.standardAlignment.file)} style={{ width: 1340, display: "block", borderRadius: 10 }} />
         </div>
       </Rise>
-      <Rise start={b(9)} style={{ position: "absolute", right: 150, top: 300 }}>
+      <Rise start={b(9)} style={{ position: "absolute", right: 150, top: 388 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           {STANDARDS.map((s) => (
             <Chip key={s}>{s}</Chip>
