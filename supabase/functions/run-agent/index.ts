@@ -6620,7 +6620,13 @@ function ontologyClassFromUri(uri: unknown): string {
 // generation context so grounding is matching against provided facts rather
 // than training recall — a class the pack does not list cannot be aligned to.
 // Recovered from the deterministic-compiler experiment (689d9ff).
-type ProvisionalPackEntity = { name: string; uri: string; definition: string; aliases: string[]; core?: boolean };
+type ProvisionalPackEntity = {
+  name: string; uri: string; definition: string; aliases: string[]; core?: boolean;
+  /** Words that place this class in a business area, for the core-synthesis
+   * path — which has no drafted row to read an area off. Matched against the
+   * Discovery Kit's declared coverage domains; no match leaves it General. */
+  areaHints?: string[];
+};
 type ProvisionalPack = {
   vocabulary: string;
   entities: ProvisionalPackEntity[];
@@ -6893,6 +6899,48 @@ PROVISIONAL_BACKBONE_PACKS.fiboInsurance = {
   relations: PROVISIONAL_BACKBONE_PACKS.fibo.relations,
 };
 
+/** The commercial backbone, and the area vocabulary each class belongs to.
+ * Keys are schema.org class names; presence here is what makes a class core
+ * when schema.org is the PRIMARY pack. Hints are matched loosely against the
+ * Discovery Kit's declared domains, so they list the words a programme is
+ * likely to have named its areas with rather than one canonical label. */
+const COMMERCE_CORE_AREA_HINTS: Record<string, string[]> = {
+  Person: ["customer", "client", "sales", "account", "crm"],
+  Organization: ["account", "customer", "partner", "alliance", "sales"],
+  Product: ["product", "catalog", "catalogue", "offering", "portfolio"],
+  Service: ["service", "delivery", "offering", "support", "operations"],
+  Offer: ["sales", "pricing", "quote", "proposal", "deal", "pursuit", "marketing"],
+  Order: ["sales", "order", "booking", "contract", "revenue"],
+  Invoice: ["finance", "billing", "invoicing", "revenue", "accounts", "collections"],
+};
+
+/** schema.org does two different jobs, and one core set cannot serve both.
+ *
+ * As the FALLBACK under a specialist pack it must stay minimal: guaranteeing
+ * Order and Invoice into a FHIR clinical ontology would assert commerce nouns
+ * nobody's mandate asked for. Two cores (Person, Organization) is right there.
+ *
+ * As the PRIMARY pack — technology & software, professional services,
+ * education, travel, and every industry with no dedicated vocabulary — two
+ * cores is a hard ceiling of two asserted entities, because extended classes
+ * are demoted to gaps by policy however many drafts vote for them. That is how
+ * a nine-area CRM programme came back with Customer and Organization and
+ * nothing else.
+ *
+ * So: same classes, same URIs, same relations — a wider core. The commercial
+ * backbone below is the part every revenue-generating organisation has, whether
+ * it sells software, courses, or hotel rooms: a customer, a counterparty, an
+ * offering, an agreement to buy, and a bill.
+ */
+PROVISIONAL_BACKBONE_PACKS.commerce = {
+  vocabulary: PROVISIONAL_BACKBONE_PACKS.schema.vocabulary,
+  entities: PROVISIONAL_BACKBONE_PACKS.schema.entities.map((e) => {
+    const hints = COMMERCE_CORE_AREA_HINTS[e.name];
+    return hints ? { ...e, core: true, areaHints: hints } : e;
+  }),
+  relations: PROVISIONAL_BACKBONE_PACKS.schema.relations,
+};
+
 /** Deterministic pack selection: the packs ride in the SAME ORDER the steering
  * mentions the vocabularies — the FIRST named vocabulary is the primary whose
  * cores are always asserted. (A fixed check order used to decide this, which
@@ -6916,6 +6964,12 @@ function resolveProvisionalPacks(steering: string): ProvisionalPack[] {
     .sort((a, b) => a.at - b.at)
     .map((t) => t.pack);
   if (!packs.includes(PROVISIONAL_BACKBONE_PACKS.schema)) packs.push(PROVISIONAL_BACKBONE_PACKS.schema);
+  // schema.org PRIMARY (no specialist vocabulary named first) means no
+  // specialist pack is carrying the backbone, so the generic pack has to — see
+  // the commerce pack above. Swapping in place keeps every class, URI and
+  // relation identical; only the core flags widen. When schema.org is merely
+  // the fallback its two cores are left exactly as they were.
+  if (packs[0] === PROVISIONAL_BACKBONE_PACKS.schema) packs[0] = PROVISIONAL_BACKBONE_PACKS.commerce;
   return packs;
 }
 
@@ -6990,9 +7044,27 @@ function reconcileVotedOntology(
     coreClasses?: Set<string>;
     /** Class name → its pack entity + vocabulary, for core synthesis. */
     packEntityByClass?: Map<string, { name: string; uri: string; definition: string; vocabulary: string }>;
+    /** Class name → the area words the pack places it in, for core synthesis. */
+    packAreaHintsByClass?: Map<string, string[]>;
+    /** The Discovery Kit's declared coverage domains — the areas the rest of
+     * the programme aligns to. Synthesised cores are placed onto these. */
+    programAreas?: string[];
   },
 ): Record<string, unknown> {
-  const { threshold, total, sponsor, programName, allowedUris, packClasses, uriToClass, packAssociations, coreClasses, packEntityByClass } = opts;
+  const { threshold, total, sponsor, programName, allowedUris, packClasses, uriToClass, packAssociations, coreClasses, packEntityByClass, packAreaHintsByClass, programAreas } = opts;
+  /** Place a synthesised core onto one of the programme's declared areas: the
+   * first area whose label contains one of the class's hint words. No hint, no
+   * declared areas, or no match leaves it General — the honest answer, and the
+   * one an operator can see needs assigning. */
+  const areaForClass = (cls: string): string => {
+    const hints = packAreaHintsByClass?.get(cls);
+    if (!hints?.length || !programAreas?.length) return "General";
+    for (const hint of hints) {
+      const hit = programAreas.find((a) => a.toLowerCase().includes(hint));
+      if (hit) return hit;
+    }
+    return "General";
+  };
   // Pack validation: with the backbone shipped as facts, an alignment URI the
   // pack does not list is recall leaking back in — strip it (standard-keyed
   // comparison) so a hallucinated or off-pack class can never reach the record.
@@ -7189,7 +7261,7 @@ function reconcileVotedOntology(
       entities.push({
         name: pe.name,
         definition: pe.definition + " - to be confirmed in interviews.",
-        area: "General",
+        area: areaForClass(cls),
         attributes: [] as string[],
         systemOfRecord: null,
         aliases: [] as string[],
@@ -7411,6 +7483,16 @@ function ontologyListenEvidenceOnRecord(inner: Record<string, unknown>): boolean
     && value.trim().length >= 400);
 }
 
+/** The business domains the Discovery Kit declared it would cover. MIRRORS
+ * kitCoverageDomains() in src/v3/components/flow/flowAreas.ts — the app treats
+ * these as the source of truth every phase aligns to, so a synthesised entity
+ * has to land on one of them rather than inventing its own label. */
+function ontologyKitCoverageDomains(inner: Record<string, unknown>): string[] {
+  const kit = normalizeProgramData(inner.discoveryKit as JsonValue | null);
+  const map = Array.isArray(kit.coverageMap) ? kit.coverageMap.filter(isRecord) : [];
+  return map.map((row) => typeof row.domain === "string" ? row.domain.trim() : "").filter(Boolean);
+}
+
 /** The mandate text + sponsor + steering inputs, for the reconciler's naming
  * tiebreak, its gaps, and the pack the alignment URIs are validated against. */
 function ontologyMandateContext(inner: Record<string, unknown>, programRow: Record<string, unknown>): { mandate: string; sponsor: string; programName: string; industry: string; segment: string } {
@@ -7480,15 +7562,18 @@ async function runVotedProvisionalOntology(
     // Client-pack cores are asserted too — the engagement declared them canonical.
     for (const entity of (clientPack?.entities ?? [])) if (entity.core) coreClasses.add(entity.name);
     const packEntityByClass = new Map<string, { name: string; uri: string; definition: string; vocabulary: string }>();
+    const packAreaHintsByClass = new Map<string, string[]>();
     for (const pack of packs) {
       for (const entity of pack.entities) {
         if (!packEntityByClass.has(entity.name)) packEntityByClass.set(entity.name, { name: entity.name, uri: entity.uri, definition: entity.definition, vocabulary: pack.vocabulary });
+        if (entity.areaHints?.length && !packAreaHintsByClass.has(entity.name)) packAreaHintsByClass.set(entity.name, entity.areaHints);
       }
     }
     const doc = reconcileVotedOntology(drafts, {
       threshold: ONTOLOGY_VOTE_THRESHOLD, total: ONTOLOGY_VOTE_N,
       mandate: mc.mandate, sponsor: mc.sponsor, programName: mc.programName,
       allowedUris, packClasses, uriToClass, packAssociations, coreClasses, packEntityByClass,
+      packAreaHintsByClass, programAreas: ontologyKitCoverageDomains(inner),
     });
     const base = usable[0];
     return {

@@ -45,7 +45,7 @@ import { applyArtifactEdit, readArtifactDoc } from "@/v3/components/flow/flowArt
 import { operatorOverrideGuidance } from "@/v3/components/flow/flowOperatorOverrides";
 import { compileShipLanes, setShipLane, toggleShipItem } from "@/v3/components/flow/flowShip";
 import { scheduleFollowUp, discoveryKitCoverageGuidance } from "@/v3/components/flow/flowMeetings";
-import { listenCanonicalCastGuidance, kitAreaEntityGuidance, atlasAreaEntityGuidance } from "@/v3/components/flow/listenCoverage";
+import { listenCanonicalCastGuidance, kitAreaEntityGuidance, atlasAreaEntityGuidance, ontologyAreaCoverageGuidance } from "@/v3/components/flow/listenCoverage";
 import { mintFollowUpPack, latestPackFor, portalLinkFor, mintReviewPack, latestReviewPackFor } from "@/v3/components/flow/flowPortal";
 import { mintBrief, briefLinkFor } from "@/v3/components/flow/flowBriefs";
 import FlowRespond from "@/v3/components/flow/FlowRespond";
@@ -1058,6 +1058,15 @@ export default function AppShellV3() {
       // the model by construction.
       const areaEntities = kitAreaEntityGuidance(activeProgram);
       if (areaEntities) crossPhaseContext += `${crossPhaseContext ? "\n\n" : ""}${areaEntities}`;
+    }
+    // The ontology's own prompt names "area" exactly once — in a JSON field
+    // description — while six passages push it toward fewer entities. With no
+    // area checklist a nine-area programme returns two entities in one area,
+    // and because the kit and atlas guidances both key off the ontology, that
+    // one gap starves the whole Listen triangle.
+    if (resolvedAgentId === "domain-ontology" && activeProgram) {
+      const coverage = ontologyAreaCoverageGuidance(activeProgram);
+      if (coverage) crossPhaseContext += `${crossPhaseContext ? "\n\n" : ""}${coverage}`;
     }
     // The Atlas OWNS the business events (they moved from the ontology) and
     // weaves them into its workflows: each step that raises or responds to
