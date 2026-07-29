@@ -36,7 +36,12 @@ export const Ontology2D: React.FC<{
   // ones or wastes the frame on the short ones, so each pill is sized to its
   // label and the type steps down to keep the widest inside the 320 column
   // pitch rather than overrunning its neighbour.
+  // An empty label is a real entity the frame has no room to name — drawn as a
+  // node, not a pill. Thirty-two named pills do not fit two run cards, and
+  // dropping twenty of the entities to make them fit would make the finished
+  // ontology look smaller than the provisional seed it is supposed to dwarf.
   const box = (label: string) => {
+    if (!label) return { fs: 0, w: 26 };
     const fs = label.length > 20 ? 19 : label.length > 15 ? 23 : label.length > 11 ? 27 : 32;
     return { fs, w: Math.max(170, Math.min(300, label.length * fs * 0.58 + 34)) };
   };
@@ -72,14 +77,20 @@ export const Ontology2D: React.FC<{
       {nodes.map(([x, y, label], i) => {
         const { fs, w } = box(label);
         return (
-          <g key={label} opacity={enter(start + i * 5)}>
-            <rect
-              x={x - w / 2} y={y - 30} width={w} height={60} rx={14}
-              fill="rgba(255,255,255,0.07)" stroke="rgba(255,255,255,0.35)"
-            />
-            <text x={x} y={y + fs / 3 + 1} textAnchor="middle" fill="#fff" fontFamily={FONT} fontSize={fs} fontWeight={700}>
-              {label}
-            </text>
+          <g key={`${label}-${i}`} opacity={enter(start + i * 5)}>
+            {label ? (
+              <>
+                <rect
+                  x={x - w / 2} y={y - 30} width={w} height={60} rx={14}
+                  fill="rgba(255,255,255,0.07)" stroke="rgba(255,255,255,0.35)"
+                />
+                <text x={x} y={y + fs / 3 + 1} textAnchor="middle" fill="#fff" fontFamily={FONT} fontSize={fs} fontWeight={700}>
+                  {label}
+                </text>
+              </>
+            ) : (
+              <circle cx={x} cy={y} r={13} fill="rgba(255,255,255,0.16)" stroke="rgba(255,255,255,0.42)" strokeWidth={2} />
+            )}
           </g>
         );
       })}
@@ -178,31 +189,48 @@ export const Ontology3D: React.FC<{
       })}
       {order.map((i) => {
         const p = pts[i];
-        const w = 176 * p.s;
-        const h = 58 * p.s;
+        // Plates size to their word, as on the flat map: a real ontology runs
+        // from "SOW" to "Practice Forecast Split", and one fixed width either
+        // clips the long names or floats the short ones in empty box.
+        const fs = 22;
+        const w = Math.max(120, p.label.length * fs * 0.56 + 26) * p.s;
+        const h = 52 * p.s;
         // Depth cue: things further away are dimmer as well as smaller.
         const dim = interpolate(p.s, [0.72, 1.24], [0.45, 1], {
           extrapolateLeft: "clamp",
           extrapolateRight: "clamp",
         });
         return (
-          <g key={p.label} opacity={p.enter * dim}>
-            {/* Opaque backing first, so the painter's sort genuinely occludes
-                rather than letting far labels read through near ones. */}
-            <rect x={p.sx - w / 2} y={p.sy - h / 2} width={w} height={h} rx={14 * p.s} fill="#241A54" />
-            <rect
-              x={p.sx - w / 2} y={p.sy - h / 2} width={w} height={h} rx={14 * p.s}
-              fill="rgba(255,255,255,0.07)" stroke="rgba(255,255,255,0.38)" strokeWidth={1.2}
-            />
-            {/* Always labelled. A plate drawn without its word in it reads as
-                a failed render, not as depth — the opaque backing above and
-                the depth dimming below are what separate near from far. */}
-            <text
-              x={p.sx} y={p.sy + 9 * p.s} textAnchor="middle" fill="#fff"
-              fontFamily={FONT} fontSize={25 * p.s} fontWeight={700}
-            >
-              {p.label}
-            </text>
+          <g key={`${p.label}-${i}`} opacity={p.enter * dim}>
+            {p.label ? (
+              <>
+                {/* Opaque backing first, so the painter's sort genuinely occludes
+                    rather than letting far labels read through near ones. */}
+                <rect x={p.sx - w / 2} y={p.sy - h / 2} width={w} height={h} rx={14 * p.s} fill="#241A54" />
+                <rect
+                  x={p.sx - w / 2} y={p.sy - h / 2} width={w} height={h} rx={14 * p.s}
+                  fill="rgba(255,255,255,0.07)" stroke="rgba(255,255,255,0.38)" strokeWidth={1.2}
+                />
+                {/* A plate is ALWAYS given its word. Drawn empty it reads as a
+                    failed render, not as depth — the opaque backing above and
+                    the depth dimming below are what separate near from far. */}
+                <text
+                  x={p.sx} y={p.sy + 8 * p.s} textAnchor="middle" fill="#fff"
+                  fontFamily={FONT} fontSize={fs * p.s} fontWeight={700}
+                >
+                  {p.label}
+                </text>
+              </>
+            ) : (
+              /* An entity the frame has no room to name. A node, never an empty
+                 plate — see above. Thirty-two named plates on one sphere is
+                 mush, but dropping twenty entities would make the finished
+                 ontology look smaller than the seed it is meant to dwarf. */
+              <circle
+                cx={p.sx} cy={p.sy} r={11 * p.s}
+                fill="rgba(255,255,255,0.20)" stroke="rgba(255,255,255,0.45)" strokeWidth={1.4 * p.s}
+              />
+            )}
           </g>
         );
       })}

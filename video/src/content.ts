@@ -318,23 +318,49 @@ export const PROVISIONAL_LABELS: string[] = [
 
 /** Scene 5 — the entities that bloom on the ontology map. */
 /**
- * Twelve entities lifted from Laila's real domain ontology — the live one has
- * 32 across ten business areas and 40 relations, which is more than a frame
- * can carry legibly. These twelve are the actual value chain, and they cross
- * four systems: CRM, contract management, project management and finance.
- * Laid out so consecutive entities are genuinely related, because Ontology2D
- * links each node to the next two.
+ * ALL 32 entities of Laila's live domain ontology, and the count is the point:
+ * against the thirteen above, the map has to LOOK like more than the seed or
+ * the scene argues against itself. Showing twelve made the finished ontology
+ * appear smaller than the provisional one.
  *
- * Chosen to be the ones the STANDARDS could never have supplied. Buying
- * Committee, Delivery Health, Practice Forecast Split and Revenue Recognition
- * came out of sixteen interviews and exist nowhere in schema.org — set against
- * the provisional list above, they are the visible proof that the stakeholders
- * changed something.
+ * Thirty-two labelled plates cannot fit two side-by-side run cards, so eight
+ * carry their names and the other twenty-four are drawn as nodes (empty label
+ * = unlabelled). Every one is a real entity, listed in ONTOLOGY_CORE below —
+ * none is decoration, and the dense pattern being identical across both runs
+ * proves determinism harder than twelve plates did.
+ *
+ * The named eight are deliberately the ones the STANDARDS could never have
+ * supplied. Buying Committee, Practice Forecast Split, Revenue Recognition and
+ * Forecast Snapshot came out of sixteen interviews and exist nowhere in
+ * schema.org — set against the provisional list above, they are the visible
+ * proof that the stakeholders changed something.
  */
-export const ONTOLOGY_NODES: Array<[number, number, string]> = [
-  [370, 210, "Lead"],     [690, 210, "Buying Committee"], [1010, 210, "Opportunity"], [1310, 210, "Proposal"],
-  [1310, 360, "SOW"],     [1010, 360, "Engagement"],      [690, 360, "Delivery Health"], [370, 360, "Timesheet"],
-  [370, 510, "Invoice"],  [690, 510, "Revenue Recognition"], [1010, 510, "Practice Forecast Split"], [1310, 510, "Forecast Snapshot"],
+/** The eight the map names — every one a noun sixteen interviews produced and
+ * schema.org has never heard of, plus the anchors that orient the value chain. */
+export const ONTOLOGY_NAMED: string[] = [
+  "Lead", "Buying Committee", "Opportunity", "SOW", "Timesheet", "Practice Forecast Split",
+];
+
+/**
+ * The same 32 for the rotating map. Ontology3D lays nodes out by index on a
+ * Fibonacci spiral, so the named ones are spaced every fourth slot — bunching
+ * them at the head would pile all eight labels onto one pole of the sphere.
+ */
+export const ONTOLOGY_SPHERE: string[] = Array.from(
+  { length: 32 },
+  (_, i) => (i % 5 === 0 ? ONTOLOGY_NAMED[i / 5] ?? "" : ""),
+);
+
+/**
+ * The twenty-four the core stands for, in the app's own order — kept so the
+ * claim "every node is real" is checkable rather than asserted.
+ */
+export const ONTOLOGY_CORE: string[] = [
+  "Account", "Billing Schedule", "Campaign", "Campaign Member", "Competitor",
+  "Contact", "Contract", "Delivery Health", "Document", "Engagement",
+  "Escalation", "Event", "Invoice", "Lead Score", "Milestone",
+  "Opportunity Line Item", "Partner", "Practice Contribution", "Quote",
+  "Revenue Projection", "Signal", "Signal Action", "SOW", "Staffing",
 ];
 
 export const STANDARDS = ["FHIR", "FIBO", "GS1", "schema.org"];

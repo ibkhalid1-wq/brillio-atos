@@ -8,10 +8,10 @@ import {
   useCurrentFrame,
 } from "remotion";
 import { ELECTRIC, ELECTRIC_TEXT, FAINT, FONT, INK, INK_2, MUTED, T } from "./tokens";
-import { AuraWord, Chip, DrawnLine, Eyebrow, Glow, Ontology2D, Ontology3D, Plate, Rise, ScreenInset, Typed } from "./ui";
+import { AuraWord, Chip, DrawnLine, Eyebrow, Glow, Ontology3D, Plate, Rise, ScreenInset, Typed } from "./ui";
 import {
   b, copy, CONTRADICTION, DIAGNOSIS_POLES, DOMAINS, GOVERNANCE_CHIPS, GRAVEYARD,
-  JOURNEY, LIFECYCLE, NUMBERS, ONTOLOGY_NODES, PROVISIONAL_LABELS, RECEIPTS, TRANSCRIPT, SPINE, STAKEHOLDERS, STANDARDS, TEAM,
+  JOURNEY, LIFECYCLE, NUMBERS, ONTOLOGY_SPHERE, PROVISIONAL_LABELS, RECEIPTS, TRANSCRIPT, SPINE, STAKEHOLDERS, STANDARDS, TEAM,
 } from "./content";
 
 /**
@@ -370,7 +370,9 @@ export const SceneGrounded: React.FC = () => {
           }}
         >
           <div style={{ display: "flex", alignItems: "baseline", gap: 18, marginBottom: 14 }}>
-            <span style={{ fontSize: 28, fontWeight: 800 }}>Account</span>
+            {/* From the content library, never typed here. This exact word was
+                hardcoded once before and outlived the fact it named. */}
+            <span style={{ fontSize: 28, fontWeight: 800 }}>{RECEIPTS.standardAlignment.entity}</span>
             <span style={{ fontSize: 19, fontWeight: 700, color: ELECTRIC_TEXT, letterSpacing: ".1em" }}>
               {RECEIPTS.standardAlignment.label}
             </span>
@@ -410,18 +412,20 @@ export const SceneFabric: React.FC = () => {
             <div
               key={r}
               style={{
-                width: 760, height: 340, borderRadius: 22, border: `1px solid ${FAINT}`,
+                width: 760, height: 430, borderRadius: 22, border: `1px solid ${FAINT}`,
                 position: "relative", overflow: "hidden",
               }}
             >
-              <span style={{ position: "absolute", top: 20, left: 26, fontFamily: FONT, fontSize: 26, fontWeight: 800, color: MUTED, letterSpacing: ".14em" }}>
+              <span style={{ position: "absolute", top: 20, left: 26, fontFamily: FONT, fontSize: 26, fontWeight: 800, color: MUTED, letterSpacing: ".14em", zIndex: 2 }}>
                 {r}
               </span>
-              {/* Flat, and therefore provably the same picture twice. A
-                  rotating pair shows a different silhouette every frame,
-                  which is the opposite of what this scene claims. */}
+              {/* Both runs in 3D, and still provably the same picture twice:
+                  Ontology3D derives its rotation from the frame alone, so at
+                  any instant the pair is pixel-identical. The earlier note here
+                  worried that rotation broke the proof — it does not. The claim
+                  is run 1 == run 2 at a given frame, not frame N == frame N+1. */}
               <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <Ontology2D nodes={ONTOLOGY_NODES} start={b(4)} width={730} height={230} />
+                <Ontology3D labels={ONTOLOGY_SPHERE} start={b(4)} period={1100} radius={196} width={740} height={420} />
               </div>
             </div>
           ))}
