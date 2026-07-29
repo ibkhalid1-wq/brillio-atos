@@ -120,6 +120,17 @@ export const SCENES: Scene[] = [
     tail: 1.6,
   },
   {
+    id: "seg8",
+    eyebrow: "Any business",
+    headline: "One method. Every industry.",
+    subline:
+      "Different industries. Different problems. The same discipline — start from the business.",
+    vo: "Patient referrals. Loan origination. Order fulfillment. Different problems — the same discipline … start from the business.",
+    animFloor: 200,
+    tail: 1.6,
+    wpm: 132,
+  },
+  {
     id: "seg4",
     eyebrow: "Then it goes to the people",
     headline: "AURA is designed to engage with stakeholders autonomously.",
@@ -148,20 +159,9 @@ export const SCENES: Scene[] = [
   },
   {
     id: "seg7",
-    vo: "One real business problem. Fifteen stakeholders heard. Thirty-four entities across ten business areas. A working prototype in twenty-one days, validated by the people who named the problem.",
+    vo: "One real business problem. Fifteen stakeholders heard. Thirty-two entities across ten business areas. A working prototype in twenty-one days, validated by the people who named the problem.",
     animFloor: 360,
     tail: 1.4,
-  },
-  {
-    id: "seg8",
-    eyebrow: "Any business",
-    headline: "One method. Every industry.",
-    subline:
-      "Different industries. Different problems. The same discipline — start from the business.",
-    vo: "Patient referrals. Loan origination. Order fulfillment. Different problems — the same discipline … start from the business.",
-    animFloor: 200,
-    tail: 1.6,
-    wpm: 132,
   },
   {
     id: "seg9",
@@ -299,10 +299,20 @@ export const CONTRADICTION = {
 };
 
 /** Scene 5 — the entities that bloom on the ontology map. */
+/**
+ * Twelve entities lifted from Laila's real domain ontology — the live one has
+ * 32 across ten business areas and 40 relations, which is more than a frame
+ * can carry legibly. These twelve are the actual value chain, and they cross
+ * four systems: CRM, contract management, project management and finance.
+ * Laid out so consecutive entities are genuinely related, because Ontology2D
+ * links each node to the next two.
+ */
 export const ONTOLOGY_NODES: Array<[number, number, string]> = [
-  [420, 300, "Account"], [700, 190, "Opportunity"], [960, 320, "Quote"],
-  [560, 470, "Contact"], [830, 500, "Contract"], [1120, 210, "Campaign"],
-  [1180, 460, "Invoice"], [300, 480, "Partner"], [1330, 330, "Engagement"],
+  [330, 230, "Lead"],        [640, 190, "Opportunity"],  [950, 230, "Quote"],
+  [1270, 190, "Proposal"],   [1330, 350, "Contract"],    [1040, 390, "SOW"],
+  [740, 390, "Engagement"],  [430, 380, "Invoice"],
+  [330, 520, "Account"],     [660, 520, "Contact"],      [980, 520, "Partner"],
+  [1300, 510, "Forecast"],
 ];
 /** Just the entity names — what the 3D model of the ontology renders. */
 export const ONTOLOGY_LABELS: string[] = ONTOLOGY_NODES.map(([, , label]) => label);
@@ -337,7 +347,7 @@ export const GOVERNANCE_CHIPS = [
 export const NUMBERS = [
   "1 mandate",
   "15 stakeholders heard",
-  "34 entities",
+  "32 entities",
   "10 business areas",
   "21 days → working Sales prototype in Laila",
 ];
