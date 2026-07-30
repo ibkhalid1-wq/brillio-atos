@@ -305,14 +305,27 @@ export function IntervieweeDiscovery({ program, movementId, captureField, areaFi
   const kitAreas = listenCoverageAreas(program).map((area) => area.label)
     .filter((label) => !label.includes("/"));
   const kitCoverage = listenAreaCoverage(program);
-  const coverageAreaOf = (label: string): string | null => {
+  // ALL the areas the kit assigns this person, not the first. The kit's matrix
+  // says in as many words that "a person who spans areas is interviewed once
+  // and their evidence flows to every area they cover" — a .find() here broke
+  // that promise: someone covering Finance, Sales, Practices and Sales Ops
+  // landed in whichever lane sorted first and the other three read 0/0. That
+  // is how Finance showed "no one covers this area" during a live demo while
+  // the kit plainly assigned it.
+  const coverageAreasOf = (label: string): string[] => {
     const key = label.trim().toLowerCase();
-    if (!key) return null;
-    return kitCoverage.find((row) => row.roles.some((role) => role.trim().toLowerCase() === key))?.area ?? null;
+    if (!key) return [];
+    return kitCoverage.filter((row) => row.roles.some((role) => role.trim().toLowerCase() === key)).map((row) => row.area);
   };
-  const primaryAreaOf = new Map(evaluated.map((e) =>
-    [e.s.id, coverageAreaOf(e.s.role || e.s.name) ?? coverageAreaOf(e.s.name)
-      ?? canonicalFrameArea(kitAreas, stakeholderPrimaryArea(program, e.s.name, e.s.role))] as const));
+  const areasOf = new Map(evaluated.map((e) => {
+    const declared = [...new Set([...coverageAreasOf(e.s.role || e.s.name), ...coverageAreasOf(e.s.name)])];
+    return [e.s.id, declared.length
+      ? declared
+      : [canonicalFrameArea(kitAreas, stakeholderPrimaryArea(program, e.s.name, e.s.role))]] as const;
+  }));
+  // Surfaces that can only show one area (a card's badge, a review projection)
+  // take the first; the lanes below use the full set.
+  const primaryAreaOf = new Map([...areasOf].map(([id, list]) => [id, list[0]] as const));
   // "Heard" = their evidence is on the record. Open follow-ups are a
   // separate fact (the to-collect/open counts) — requiring both made every
   // heard voice read unheard the moment a regen minted new questions.
@@ -366,9 +379,12 @@ export function IntervieweeDiscovery({ program, movementId, captureField, areaFi
   const laneData = areaOrganized ? (() => {
     const groups = new Map<string, typeof evaluated>();
     for (const e of evaluated) {
-      const area = primaryAreaOf.get(e.s.id) ?? GENERAL_AREA;
-      const list = groups.get(area) ?? [];
-      list.push(e); groups.set(area, list);
+      // Every area they cover, so a spanning voice counts toward each lane it
+      // was assigned to rather than only the first.
+      for (const area of areasOf.get(e.s.id) ?? [GENERAL_AREA]) {
+        const list = groups.get(area) ?? [];
+        list.push(e); groups.set(area, list);
+      }
     }
     // Lanes follow the Discovery Kit's areas in the kit's own (operator-
     // pinned) order; anything the kit doesn't know trails behind.

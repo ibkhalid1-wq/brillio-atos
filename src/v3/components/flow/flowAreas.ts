@@ -136,6 +136,26 @@ export function entityArea(entity: Record<string, unknown>, program: ProgramSumm
  * "what we'll cover" areas, stored on discoveryKit.coverageMap[].domain. These
  * are the SOURCE OF TRUTH the phases align to: they carry forward even before a
  * Listen workflow or ontology term happens to name that domain. */
+/** The Discovery Kit's coverage map as rows: which DOMAIN each set of people
+ * was assigned to cover. The kit is where an operator actually states "Vimal
+ * Pandey covers Finance", so anything downstream that asks "who covers this
+ * area?" has to read it — inferring the answer from another phase's artefacts
+ * gets a different, and often empty, result. */
+export function kitCoverageRows(program: ProgramSummary): Array<{ domain: string; coveredBy: string[] }> {
+  const raw = (program.rawData ?? {}) as Record<string, unknown>;
+  const inner = isRecord(raw.data) ? raw.data : raw;
+  const kit = isRecord(inner.discoveryKit) ? inner.discoveryKit : null;
+  const map = kit && Array.isArray(kit.coverageMap) ? kit.coverageMap.filter(isRecord) : [];
+  return map.map((row) => ({
+    domain: str(row.domain).trim(),
+    coveredBy: (Array.isArray(row.coveredBy) ? row.coveredBy.map(String) : str(row.coveredBy).split(","))
+      // "End Patient — TBC" and "End Patient" are one identity; the kit writes
+      // both forms, and the same strip is applied wherever coveredBy is read.
+      .map((v) => v.trim().replace(/\s*[—–−‑-]\s*tbc\s*$/i, "").trim())
+      .filter(Boolean),
+  })).filter((r) => r.domain && r.coveredBy.length);
+}
+
 export function kitCoverageDomains(program: ProgramSummary): string[] {
   const raw = (program.rawData ?? {}) as Record<string, unknown>;
   const inner = isRecord(raw.data) ? raw.data : raw;
