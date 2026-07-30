@@ -8,7 +8,7 @@
  * it, so there is no import cycle.
  */
 import type { ProgramSummary } from "@/new/types";
-import { programAreas, GENERAL_AREA, stakeholderPrimaryArea, workflowArea } from "@/v3/components/flow/flowAreas";
+import { programAreas, GENERAL_AREA, kitCoverageRows, stakeholderPrimaryArea, workflowArea } from "@/v3/components/flow/flowAreas";
 import { resolveMovementStakeholders, readDirectoryPeople, dismissedListenRoles, validateProgramRole, readListenPlan, listenPlanWrite, readListenPlanOrder, type ListenPlanOverlay, type ListenPlanOrder } from "@/v3/components/flow/flowStakeholders";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
 
@@ -62,10 +62,32 @@ export function listenAreaCoverage(
   areas: CoverageArea[] = listenCoverageAreas(program, plan),
 ): Array<{ area: string; roles: string[]; explicit: boolean; added: boolean }> {
   const rolePrimary = roles.map((r) => ({ label: r.label, area: stakeholderPrimaryArea(program, r.name || r.label, r.label) }));
+  // The Discovery Kit is where coverage is actually DECLARED — an operator sets
+  // "Vimal Pandey covers Finance" in the kit's matrix. Listen used to ignore it
+  // and re-derive the answer from stakeholderPrimaryArea, which scores people
+  // against ATLAS workflows; anyone the Atlas has not placed scores nothing and
+  // the area reads as uncovered. That is how Finance showed "no one covers this
+  // area" while the kit plainly assigned it. The kit's own statement now ranks
+  // above the inference and below only the operator's explicit override.
+  const kitByRole = new Map<string, Set<string>>();
+  for (const row of kitCoverageRows(program)) {
+    const domToks = covTokens(row.domain);
+    if (!domToks.size) continue;
+    for (const person of row.coveredBy) {
+      const key = person.toLowerCase();
+      const match = roles.find((r) => (r.name || "").toLowerCase() === key || r.label.toLowerCase() === key);
+      if (!match) continue;
+      const set = kitByRole.get(match.label) ?? new Set<string>();
+      for (const t of domToks) set.add(t);
+      kitByRole.set(match.label, set);
+    }
+  }
   return areas.map((a) => {
     const explicit = plan.coverage[a.label];
     if (explicit) return { area: a.label, roles: explicit, explicit: true, added: a.added };
     const at = covTokens(a.label);
+    const fromKit = [...kitByRole].filter(([, toks]) => [...toks].some((t) => at.has(t))).map(([label]) => label);
+    if (fromKit.length) return { area: a.label, roles: [...new Set(fromKit)], explicit: false, added: a.added };
     const covering = rolePrimary.filter((rp) => [...covTokens(rp.area)].some((t) => at.has(t))).map((rp) => rp.label);
     return { area: a.label, roles: [...new Set(covering)], explicit: false, added: a.added };
   });
