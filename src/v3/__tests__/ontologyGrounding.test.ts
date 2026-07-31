@@ -708,3 +708,111 @@ describe("CRM functional-domain pack", () => {
     expect(new Set((doc.entities as Array<{ area: string }>).map((e) => e.area)).size).toBeGreaterThanOrEqual(3);
   });
 });
+
+/**
+ * AREA COVERAGE promotion — the FHIR edition of the two-entity ceiling.
+ *
+ * The surgery-cancellations programme surfaced it live: healthcare steers
+ * FHIR-primary, whose core is {Patient, Practitioner, Organization}, and the
+ * extended-demotion policy capped the asserted ontology at those 3 while the
+ * Discovery Kit declared 8 domains. The live view read "3 entities · 8 to
+ * confirm" — the 8 being exactly the FHIR pack's extended classes the drafts
+ * proposed and the reconciler culled. The atlas checklist then keyed off the
+ * ontology's 3 areas and left three kit domains workflow-less.
+ *
+ * The carve-out: a kit domain with no asserted entity promotes the demoted
+ * extended class the drafts filed under it. Standard-grounded only — the acid
+ * test is intact — and deterministic, so the asserted set is a pure function
+ * of (mandate, steering, kit).
+ */
+describe("area coverage promotion (specialist packs)", () => {
+  const SURGERY_KIT = [
+    "Anesthesiology", "Executive Oversight", "IT & Systems", "Patient Access",
+    "Pre-Operative Care", "Quality & Risk", "Scheduling", "Surgical Operations",
+  ];
+  const MANDATE_SURG = "Reduce surgical cancellations across the hospital by intervening before the day of surgery.";
+  const hcPacks = packsFor("Healthcare");
+
+  /** All five drafts agree: the 3 FHIR cores plus 4 extended classes, each
+   * filed under a kit domain — what the real drafts evidently did. */
+  const surgeryDraft = (): Draft => ({
+    entities: [
+      { name: "Patient", definition: "A person scheduled for surgery.", area: "Patient Access", attributes: [], systemOfRecord: null, aliases: [], evidence: "std" },
+      { name: "Practitioner", definition: "A surgeon or clinician.", area: "Surgical Operations", attributes: [], systemOfRecord: null, aliases: [], evidence: "std" },
+      { name: "Organization", definition: "The hospital.", area: "Executive Oversight", attributes: [], systemOfRecord: null, aliases: [], evidence: "std" },
+      { name: "Appointment", definition: "A booked theatre slot.", area: "Scheduling", attributes: [], systemOfRecord: null, aliases: [], evidence: "std" },
+      { name: "Observation", definition: "A recorded clinical measurement.", area: "Quality & Risk", attributes: [], systemOfRecord: null, aliases: [], evidence: "std" },
+      { name: "Communication", definition: "A message to a patient or team.", area: "IT & Systems", attributes: [], systemOfRecord: null, aliases: [], evidence: "std" },
+      { name: "Encounter", definition: "A pre-operative visit.", area: "Pre-Operative Care", attributes: [], systemOfRecord: null, aliases: [], evidence: "std" },
+    ],
+    relations: [], events: [],
+    standardAlignment: [
+      { entity: "Patient", standard: "http://hl7.org/fhir/Patient", vocabulary: "HL7 FHIR", relation: "skos:closeMatch", confidence: 0.9 },
+      { entity: "Appointment", standard: "http://hl7.org/fhir/Appointment", vocabulary: "HL7 FHIR", relation: "skos:closeMatch", confidence: 0.9 },
+    ],
+    gaps: [],
+  });
+  const surgeryOpts = () => groundingFor(hcPacks, MANDATE_SURG, "the sponsor", SURGERY_KIT);
+  const drafts5 = () => Array.from({ length: 5 }, () => surgeryDraft());
+
+  it("promotes a demoted extended class for each kit domain the drafts covered", () => {
+    const got = names(sandbox.reconcileVotedOntology(drafts5(), surgeryOpts()));
+    for (const promoted of ["Appointment", "Observation", "Communication", "Encounter"]) {
+      expect(got).toContain(promoted);
+    }
+  });
+
+  it("the promoted entity carries the kit domain as its area", () => {
+    const doc = sandbox.reconcileVotedOntology(drafts5(), surgeryOpts());
+    const areaOf = (n: string) => (doc.entities as Array<{ name: string; area: string }>).find((e) => e.name === n)?.area;
+    expect(areaOf("Appointment")).toBe("Scheduling");
+    expect(areaOf("Communication")).toBe("IT & Systems");
+  });
+
+  it("a promoted class stops being a confirm gap", () => {
+    const doc = sandbox.reconcileVotedOntology(drafts5(), surgeryOpts());
+    const gapText = (doc.gaps as string[]).join(" ");
+    expect(gapText).not.toContain('models "Appointment"');
+  });
+
+  it("a kit domain with no candidate becomes a NAMED gap, never an invention", () => {
+    const doc = sandbox.reconcileVotedOntology(drafts5(), surgeryOpts());
+    expect((doc.gaps as string[]).some((g) => g.includes('no standard concept covers "Anesthesiology"'))).toBe(true);
+    // …and no entity was fabricated for it.
+    const areas = (doc.entities as Array<{ area: string }>).map((e) => e.area);
+    expect(areas).not.toContain("Anesthesiology");
+  });
+
+  it("promotion is deterministic — the same input twice gives the same document", () => {
+    const a = sandbox.reconcileVotedOntology(drafts5(), surgeryOpts());
+    const b = sandbox.reconcileVotedOntology(drafts5(), surgeryOpts());
+    expect(a).toEqual(b);
+  });
+
+  it("without kit domains the old policy holds: extended classes stay demoted", () => {
+    const opts = groundingFor(hcPacks, MANDATE_SURG, "the sponsor");
+    const got = names(sandbox.reconcileVotedOntology(drafts5(), opts));
+    for (const ext of ["Appointment", "Observation", "Communication", "Encounter"]) {
+      expect(got).not.toContain(ext);
+    }
+  });
+
+  it("a synthesised core with no areaHints files under the kit domain sharing its name", () => {
+    // No drafts mention Patient at all — the core guarantee synthesises it,
+    // and the token fallback places it in "Patient Access" instead of General.
+    const empty = Array.from({ length: 5 }, () => ({ entities: [], relations: [], events: [], standardAlignment: [], gaps: [] }));
+    const doc = sandbox.reconcileVotedOntology(empty as never, surgeryOpts());
+    const patient = (doc.entities as Array<{ name: string; area: string }>).find((e) => e.name === "Patient");
+    expect(patient?.area).toBe("Patient Access");
+  });
+
+  it("an ungrounded noun is still culled — promotion never readmits it", () => {
+    const withInvented = () => {
+      const d = surgeryDraft();
+      (d.entities as Array<Record<string, unknown>>).push({ name: "Turnaround Velocity Index", definition: "x", area: "Anesthesiology", attributes: [], systemOfRecord: null, aliases: [], evidence: "x" });
+      return d;
+    };
+    const got = names(sandbox.reconcileVotedOntology(Array.from({ length: 5 }, withInvented), surgeryOpts()));
+    expect(got).not.toContain("Turnaround Velocity Index");
+  });
+});

@@ -236,6 +236,15 @@ export function kitAreaEntityGuidance(program: ProgramSummary): string | null {
     "## Each area's questions must PROBE ITS ENTITIES (from the Domain Ontology)",
     "The interviews covering an area must establish how that area's entities are created, moved and stored today — name them in the questions, in the stakeholders' own vocabulary:",
     ...areas.filter((area) => byArea.has(area)).map((area) => `- ${area}: ${byArea.get(area)!.join(", ")}`),
+    "",
+    // Unlike the atlas checklist this stays entity-scoped by design: the kit
+    // already owes every area its interviews through its own coverage matrix,
+    // so the guidance here only needs to bind QUESTIONS to entities. But name
+    // the entity-less areas so the generator does not read the list above as
+    // the programme's full area set.
+    ...(areas.some((area) => !byArea.has(area))
+      ? [`Areas with no ontology entities yet (their interviews probe the work itself): ${areas.filter((area) => !byArea.has(area)).join(", ")}.`]
+      : []),
   ].join("\n");
 }
 
@@ -276,13 +285,21 @@ export function atlasAreaEntityGuidance(program: ProgramSummary): string | null 
   // The abstract AREA COMPLETENESS rule in the system prompt loses to the
   // "one workflow per mandate stage" enumeration — name the areas HERE as a
   // hard checklist so the model can't satisfy the prompt while skipping one.
-  const owed = areas.filter((area) => byArea.has(area));
+  //
+  // The checklist owes EVERY frame area, not only the ones the ontology has
+  // entities for. It used to filter to byArea.has(area), which chained the
+  // atlas's coverage to the ontology's: a 3-entity provisional ontology made
+  // the checklist demand 3 areas, the atlas obliged, and the other kit domains
+  // rendered "NOT MAPPED YET" — the starvation cascade, one level down. The
+  // entity lists stay per-area where they exist; an area without entities
+  // still gets its provisional workflow, with its nouns as openQuestions.
+  const withEntities = areas.filter((area) => byArea.has(area));
   return [
     "## Each area's workflows must MOVE ITS ENTITIES (from the Domain Ontology)",
     "When mapping an area's workflow, its steps' entities come from that area's list below — reference them VERBATIM in steps[].entities. A noun the list doesn't carry is an openQuestion for that area's stakeholder, never a new entity:",
-    ...owed.map((area) => `- ${area}: ${byArea.get(area)!.join(", ")}`),
+    ...withEntities.map((area) => `- ${area}: ${byArea.get(area)!.join(", ")}`),
     "",
-    `AREA CHECKLIST — the returned workflows array MUST contain at least one workflow whose area is EACH of: ${owed.join(", ")}. An area with no transcript evidence still gets ONE provisional workflow — an industry-standard 3-6 step skeleton moving that area's entities above, every step's evidence "industry-standard practice — to confirm in interviews", actor = that area's kit persona, plus an openQuestion to them. Do not return an atlas that leaves any listed area workflow-less.`,
+    `AREA CHECKLIST — the returned workflows array MUST contain at least one workflow whose area is EACH of: ${areas.join(", ")}. An area with no transcript evidence still gets ONE provisional workflow — an industry-standard 3-6 step skeleton, every step's evidence "industry-standard practice — to confirm in interviews", actor = that area's kit persona, plus an openQuestion to them. Where the area has entities listed above the steps move them; where it has none, the workflow's operational nouns go into openQuestions rather than steps[].entities. Do not return an atlas that leaves any listed area workflow-less.`,
   ].join("\n");
 }
 
