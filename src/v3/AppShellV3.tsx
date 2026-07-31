@@ -45,7 +45,7 @@ import { applyArtifactEdit, readArtifactDoc } from "@/v3/components/flow/flowArt
 import { operatorOverrideGuidance } from "@/v3/components/flow/flowOperatorOverrides";
 import { compileShipLanes, setShipLane, toggleShipItem } from "@/v3/components/flow/flowShip";
 import { scheduleFollowUp, discoveryKitCoverageGuidance } from "@/v3/components/flow/flowMeetings";
-import { listenCanonicalCastGuidance, kitAreaEntityGuidance, atlasAreaEntityGuidance, ontologyAreaCoverageGuidance } from "@/v3/components/flow/listenCoverage";
+import { listenCanonicalCastGuidance, kitAreaEntityGuidance, atlasAreaEntityGuidance, areaVocabularyGuidance, ontologyAreaCoverageGuidance } from "@/v3/components/flow/listenCoverage";
 import { mintFollowUpPack, latestPackFor, portalLinkFor, mintReviewPack, latestReviewPackFor } from "@/v3/components/flow/flowPortal";
 import { mintBrief, briefLinkFor } from "@/v3/components/flow/flowBriefs";
 import FlowRespond from "@/v3/components/flow/FlowRespond";
@@ -1067,6 +1067,15 @@ export default function AppShellV3() {
     if (resolvedAgentId === "domain-ontology" && activeProgram) {
       const coverage = ontologyAreaCoverageGuidance(activeProgram);
       if (coverage) crossPhaseContext += `${crossPhaseContext ? "\n\n" : ""}${coverage}`;
+    }
+    // BOTH area-emitting generators get the kit's domains as their vocabulary.
+    // Neither prompt has ever been told what the areas ARE — each declares
+    // "area" only inside a JSON field description carrying generic hardcoded
+    // examples — which is why Discovery, the ontology and the atlas each named
+    // areas the Discovery Kit had never heard of.
+    if ((resolvedAgentId === "domain-ontology" || resolvedAgentId === "current-state-atlas") && activeProgram) {
+      const vocab = areaVocabularyGuidance(activeProgram);
+      if (vocab) crossPhaseContext += `${crossPhaseContext ? "\n\n" : ""}${vocab}`;
     }
     // The Atlas OWNS the business events (they moved from the ontology) and
     // weaves them into its workflows: each step that raises or responds to

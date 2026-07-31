@@ -8,7 +8,7 @@
  * it, so there is no import cycle.
  */
 import type { ProgramSummary } from "@/new/types";
-import { programAreas, canonicalFrameArea, GENERAL_AREA, kitCoverageRows, stakeholderPrimaryArea, workflowArea } from "@/v3/components/flow/flowAreas";
+import { programAreas, canonicalFrameArea, GENERAL_AREA, kitCoverageDomains, kitCoverageRows, stakeholderPrimaryArea, workflowArea } from "@/v3/components/flow/flowAreas";
 
 // Re-exported: it lives in flowAreas now because programAreas needs it, and
 // flowAreas cannot import from here without a cycle.
@@ -97,6 +97,39 @@ export function listenAreaCoverage(
   });
 }
 
+
+/**
+ * The Discovery Kit's domains, shipped to the generators as the AREA VOCABULARY.
+ *
+ * Neither the ontology nor the atlas prompt has ever been told what the areas
+ * are. Each declares "area" only inside a JSON field description, and each
+ * describes it with hardcoded generic examples ("e.g. Sales, Marketing,
+ * Finance") - on a hospital programme those are actively misleading, and they
+ * are the only concrete vocabulary either agent sees. Worse, the ontology is
+ * told to reuse the atlas's labels, so the ontology anchors to the atlas and
+ * the atlas anchors to nothing: the chain ends in a guess, and neither end is
+ * tied to the kit, where the operator actually agreed the areas.
+ *
+ * That is why Discovery, the ontology and the atlas each named areas the kit
+ * had never heard of. Canonicalising in programAreas fixes what is DISPLAYED;
+ * this fixes what is WRITTEN, so a regeneration stops re-inventing labels. Same
+ * treatment the ontology's standards packs already get: supply the vocabulary
+ * as facts rather than hoping the model guesses the house style.
+ */
+export function areaVocabularyGuidance(program: ProgramSummary): string | null {
+  // Compound labels are spanning tags on a person, never areas to file under.
+  const domains = kitCoverageDomains(program)
+    .map((d) => d.trim())
+    .filter((d) => d && !d.includes("/"));
+  if (domains.length < 2) return null;
+  return [
+    "## AREA VOCABULARY \u2014 use these labels, verbatim",
+    `This programme's business areas were agreed in the Discovery Kit: ${domains.join(", ")}.`,
+    'Every "area" field you emit MUST be one of those labels, copied exactly \u2014 same words, same casing, same punctuation. Do not translate, abbreviate, pluralise, or coin a near-synonym: writing "Pre-Operative Care" when the kit says "Pre-Op Nursing" creates two areas for one thing, and every downstream surface then disagrees about which exists.',
+    "Ignore any generic examples in the field descriptions \u2014 they are placeholders, and this list supersedes them.",
+    'If something genuinely belongs to no listed area, use "General" rather than coining a label. Adding an area is an operator decision, not a generation-time one.',
+  ].join("\n");
+}
 
 /**
  * The operator's CURRENT roster and area labels as prompt guidance for the
