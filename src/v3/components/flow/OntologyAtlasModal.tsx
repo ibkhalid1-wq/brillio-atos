@@ -9,7 +9,7 @@
  */
 import { useState } from "react";
 import type { ProgramSummary } from "@/new/types";
-import { ontologyEntities, ontologyRelations, atlasWorkflows, entityArea, workflowArea } from "@/v3/components/flow/flowAreas";
+import { alignAreaToKit, ontologyEntities, ontologyRelations, atlasWorkflows, entityArea, workflowArea } from "@/v3/components/flow/flowAreas";
 import { areaAccent } from "@/v3/components/flow/CollectBoard";
 import { layeredPositions } from "@/v3/components/flow/studio/graphKit";
 
@@ -20,7 +20,7 @@ import { layeredPositions } from "@/v3/components/flow/studio/graphKit";
 function OntologyGraph({ program, entities }: { program: ProgramSummary; entities: Record<string, unknown>[] }) {
   const s = (v: unknown): string => (v == null ? "" : String(v)).trim();
   // Node per entity, keyed by its (case-insensitive) name.
-  const nodes = entities.map((e) => ({ name: s(e.name) || "Entity", area: entityArea(e, program), sor: s(e.systemOfRecord) }))
+  const nodes = entities.map((e) => ({ name: s(e.name) || "Entity", area: alignAreaToKit(program, entityArea(e, program)), sor: s(e.systemOfRecord) }))
     .filter((n) => n.name);
   const byKey = new Map(nodes.map((n) => [n.name.toLowerCase(), n] as const));
   // Links, from BOTH sources: the ontology's sibling `relations` array (how the
@@ -175,8 +175,8 @@ function WorkflowFlow({ workflow }: { workflow: Record<string, unknown> }) {
 // ── The area-scoped (or complete) ontology + current-state atlas, read-only.
 export default function OntologyAtlasModal({ program, area, section, onOpenWorkspace, onClose }: { program: ProgramSummary; area: string | null; section?: "map" | "atlas"; onOpenWorkspace?: (artifactId: string) => void; onClose: () => void }) {
   const s = (v: unknown): string => (v == null ? "" : String(v)).trim();
-  const entities = ontologyEntities(program).filter((e) => !area || entityArea(e, program) === area);
-  const workflows = atlasWorkflows(program).filter((w) => !area || workflowArea(w) === area);
+  const entities = ontologyEntities(program).filter((e) => !area || alignAreaToKit(program, entityArea(e, program)) === area);
+  const workflows = atlasWorkflows(program).filter((w) => !area || alignAreaToKit(program, workflowArea(w)) === area);
   // Which sections to show — a caller can deep-link to just one (so a
   // business-map button and a "how it works today" button open DIFFERENT
   // views, not the same combined modal); "See the complete ontology" shows both.
