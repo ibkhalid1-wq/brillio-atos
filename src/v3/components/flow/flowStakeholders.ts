@@ -11,7 +11,7 @@ import type { ProgramSummary } from "@/new/types";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
 import { meetingKit, askableMovementGaps, sponsorLinkQuestions } from "@/v3/components/flow/flowMeetings";
 import { readContradictions, flowMovements, movementEvidence, readMovementInputs, parseGridRows, deferredAsks } from "@/v3/components/flow/flowShellData";
-import { stakeholderPrimaryArea, areaHasModel } from "@/v3/components/flow/flowAreas";
+import { stakeholderPrimaryArea, areaHasEvidence, areaHasModel } from "@/v3/components/flow/flowAreas";
 
 export interface MovementStakeholder {
   /** Stable key for React + pack matching. */
@@ -404,7 +404,16 @@ function kitInterviews(program: ProgramSummary): MovementStakeholder[] {
     // remain below; only the discovery agenda clears, so we stop re-asking for
     // information the record already holds.
     const primaryArea = name || roleLabel ? stakeholderPrimaryArea(program, name || roleLabel, roleLabel) : "";
-    const agendaAddressed = heard || (!!primaryArea && areaHasModel(program, primaryArea));
+    // …but ONLY when that model came from evidence. areaHasModel alone was
+    // enough until the provisional path began generating an ontology and atlas
+    // from published standards before anyone is interviewed: every area then
+    // reads "map confirmed" at zero voices heard, every agenda is silently
+    // dropped, and Listen shows no discovery questions for any stakeholder
+    // while telling the operator each area is settled. Requiring evidence keeps
+    // the original intent — do not re-ask what a bulk document already answered
+    // — without letting a generated map stand in for a conversation.
+    const agendaAddressed = heard
+      || (!!primaryArea && areaHasModel(program, primaryArea) && areaHasEvidence(program, primaryArea));
     // The sponsor's Listen card is arbiter-only: conflicts to resolve, nothing
     // else. The discovery agenda that would sit here reaches the process owners
     // through their own cards (the sponsor is off the routing roster).

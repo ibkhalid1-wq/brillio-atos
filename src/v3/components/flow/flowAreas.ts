@@ -314,6 +314,21 @@ export function areaHasModel(program: ProgramSummary, area: string): boolean {
   return ontologyEntities(program).some((e) => entityArea(e, program) === area);
 }
 
+/** True when this area's model was produced by EVIDENCE — at least one voice in
+ * it is on record — rather than merely generated.
+ *
+ * areaHasModel answers "is this area mapped?", which is the right question for
+ * a badge and the wrong one for deciding whether to stop asking. The
+ * provisional path now generates an ontology and an atlas from published
+ * standards BEFORE any conversation happens, so a fully "mapped" area can sit
+ * at zero voices heard. Anything that suppresses work on the grounds that the
+ * record already holds the answer has to ask this instead.
+ */
+export function areaHasEvidence(program: ProgramSummary, area: string): boolean {
+  if (!area || area === GENERAL_AREA) return false;
+  return (areaProgress(program).find((r) => r.area === area)?.heard.length ?? 0) > 0;
+}
+
 /** The areas whose Listen voices are all heard — ready to move to Envision/Show
  * while other areas keep collecting. */
 export function readyAreas(program: ProgramSummary): Set<string> {
