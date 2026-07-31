@@ -231,11 +231,23 @@ export const CROSS_PHASE_ARTIFACT_DEPS: Record<string, Array<{ phaseId: string; 
     // edge is inert there; the proposal-CONFIRM path is what needs it, or
     // confirming a regenerated ontology leaves the atlas claiming fresh.
     { phaseId: "listen", artifactId: "current-state-atlas" },
+    // The build-phase targets are declared under BOTH bucket keys: the edge
+    // function files these artifacts under its spec.phase, which is "envision"
+    // for architecture-strategy et al., while the flow movement id is
+    // "prototype". declaredCrossPhaseTargets skips absent buckets, so listing
+    // both is immune to either keying — a target under the wrong key is a
+    // silent no-op, which is precisely how the atlas edge went unnoticed.
+    { phaseId: "envision", artifactId: "architecture-strategy" },
+    { phaseId: "envision", artifactId: "experience-design" },
+    { phaseId: "envision", artifactId: "agentic-blueprint" },
     { phaseId: "prototype", artifactId: "architecture-strategy" },
     { phaseId: "prototype", artifactId: "experience-design" },
     { phaseId: "prototype", artifactId: "agentic-blueprint" },
   ],
   "current-state-atlas": [
+    { phaseId: "envision", artifactId: "architecture-strategy" },
+    { phaseId: "envision", artifactId: "experience-design" },
+    { phaseId: "envision", artifactId: "agentic-blueprint" },
     { phaseId: "prototype", artifactId: "architecture-strategy" },
     { phaseId: "prototype", artifactId: "experience-design" },
     { phaseId: "prototype", artifactId: "agentic-blueprint" },

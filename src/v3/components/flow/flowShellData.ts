@@ -425,7 +425,7 @@ export function movementEvidence(program: ProgramSummary, movement: PhaseDefinit
 /** Artifact cards for one movement — presence, confidence, readable excerpt. */
 export function movementArtifacts(program: ProgramSummary, movement: PhaseDefinition): ArtifactCardModel[] {
   const root = dataRoot(program);
-  const stubs = (root.phaseArtifacts as Record<string, Record<string, { confidence?: number; inputsFingerprint?: string }>> | undefined)?.[movement.id] ?? {};
+  const stubs = (root.phaseArtifacts as Record<string, Record<string, { confidence?: number; inputsFingerprint?: string; status?: string }>> | undefined)?.[movement.id] ?? {};
   const currentFingerprint = movementInputsFingerprint(program, movement.id);
   return getPhaseArtifactDefs(movement.id).map((def) => {
     const content = getFormalArtifactContent(root, def.id);
@@ -457,10 +457,20 @@ export function movementArtifacts(program: ProgramSummary, movement: PhaseDefini
       ? ((mirror as Record<string, unknown>).gaps as unknown[])
           .map(String).filter(Boolean).filter((gap) => !falsifiedGap(program, gap)).length
       : 0;
+    // TWO staleness signals, and the flow shell must honor BOTH. The
+    // fingerprint catches "this movement's inputs changed since generation".
+    // The ledger status catches "an UPSTREAM deliverable was regenerated" —
+    // the server-side cascade (staleDownstreamArtifacts) and the app's
+    // input-edit/confirm paths all write status: "stale" on the consumer, and
+    // this derivation used to ignore it entirely. That is why regenerating the
+    // Discovery Kit never prompted a Listen regeneration: the flag was set,
+    // and the only surface that could show it was reading fingerprints alone.
+    const statusStale = typeof stub?.status === "string" && stub.status === "stale";
     return {
       id: def.id, movementId: movement.id, title: def.label, description: def.description,
       excerpt, confidence, present, gaps,
-      stale: present && typeof stub?.inputsFingerprint === "string" && stub.inputsFingerprint !== currentFingerprint,
+      stale: present && (statusStale
+        || (typeof stub?.inputsFingerprint === "string" && stub.inputsFingerprint !== currentFingerprint)),
     };
   });
 }
