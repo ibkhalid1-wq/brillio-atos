@@ -183,6 +183,76 @@ export interface CrossPhaseStaleTarget {
  * phase is skipped, and titles resolve from the artifact catalogue so no
  * bucket-stored title is needed. Pure and deterministic — no I/O, no AI.
  */
+/**
+ * DECLARED cross-phase dependencies: regenerating the key stales the values.
+ *
+ * crossPhaseArtifactsToStale discovers dependencies from a later phase's
+ * `artifact-reference` input fields. That is a sound mechanism and it has never
+ * fired once, because no phase in the methodology declares a field of that
+ * type — `artifact-reference` appears in the codebase only as a type union
+ * member. So a correct, tested propagation engine sat wired in with a
+ * permanently empty input, and regenerating Frame's Discovery Kit left Listen's
+ * documents claiming to be fresh.
+ *
+ * These are the real edges, declared rather than inferred:
+ *
+ *   The Charter frames the problem and the Kit sets who is asked about what.
+ *   Listen's Discovery, Domain Ontology and Current-State Atlas are all
+ *   generated downstream of both, so either one moving invalidates all three.
+ *
+ *   Prototype's architecture, experience and blueprint are generated FROM the
+ *   ontology and the atlas — the model of the business is their entire input —
+ *   so either one moving invalidates all of them.
+ *
+ * Stated as artifact ids so a rename of a document TITLE cannot silently break
+ * the edge, which is the failure mode the label-matching path carries.
+ */
+export const CROSS_PHASE_ARTIFACT_DEPS: Record<string, Array<{ phaseId: string; artifactId: string }>> = {
+  "charter": [
+    { phaseId: "listen", artifactId: "discovery-kit" },
+    { phaseId: "listen", artifactId: "domain-ontology" },
+    { phaseId: "listen", artifactId: "current-state-atlas" },
+  ],
+  "discovery-kit": [
+    { phaseId: "listen", artifactId: "domain-ontology" },
+    { phaseId: "listen", artifactId: "current-state-atlas" },
+  ],
+  "domain-ontology": [
+    { phaseId: "prototype", artifactId: "architecture-strategy" },
+    { phaseId: "prototype", artifactId: "experience-design" },
+    { phaseId: "prototype", artifactId: "agentic-blueprint" },
+  ],
+  "current-state-atlas": [
+    { phaseId: "prototype", artifactId: "architecture-strategy" },
+    { phaseId: "prototype", artifactId: "experience-design" },
+    { phaseId: "prototype", artifactId: "agentic-blueprint" },
+  ],
+};
+
+/** The declared downstream targets of the given upstream artifacts, filtered to
+ * those actually present and not already archived or stale. */
+export function declaredCrossPhaseTargets(
+  changedArtifactIds: string[],
+  allBuckets: Record<string, PhaseArtifactBucket>,
+): CrossPhaseStaleTarget[] {
+  const out: CrossPhaseStaleTarget[] = [];
+  const seen = new Set<string>();
+  for (const changed of changedArtifactIds) {
+    for (const target of CROSS_PHASE_ARTIFACT_DEPS[changed] ?? []) {
+      const key = `${target.phaseId}/${target.artifactId}`;
+      if (seen.has(key)) continue;
+      const bucket = allBuckets?.[target.phaseId];
+      const entry = bucket && typeof bucket === "object" ? (bucket as Record<string, unknown>)[target.artifactId] : undefined;
+      if (!entry || typeof entry !== "object") continue;
+      const status = (entry as { status?: unknown }).status;
+      if (status === "archived" || status === "stale") continue;
+      seen.add(key);
+      out.push(target);
+    }
+  }
+  return out;
+}
+
 export function crossPhaseArtifactsToStale(
   originPhaseId: string,
   changedArtifactIds: string[],
@@ -208,6 +278,16 @@ export function crossPhaseArtifactsToStale(
       if (status === "archived" || status === "stale") continue;
       out.push({ phaseId, artifactId });
     }
+  }
+  // …plus the DECLARED edges. The reference-label path above depends on input
+  // fields no phase actually declares, so on its own it returns nothing.
+  const seen = new Set(out.map((t) => `${t.phaseId}/${t.artifactId}`));
+  for (const target of declaredCrossPhaseTargets(changedArtifactIds, allBuckets)) {
+    if (target.phaseId === originPhaseId) continue;
+    const key = `${target.phaseId}/${target.artifactId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(target);
   }
   return out;
 }
