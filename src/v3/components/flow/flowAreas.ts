@@ -198,6 +198,27 @@ export function canonicalFrameArea(frameAreas: string[], raw: string): string {
   return best?.area ?? GENERAL_AREA;
 }
 
+/**
+ * A raw model-written area label, folded onto the Discovery Kit's vocabulary.
+ *
+ * MUST be applied on BOTH sides of any area comparison. programAreas returns
+ * kit labels, so comparing one against a raw workflowArea/entityArea silently
+ * fails: an atlas saying "Pre-Operative Care" beside a kit domain of "Pre-Op
+ * Nursing" made every such area read UNMAPPED, because the equality had a
+ * canonical label on one side and a raw one on the other. That is exactly the
+ * regression this helper exists to prevent recurring.
+ *
+ * A label matching no kit domain is returned unchanged — a genuinely new area
+ * the model found must not collapse into General. Compound spanning tags are
+ * left alone; they are tags on a person, not areas.
+ */
+export function alignAreaToKit(program: ProgramSummary, raw: string): string {
+  const kitDomains = kitCoverageDomains(program);
+  if (!kitDomains.length || !raw || raw.includes("/")) return raw;
+  const canon = canonicalFrameArea(kitDomains, raw);
+  return canon === GENERAL_AREA && areaKey(raw) !== areaKey(GENERAL_AREA) ? raw : canon;
+}
+
 export function programAreas(program: ProgramSummary): string[] {
   const byKey = new Map<string, string>();
   const add = (label: string) => {
@@ -219,15 +240,9 @@ export function programAreas(program: ProgramSummary): string[] {
   // them. A label that matches nothing still stands on its own — a genuinely
   // new area the model found must not be swallowed. Compound spanning tags
   // ("Finance / Sales / Practices") are left alone; they are not areas.
-  const kitDomains = kitCoverageDomains(program);
-  for (const domain of kitDomains) add(domain);
-  const align = (raw: string): string => {
-    if (!kitDomains.length || !raw || raw.includes("/")) return raw;
-    const canon = canonicalFrameArea(kitDomains, raw);
-    return canon === GENERAL_AREA && areaKey(raw) !== areaKey(GENERAL_AREA) ? raw : canon;
-  };
-  for (const workflow of atlasWorkflows(program)) add(align(workflowArea(workflow)));
-  for (const entity of ontologyEntities(program)) add(align(entityArea(entity, program)));
+  for (const domain of kitCoverageDomains(program)) add(domain);
+  for (const workflow of atlasWorkflows(program)) add(alignAreaToKit(program, workflowArea(workflow)));
+  for (const entity of ontologyEntities(program)) add(alignAreaToKit(program, entityArea(entity, program)));
   return [...byKey.values()].sort((a, b) => {
     if (a === GENERAL_AREA) return 1;
     if (b === GENERAL_AREA) return -1;
@@ -250,7 +265,7 @@ export function personaAreas(program: ProgramSummary, persona: string): string[]
   for (const workflow of atlasWorkflows(program)) {
     const acts = Array.isArray(workflow.steps) && workflow.steps.filter(isRecord)
       .some((s) => str(s.actor).trim().toLowerCase() === key);
-    if (acts) set.add(workflowArea(workflow));
+    if (acts) set.add(alignAreaToKit(program, workflowArea(workflow)));
   }
   return [...set];
 }
@@ -349,9 +364,9 @@ export function areaHasModel(program: ProgramSummary, area: string): boolean {
   // ≥1 term). Even a thin footprint means the captured evidence produced a
   // current-state model for the area — enough to treat that area's discovery
   // agenda as addressed. An area with no workflow or no term isn't modelled yet.
-  const hasWorkflow = atlasWorkflows(program).some((w) => workflowArea(w) === area);
+  const hasWorkflow = atlasWorkflows(program).some((w) => alignAreaToKit(program, workflowArea(w)) === area);
   if (!hasWorkflow) return false;
-  return ontologyEntities(program).some((e) => entityArea(e, program) === area);
+  return ontologyEntities(program).some((e) => alignAreaToKit(program, entityArea(e, program)) === area);
 }
 
 /** True when this area's model was produced by EVIDENCE — at least one voice in
@@ -421,8 +436,8 @@ export function areaProgress(program: ProgramSummary): AreaProgress[] {
   };
   const demo = demoAcceptance(program);
   return programAreas(program).map((area) => {
-    const areaWf = workflows.filter((w) => workflowArea(w) === area);
-    const areaEnt = entities.filter((e) => entityArea(e, program) === area);
+    const areaWf = workflows.filter((w) => alignAreaToKit(program, workflowArea(w)) === area);
+    const areaEnt = entities.filter((e) => alignAreaToKit(program, entityArea(e, program)) === area);
     const personaSet = new Set<string>();
     for (const w of areaWf) {
       for (const s of (Array.isArray(w.steps) ? w.steps.filter(isRecord) : [])) {
