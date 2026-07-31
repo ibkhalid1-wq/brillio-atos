@@ -7209,14 +7209,30 @@ function reconcileVotedOntology(
    * first area whose label contains one of the class's hint words. No hint, no
    * declared areas, or no match leaves it General — the honest answer, and the
    * one an operator can see needs assigning. */
+  const areaTokens = (label: string): Set<string> =>
+    new Set(label.toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length >= 3));
+  const areasOverlap = (a: string, b2: string): boolean => {
+    if (!a || !b2) return false;
+    if (a.trim().toLowerCase() === b2.trim().toLowerCase()) return true;
+    const at = areaTokens(a);
+    return [...areaTokens(b2)].some((t) => at.has(t));
+  };
   const areaForClass = (cls: string): string => {
+    if (!programAreas?.length) return "General";
     const hints = packAreaHintsByClass?.get(cls);
-    if (!hints?.length || !programAreas?.length) return "General";
-    for (const hint of hints) {
-      const hit = programAreas.find((a) => a.toLowerCase().includes(hint));
-      if (hit) return hit;
+    if (hints?.length) {
+      for (const hint of hints) {
+        const hit = programAreas.find((a) => a.toLowerCase().includes(hint));
+        if (hit) return hit;
+      }
     }
-    return "General";
+    // Only the commerce pack carries areaHints; every other pack's synthesised
+    // cores used to land in General unconditionally. A class NAME that shares a
+    // real token with a kit domain files there instead — Patient belongs in
+    // "Patient Access" without anyone having to say so.
+    const ct = areaTokens(cls);
+    const hit = programAreas.find((a) => [...areaTokens(a)].some((t) => ct.has(t)));
+    return hit ?? "General";
   };
   // Pack validation: with the backbone shipped as facts, an alignment URI the
   // pack does not list is recall leaking back in — strip it (standard-keyed
@@ -7312,6 +7328,12 @@ function reconcileVotedOntology(
   const lowAgreement: string[] = [];    // included but flagged
   const ungrounded: string[] = [];      // failed the acid test — demoted to gaps
   const extendedDemoted: string[] = []; // real standard classes outside the core — confirm first
+  // Everything needed to PROMOTE a demoted extended class later: the bucket key
+  // (so relations can resolve through `survivor`), its pack class, the
+  // representative draft row (whose `area` says where the drafts filed it), the
+  // pack-validated URIs and the vote count. Captured at demotion time because
+  // the bucket is gone once the vote loop ends.
+  const demotedExtended = new Map<string, { key: string; cls: string; rep: Record<string, unknown>; uris: string[]; docs: number }>();
   // Per-survivor grounding facts, for the relation acid test below.
   const mandateByName = new Map<string, boolean>();
   const classByName = new Map<string, string>();
@@ -7362,10 +7384,15 @@ function reconcileVotedOntology(
       // real standard fact but not automatically in this mandate's scope — the
       // exact boundary (Consent / Coverage / Encounter at 3-of-5) that made
       // sibling programmes with identical mandates diverge. Extended classes
-      // ALWAYS demote to a confirm gap, however many drafts voted for them;
-      // core classes are guaranteed below, with or without votes. The asserted
-      // set becomes a pure function of (mandate, steering).
+      // demote to a confirm gap here, however many drafts voted for them; core
+      // classes are guaranteed below. ONE carve-out, applied after the vote:
+      // a demoted class is promoted back when it is the only coverage for a
+      // kit domain (see AREA COVERAGE below) — deterministic, so the asserted
+      // set stays a pure function of (mandate, steering, kit).
       if (coreClasses && cls && !coreClasses.has(cls) && !mandateConcept && !wordsGrounded) {
+        const demotedRep = b.rows.find((r) => (typeof r.row.name === "string" ? r.row.name.trim() : "") === name)?.row
+          ?? b.rows[0].row;
+        demotedExtended.set(name, { key, cls, rep: demotedRep, uris: b.uris, docs: b.docs.size });
         extendedDemoted.push(name);
         return;
       }
@@ -7423,6 +7450,56 @@ function reconcileVotedOntology(
       if (pe.uri) standardAlignment.push({ entity: pe.name, standard: pe.uri, vocabulary: pe.vocabulary, relation: "skos:exactMatch", confidence: 1 });
       classByName.set(pe.name, cls);
       mandateByName.set(pe.name, false);
+    }
+    entities.sort((a, b) => ontologyCompare(String(a.name), String(b.name)));
+  }
+
+  // ── AREA COVERAGE, by POLICY: every kit domain is owed an entity. ──
+  // The extended-demotion above capped the asserted set at the primary pack's
+  // core — 3 classes for FHIR, and similar for FIBO/GS1/EBU — while a real
+  // Discovery Kit declares eight or more domains. On the surgery-cancellations
+  // programme that left a 3-entity ontology beside an 8-domain kit, and because
+  // the atlas checklist keys off the ontology's areas, three kit domains ended
+  // up with no workflow at all: the starvation cascade, one level down.
+  //
+  // So: a kit domain with no asserted entity PROMOTES the best demoted extended
+  // class the drafts filed under it (most votes, then name order). An extended
+  // class is still a standard-grounded fact — promotion never readmits an
+  // ungrounded noun, so the acid test is intact. The asserted set becomes a
+  // pure function of (mandate, steering, kit): the kit is a deterministic
+  // per-programme input, which is exactly what "provisional" should mean.
+  // A domain with no candidate stays uncovered and surfaces as a NAMED gap
+  // below — an honest hole beats an invented entity.
+  const uncoveredAreas: string[] = [];
+  if (programAreas?.length) {
+    // Compound labels ("Finance / Sales") are spanning tags, never areas.
+    for (const area of programAreas.filter((a) => a.trim() && !a.includes("/"))) {
+      if (entities.some((e) => areasOverlap(String(e.area ?? ""), area))) continue;
+      const cands = extendedDemoted
+        .filter((n) => areasOverlap(String(demotedExtended.get(n)?.rep.area ?? ""), area))
+        .sort((x, y) => (demotedExtended.get(y)!.docs - demotedExtended.get(x)!.docs) || ontologyCompare(x, y));
+      const name = cands[0];
+      const d = name ? demotedExtended.get(name) : undefined;
+      if (!name || !d) { uncoveredAreas.push(area); continue; }
+      entities.push({
+        name,
+        definition: typeof d.rep.definition === "string" && d.rep.definition ? d.rep.definition : name + ".",
+        area,
+        attributes: Array.isArray(d.rep.attributes) ? d.rep.attributes : [],
+        systemOfRecord: typeof d.rep.systemOfRecord === "string" ? d.rep.systemOfRecord : null,
+        aliases: [] as string[],
+        evidence: "industry-standard concept covering " + area + " — to confirm in interviews",
+      });
+      survivor.set(d.key, name);           // relations touching it now resolve
+      classByName.set(name, d.cls);
+      mandateByName.set(name, false);
+      lowAgreement.push(name);             // promoted ≠ certain: still flagged to confirm
+      if (d.uris.length) {
+        const uri = ontologyModal(d.uris, (u) => ontologyStandardKey(u), (a, z) => ontologyCompare(a, z));
+        standardAlignment.push({ entity: name, standard: uri, vocabulary: "", relation: "skos:closeMatch", confidence: d.docs / total });
+      }
+      const at = extendedDemoted.indexOf(name);
+      if (at >= 0) extendedDemoted.splice(at, 1); // asserted now — not a confirm gap too
     }
     entities.sort((a, b) => ontologyCompare(String(a.name), String(b.name)));
   }
@@ -7552,6 +7629,9 @@ function reconcileVotedOntology(
   // and sponsor-addressed. ──
   const ask = sponsor ? `Ask ${sponsor}: ` : "Ask the sponsor: ";
   const gaps = [
+    // A kit domain nothing covers outranks every other ask: the operator agreed
+    // this area is in scope, and the standard had nothing to offer it.
+    ...uncoveredAreas.sort(ontologyCompare).map((area) => `${ask}no standard concept covers "${area}" — what does this area's work produce and track, and who owns it?`),
     ...disconnected.map((n) => `${ask}"${n}" stands alone in the model — which existing entity does it relate to, and how?`),
     ...ungrounded.sort(ontologyCompare).map((n) => ask + 'drafts modelled "' + n + '" but it is neither named by the mandate nor a class of the industry standard - is it part of this process?'),
     ...extendedDemoted.sort(ontologyCompare).map((n) => ask + 'the industry standard models "' + n + '" - does it play a part in this process, and who owns it?'),
