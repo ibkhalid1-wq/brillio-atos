@@ -174,6 +174,30 @@ export const areaKey = (area: string): string =>
  * Discovery Kit's declared coverage domains, so the kit's "what we'll cover"
  * aligns every downstream phase. A domain already modeled (same normalized
  * label) is not duplicated — the modeled label wins. */
+/**
+ * Canonicalise a free-form area label onto the FRAME's area list (the same
+ * list the Discovery Kit covers): exact label first, else the frame area
+ * sharing the most words ("Sales & Delivery" → Delivery), else General.
+ * Shared by the Atlas's workflow grouping and the collect boards so every
+ * surface speaks the kit's own vocabulary.
+ */
+export function canonicalFrameArea(frameAreas: string[], raw: string): string {
+  const label = raw.trim();
+  if (!frameAreas.length) return label || GENERAL_AREA;
+  const exact = frameAreas.find((area) => area.toLowerCase() === label.toLowerCase());
+  if (exact) return exact;
+  const words = new Set(label.toLowerCase().split(/[^a-z0-9]+/).filter((word) => word.length >= 3));
+  let best: { area: string; score: number } | null = null;
+  for (const area of frameAreas) {
+    const areaWords = area.toLowerCase().split(/[^a-z0-9]+/).filter((word) => word.length >= 3);
+    if (!areaWords.length) continue;
+    const hits = areaWords.filter((word) => words.has(word)).length;
+    const score = hits / areaWords.length;
+    if (hits && (!best || score > best.score)) best = { area, score };
+  }
+  return best?.area ?? GENERAL_AREA;
+}
+
 export function programAreas(program: ProgramSummary): string[] {
   const byKey = new Map<string, string>();
   const add = (label: string) => {
@@ -183,11 +207,27 @@ export function programAreas(program: ProgramSummary): string[] {
     if (!k || byKey.has(k)) return;
     byKey.set(k, l);
   };
-  // Modeled areas first — they own the canonical label…
-  for (const workflow of atlasWorkflows(program)) add(workflowArea(workflow));
-  for (const entity of ontologyEntities(program)) add(entityArea(entity, program));
-  // …then the kit's declared coverage, adding any domain not yet modeled.
-  for (const domain of kitCoverageDomains(program)) add(domain);
+  // The KIT's vocabulary is authoritative — its domains are what the operator
+  // agreed to cover, and kitCoverageDomains above calls them the source of
+  // truth the phases align to. Modelled labels used to be added first and win,
+  // which contradicted that: the ontology writing "Pre-Operative Care" beside a
+  // kit domain of "Pre-Op Nursing" produced TWO areas for one, and Discovery,
+  // the ontology and the atlas each ended up naming areas the kit had never
+  // heard of.
+  //
+  // So the kit's domains land first, and a modelled label is canonicalised onto
+  // them. A label that matches nothing still stands on its own — a genuinely
+  // new area the model found must not be swallowed. Compound spanning tags
+  // ("Finance / Sales / Practices") are left alone; they are not areas.
+  const kitDomains = kitCoverageDomains(program);
+  for (const domain of kitDomains) add(domain);
+  const align = (raw: string): string => {
+    if (!kitDomains.length || !raw || raw.includes("/")) return raw;
+    const canon = canonicalFrameArea(kitDomains, raw);
+    return canon === GENERAL_AREA && areaKey(raw) !== areaKey(GENERAL_AREA) ? raw : canon;
+  };
+  for (const workflow of atlasWorkflows(program)) add(align(workflowArea(workflow)));
+  for (const entity of ontologyEntities(program)) add(align(entityArea(entity, program)));
   return [...byKey.values()].sort((a, b) => {
     if (a === GENERAL_AREA) return 1;
     if (b === GENERAL_AREA) return -1;

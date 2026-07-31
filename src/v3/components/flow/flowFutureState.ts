@@ -7,7 +7,7 @@
  * Pure and testable; EnvisionCockpit renders it.
  */
 import type { ProgramSummary } from "@/new/types";
-import { workflowArea } from "@/v3/components/flow/flowAreas";
+import { canonicalFrameArea, GENERAL_AREA, kitCoverageDomains, workflowArea } from "@/v3/components/flow/flowAreas";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -91,12 +91,23 @@ export function projectFutureState(program: ProgramSummary): FutureState {
   // Workflows: today → tomorrow. Steps carry the proposed mode + the agent that
   // takes them, derived from the atlas + the blueprint (never authored here).
   const bpAgents = blueprint && Array.isArray(blueprint.agents) ? blueprint.agents.filter(isRecord) : [];
+  // Prototype inherits the Atlas's area labels, and the Atlas writes whatever
+  // the generator chose. Align them to the Discovery Kit's domains — the same
+  // alignment programAreas does — or the build studio names areas the kit never
+  // agreed to and the phases stop matching each other. A label the kit does not
+  // recognise still stands; a genuinely new area must not be swallowed.
+  const kitDomains = kitCoverageDomains(program);
+  const alignArea = (raw: string): string => {
+    if (!kitDomains.length || !raw || raw.includes("/")) return raw;
+    const canon = canonicalFrameArea(kitDomains, raw);
+    return canon === GENERAL_AREA && raw.trim().toLowerCase() !== GENERAL_AREA.toLowerCase() ? raw : canon;
+  };
   const workflows: FutureWorkflow[] = (atlas && Array.isArray(atlas.workflows) ? atlas.workflows.filter(isRecord) : [])
     .map((wf): FutureWorkflow => {
       const name = str(wf.name) || "Workflow";
       const owner = bpAgents.find((a) => str(a.replacesWorkflow) && overlaps(str(a.replacesWorkflow), name));
       return {
-        name, area: workflowArea(wf), trigger: str(wf.trigger) || undefined,
+        name, area: alignArea(workflowArea(wf)), trigger: str(wf.trigger) || undefined,
         steps: (Array.isArray(wf.steps) ? wf.steps.filter(isRecord) : []).slice(0, 12).map((s): FutureStep => {
           const action = str(s.action) || "step";
           const judgement = JUDGEMENT.test(action);
