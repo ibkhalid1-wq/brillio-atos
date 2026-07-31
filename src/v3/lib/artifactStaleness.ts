@@ -225,6 +225,12 @@ export const CROSS_PHASE_ARTIFACT_DEPS: Record<string, Array<{ phaseId: string; 
     { phaseId: "listen", artifactId: "current-state-atlas" },
   ],
   "domain-ontology": [
+    // Same-phase edge: the atlas is generated FROM the ontology (the server's
+    // UPSTREAM_ARTIFACT_DEPS says so — currentStateAtlas depends on
+    // domainOntology). The input-edit path skips origin-phase targets so this
+    // edge is inert there; the proposal-CONFIRM path is what needs it, or
+    // confirming a regenerated ontology leaves the atlas claiming fresh.
+    { phaseId: "listen", artifactId: "current-state-atlas" },
     { phaseId: "prototype", artifactId: "architecture-strategy" },
     { phaseId: "prototype", artifactId: "experience-design" },
     { phaseId: "prototype", artifactId: "agentic-blueprint" },

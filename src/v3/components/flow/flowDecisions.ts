@@ -13,6 +13,8 @@ import { getProgramState, wrapProgramState } from "@/new/lib/programState";
 import { readMovementInputs, parseGridRows } from "@/v3/components/flow/flowShellData";
 import { listFollowUps } from "@/v3/components/flow/flowMeetings";
 import { buildDemoInviteFromScript } from "@/v3/components/flow/flowPortal";
+import { declaredCrossPhaseTargets } from "@/v3/lib/artifactStaleness";
+import { FORMAL_ARTIFACT_FIELD_KEYS } from "@/v3/lib/formalArtifacts";
 
 export interface FlowDecision {
   id: string;
@@ -300,8 +302,30 @@ export function resolveFlowDecision(
   // confidence and the staleness fingerprint read as if it had been written
   // at generation time.
   if (resolution === "confirmed" && payload && isRecord(payload.artifactDocs)) {
+    const appliedArtifactIds: string[] = [];
     for (const [fieldKey, doc] of Object.entries(payload.artifactDocs as Record<string, unknown>)) {
-      if (fieldKey && isRecord(doc)) nextInner = { ...nextInner, [fieldKey]: doc };
+      if (!fieldKey || !isRecord(doc)) continue;
+      nextInner = { ...nextInner, [fieldKey]: doc };
+      const artifactId = Object.keys(FORMAL_ARTIFACT_FIELD_KEYS).find((id) => FORMAL_ARTIFACT_FIELD_KEYS[id] === fieldKey);
+      if (artifactId) appliedArtifactIds.push(artifactId);
+    }
+    // Confirming a held regeneration IS a regeneration landing — everything
+    // built on this document is now standing on shifted ground, exactly as if
+    // the direct apply path had run. The server-side cascade fires only on
+    // that direct path (applyProgramSupportArtifact); this confirm applies the
+    // document HERE, so the cascade has to run here too or a hand-edit-guarded
+    // programme silently skips it every time.
+    if (appliedArtifactIds.length) {
+      const buckets = isRecord(nextInner.phaseArtifacts) ? { ...(nextInner.phaseArtifacts as Record<string, Record<string, Record<string, unknown>>>) } : {};
+      const nowIso = new Date().toISOString();
+      for (const target of declaredCrossPhaseTargets(appliedArtifactIds, buckets)) {
+        const bucket = { ...(buckets[target.phaseId] ?? {}) };
+        const entry = bucket[target.artifactId];
+        if (!entry || typeof entry !== "object") continue;
+        bucket[target.artifactId] = { ...entry, status: "stale", staleReason: "An upstream deliverable was regenerated and confirmed", staleAt: nowIso };
+        buckets[target.phaseId] = bucket;
+      }
+      nextInner = { ...nextInner, phaseArtifacts: buckets };
     }
   }
   if (resolution === "confirmed" && payload && Array.isArray(payload.artifactStubs)) {
