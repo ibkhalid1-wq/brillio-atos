@@ -206,6 +206,13 @@ export interface CrossPhaseStaleTarget {
  *
  * Stated as artifact ids so a rename of a document TITLE cannot silently break
  * the edge, which is the failure mode the label-matching path carries.
+ *
+ * SCOPE: this covers the operator editing grounding INPUTS. A regeneration
+ * never reaches this code — run-agent persists the artifact server-side and the
+ * client only receives a realtime update — so the regeneration cascade lives in
+ * the edge function, inverting UPSTREAM_ARTIFACT_DEPS at persist time. Two
+ * graphs is a duplication worth watching: if these ever disagree, the edge
+ * function's is authoritative, because it is what actually feeds generation.
  */
 export const CROSS_PHASE_ARTIFACT_DEPS: Record<string, Array<{ phaseId: string; artifactId: string }>> = {
   "charter": [
