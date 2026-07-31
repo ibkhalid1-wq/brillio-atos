@@ -1,116 +1,80 @@
-import { crossPhaseArtifactsToStale } from "@/v3/lib/artifactStaleness";
-import type { DynamicSchemaStore } from "@/v3/lib/dynamicSchema";
-
 /**
- * Cross-phase staleness: when an upstream deliverable changes (Discover's
- * Requirements Catalog), any downstream artifact whose `artifact-reference` input
- * names it (Design's Solution Architecture, grounded on that catalog) is now
- * built on shifted ground and must be regenerated too. The dependency is
- * expressed exactly as the product does it — a later phase's artifact-reference
- * field labelled after the upstream deliverable, wired to the downstream artifact
- * via the dynamic schema's `artifactInputFlow`.
+ * Regenerating an upstream deliverable stales what was built on it.
+ *
+ * crossPhaseArtifactsToStale discovers dependencies from a later phase's
+ * `artifact-reference` input fields. It is correct, tested, and had never fired
+ * once: `artifact-reference` exists in the codebase only as a member of a type
+ * union — no phase declares a field of that type — so the engine ran with a
+ * permanently empty input. Regenerating Frame's Discovery Kit left Listen's
+ * documents claiming to be fresh.
+ *
+ * The edges are now DECLARED by artifact id.
  */
-const store: DynamicSchemaStore = {
-  inputFields: {
-    design: [
-      {
-        id: "reqRef",
-        label: "Reference to approved requirements catalog",
-        type: "artifact-reference",
-        required: true,
-        source: "ai-derived",
-      },
-    ],
-  },
-  artifactInputFlow: {
-    design: { "solution-architecture": ["reqRef"] },
-  },
-};
+import { describe, expect, it } from "vitest";
+import { crossPhaseArtifactsToStale, declaredCrossPhaseTargets, CROSS_PHASE_ARTIFACT_DEPS } from "@/v3/lib/artifactStaleness";
 
-describe("crossPhaseArtifactsToStale", () => {
-  it("stales a downstream artifact whose artifact-reference names the changed upstream deliverable", () => {
-    const stale = crossPhaseArtifactsToStale(
-      "discover",
-      ["requirements-catalog"],
-      { design: { "solution-architecture": { status: "approved" } } },
-      store,
-    );
-    expect(stale).toEqual([{ phaseId: "design", artifactId: "solution-architecture" }]);
+const buckets = () => ({
+  frame: { "charter": { status: "approved" }, "discovery-kit": { status: "approved" } },
+  listen: { "discovery-kit": { status: "approved" }, "domain-ontology": { status: "approved" }, "current-state-atlas": { status: "draft" } },
+  prototype: { "architecture-strategy": { status: "approved" }, "experience-design": { status: "draft" }, "agentic-blueprint": { status: "approved" } },
+});
+const ids = (t: Array<{ phaseId: string; artifactId: string }>) => t.map((x) => `${x.phaseId}/${x.artifactId}`).sort();
+
+describe("cross-phase staleness", () => {
+  it("the Charter stales all three Listen documents", () => {
+    expect(ids(crossPhaseArtifactsToStale("frame", ["charter"], buckets()))).toEqual([
+      "listen/current-state-atlas", "listen/discovery-kit", "listen/domain-ontology",
+    ]);
   });
 
-  it("never returns artifacts in the origin phase (that ripple is intra-phase)", () => {
-    // The reference field + flow live in the origin phase here; cross-phase must skip it.
-    const originStore: DynamicSchemaStore = {
-      inputFields: { discover: store.inputFields!.design },
-      artifactInputFlow: { discover: { "solution-architecture": ["reqRef"] } },
-    };
-    const stale = crossPhaseArtifactsToStale(
-      "discover",
-      ["requirements-catalog"],
-      { discover: { "solution-architecture": { status: "approved" } } },
-      originStore,
-    );
-    expect(stale).toEqual([]);
+  it("the Discovery Kit stales the ontology and the atlas", () => {
+    expect(ids(crossPhaseArtifactsToStale("frame", ["discovery-kit"], buckets()))).toEqual([
+      "listen/current-state-atlas", "listen/domain-ontology",
+    ]);
   });
 
-  it("does not propagate when no downstream reference matches the changed deliverable", () => {
-    // scope-map ("Scope Map") shares no content tokens with the reqRef label
-    // ("requirements catalog"), so the reference is not pointing at what changed.
-    const stale = crossPhaseArtifactsToStale(
-      "discover",
-      ["scope-map"],
-      { design: { "solution-architecture": { status: "approved" } } },
-      store,
-    );
-    expect(stale).toEqual([]);
+  it("the ontology stales the Prototype build documents", () => {
+    expect(ids(crossPhaseArtifactsToStale("listen", ["domain-ontology"], buckets()))).toEqual([
+      "prototype/agentic-blueprint", "prototype/architecture-strategy", "prototype/experience-design",
+    ]);
   });
 
-  it("only follows artifact-reference inputs, not a plain field that happens to share the label", () => {
-    const textStore: DynamicSchemaStore = {
-      inputFields: {
-        design: [
-          {
-            id: "reqNote",
-            label: "Reference to approved requirements catalog",
-            type: "textarea",
-            required: false,
-            source: "ai-derived",
-          },
-        ],
-      },
-      artifactInputFlow: { design: { "solution-architecture": ["reqNote"] } },
-    };
-    const stale = crossPhaseArtifactsToStale(
-      "discover",
-      ["requirements-catalog"],
-      { design: { "solution-architecture": { status: "approved" } } },
-      textStore,
-    );
-    expect(stale).toEqual([]);
+  it("the atlas stales them too", () => {
+    expect(ids(crossPhaseArtifactsToStale("listen", ["current-state-atlas"], buckets()))).toEqual([
+      "prototype/agentic-blueprint", "prototype/architecture-strategy", "prototype/experience-design",
+    ]);
   });
 
-  it("leaves archived and already-stale downstream artifacts untouched", () => {
-    expect(
-      crossPhaseArtifactsToStale(
-        "discover",
-        ["requirements-catalog"],
-        { design: { "solution-architecture": { status: "archived" } } },
-        store,
-      ),
-    ).toEqual([]);
-    expect(
-      crossPhaseArtifactsToStale(
-        "discover",
-        ["requirements-catalog"],
-        { design: { "solution-architecture": { status: "stale" } } },
-        store,
-      ),
-    ).toEqual([]);
+  it("both together do not double-report a target", () => {
+    const out = crossPhaseArtifactsToStale("listen", ["domain-ontology", "current-state-atlas"], buckets());
+    expect(out).toHaveLength(new Set(ids(out)).size);
   });
 
-  it("no-ops when nothing changed or the downstream artifact was never generated", () => {
-    expect(crossPhaseArtifactsToStale("discover", [], { design: {} }, store)).toEqual([]);
-    // Referenced but not yet generated ⇒ nothing in the bucket to stale.
-    expect(crossPhaseArtifactsToStale("discover", ["requirements-catalog"], { design: {} }, store)).toEqual([]);
+  it("never stales inside the origin phase", () => {
+    // frame/discovery-kit must not stale listen's own kit entry via the frame
+    // origin — and nothing in frame itself.
+    const out = crossPhaseArtifactsToStale("frame", ["charter"], buckets());
+    expect(out.every((t) => t.phaseId !== "frame")).toBe(true);
+  });
+
+  it("skips a target already stale or archived", () => {
+    const b = buckets() as Record<string, Record<string, { status: string }>>;
+    b.listen["domain-ontology"].status = "stale";
+    b.listen["current-state-atlas"].status = "archived";
+    expect(ids(crossPhaseArtifactsToStale("frame", ["discovery-kit"], b))).toEqual([]);
+  });
+
+  it("skips a target the programme does not have", () => {
+    expect(declaredCrossPhaseTargets(["domain-ontology"], { prototype: {} })).toEqual([]);
+  });
+
+  it("an artifact with no declared downstream stales nothing", () => {
+    expect(crossPhaseArtifactsToStale("ship", ["runbook"], buckets())).toEqual([]);
+  });
+
+  it("every declared target names a real upstream artifact id", () => {
+    // Guards the map against a typo silently disabling an edge.
+    const known = new Set(["charter", "discovery-kit", "domain-ontology", "current-state-atlas"]);
+    for (const key of Object.keys(CROSS_PHASE_ARTIFACT_DEPS)) expect(known.has(key)).toBe(true);
   });
 });

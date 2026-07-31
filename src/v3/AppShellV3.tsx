@@ -2189,6 +2189,16 @@ export default function AppShellV3() {
       const staleDefId = opts?.staleDefId;
       const explicitStale = staleDefId && phaseBucket && phaseBucket[staleDefId] ? [staleDefId] : [];
       const allStaled = [...new Set([...staled, ...explicitStale])];
+      // A REGENERATED artifact is a changed upstream deliverable even though it
+      // stales nothing in its own phase. Its generated document lands in
+      // phaseInputs under the artifact's own fieldKey, so a changed field that
+      // IS an artifact's fieldKey means that artifact just rewrote itself — the
+      // signal the cross-phase cascade needs and never had. Without this,
+      // regenerating Frame's Discovery Kit left Listen's documents claiming to
+      // be fresh, because nothing in Frame went stale to trigger the ripple.
+      const regenerated = changedFields
+        .map((field) => Object.keys(FORMAL_ARTIFACT_FIELD_KEYS).find((id) => FORMAL_ARTIFACT_FIELD_KEYS[id] === field))
+        .filter((id): id is string => !!id);
       if (allStaled.length) {
         const nextBucket = { ...phaseBucket };
         const nowIso = new Date().toISOString();
@@ -2206,8 +2216,11 @@ export default function AppShellV3() {
       // and stale them, so a Design that cited an approved requirements catalog
       // doesn't keep pointing at a version we just invalidated. Skips the origin
       // phase and anything archived/already-stale.
-      const crossStaled = allStaled.length
-        ? crossPhaseArtifactsToStale(phaseId, allStaled, artifactBuckets, flowStore)
+      // Feed the cascade BOTH the artifacts staled in this phase and the ones
+      // just regenerated — either is a changed upstream deliverable.
+      const crossSources = [...new Set([...allStaled, ...regenerated])];
+      const crossStaled = crossSources.length
+        ? crossPhaseArtifactsToStale(phaseId, crossSources, artifactBuckets, flowStore)
         : [];
       if (crossStaled.length) {
         const nowIso = new Date().toISOString();
