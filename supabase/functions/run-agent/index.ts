@@ -2297,6 +2297,12 @@ const UPSTREAM_ARTIFACT_DEPS: Record<string, readonly string[]> = {
   // The Atlas names every step's actor from the Discovery Kit's personas — the
   // kit BODY must ride along or the instruction points at data the context
   // doesn't carry and every actor degenerates to "Unclear — to confirm".
+  // The kit sets who is asked about what and the charter frames the problem, so
+  // the ontology is downstream of both. Declared here for the same reason as
+  // every other edge — the generator needs those bodies — and because the
+  // staleness inversion below reads this map as the single dependency graph.
+  discoveryKit: ["transformationCharter"],
+  domainOntology: ["discoveryKit", "transformationCharter"],
   currentStateAtlas: ["domainOntology", "discoveryKit"],
   architectureStrategy: ["currentStateAtlas", "domainOntology"],
   experienceDesign: ["architectureStrategy", "currentStateAtlas", "domainOntology"],
@@ -6428,6 +6434,61 @@ function tagArtifactAreas(programData: ProgramState, fieldKey: string, result: R
       if (isRecord(script)) stamp(script, str(script.stakeholder), str(script.role) || undefined);
     }
   }
+}
+
+/**
+ * Mark every artifact that CONSUMES this one as stale.
+ *
+ * UPSTREAM_ARTIFACT_DEPS already states, per generator, which artifact bodies
+ * feed it — it is what pulls those bodies into the generation context, so it is
+ * the authoritative dependency graph and it is maintained because generation
+ * would visibly break otherwise. Inverting it gives the downstream edges for
+ * free, with no second graph to drift out of step.
+ *
+ * This has to happen HERE, server-side. The artifact is persisted by this
+ * function; the client only subscribes to the realtime update and never runs a
+ * save path of its own, so a client-side cascade cannot see a regeneration at
+ * all. An earlier attempt keyed off changed input fields and could never fire
+ * for that reason.
+ *
+ * Staleness is a flag, not a deletion: the downstream document keeps its
+ * content and gains "Stale — regenerate" so the operator decides when to re-run
+ * it. Anything already stale or archived is left alone.
+ */
+function staleDownstreamArtifacts(programData: ProgramState, changedFieldKey: string): ProgramState {
+  const consumers = Object.entries(UPSTREAM_ARTIFACT_DEPS)
+    .filter(([, deps]) => deps.includes(changedFieldKey))
+    .map(([fieldKey]) => fieldKey);
+  if (!consumers.length) return programData;
+  // fieldKey → the agent id and phase its artifact is filed under.
+  const specByFieldKey = new Map<string, { agentId: string; phase: string }>();
+  for (const [agentId, spec] of Object.entries(FORMAL_ARTIFACT_AGENTS)) {
+    specByFieldKey.set(spec.fieldKey, { agentId, phase: spec.phase });
+  }
+  const nowIso = new Date().toISOString();
+  const upstreamTitle = fieldKeyTitle(changedFieldKey);
+  let next = programData;
+  for (const consumerKey of consumers) {
+    const target = specByFieldKey.get(consumerKey);
+    if (!target) continue;
+    next = updateInnerProgramData(next, (inner) => {
+      const buckets = isRecord(inner.phaseArtifacts) ? { ...inner.phaseArtifacts as Record<string, JsonValue> } : {};
+      const bucket = isRecord(buckets[target.phase]) ? { ...buckets[target.phase] as Record<string, JsonValue> } : {};
+      const entry = bucket[target.agentId];
+      if (!isRecord(entry)) return inner;
+      const status = entry.status;
+      if (status === "archived" || status === "stale") return inner;
+      bucket[target.agentId] = {
+        ...entry,
+        status: "stale",
+        staleReason: `${upstreamTitle} was regenerated`,
+        staleAt: nowIso,
+      } as JsonValue;
+      buckets[target.phase] = bucket as JsonValue;
+      return { ...inner, phaseArtifacts: buckets as JsonValue };
+    });
+  }
+  return next;
 }
 
 function applyProgramSupportArtifact(
@@ -11071,6 +11132,9 @@ Deno.serve(async (req) => {
           });
         } else {
           nextProgramData = applyProgramSupportArtifact(contextProgramData, spec.phase, request.agentId, spec.fieldKey, formalResult, spec.title, generationMetadata, confidence);
+          // Everything built on this artifact is now standing on shifted
+          // ground — flag it so the operator is prompted to regenerate.
+          nextProgramData = staleDownstreamArtifacts(nextProgramData, spec.fieldKey);
         }
         if (atlasContradictions.length && isFlowProgramme(nextProgramData)) {
           const existingDecisions = getInnerProgramData(nextProgramData).flowDecisions;

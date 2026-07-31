@@ -53,6 +53,7 @@ import FlowBrief from "@/v3/components/flow/FlowBrief";
 import FlowApprove from "@/v3/components/flow/FlowApprove";
 import { reportError } from "@/lib/errorReporter";
 import { changedInputFields, relatedArtifactsToStale, crossPhaseArtifactsToStale } from "@/v3/lib/artifactStaleness";
+import { FORMAL_ARTIFACT_FIELD_KEYS } from "@/v3/lib/formalArtifacts";
 import { getDynamicSchemaStore } from "@/v3/lib/dynamicSchema";
 import { hasSubstantiveProgramData } from "@/v3/lib/programDataGuard";
 import { AGENT_ID_ALIASES, RETIRED_AGENT_IDS } from "@/v3/lib/agentMeta";
@@ -63,7 +64,6 @@ import { useLocalProgramMigration } from "@/v3/hooks/useLocalProgramMigration";
 import { usePhaseAgentState } from "@/v3/hooks/usePhaseAgentState";
 import { getPhaseSequence, getPhaseDefinition, buildPhaseOwnershipContext } from "@/v3/lib/methodology";
 import type { MethodologyVariant } from "@/v3/lib/methodology";
-import { FORMAL_ARTIFACT_FIELD_KEYS } from "@/v3/lib/formalArtifacts";
 import { buildPhaseSchedule } from "@/v3/lib/phaseSchedule";
 import { deriveProgramConfidence } from "@/v3/lib/programConfidence";
 import { getPreviousScore, recordConfidenceSnapshot } from "@/v3/lib/confidenceHistory";
@@ -2189,16 +2189,6 @@ export default function AppShellV3() {
       const staleDefId = opts?.staleDefId;
       const explicitStale = staleDefId && phaseBucket && phaseBucket[staleDefId] ? [staleDefId] : [];
       const allStaled = [...new Set([...staled, ...explicitStale])];
-      // A REGENERATED artifact is a changed upstream deliverable even though it
-      // stales nothing in its own phase. Its generated document lands in
-      // phaseInputs under the artifact's own fieldKey, so a changed field that
-      // IS an artifact's fieldKey means that artifact just rewrote itself — the
-      // signal the cross-phase cascade needs and never had. Without this,
-      // regenerating Frame's Discovery Kit left Listen's documents claiming to
-      // be fresh, because nothing in Frame went stale to trigger the ripple.
-      const regenerated = changedFields
-        .map((field) => Object.keys(FORMAL_ARTIFACT_FIELD_KEYS).find((id) => FORMAL_ARTIFACT_FIELD_KEYS[id] === field))
-        .filter((id): id is string => !!id);
       if (allStaled.length) {
         const nextBucket = { ...phaseBucket };
         const nowIso = new Date().toISOString();
@@ -2216,11 +2206,8 @@ export default function AppShellV3() {
       // and stale them, so a Design that cited an approved requirements catalog
       // doesn't keep pointing at a version we just invalidated. Skips the origin
       // phase and anything archived/already-stale.
-      // Feed the cascade BOTH the artifacts staled in this phase and the ones
-      // just regenerated — either is a changed upstream deliverable.
-      const crossSources = [...new Set([...allStaled, ...regenerated])];
-      const crossStaled = crossSources.length
-        ? crossPhaseArtifactsToStale(phaseId, crossSources, artifactBuckets, flowStore)
+      const crossStaled = allStaled.length
+        ? crossPhaseArtifactsToStale(phaseId, allStaled, artifactBuckets, flowStore)
         : [];
       if (crossStaled.length) {
         const nowIso = new Date().toISOString();
