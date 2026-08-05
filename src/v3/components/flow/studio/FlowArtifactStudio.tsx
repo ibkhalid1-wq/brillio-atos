@@ -124,7 +124,37 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
   const canEdit = hasDraft && isArtifactAuthorable(artifact.id);
   const canCurate = hasDraft && artifactEditTier(artifact.id) === "curatable";
   const editable = canEdit || canCurate;
-  const studioActive = !!entry && !!draft && editing;
+  // EXPORT PRINTS THE DOCUMENT, NOT THE EDITOR (operator report 2026-08-05).
+  // `window.print()` captures whatever is on screen, and for three artifacts
+  // that was never the document:
+  //  - domain-ontology / current-state-atlas open graph-first, so the export
+  //    caught a React Flow canvas (unformatted) and a workflow studio that
+  //    keeps only the ACTIVE area's lanes mounted — hence "not showing all
+  //    areas and personas". The unmounted tabs cannot print; no CSS reaches
+  //    a node that isn't in the DOM.
+  //  - discovery-kit suppresses its document body on screen in favour of the
+  //    plan matrix, so the export carried the plan and none of the kit.
+  // Printing therefore renders the document projection instead: every section
+  // in registry order, every row of every collection, nothing behind a tab.
+  // The draft is the same object the studio edits, so unsaved curation prints
+  // exactly as it appears — and `editing` is untouched, so the operator lands
+  // back in the studio afterwards with their work intact.
+  const [printing, setPrinting] = useState(false);
+  const studioActive = !!entry && !!draft && editing && !printing;
+
+  useEffect(() => {
+    if (!printing) return;
+    // Two frames: the first commits the document projection, the second lets
+    // the browser lay it out before the (synchronous, blocking) print dialog
+    // snapshots the page.
+    let raf = 0;
+    raf = requestAnimationFrame(() => {
+      raf = requestAnimationFrame(() => {
+        try { window.print(); } finally { setPrinting(false); }
+      });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [printing]);
 
   // Write-time ontology gate (F-004): while editing the domain ontology, the
   // declared domain/range/cardinality is checked live. Blocking violations
@@ -488,7 +518,7 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
                           Regenerate
                         </button>
                       ) : null}
-                      <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); window.print(); }}>
+                      <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); setPrinting(true); }}>
                         Export · print or PDF
                       </button>
                       <button type="button" role="menuitem" onClick={copyJsonLd}>Copy as JSON-LD</button>
@@ -653,7 +683,7 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
               {/* The Discovery Kit reads as the Listen plan (the `header` above)
                   plus "About this document" — the generated document body is
                   hidden here; the plan is the operator's working surface. */}
-              {artifact.id === "discovery-kit" ? null : draft ? (
+              {artifact.id === "discovery-kit" && !printing ? null : draft ? (
                 <DocumentView key={typeof draft.editedAt === "string" ? String(draft.editedAt) : "unedited"}
                   // Falsified field-demand gaps (the field demonstrably holds
                   // content) are suppressed here too — the document view, the
@@ -665,7 +695,9 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
                   // The Discovery Kit's interview questions are asked and edited
                   // in the Listen phase — hide that section here so the kit reads
                   // as the plan (coverage + cast), not a duplicate of the scripts.
-                  hideKeys={artifact.id === "discovery-kit" ? new Set(["interviews"]) : undefined}
+                  // On EXPORT they come back: a printed kit that omits the
+                  // questions isn't the kit, it's the cover sheet.
+                  hideKeys={artifact.id === "discovery-kit" && !printing ? new Set(["interviews"]) : undefined}
                   onPatch={editable ? (key, value) => { setDraft({ ...draft, [key]: value }); setDirty(true); } : undefined}
                   onOpenFullEditor={editable ? () => setEditing(true) : undefined} />
               ) : (
