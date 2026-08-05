@@ -7486,6 +7486,24 @@ details[open] > summary .v3fs-disc-c::after {display:none}
   .v3fs-dv-colophon,.v3fs-docview-b .v3fs-ground{display:block}
   .v3fs-dv-colophon[open] summary,.v3fs-ground[open] summary{display:block}
 
+  /* PAGINATION. Export renders the document projection, so the long
+     collections — ontology entities, atlas workflows, the kit's questions —
+     print as tables that outrun a single page.
+     `.v3fs-dv-tablewrap` is a horizontal scroller on screen: left alone it
+     prints only the columns that fit the viewport and silently drops the
+     rest, which is the same class of bug as a clipped scroller losing rows. */
+  .v3fs-dv-tablewrap,.v3fs-artpanel-header{overflow:visible !important;max-height:none !important}
+  .v3fs-dv-table{width:100% !important;table-layout:auto}
+  /* Repeat the column headers on every page a table spills onto — otherwise
+     page two of the entity list is unlabelled columns. */
+  .v3fs-dv-table thead{display:table-header-group}
+  .v3fs-dv-table tr,.v3fs-dv-quote,.v3fs-dv-fact{break-inside:avoid}
+  /* Keep a heading with the content it introduces, and never strand a card
+     across a page boundary. */
+  .v3fs-dv-h,.v3fs-dv-card-h{break-after:avoid}
+  .v3fs-dv-card{break-inside:avoid}
+  .v3fs-dv-sec{break-inside:auto}
+
   @page{margin:14mm}
 }
 
