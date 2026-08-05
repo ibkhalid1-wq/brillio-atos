@@ -40,3 +40,9 @@ lerna-debug.log*
 
 # Shareable env template (public VITE_ values; keep out of git anyway)
 .env.local.shared
+
+# The Laila film. Its source is worth keeping, but this working copy carries
+# ~50MB of extracted screen-recording clips plus symlinks to the Aura
+# project's node_modules and music bed — none of which belong in git.
+video-laila/
+video/public/laila/
