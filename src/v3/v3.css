@@ -7435,15 +7435,58 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-dv-menu button{font:inherit;font-size:13px;text-align:left;padding:9px 12px;border:none;background:none;color:var(--v3-text-primary);border-radius:8px;cursor:pointer}
 .v3fs-dv-menu button:hover{background:var(--v3-surface-2)}
 
-/* Export: the document prints as the deliverable — nothing else. */
+/* Export: the document prints as the deliverable — nothing else.
+ *
+ * BOTH containers have to be listed. The studio renders as `.v3fs-docview`
+ * when it is the slide-over overlay and as `.v3fs-artpanel` when it is
+ * embedded in a movement tab — which is how every artifact in Frame, Listen
+ * and the rest is actually opened. Naming only the overlay meant `body *
+ * {visibility:hidden}` blanked the page and nothing was ever un-hidden
+ * again, so Export printed an empty sheet from every tab in the app.
+ */
 @media print{
   body *{visibility:hidden}
-  .v3fs-docview,.v3fs-docview *{visibility:visible}
-  .v3fs-docview{position:absolute;inset:0;width:100% !important;height:auto;border:none;box-shadow:none;animation:none}
-  .v3fs-docview-b{overflow:visible;max-height:none}
-  .v3fs-docview-cta,.v3fs-doc-backdrop,.v3fs-dv-band .v3fs-btn,.v3fs-stu-savebar,.v3fs-ground-go,.v3fs-disc-c{display:none !important}
+  .v3fs-docview,.v3fs-docview *,
+  .v3fs-artpanel,.v3fs-artpanel *{visibility:visible}
+
+  /* Lift the document out of the app's layout and let it run as long as it
+     needs: on screen it lives inside a fixed-height, scrolling shell, and a
+     scroller prints only the slice that happens to be in view. */
+  .v3fs-docview,.v3fs-artpanel{
+    position:absolute;left:0;top:0;right:0;width:100% !important;
+    height:auto;max-height:none;overflow:visible;
+    border:none;border-radius:0;box-shadow:none;animation:none;background:#fff}
+  .v3fs-docview-b,.v3fs-artpanel .v3fs-docview-b{overflow:visible;max-height:none}
+
+  /* …and stop its ancestors clipping it. `.v3fs-ch` is overflow:hidden to
+     keep the movement column tidy on screen; left alone it can crop the
+     printed document to one page.
+     `position:static` matters as much as the overflow: `visibility:hidden`
+     hides the app chrome but KEEPS its layout, so any positioned ancestor
+     stays the absolute panel's containing block and the document starts
+     several hundred pixels down — a blank first half-page. Making them
+     static hands the containing block back to the page. */
+  .v3fs-ch,.v3fs-ch-b,.v3fs-arttab,.v3fs-flow,.v3fs-wrap,.v3fs-app{
+    overflow:visible !important;max-height:none !important;height:auto !important;
+    position:static !important}
+
+  /* The embedded header is sticky with a blur behind it — both are screen
+     affordances that print as a grey band across the title. */
+  .v3fs-artpanel .v3fs-docview-h{position:static !important;backdrop-filter:none !important;background:none !important}
+
+  /* Controls are not part of the deliverable. `.v3fs-artask` is the
+     ask-a-stakeholder composer — a live input with a dropdown and a send
+     button, which on paper is an empty grey box asking a question nobody
+     can answer. */
+  .v3fs-docview-cta,.v3fs-doc-backdrop,.v3fs-dv-band .v3fs-btn,.v3fs-stu-savebar,
+  .v3fs-ground-go,.v3fs-disc-c,.v3fs-dv-pencil,.v3fs-dv-menu,.v3fs-dv-menu-backdrop,
+  .v3fs-copilotcard,.v3fs-dv-outline,.v3fs-artask,.v3fs-dv-changed{display:none !important}
+
+  /* Collapsed disclosures hold the provenance; a printed record needs it. */
   .v3fs-dv-colophon,.v3fs-docview-b .v3fs-ground{display:block}
   .v3fs-dv-colophon[open] summary,.v3fs-ground[open] summary{display:block}
+
+  @page{margin:14mm}
 }
 
 /* Outline navigation + edit-in-place affordances for the document view. */
