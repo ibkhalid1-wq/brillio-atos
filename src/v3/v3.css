@@ -7504,6 +7504,37 @@ details[open] > summary .v3fs-disc-c::after {display:none}
   .v3fs-dv-card{break-inside:avoid}
   .v3fs-dv-sec{break-inside:auto}
 
+  /* THE DIAGRAMS. Browsers drop background fills when printing unless told
+     otherwise, and these diagrams ARE their fills — the pain shading on a step
+     tile and the lane bands carry the meaning. */
+  .v3fs-printgraphic,.v3fs-printgraphic *,
+  .v3fs-dka-matrix,.v3fs-dka-matrix *{
+    -webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .v3fs-printgraphic{margin:0 0 18px}
+
+  /* The ontology canvas keeps its own overflow:hidden — the graph is fitted to
+     this box, so letting it overflow would spill nodes across the page rather
+     than reveal them. Only the app-level clipping above is lifted. */
+  .v3fs-onto.printing .v3fs-onto-canvas{border:1px solid #d9d6e4;border-radius:8px}
+
+  /* Swimlanes: the horizontal scroller becomes a full-width grid, and a
+     workflow never splits across a page boundary if it can be helped. */
+  .v3fs-swim-scroll{overflow:visible !important;max-width:none !important}
+  .v3fs-swim{min-width:0 !important}
+  .v3fs-wf-printwf{break-inside:avoid;margin:0 0 16px}
+  .v3fs-wf-printarea{break-after:avoid;margin:16px 0 8px;font-size:13px;
+    text-transform:uppercase;letter-spacing:.06em;color:#3b2f72}
+  .v3fs-swim-tile{box-shadow:none}
+
+  /* The Discovery Kit matrix is capped at 640px and scrolls on screen; on
+     paper that cap is the truncation the operator reported. Sticky headers go
+     static too — a sticky cell in a printed grid lands wherever the first page
+     left it. */
+  .v3fs-dka-matrixwrap{overflow:visible !important;max-height:none !important}
+  .v3fs-dka-corner,.v3fs-dka-ahdr,.v3fs-dka-person,.v3fs-dka-foot.lbl{position:static !important}
+  .v3fs-dka-matrix{min-width:0 !important}
+  .v3fs-dka-views,.v3fs-dka-addcol{display:none !important}
+
   @page{margin:14mm}
 }
 

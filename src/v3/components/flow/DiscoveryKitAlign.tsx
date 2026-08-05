@@ -18,6 +18,7 @@ import { listenCoverageRoles, listenCoverageAreas, listenAreaCoverage, makeListe
 import { listInterviewPacks } from "@/v3/components/flow/flowPortal";
 import { stakeholderEmail } from "@/v3/components/flow/flowMeetings";
 import { movementEvidence, flowMovements, readMovementInputs } from "@/v3/components/flow/flowShellData";
+import { useStudioPrinting } from "@/v3/components/flow/studio/StudioKit";
 
 const initials = (name: string): string => {
   const w = name.split(/[^A-Za-z0-9]+/).filter(Boolean);
@@ -48,7 +49,12 @@ export default function DiscoveryKitAlign({ program, onSaveInputs, onRenamePerso
   const [editing, setEditing] = useState<null | { kind: "area" | "person"; label: string }>(null);
   const [drag, setDrag] = useState<null | { kind: "area" | "person"; label: string }>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
-  const editable = !!onSaveInputs;
+  // Printing strips the editing affordances: an "add an area" column on paper
+  // is a track of empty boxes, and the grid template below no longer reserves
+  // it. The matrix view is forced too — "By person" is a screen convenience,
+  // and the matrix is what the export is asked for.
+  const printing = useStudioPrinting();
+  const editable = !!onSaveInputs && !printing;
 
   const plan = readListenPlan(program);
   const writer = makeListenPlanWriter(program, onSaveInputs);
@@ -164,7 +170,14 @@ export default function DiscoveryKitAlign({ program, onSaveInputs, onRenamePerso
   };
   const hidePeek = () => setPeek(null);
 
-  const gridCols = `230px repeat(${shown.length}, minmax(96px, 1fr))${editable ? " 44px" : ""}`;
+  // On screen the columns hold a 96px floor and the wrapper scrolls sideways to
+  // fit them. Paper does not scroll: that floor is what pushes the right-hand
+  // areas off the sheet, so a print render drops it and lets every column
+  // divide the page instead. The edit column goes with it — nothing on paper
+  // adds an area.
+  const gridCols = printing
+    ? `150px repeat(${shown.length}, minmax(0, 1fr))`
+    : `230px repeat(${shown.length}, minmax(96px, 1fr))${editable ? " 44px" : ""}`;
 
   return (
     <div className={`v3fs-dka${busy ? " busy" : ""}`}>
@@ -210,7 +223,7 @@ export default function DiscoveryKitAlign({ program, onSaveInputs, onRenamePerso
 
       {!people.length ? (
         <div className="v3fs-dka-empty">No people yet — add a role below to start mapping coverage.</div>
-      ) : view === "matrix" ? (
+      ) : (printing || view === "matrix") ? (
         <div className="v3fs-dka-matrixwrap">
           <div className="v3fs-dka-matrix" style={{ gridTemplateColumns: gridCols }}>
             <div className="v3fs-dka-corner">People × Areas</div>

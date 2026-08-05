@@ -14,7 +14,7 @@ import { ROUTED_EDGE_TYPES, layeredPositions, elkGraphLayout } from "./graphKit"
 import "@xyflow/react/dist/style.css";
 import {
   Section, TextField, TextArea, SelectField, ChipsField,
-  asArray, asRecord, asText, asStrings, useStudioLocked, useStudioAuthoring,
+  asArray, asRecord, asText, asStrings, useStudioLocked, useStudioAuthoring, useStudioPrinting,
   curationNote, DismissControl, type StudioProps,
 } from "./StudioKit";
 
@@ -125,6 +125,12 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
   // below while preserving positions and measurements across rebuilds.
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const flowRef = useRef<ReactFlowInstance<Node, Edge> | null>(null);
+  // A print render is a SEPARATE mount of this studio, so its own state starts
+  // fresh: no area filter, no selection. That is exactly the export we want —
+  // every entity on the map, nothing spotlighted, nothing dimmed — so printing
+  // only has to strip the instrument (deck, toolbar, detail card) and give the
+  // canvas a fixed box to fit into.
+  const printing = useStudioPrinting();
   // ELK's orthogonal edge routes (edge id → polyline), valid ONLY for the node
   // positions the arrange produced them with — any drag or doc change drops
   // them and the edges fall back to live floating lines.
@@ -289,6 +295,19 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
     });
   }, [entities, ids, relations, adopted, candidates, showCandidates, selected, selectedEntityId, focusIds, visibleIds, setNodes]);
 
+  // PRINT: fit AFTER the nodes have real sizes.
+  // The `fitView` prop fits on init — which happens before React Flow has
+  // measured anything, so on a fresh print mount it is a no-op and the graph
+  // stays at translate(0,0) scale(1) with most of it outside the box. Waiting
+  // for every node to report a measured width and fitting then is what puts
+  // the whole ontology on the page.
+  useEffect(() => {
+    if (!printing || !nodes.length) return;
+    if (!nodes.every((node) => node.measured?.width)) return;
+    const frame = requestAnimationFrame(() => flowRef.current?.fitView({ padding: 0.12 }));
+    return () => cancelAnimationFrame(frame);
+  }, [printing, nodes]);
+
   const edges: Edge[] = useMemo(() => relations.map((relation, index) => {
     const cardinality = asText(relation.cardinality);
     const from = asText(relation.from), to = asText(relation.to);
@@ -405,10 +424,11 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
     : -1;
 
   return (
-    <div className="v3fs-onto">
+    <div className={`v3fs-onto${printing ? " printing" : ""}`}>
       {/* Area filter deck — same indigo band as the atlas's pickers. It
           narrows the MAP (hidden nodes/edges — never removed), the entity
           cards and the gaps below. */}
+      {printing ? null : (
       <div className="v3fs-wf-filters">
         <label className="v3fs-wf-filter">
           <span>Area</span>
@@ -441,6 +461,7 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
           </label>
         ) : null}
       </div>
+      )}
       {/* UML hollow triangle for specialisation edges — points at the
           supertype. Defined once; referenced by markerEnd url. */}
       <svg style={{ position: "absolute", width: 0, height: 0 }} aria-hidden="true">
@@ -455,7 +476,12 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
       <div className="v3fs-onto-canvas">
         {/* The flow viewport starts BELOW the toolbar band, so an arranged
             graph can never slide under the buttons. */}
-        <div className="v3fs-onto-flowwrap">
+        {/* The print box is sized INLINE, not in @media print: React Flow fits
+            the graph to whatever the container measures at mount, and a height
+            that only appears once the print stylesheet applies would arrive
+            after the fit — leaving a graph scaled for a box it no longer sits
+            in. Sizing it here means the fit and the paper agree. */}
+        <div className="v3fs-onto-flowwrap" style={printing ? { height: 560, minHeight: 560 } : undefined}>
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -471,13 +497,15 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
           minZoom={0.1}
           maxZoom={2.5}
           proOptions={{ hideAttribution: true }}
-          nodesConnectable={!locked}
-          nodesDraggable={!locked}
+          nodesConnectable={!locked && !printing}
+          nodesDraggable={!locked && !printing}
         >
           <Background gap={22} size={1} />
-          <Controls showInteractive={false} />
+          {/* Zoom buttons are an instrument, not part of the diagram. */}
+          {printing ? null : <Controls showInteractive={false} />}
         </ReactFlow>
         </div>
+        {printing ? null : (
         <div className="v3fs-onto-toolbar">
           {locked || !authoring ? null : <button type="button" className="v3fs-btn" onClick={addEntity}>＋ Add entity</button>}
           <button type="button" className="v3fs-btn" onClick={() => void rearrange()} title="Re-apply the routed layout — no overlaps, edges steered around entities, fewest crossings">⌗ Arrange</button>
@@ -495,6 +523,7 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
             </button>
           ) : null}
         </div>
+        )}
         {/* Focus mode is a spotlight, not a filter — say so while it's on. */}
         {selectedEntityId ? (
           <button type="button" className="v3fs-onto-focus" onClick={() => setSelected(null)}>
@@ -545,6 +574,11 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
       </aside>
       ) : null}
 
+      {/* Below the map: the one selected entity's editor, and the gap router.
+          Neither has anything to say on paper — nothing is selected in a print
+          mount, and the document projection underneath carries every entity in
+          full. */}
+      {printing ? null : (
       <div className="v3fs-onto-below">
         {/* ONE entity's detail under the map — the deck's Entity dropdown and
             a node click both drive the same selection, so the map spotlight,
@@ -734,6 +768,7 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
           );
         })()}
       </div>
+      )}
     </div>
   );
 }
