@@ -30,6 +30,22 @@ export const StudioAuthoringContext = React.createContext(true);
 export const useStudioAuthoring = (): boolean => React.useContext(StudioAuthoringContext);
 
 /**
+ * Whether this studio is rendering FOR PAPER rather than for the screen.
+ *
+ * A studio on screen is an instrument: it shows ONE thing at a time (the
+ * selected workflow, the graph at whatever zoom the operator left it) and
+ * surrounds it with the controls to change that selection. Neither survives
+ * export — a printer cannot click a tab, and an unmounted tab cannot print.
+ *
+ * So a print render is a different render, not a restyled one: every workflow
+ * instead of the active one, the graph fitted to all its nodes instead of the
+ * operator's viewport, and none of the inspector forms (the document
+ * projection printed underneath carries that detail in full).
+ */
+export const StudioPrintContext = React.createContext(false);
+export const useStudioPrinting = (): boolean => React.useContext(StudioPrintContext);
+
+/**
  * Append a dismissal note to a document's `_curationLog` — an underscore-keyed,
  * non-rendered provenance trail that travels with the saved doc (the snapshot
  * ring captures it, and the regeneration hand-edit extractor skips `_` keys, so

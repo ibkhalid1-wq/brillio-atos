@@ -21,7 +21,7 @@ import { buildPrototypePrompt } from "@/v3/components/flow/flowBuildPrompt";
 import { listSnapshots } from "@/v3/lib/blobSnapshots";
 import { STUDIO_REGISTRY } from "./studios";
 import SectionCopilotCard from "./SectionCopilotCard";
-import { StudioLockContext, StudioAuthoringContext, EmptyState } from "./StudioKit";
+import { StudioLockContext, StudioAuthoringContext, StudioPrintContext, EmptyState } from "./StudioKit";
 import { artifactEditTier, isArtifactAuthorable } from "@/v3/lib/artifactEditPolicy";
 
 const SECTION_COPILOT_LABEL: Record<string, string> = {
@@ -34,6 +34,14 @@ const SECTION_COPILOT_PLACEHOLDER: Record<string, string> = {
   "experience-design": "e.g. “add a bulk-approve screen”, “make the theme warmer”, “mark the pricing step to agentify”",
   "agentic-blueprint": "e.g. “add a human-in-the-loop gate before contract send”, “split the pricing agent in two”",
 };
+/**
+ * Artifacts whose studio draws something the prose CANNOT carry — the ontology
+ * graph, the atlas swimlanes. For these the export leads with the picture and
+ * follows with the document; everywhere else the studio is a form, and a form
+ * on paper is just greyed-out boxes, so only the document prints.
+ */
+const PRINT_GRAPHIC_ARTIFACTS = ["domain-ontology", "current-state-atlas"];
+
 import DocumentView from "./DocumentView";
 import EvidenceReader from "@/v3/components/flow/EvidenceReader";
 
@@ -144,17 +152,37 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
 
   useEffect(() => {
     if (!printing) return;
-    // Two frames: the first commits the document projection, the second lets
-    // the browser lay it out before the (synchronous, blocking) print dialog
-    // snapshots the page.
-    let raf = 0;
-    raf = requestAnimationFrame(() => {
-      raf = requestAnimationFrame(() => {
-        try { window.print(); } finally { setPrinting(false); }
-      });
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [printing]);
+    let cancelled = false;
+    const frame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    void (async () => {
+      // One frame commits the print render and lets the browser lay it out.
+      await frame();
+      // A GRAPH needs more than a layout pass. React Flow mounts, waits for a
+      // ResizeObserver to report the container, measures each node, and only
+      // then can fit the view — several frames, not one. Printing on the next
+      // frame caught it mid-mount: the viewport still at identity transform,
+      // the nodes at raw coordinates, and no edges rendered at all. So wait
+      // for the fit to actually land, with a ceiling so a graph that never
+      // settles still prints rather than hanging the export.
+      if (PRINT_GRAPHIC_ARTIFACTS.includes(artifact.id)) {
+        const IDENTITY = "translate(0px, 0px) scale(1)";
+        const deadline = Date.now() + 2500;
+        for (;;) {
+          if (cancelled) return;
+          const viewport = dialogRef.current?.querySelector<HTMLElement>(".v3fs-printgraphic .react-flow__viewport");
+          // No React Flow here (the atlas draws plain DOM swimlanes) — one
+          // layout pass is all that surface needs.
+          if (!viewport) break;
+          if (viewport.style.transform && viewport.style.transform !== IDENTITY) break;
+          if (Date.now() > deadline) break;
+          await frame();
+        }
+      }
+      if (cancelled) return;
+      try { window.print(); } finally { setPrinting(false); }
+    })();
+    return () => { cancelled = true; };
+  }, [printing, artifact.id]);
 
   // Write-time ontology gate (F-004): while editing the domain ontology, the
   // declared domain/range/cardinality is checked live. Blocking violations
@@ -545,7 +573,14 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
           </div>
         </header>
         {askPanel}
-        {header ? <div className="v3fs-artpanel-header">{header}</div> : null}
+        {/* The Discovery Kit's coverage matrix arrives as `header`. It is a grid
+            inside a 640px-capped scroller on screen, so the print pass needs the
+            signal too — it narrows its own columns to the page width. */}
+        {header ? (
+          <div className="v3fs-artpanel-header">
+            <StudioPrintContext.Provider value={printing}>{header}</StudioPrintContext.Provider>
+          </div>
+        ) : null}
         {approval.status === "changes" && approval.comment ? (
           <div className="v3fs-approval-bar changes" role="status">↺ {approval.approver?.name ?? "Approver"} requested changes: &ldquo;{approval.comment}&rdquo;</div>
         ) : null}
@@ -679,6 +714,24 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
             </>
           ) : (
             <>
+              {/* THE PICTURE, THEN THE RECORD. The ontology graph and the atlas
+                  swimlanes say something the prose underneath cannot — shape,
+                  adjacency, who hands off to whom. They render here in a print
+                  pass of their own: read-only, un-authorable, and told (via
+                  StudioPrintContext) to draw EVERY workflow and to fit the graph
+                  to all its nodes rather than to the operator's last viewport. */}
+              {printing && entry && draft && PRINT_GRAPHIC_ARTIFACTS.includes(artifact.id) ? (
+                <div className="v3fs-printgraphic">
+                  <StudioLockContext.Provider value={true}>
+                    <StudioAuthoringContext.Provider value={false}>
+                      <StudioPrintContext.Provider value={true}>
+                        <entry.Component doc={draft} onChange={() => { /* print render — read-only */ }}
+                          program={program} />
+                      </StudioPrintContext.Provider>
+                    </StudioAuthoringContext.Provider>
+                  </StudioLockContext.Provider>
+                </div>
+              ) : null}
               {groundingDisclosure}
               {/* The Discovery Kit reads as the Listen plan (the `header` above)
                   plus "About this document" — the generated document body is

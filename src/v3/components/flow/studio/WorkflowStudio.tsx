@@ -10,7 +10,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   TextField, SelectField, ChipsField, TableEditor, CollapsibleCard,
-  asArray, asRecord, asText, asStrings, useStudioLocked, useStudioAuthoring,
+  asArray, asRecord, asText, asStrings, useStudioLocked, useStudioAuthoring, useStudioPrinting,
   curationNote, DismissControl, EmptyState, type StudioProps,
 } from "./StudioKit";
 import { workflowArea, GENERAL_AREA } from "@/v3/components/flow/flowAreas";
@@ -84,11 +84,99 @@ function painForStep(step: Record<string, unknown>, pains: Array<Record<string, 
   return best;
 }
 
+/**
+ * ONE workflow, drawn for paper.
+ *
+ * The screen studio shows the swimlane of whichever workflow is selected, and
+ * everything around it — the tile buttons, the entity links, the hover peek —
+ * exists to change that selection. None of it means anything printed, and the
+ * unselected workflows are not in the DOM at all, which is why an exported
+ * atlas used to carry one diagram out of ten.
+ *
+ * So this is a flatter twin of that markup: same grid, same lanes, same pain
+ * shading, but static — and the caller renders it once per workflow. The step
+ * chips also stop truncating here (`slice(0, 3)` on screen, all of them on
+ * paper): a page has the room a tile does not.
+ */
+function PrintWorkflowDiagram({ workflow, pains, ontoEvents, area }: {
+  workflow: Record<string, unknown>;
+  pains: Array<Record<string, unknown>>;
+  ontoEvents: Array<Record<string, unknown>>;
+  area: string;
+}) {
+  const steps = asArray(workflow.steps).map(asRecord);
+  const lanes: string[] = [];
+  for (const step of steps) {
+    const actor = asText(step.actor).trim() || "Unassigned";
+    if (!lanes.includes(actor)) lanes.push(actor);
+  }
+  const initials = (lane: string): string => {
+    const words = lane.split(/[^A-Za-z0-9]+/).filter(Boolean);
+    return ((words[0]?.[0] ?? "") + (words[1]?.[0] ?? "")).toUpperCase() || lane.slice(0, 2).toUpperCase();
+  };
+  return (
+    <section className="v3fs-wf-printwf">
+      <div className="v3fs-wf-cockpit">
+        <div className="v3fs-wf-ckpt-id">
+          <span className="v3fs-wf-ckpt-name">{asText(workflow.name) || "Untitled workflow"}</span>
+          {area ? <span className="v3fs-wf-ckpt-trig">{area}</span> : null}
+          {asText(workflow.trigger) ? <span className="v3fs-wf-ckpt-trig">{asText(workflow.trigger)}</span> : null}
+        </div>
+        <div className="v3fs-wf-ckpt-stats">
+          <span><b>{steps.length}</b> step{steps.length === 1 ? "" : "s"}</span>
+          <span><b>{lanes.length}</b> persona{lanes.length === 1 ? "" : "s"}</span>
+          {asText(workflow.owner) ? <span className="v3fs-wf-ckpt-owner">{asText(workflow.owner)}</span> : null}
+        </div>
+      </div>
+      {steps.length === 0 ? (
+        <div className="v3fs-stu-empty">No steps recorded for this workflow.</div>
+      ) : (
+        <div className="v3fs-swim-scroll">
+          <div className="v3fs-swim" style={{ gridTemplateColumns: `110px repeat(${steps.length}, minmax(0, 1fr))` }}>
+            {lanes.map((lane) => (
+              <React.Fragment key={lane}>
+                <div className="v3fs-swim-lane"><span className="v3fs-swim-av" aria-hidden="true">{initials(lane)}</span>{lane}</div>
+                {steps.map((step, index) => {
+                  const actor = asText(step.actor).trim() || "Unassigned";
+                  if (actor !== lane) return <div key={index} className="v3fs-swim-cell" aria-hidden="true" />;
+                  const pain = painForStep(step, pains);
+                  const entities = asStrings(step.entities);
+                  const stepEvents = eventsForStep(step, ontoEvents);
+                  return (
+                    <div key={index} className="v3fs-swim-cell has">
+                      <div className={`v3fs-swim-tile${pain ? ` pain-${pain.severity}` : ""}`}>
+                        <span className="v3fs-swim-n" aria-hidden="true">{index + 1}</span>
+                        <span className="v3fs-swim-action">{asText(step.action) || "—"}</span>
+                        <span className="v3fs-swim-meta">
+                          {asText(step.system) ? <span className="v3fs-wf-system">{asText(step.system)}</span> : null}
+                          {asText(step.duration) ? <span className="v3fs-wf-dur">{asText(step.duration)}</span> : null}
+                        </span>
+                        {pain ? <span className="v3fs-swim-pain">{pain.pain}</span> : null}
+                        {entities.length || stepEvents.length ? (
+                          <span className="v3fs-wf-ents">
+                            {entities.map((entity) => <span key={entity} className="v3fs-wf-ent">{entity}</span>)}
+                            {stepEvents.map((name) => <span key={`ev-${name}`} className="v3fs-wf-evt">⚡{name}</span>)}
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })}
+              </React.Fragment>
+            ))}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program, onFocus }: StudioProps & {
   onFocus?: (focus: AtlasFocus | null) => void;
 }) {
   const locked = useStudioLocked();
   const authoring = useStudioAuthoring();
+  const printing = useStudioPrinting();
   const workflows = useMemo(() => asArray(doc.workflows).map(asRecord), [doc.workflows]);
   const pains = useMemo(() => asArray(doc.painHeatmap).map(asRecord), [doc.painHeatmap]);
   const [active, setActive] = useState(0);
@@ -269,6 +357,33 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program,
 
   const activeArea = workflow ? frameAreaFor(workflowArea(workflow)) : "";
   const areaWorkflows = groupedTabs.find(([area]) => area === activeArea)?.[1] ?? [];
+
+  // EXPORT: every workflow, in area order, instead of the one on the tab.
+  // Placed after every hook so the hook order never changes between the screen
+  // render and the print render.
+  if (printing) {
+    return (
+      <div className="v3fs-wf printing">
+        {workflows.length === 0 ? <div className="v3fs-stu-empty">No workflows on record.</div> : null}
+        {groupedTabs.map(([area, items]) => (
+          <React.Fragment key={area}>
+            <h3 className="v3fs-wf-printarea">{area} · {items.length} workflow{items.length === 1 ? "" : "s"}</h3>
+            {items.map(({ index }) => (
+              <PrintWorkflowDiagram key={index} workflow={workflows[index]}
+                pains={pains} ontoEvents={ontoEvents} area={area} />
+            ))}
+          </React.Fragment>
+        ))}
+        {/* Frame areas with no workflow yet are part of the picture too — an
+            atlas that silently omits them reads as complete when it isn't. */}
+        {unmappedAreas.length ? (
+          <div className="v3fs-wf-unmapped-row">
+            Not mapped yet: {unmappedAreas.map((area) => <span key={area} className="v3fs-wf-unmapped">{area}</span>)}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <div className="v3fs-wf">
