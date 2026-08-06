@@ -368,6 +368,7 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
     }
   };
 
+  const briefSet = !!String(readMovementInputs(program, "frame").companyBrief ?? "").trim();
   const openBrief = () => {
     setBriefText(String(readMovementInputs(program, "frame").companyBrief ?? ""));
     setBriefOpen(true);
@@ -506,10 +507,6 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
             {band.half ? <span className="v3ln-half">{band.half}</span> : null}
             <span className="v3ln-scope">{band.scope}</span>
             <span className="v3ln-band-sp" />
-            {band.id === "frame" && onSaveInputs ? (
-              <button type="button" className="v3ln-a" onClick={openBrief}
-                title="Who the client is — fetch a web-grounded draft, then confirm or override">Company brief</button>
-            ) : null}
             <button type="button" className={`v3ln-chip ${band.chip.tone}`}
               onClick={() => setGateFor(band)}
               title={`Open the ${band.name} gate's criteria`}>
@@ -523,7 +520,20 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
               ) : null}
             </div>
           ) : null}
-          <div className={`v3ln-stns n${band.stations.length}`}>
+          <div className={`v3ln-stns n${band.stations.length + (band.id === "frame" && onSaveInputs ? 1 : 0)}`}>
+            {/* The Company Brief leads Frame: who the client IS comes before
+              * why we're doing this. An input station, not a generated one —
+              * it opens the fetch/override dialog rather than a studio. */}
+            {band.id === "frame" && onSaveInputs ? (
+              <button type="button" className="v3ln-stn" onClick={openBrief}
+                title={briefSet ? "Company Brief — on the record; open to edit or refetch" : "Company Brief — not set; fetch a web-grounded draft or write your own"}>
+                <span className="v3ln-stn-h">
+                  <span className={`v3ln-g ${briefSet ? "m4" : "m0"}`} aria-hidden="true">{briefSet ? "●" : "○"}</span>
+                  <span className="v3ln-stn-n">Company Brief</span>
+                </span>
+                <span className="v3ln-stn-sub">Who the client is — web-fetched draft, confirmed by you</span>
+              </button>
+            ) : null}
             {band.stations.map((s) => <Station key={s.id} station={s} onOpen={setDocFor} />)}
           </div>
         </section>

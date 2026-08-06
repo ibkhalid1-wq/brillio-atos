@@ -100,8 +100,8 @@ Deno.serve(async (req) => {
     "You write a COMPANY BRIEF for a transformation programme's grounding record.",
     "Search the web for the company, then write 150-250 words of plain prose covering: what the company does, its market and customers, main products/services, rough scale (revenue/headcount/geography when stated by a source), and anything structurally notable (business model, recent strategic shifts).",
     "FACTS ONLY, each traceable to a page you actually read — no speculation, no marketing gloss. If the name is ambiguous and the industry hint does not settle it, say so in one line and brief the most likely match.",
-    "End with a 'Sources:' section listing the URLs you relied on, one per line.",
-    "Return ONLY the brief text — no preamble, no headings other than Sources.",
+    "Plain prose only — do NOT include URLs, inline citations, footnotes, or a Sources section.",
+    "Return ONLY the brief text — no preamble, no headings.",
   ].join("\n");
 
   try {
@@ -114,10 +114,14 @@ Deno.serve(async (req) => {
   }
 });
 
-/** Provenance always travels with the text, even when the model skips the
- * Sources section it was asked for. */
-function withSources(text: string, cited: string[]): string {
-  return /sources:/i.test(text) || !cited.length ? text : `${text}\n\nSources:\n${cited.join("\n")}`;
+/** The brief reads as prose: strip inline citation links the search tools
+ * weave in, and any trailing Sources block. */
+function cleanBrief(text: string): string {
+  return text
+    .replace(/\s*\(\[[^\]]*\]\([^)]*\)\)/g, "")
+    .replace(/\[([^\]]*)\]\(([^)]*)\)/g, "$1")
+    .replace(/\n+sources:[\s\S]*$/i, "")
+    .trim();
 }
 
 async function anthropicBrief(key: string, model: string, system: string, user: string): Promise<string> {
@@ -137,9 +141,7 @@ async function anthropicBrief(key: string, model: string, system: string, user: 
   const text = blocks.filter((b) => b.type === "text" && typeof b.text === "string")
     .map((b) => b.text as string).join("").trim();
   if (!text) throw new Error("The model returned no brief.");
-  const cited = [...new Set(blocks.flatMap((b) => (b.citations ?? [])
-    .map((c) => c.url).filter((u): u is string => !!u)))];
-  return withSources(text, cited);
+  return cleanBrief(text);
 }
 
 async function openAiBrief(key: string, model: string, system: string, user: string): Promise<string> {
@@ -158,19 +160,13 @@ async function openAiBrief(key: string, model: string, system: string, user: str
   const payload = await res.json();
   const items = Array.isArray(payload.output) ? payload.output : [];
   let text = "";
-  const cited = new Set<string>();
   for (const item of items) {
     if (item?.type !== "message" || !Array.isArray(item.content)) continue;
     for (const part of item.content) {
-      if (part?.type === "output_text" && typeof part.text === "string") {
-        text += part.text;
-        for (const note of part.annotations ?? []) {
-          if (note?.type === "url_citation" && typeof note.url === "string") cited.add(note.url);
-        }
-      }
+      if (part?.type === "output_text" && typeof part.text === "string") text += part.text;
     }
   }
   text = text.trim();
   if (!text) throw new Error("The model returned no brief.");
-  return withSources(text, [...cited]);
+  return cleanBrief(text);
 }
