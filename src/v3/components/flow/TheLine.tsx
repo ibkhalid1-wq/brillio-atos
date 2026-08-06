@@ -209,6 +209,7 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
   // embedded previews and iframes deny clipboards silently, and a button
   // that only writes to a denied clipboard reads as broken.
   const [linkShown, setLinkShown] = useState<{ who: string; url: string } | null>(null);
+  const [qOpen, setQOpen] = useState<Record<string, boolean>>({});
   const copyLink = async (row: CastRow) => {
     try {
       const existing = packFor(program, row.label, row.movementId);
@@ -221,17 +222,29 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
       }
       if (!url) { setNote(`No link handler available for ${row.label} in this view.`); return; }
       setLinkShown({ who: row.label, url });
+      setQOpen((s) => ({ ...s, [row.label]: true }));
       try {
         await navigator.clipboard.writeText(url);
         setNote(`Link copied — ${row.label}. It's also shown below their row.`);
       } catch {
-        setNote(`Link ready — the clipboard is blocked here, so copy it from the field under ${row.label}'s row.`);
+        setNote(`Link ready — copy it from the field under ${row.label}'s row.`);
       }
       window.setTimeout(() => setNote(null), 6000);
     } catch (error) {
       setNote(`Couldn't create the link: ${error instanceof Error ? error.message : String(error)}`);
       window.setTimeout(() => setNote(null), 8000);
     }
+  };
+
+  const copyShown = async () => {
+    if (!linkShown) return;
+    try {
+      await navigator.clipboard.writeText(linkShown.url);
+      setNote(`Link copied — ${linkShown.who}.`);
+    } catch {
+      setNote("The clipboard is blocked here — select the link text and copy it manually.");
+    }
+    window.setTimeout(() => setNote(null), 5000);
   };
 
   // ── meeting invite: a VISIBLE inline date bar (hidden-input showPicker()
@@ -302,24 +315,25 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
         </button>
       </div>
 
-      <div className="v3ln-stats">
-        <div><span className="v3ln-sl">Round</span><span className="v3ln-sv">{model.round}</span></div>
-        <div><span className="v3ln-sl">Converged — signed off</span><span className="v3ln-sv">{model.stats.converged} of {model.stats.areasTotal} areas</span></div>
-        <button type="button" className="v3ln-statbtn" onClick={() => setTab("discovery")}
-          title="Open Discovery — who has been heard, who is waiting">
-          <span className="v3ln-sl">Voices heard</span><span className="v3ln-sv">{model.stats.heardTotal > 0 ? `${model.stats.heardDone} of ${model.stats.heardTotal}` : "—"}</span>
-        </button>
-        <div><span className="v3ln-sl">Needs refresh</span><span className={`v3ln-sv${model.stats.refresh > 0 ? " acc" : ""}`}>{model.stats.refresh > 0 ? `${model.stats.refresh} station${model.stats.refresh === 1 ? "" : "s"}` : "—"}</span></div>
-        <div className="v3ln-sp" />
-        <span className="v3ln-ro" title="Both chromes read and write the same live record — switch back any time; nothing diverges.">one record · both chromes live</span>
-      </div>
+      {tab === "work" ? (
+        <div className="v3ln-stats">
+          <div><span className="v3ln-sl">Round</span><span className="v3ln-sv">{model.round}</span></div>
+          <div><span className="v3ln-sl">Converged</span><span className="v3ln-sv">{model.stats.converged} of {model.stats.areasTotal} areas</span></div>
+          <button type="button" className="v3ln-statbtn" onClick={() => setTab("discovery")}
+            title="Open Discovery — who has been heard, who is waiting">
+            <span className="v3ln-sl">Voices heard</span><span className="v3ln-sv">{model.stats.heardTotal > 0 ? `${model.stats.heardDone} of ${model.stats.heardTotal}` : "—"}</span>
+          </button>
+          <div><span className="v3ln-sl">Needs refresh</span><span className={`v3ln-sv${model.stats.refresh > 0 ? " acc" : ""}`}>{model.stats.refresh > 0 ? `${model.stats.refresh} station${model.stats.refresh === 1 ? "" : "s"}` : "—"}</span></div>
+        </div>
+      ) : null}
 
       {note ? <div className="v3ln-toast" role="status">{note}</div> : null}
 
-      {tab === "work" ? model.bands.map((band, bi) => (
-        <section key={band.id} className={`v3ln-band${band.id === "loop" ? " loop" : ""}`} aria-label={band.name}>
+      {tab === "work" ? <div className="v3ln-spine">{model.bands.map((band, bi) => (
+        <div key={band.id} className="v3ln-spine-row">
+        <span className="v3ln-rail-n" aria-hidden="true">{String(bi + 1).padStart(2, "0")}</span>
+        <section className={`v3ln-band${band.id === "loop" ? " loop" : ""}`} aria-label={band.name}>
           <header className="v3ln-band-h spine">
-            <span className="v3ln-band-i" aria-hidden="true">{String(bi + 1).padStart(2, "0")}</span>
             <span className="v3ln-band-n">{band.name}</span>
             {band.half ? <span className="v3ln-half">{band.half}</span> : null}
             <span className="v3ln-scope">{band.scope}</span>
@@ -340,15 +354,17 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
           <div className={`v3ln-stns n${band.stations.length}`}>
             {band.stations.map((s) => <Station key={s.id} station={s} onOpen={setDocFor} />)}
           </div>
-          {band.note ? <div className="v3ln-note">{band.note}</div> : null}
         </section>
-      )) : null}
+        </div>
+      ))}</div> : null}
 
       {tab === "discovery" && cast.length > 0 ? (
         <section className="v3ln-band" aria-label="Discovery">
           <header className="v3ln-band-h">
             <span className="v3ln-band-n">Discovery</span>
-            <span className="v3ln-scope">{cast[0]?.movementId === "frame" ? "the sponsor is the starting voice — the Kit casts the rest" : "one durable link per voice · verdicts and sign-offs land here later"}</span>
+            {cast[0]?.movementId === "frame" ? (
+              <span className="v3ln-scope">the sponsor is the starting voice — the Kit casts the rest</span>
+            ) : null}
             <span className="v3ln-band-sp" />
             {castAreas.length > 1 ? (
               <label className="v3ln-filter">
@@ -375,12 +391,14 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                   title={row.heard ? "Heard — evidence on the record" : row.awaiting ? "Link out — awaiting response" : "To reach"} />
                 <span className="v3ln-cr-who">
                   <b>{row.label}</b>
-                  <span>{row.isRole ? "role — assign a name to send" : row.role}</span>
+                  {row.isRole ? <span>role — assign a name to send</span>
+                    : row.role && row.role !== row.label ? <span>{row.role}</span> : null}
                 </span>
                 <button type="button" className="v3ln-cr-area"
                   title={areaFilter === row.area ? "Show all areas" : `Filter to ${row.area}`}
                   onClick={() => setAreaFilter(areaFilter === row.area ? "" : row.area)}>{row.area}</button>
-                <details className="v3ln-cr-q">
+                <details className="v3ln-cr-q" open={!!qOpen[row.label]}
+                  onToggle={(e) => { const open = e.currentTarget.open; setQOpen((s) => (s[row.label] === open ? s : { ...s, [row.label]: open })); }}>
                   <summary>{row.questions.length} question{row.questions.length === 1 ? "" : "s"}</summary>
                   <ul>{row.questions.map((q, i) => <li key={i}>{q}</li>)}</ul>
                 </details>
@@ -396,10 +414,14 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                       title="Schedule a follow-up and download the calendar invite">🗓 invite</button>
                   ) : null}
                 </span>
-                {linkShown?.who === row.label ? (
-                  <input className="v3ln-cr-url" readOnly value={linkShown.url}
-                    onFocus={(e) => e.currentTarget.select()}
-                    aria-label={`${row.label}'s durable link`} />
+                {linkShown?.who === row.label && qOpen[row.label] ? (
+                  <span className="v3ln-cr-url-row">
+                    <input className="v3ln-cr-url" readOnly value={linkShown.url}
+                      onFocus={(e) => e.currentTarget.select()}
+                      aria-label={`${row.label}'s durable link`} />
+                    <button type="button" className="v3ln-a" onClick={() => void copyShown()}
+                      title="Copy the link">⧉ copy</button>
+                  </span>
                 ) : null}
                 {invitee?.label === row.label ? (
                   <span className="v3ln-cr-invite">
@@ -413,7 +435,6 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
               </div>
             ))}
           </div>
-          <div className="v3ln-note">A person&rsquo;s link is minted once and re-asks forever — new questions supersede old ones on the same URL. Copying always shows the link here too, in case the clipboard is denied.</div>
         </section>
       ) : null}
       {tab === "discovery" && cast.length === 0 ? (
