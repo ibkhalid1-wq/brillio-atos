@@ -135,8 +135,15 @@
 .v3ln-cast{display:flex;flex-direction:column}
 .v3ln-cr{display:flex;flex-direction:column;gap:7px;padding:9px 14px;border-bottom:1px solid var(--fs-line);cursor:pointer}
 .v3ln-cr:hover{background:color-mix(in srgb,var(--v3-accent-2) 3%,var(--fs-card))}
-/* the top bar never moves — expansion only adds a body below it */
-.v3ln-cr-top{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+/* the top bar never moves — expansion only adds a body below it. Grid keeps
+ * every control in its column: a chip-heavy areas zone wraps WITHIN its own
+ * track instead of shoving the questions/link/capture/invite around. */
+.v3ln-cr-top{display:grid;grid-template-columns:auto minmax(140px,max-content) 1fr auto auto;
+  align-items:center;gap:12px}
+.v3ln-cr-top .v3ln-cr-who{flex:none}
+.v3ln-cr-areas{justify-content:flex-end}
+@media(max-width:680px){.v3ln-cr-top{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .v3ln-cr-areas{justify-content:flex-start}}
 .v3ln-cr-body{display:flex;flex-direction:column;gap:8px;padding:0 0 2px 21px}
 .v3ln-cr-qs{margin:0;padding:0 0 0 16px;max-width:560px;font-size:11px;color:var(--v3-text-muted)}
 .v3ln-cr-qs li{margin:0 0 4px;line-height:1.45}
