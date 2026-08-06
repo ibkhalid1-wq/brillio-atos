@@ -110,8 +110,14 @@ function Segments({ station }: { station: LineStation }) {
   );
 }
 
-function Station({ station, onOpen }: { station: LineStation; onOpen: (card: ArtifactCardModel) => void }) {
+function Station({ station, onOpen, onRegen, regenerating }: {
+  station: LineStation;
+  onOpen: (card: ArtifactCardModel) => void;
+  onRegen?: (card: ArtifactCardModel) => void;
+  regenerating?: boolean;
+}) {
   const openable = !!station.card?.present;
+  const canRegen = !!(station.needsRefresh && station.card && onRegen);
   return (
     <button type="button" className="v3ln-stn" disabled={!openable}
       title={openable ? `Open ${station.title}` : `${station.title} — not seeded yet`}
@@ -121,7 +127,25 @@ function Station({ station, onOpen }: { station: LineStation; onOpen: (card: Art
           <span className={`v3ln-g m${station.maturity}`} aria-hidden="true">{LINE_GLYPHS[station.maturity]}</span>
         ) : null}
         <span className="v3ln-stn-n">{station.title}</span>
-        {station.needsRefresh ? <span className="v3ln-rf">needs refresh ↻</span> : null}
+        {station.needsRefresh ? (
+          // The badge IS the action: clicking it regenerates from the
+          // refreshed record instead of opening the stale document. A span
+          // (not a nested button — invalid inside the station button) with
+          // its own click/key handling.
+          canRegen ? (
+            <span role="button" tabIndex={0}
+              className={`v3ln-rf act${regenerating ? " busy" : ""}`}
+              title={`Regenerate ${station.title} from the refreshed record`}
+              onClick={(e) => { e.stopPropagation(); if (!regenerating) onRegen!(station.card!); }}
+              onKeyDown={(e) => {
+                if (e.key !== "Enter" && e.key !== " ") return;
+                e.preventDefault(); e.stopPropagation();
+                if (!regenerating) onRegen!(station.card!);
+              }}>
+              {regenerating ? "regenerating…" : "regenerate ↻"}
+            </span>
+          ) : <span className="v3ln-rf">needs refresh ↻</span>
+        ) : null}
       </span>
       {station.subtitle ? <span className="v3ln-stn-sub">{station.subtitle}</span> : null}
       <Segments station={station} />
@@ -368,6 +392,18 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
     }
   };
 
+  // Regeneration in flight, by artifact id. Cleared implicitly: when the
+  // regenerated document lands, the station stops being stale and the badge
+  // disappears; the flag only mutes double-clicks meanwhile.
+  const [regenBusy, setRegenBusy] = useState<Record<string, boolean>>({});
+  const regenerate = (card: ArtifactCardModel) => {
+    if (!onRunAgent) return;
+    onRunAgent(card.id, card.movementId);
+    setRegenBusy((s) => ({ ...s, [card.id]: true }));
+    setNote(`Regenerating ${card.title} from the record — the station refreshes when it lands.`);
+    window.setTimeout(() => setNote(null), 6000);
+  };
+
   const briefSet = !!String(readMovementInputs(program, "frame").companyBrief ?? "").trim();
   const openBrief = () => {
     setBriefText(String(readMovementInputs(program, "frame").companyBrief ?? ""));
@@ -534,7 +570,11 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                 <span className="v3ln-stn-sub">Who the client is — web-fetched draft, confirmed by you</span>
               </button>
             ) : null}
-            {band.stations.map((s) => <Station key={s.id} station={s} onOpen={setDocFor} />)}
+            {band.stations.map((s) => (
+              <Station key={s.id} station={s} onOpen={setDocFor}
+                onRegen={onRunAgent ? regenerate : undefined}
+                regenerating={!!(s.card && regenBusy[s.card.id])} />
+            ))}
           </div>
         </section>
         </div>
@@ -773,6 +813,8 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
       {docFor ? (
         <Suspense fallback={null}>
           <FlowArtifactStudio program={program} artifact={docFor} onClose={() => setDocFor(null)}
+            onRegenerate={onRunAgent ? () => regenerate(docFor) : undefined}
+            regenerating={!!regenBusy[docFor.id]}
             header={docFor.id === "discovery-kit"
               ? <DiscoveryKitAlign program={program} onSaveInputs={onSaveInputs}
                   onRenamePerson={onRenamePerson} onRenameRole={onRenameRole}
