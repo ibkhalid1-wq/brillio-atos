@@ -17,7 +17,7 @@ import type { ProgramSummary } from "@/new/types";
 import { buildLineModel, LINE_GLYPHS, type LineBand, type LineStation } from "@/v3/lib/lineModel";
 import {
   evidenceStamp, flowMovements, movementEvidence, readMovementInputs, stakeholderEmail,
-  type ArtifactCardModel,
+  type ArtifactCardModel, type EvidenceEntry,
 } from "@/v3/components/flow/flowShellData";
 import { resolveMovementStakeholders, type MovementStakeholder } from "@/v3/components/flow/flowStakeholders";
 import { listInterviewPacks, portalLinkFor } from "@/v3/components/flow/flowPortal";
@@ -29,6 +29,7 @@ import DiscoveryKitAlign from "@/v3/components/flow/DiscoveryKitAlign";
 import "./theLine.css";
 
 const FlowArtifactStudio = lazy(() => import("./studio/FlowArtifactStudio"));
+const EvidenceReader = lazy(() => import("./EvidenceReader"));
 
 type KitAlignProps = ComponentProps<typeof DiscoveryKitAlign>;
 
@@ -172,7 +173,8 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
   // to match the classic chrome's Discovery tab). The surface itself stays
   // load-bearing past Listen — the same people carry demo verdicts and
   // sign-offs later, and they land here.
-  const [tab, setTab] = useState<"work" | "discovery">("work");
+  const [tab, setTab] = useState<"work" | "discovery" | "record">("work");
+  const [reading, setReading] = useState<EvidenceEntry | null>(null);
   // Discover's area filter — narrows the roster to one lane ("" = all).
   const [areaFilter, setAreaFilter] = useState<string>("");
 
@@ -227,6 +229,28 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
   const filteredCast = areaFilter && castAreas.includes(areaFilter)
     ? cast.filter((row) => row.area === areaFilter)
     : cast;
+
+  // ── the record: every attributed evidence entry across the spine, newest
+  // first, each mapped to its speaker's area so the Record projection can
+  // group and filter the same way the roster does.
+  const record = useMemo(() => {
+    const areaOf = new Map(cast.map((row) => [row.label.trim().toLowerCase(), row.area]));
+    return flowMovements()
+      .flatMap((movement) => movementEvidence(program, movement))
+      .map((entry) => {
+        const name = entry.who.split(",")[0].trim();
+        return { entry, name, area: areaOf.get(name.toLowerCase()) ?? "" };
+      })
+      .sort((a, b) => (b.entry.capturedAt ?? "").localeCompare(a.entry.capturedAt ?? ""));
+  }, [program, cast]);
+  const recordGroups = useMemo(() => {
+    const order = [...castAreas.filter((area) => record.some((r) => r.area === area))];
+    if (record.some((r) => !r.area)) order.push("");
+    const groups = order.map((area) => ({ area, items: record.filter((r) => r.area === area) }));
+    return areaFilter && castAreas.includes(areaFilter)
+      ? groups.filter((g) => g.area === areaFilter)
+      : groups;
+  }, [record, castAreas, areaFilter]);
 
   // ── per-person link: existing pack's URL, else mint (returns the URL).
   // The URL ALWAYS renders inline; the clipboard is best-effort on top —
@@ -336,6 +360,10 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
         <button type="button" role="tab" aria-selected={tab === "discovery"}
           className={tab === "discovery" ? "on" : undefined} onClick={() => setTab("discovery")}>
           Discover<span>the people — links, capture, invites</span>
+        </button>
+        <button type="button" role="tab" aria-selected={tab === "record"}
+          className={tab === "record" ? "on" : undefined} onClick={() => setTab("record")}>
+          Record<span>who said what, when — by area</span>
         </button>
       </div>
 
@@ -463,6 +491,61 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
       ) : null}
       {tab === "discovery" && cast.length === 0 ? (
         <div className="v3ln-note">No one to hear yet — the roster arrives when the Discovery Kit casts it.</div>
+      ) : null}
+
+      {tab === "record" ? (
+        <section className="v3ln-band" aria-label="Record">
+          <header className="v3ln-band-h">
+            <span className="v3ln-band-n">Record</span>
+            <span className="v3ln-band-sp" />
+            {castAreas.length > 1 ? (
+              <label className="v3ln-filter">
+                <span>Area</span>
+                <select value={castAreas.includes(areaFilter) ? areaFilter : ""}
+                  onChange={(e) => setAreaFilter(e.target.value)}
+                  aria-label="Filter the record by area">
+                  <option value="">All areas · {record.length}</option>
+                  {castAreas.map((area) => (
+                    <option key={area} value={area}>{area} · {record.filter((r) => r.area === area).length}</option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            <span className="v3ln-scope">{recordGroups.reduce((n, g) => n + g.items.length, 0)} entries</span>
+          </header>
+          {recordGroups.length === 0 ? (
+            <div className="v3ln-note">Nothing on the record yet{areaFilter ? ` for ${areaFilter}` : ""} — capture a conversation or share a link from Discover.</div>
+          ) : recordGroups.map((group) => (
+            <div key={group.area || "programme"} className="v3ln-rec-grp">
+              <div className="v3ln-rec-area">
+                {group.area ? (
+                  <button type="button" className="v3ln-cr-area"
+                    title={areaFilter === group.area ? "Show all areas" : `Filter to ${group.area}`}
+                    onClick={() => setAreaFilter(areaFilter === group.area ? "" : group.area)}>{group.area}</button>
+                ) : <span className="v3ln-scope">programme-wide</span>}
+                <span>{group.items.length} entr{group.items.length === 1 ? "y" : "ies"}</span>
+              </div>
+              {group.items.map(({ entry, name }) => (
+                <button type="button" key={entry.id} className="v3ln-rec-row"
+                  title="Read the full entry"
+                  onClick={() => setReading(entry)}>
+                  <span className="v3ln-rec-top">
+                    <b>{name}</b>
+                    <span className="v3ln-rec-fl">{entry.fieldLabel}</span>
+                    {entry.capturedAt ? <time className="v3ln-rec-when">{entry.capturedAt}</time> : null}
+                  </span>
+                  <span className="v3ln-rec-ex">{entry.excerpt}</span>
+                </button>
+              ))}
+            </div>
+          ))}
+        </section>
+      ) : null}
+
+      {reading ? (
+        <Suspense fallback={null}>
+          <EvidenceReader entry={reading} onClose={() => setReading(null)} />
+        </Suspense>
       ) : null}
 
       {gateFor ? <GateSheet band={gateFor} onClose={() => setGateFor(null)} /> : null}
