@@ -23,6 +23,7 @@ import {
 import { readFlowGovernance, flowAgentTier } from "@/v3/components/flow/flowGovernance";
 import { resolveMovementStakeholders, deliveryRoleDirectory, readDirectoryPeople, validateProgramRole, readRoleBindings, knownProgramRoles, unresolvedCoverageNames, kitPersonaDirectory, readSuggestedVoices, readListenPlan, listenPlanWrite, dismissedListenRoles } from "@/v3/components/flow/flowStakeholders";
 import DiscoveryKitAlign from "@/v3/components/flow/DiscoveryKitAlign";
+import TheLine from "@/v3/components/flow/TheLine";
 import { stakeholderEmail } from "@/v3/components/flow/flowMeetings";
 import { readMetricRegistry, metricConsistency } from "@/v3/components/flow/flowMetricRegistry";
 import { routeAttachedDocument, buildRoutedBlocks, type DocRoute } from "@/v3/components/flow/flowDocRouting";
@@ -133,7 +134,22 @@ interface FlowShellProps {
   jumpToFlowNonce?: number;
 }
 
-type FlowView = "today" | "flow" | "library" | "people" | "pulse" | "mission" | "grounding" | "portfolio";
+type FlowView = "today" | "flow" | "library" | "people" | "pulse" | "mission" | "grounding" | "portfolio" | "line";
+
+/** The Line — the flag-gated production-line home that runs BESIDE the
+ * classic chrome: same live record, read-only projection, so the two can
+ * never disagree. Entry is the appbar toggle, `?ui=line`, or the persisted
+ * preference — deliberately NOT a rail tile, because it is a sibling chrome
+ * for the whole programme, not an eighth view within this one. */
+const lineViewPreferred = (): boolean => {
+  try {
+    if (new URLSearchParams(window.location.search).get("ui") === "line") return true;
+    return localStorage.getItem("atos.lineView") === "on";
+  } catch { return false; }
+};
+const rememberLineView = (on: boolean): void => {
+  try { localStorage.setItem("atos.lineView", on ? "on" : "off"); } catch { /* private mode — fine */ }
+};
 
 /** The rail is programme-scoped: the work, then the system. App-global actions
  * (Search, Portfolio, Copilot, Help) live in the top bar instead — the rail
@@ -157,6 +173,7 @@ const DOCK_TIPS: Record<FlowView, string> = {
   mission: "Control — agents, governance and settings",
   grounding: "Grounding — the standards the ontology is grounded in, plus the client vocabulary",
   portfolio: "Portfolio — every programme and its engagements",
+  line: "The Line — the production-line view of this programme (read-only projection)",
 };
 
 /** One stroke weight, currentColor — the rail's icons stop being a font-glyph grab bag. */
@@ -478,9 +495,10 @@ export default function FlowShell(props: FlowShellProps) {
   // Land where the work is: Today only when something waits on the user's
   // judgment (decisions / quarantined evidence); the canvas otherwise, where
   // the spine pointer takes over. Today stays one badge-tap away.
-  const [view, setView] = useState<FlowView>(() =>
-    listOpenFlowDecisions(program).length + listPortalInbox(program).length + governedExceptionsForInbox(program).length > 0 ? "today" : "flow",
-  );
+  const [view, setView] = useState<FlowView>(() => {
+    if (lineViewPreferred()) return "line";
+    return listOpenFlowDecisions(program).length + listPortalInbox(program).length + governedExceptionsForInbox(program).length > 0 ? "today" : "flow";
+  });
   // A freshly-created programme should open on the work — the shell bumps this
   // nonce after setup saves so we jump to the canvas regardless of the view the
   // operator was on (typically Portfolio, where they clicked "New programme").
@@ -698,6 +716,17 @@ export default function FlowShell(props: FlowShellProps) {
           <kbd>⌘K</kbd>
         </button>
         <div className="v3fs-appbar-r">
+          <button type="button" className="v3fs-appbar-nav"
+            title={view === "line" ? "Back to the classic chrome — same record, nothing lost" : "The Line — the production-line view of this programme (read-only projection; runs beside the classic chrome)"}
+            aria-label={view === "line" ? "Switch to the classic chrome" : "Switch to the Line view"}
+            aria-pressed={view === "line"}
+            onClick={() => {
+              const next = view === "line" ? "flow" : "line";
+              rememberLineView(next === "line");
+              setView(next); window.scrollTo({ top: 0 });
+            }}>
+            <DockIcon id="flow" /><span>{view === "line" ? "Classic" : "Line"}</span>
+          </button>
           <button type="button" className="v3fs-appbar-nav" title="Help — how AURA Flow works" aria-label="Help"
             onClick={() => setHelpOpen(true)}>
             <DockIcon id="help" /><span>Help</span>
@@ -824,6 +853,8 @@ export default function FlowShell(props: FlowShellProps) {
           />
         ) : view === "grounding" ? (
           <FlowGrounding program={program} onSaveInputs={props.onSaveInputs} />
+        ) : view === "line" ? (
+          <TheLine program={program} />
         ) : view === "portfolio" ? (
           <FlowPortfolio
             onDeleteProgram={props.onDeleteProgram}
