@@ -153,11 +153,18 @@
   border-radius:4px;padding:4px 8px;background:var(--fs-card);max-width:240px;cursor:pointer}
 .v3ln-filter select:focus-visible{outline:2px solid var(--v3-accent-2);outline-offset:-1px}
 .v3ln-cr-q{font-size:11px;color:var(--v3-text-muted);min-width:90px}
-.v3ln-cr-q summary{cursor:pointer;white-space:nowrap;list-style:none;font:inherit;font-weight:600;font-size:11px;line-height:1.5}
+/* the expand/collapse is a control, so it dresses like one — same button
+ * language as link/capture/invite */
+.v3ln-cr-q summary{cursor:pointer;white-space:nowrap;list-style:none;display:inline-block;
+  font:inherit;font-weight:600;font-size:11px;line-height:1.4;color:var(--v3-accent-2);
+  border:1px solid var(--fs-line);border-radius:4px;padding:3px 9px}
 .v3ln-cr-q summary::-webkit-details-marker{display:none}
-.v3ln-cr-q summary::after{content:"▾";margin-left:5px;opacity:.55}
-.v3ln-cr-q[open]>summary::after{content:"▴"}
-.v3ln-cr-q summary:hover{color:var(--v3-accent-2)}
+.v3ln-cr-q summary::after{content:"▾";margin-left:6px;opacity:.7}
+.v3ln-cr-q summary:hover{border-color:var(--v3-accent-2)}
+.v3ln-cr-q summary:focus-visible{outline:2px solid var(--v3-accent-2);outline-offset:1px}
+.v3ln-cr-q[open]>summary{border-color:var(--v3-accent-2);
+  background:color-mix(in srgb,var(--v3-accent-2) 7%,transparent)}
+.v3ln-cr-q[open]>summary::after{content:"▴";opacity:1}
 .v3ln-cr-q ul{margin:6px 0 0;padding:0 0 0 16px;max-width:520px}
 .v3ln-cr-q li{margin:0 0 4px;line-height:1.45}
 .v3ln-cr-act{display:flex;gap:6px;flex:none}
