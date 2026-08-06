@@ -12,7 +12,7 @@
  * One write path, two skins: the chromes can run at the same time and can
  * never disagree, because there is nothing here to disagree with.
  */
-import { Suspense, lazy, useMemo, useRef, useState, type ComponentProps } from "react";
+import { Suspense, lazy, useMemo, useState, type ComponentProps } from "react";
 import type { ProgramSummary } from "@/new/types";
 import { buildLineModel, LINE_GLYPHS, type LineBand, type LineStation } from "@/v3/lib/lineModel";
 import {
@@ -21,11 +21,10 @@ import {
 } from "@/v3/components/flow/flowShellData";
 import { resolveMovementStakeholders, type MovementStakeholder } from "@/v3/components/flow/flowStakeholders";
 import { listInterviewPacks, portalLinkFor } from "@/v3/components/flow/flowPortal";
-import { copyTextFromAction } from "@/v3/components/flow/flowCapture";
 import { stakeholderCollection } from "@/v3/components/flow/CollectBoard";
 import { listenCoverageAreas, listenAreaCoverage } from "@/v3/components/flow/listenCoverage";
 import { canonicalFrameArea, stakeholderPrimaryArea } from "@/v3/components/flow/flowAreas";
-import { buildMeetingIcs } from "@/v3/components/flow/flowMeetings";
+import { buildMeetingIcs, meetingKit, sponsorLinkQuestions } from "@/v3/components/flow/flowMeetings";
 import DiscoveryKitAlign from "@/v3/components/flow/DiscoveryKitAlign";
 import "./theLine.css";
 
@@ -43,6 +42,11 @@ interface CastRow {
   label: string;
   role: string;
   isRole: boolean;
+  /** Which movement this voice is collected FOR — frame pre-Kit (the sponsor
+   * is the starting voice), listen once the Kit casts the roster. Routes the
+   * capture write and the link mint to the right conversation field. */
+  movementId: "frame" | "listen";
+  captureField: string;
   area: string;
   heard: boolean;
   awaiting: boolean;      // link out, nothing back yet
@@ -128,11 +132,11 @@ function GateSheet({ band, onClose }: { band: LineBand; onClose: () => void }) {
 
 /** Same matching classic uses: newest pack whose stakeholder name matches,
  * scoped to Listen (durable kit links carry no movementId). */
-function packFor(program: ProgramSummary, who: string) {
+function packFor(program: ProgramSummary, who: string, movementId: "frame" | "listen") {
   const key = who.trim().toLowerCase();
   return [...listInterviewPacks(program)].reverse().find((pack) =>
     pack.stakeholder.trim().toLowerCase() === key
-    && (!pack.movementId || pack.movementId === "listen"));
+    && (movementId === "listen" ? (!pack.movementId || pack.movementId === "listen") : pack.movementId === movementId));
 }
 
 export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenameRole, onMintFollowUp, onScheduleFollowUp, onRunAgent }: TheLineProps) {
@@ -145,69 +149,118 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
   // load-bearing past Listen — the same people carry demo verdicts and
   // sign-offs later, and they land here.
   const [tab, setTab] = useState<"work" | "discovery">("work");
+  // Discovery's area filter — narrows the roster to one lane ("" = all).
+  const [areaFilter, setAreaFilter] = useState<string>("");
 
   // ── the cast: the Listen roster with area, heard state and their questions.
+  // Pre-Kit, the roster IS the sponsor: a new programme's Discovery opens on
+  // the Executive Sponsor (named from Frame, else a placeholder whose script
+  // and link exist before the name does — a thread waiting).
   const cast = useMemo<CastRow[]>(() => {
-    const listen = flowMovements().find((movement) => movement.id === "listen");
-    if (!listen) return [];
+    const movements = flowMovements();
     const packs = listInterviewPacks(program);
-    const evidence = movementEvidence(program, listen);
     const kitAreas = listenCoverageAreas(program).map((area) => area.label);
     const coverage = listenAreaCoverage(program);
-    return resolveMovementStakeholders(program, "listen").map((stakeholder) => {
-      const label = stakeholder.name || stakeholder.role;
-      const col = stakeholderCollection("listen", stakeholder, packs, evidence);
-      const covered = coverage.find((row) =>
-        row.roles.some((who) => who.trim().toLowerCase() === label.trim().toLowerCase()));
-      const area = covered?.area
-        ?? canonicalFrameArea(kitAreas, stakeholderPrimaryArea(program, stakeholder.name ?? "", stakeholder.role));
-      return {
-        label, role: stakeholder.role, isRole: stakeholder.isRole, area,
-        heard: col.heard, awaiting: !col.heard && !!col.pack,
-        questions: stakeholder.linkQuestions ?? stakeholder.questions,
-        stakeholder,
-      };
-    });
+    const rows = (movementId: "frame" | "listen", captureField: string, people: MovementStakeholder[]): CastRow[] => {
+      const movement = movements.find((m) => m.id === movementId);
+      const evidence = movement ? movementEvidence(program, movement) : [];
+      return people.map((stakeholder) => {
+        const label = stakeholder.name || stakeholder.role;
+        const col = stakeholderCollection(movementId, stakeholder, packs, evidence);
+        const covered = coverage.find((row) =>
+          row.roles.some((who) => who.trim().toLowerCase() === label.trim().toLowerCase()));
+        const area = covered?.area
+          ?? canonicalFrameArea(kitAreas, stakeholderPrimaryArea(program, stakeholder.name ?? "", stakeholder.role));
+        return {
+          label, role: stakeholder.role, isRole: stakeholder.isRole, movementId, captureField, area,
+          heard: col.heard, awaiting: !col.heard && !!col.pack,
+          questions: stakeholder.linkQuestions ?? stakeholder.questions,
+          stakeholder,
+        };
+      });
+    };
+    const listenRows = rows("listen", "interviewTranscripts", resolveMovementStakeholders(program, "listen"));
+    if (listenRows.length) return listenRows;
+    const kit = meetingKit(program, "frame");
+    const captureField = kit?.captureField ?? "sponsorConversation";
+    const framePeople = resolveMovementStakeholders(program, "frame");
+    if (framePeople.length) return rows("frame", captureField, framePeople);
+    // No sponsor named yet — the placeholder starts the thread anyway.
+    const script = kit?.questions.length ? kit.questions : sponsorLinkQuestions(program);
+    return rows("frame", captureField, [{
+      id: "frame-sponsor", name: "", role: "Executive Sponsor",
+      questions: script, isRole: true,
+    } as MovementStakeholder]);
   }, [program]);
 
+  // Distinct areas actually present on the roster, kit order preserved by
+  // first appearance; the filter narrows without ever hiding its own option.
+  const castAreas = useMemo(() => {
+    const seen: string[] = [];
+    for (const row of cast) if (!seen.includes(row.area)) seen.push(row.area);
+    return seen;
+  }, [cast]);
+  const filteredCast = areaFilter && castAreas.includes(areaFilter)
+    ? cast.filter((row) => row.area === areaFilter)
+    : cast;
+
   // ── per-person link: existing pack's URL, else mint (returns the URL).
+  // The URL ALWAYS renders inline; the clipboard is best-effort on top —
+  // embedded previews and iframes deny clipboards silently, and a button
+  // that only writes to a denied clipboard reads as broken.
   const [linkShown, setLinkShown] = useState<{ who: string; url: string } | null>(null);
   const copyLink = async (row: CastRow) => {
-    const url = await copyTextFromAction(async () => {
-      const existing = packFor(program, row.label);
-      if (existing) return portalLinkFor(program.id, existing);
-      if (!onMintFollowUp) return null;
-      return onMintFollowUp({
-        movementId: "listen", who: row.label, questions: row.questions,
-        captureField: "interviewTranscripts", unnamed: row.isRole,
-      });
-    });
-    if (url) setLinkShown({ who: row.label, url });
+    try {
+      const existing = packFor(program, row.label, row.movementId);
+      let url = existing ? portalLinkFor(program.id, existing) : null;
+      if (!url && onMintFollowUp) {
+        url = await onMintFollowUp({
+          movementId: row.movementId, who: row.label, questions: row.questions,
+          captureField: row.captureField, unnamed: row.isRole,
+        });
+      }
+      if (!url) { setNote(`No link handler available for ${row.label} in this view.`); return; }
+      setLinkShown({ who: row.label, url });
+      try {
+        await navigator.clipboard.writeText(url);
+        setNote(`Link copied — ${row.label}. It's also shown below their row.`);
+      } catch {
+        setNote(`Link ready — the clipboard is blocked here, so copy it from the field under ${row.label}'s row.`);
+      }
+      window.setTimeout(() => setNote(null), 6000);
+    } catch (error) {
+      setNote(`Couldn't create the link: ${error instanceof Error ? error.message : String(error)}`);
+      window.setTimeout(() => setNote(null), 8000);
+    }
   };
 
-  // ── meeting invite: schedule the follow-up, then download the .ics.
-  const dateRef = useRef<HTMLInputElement>(null);
+  // ── meeting invite: a VISIBLE inline date bar (hidden-input showPicker()
+  // throws in embedded/iframe contexts, which read as a dead button), then
+  // schedule the follow-up and download the .ics — classic's two halves.
   const [invitee, setInvitee] = useState<CastRow | null>(null);
+  const [inviteDate, setInviteDate] = useState("");
   const [note, setNote] = useState<string | null>(null);
   const pickDate = (row: CastRow) => {
-    setInvitee(row);
-    const input = dateRef.current;
-    if (!input) return;
-    if (typeof input.showPicker === "function") input.showPicker(); else input.click();
+    setInvitee((current) => (current?.label === row.label ? null : row));
+    setInviteDate("");
   };
-  const onDatePicked = async (date: string) => {
-    if (!date || !invitee) return;
-    await onScheduleFollowUp?.("listen", invitee.label, date);
-    const ics = buildMeetingIcs({
-      who: invitee.label, email: stakeholderEmail(program, invitee.label), date,
-      programmeName: program.name, questions: invitee.questions,
-    });
-    const url = URL.createObjectURL(new Blob([ics], { type: "text/calendar" }));
-    const a = document.createElement("a");
-    a.href = url; a.download = `listen-${invitee.label.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.ics`;
-    a.click(); URL.revokeObjectURL(url);
-    setNote(`Invite downloaded · follow-up scheduled — ${invitee.label}, ${date}`);
-    setInvitee(null);
+  const confirmInvite = async () => {
+    if (!inviteDate || !invitee) return;
+    try {
+      await onScheduleFollowUp?.(invitee.movementId, invitee.label, inviteDate);
+      const ics = buildMeetingIcs({
+        who: invitee.label, email: stakeholderEmail(program, invitee.label), date: inviteDate,
+        programmeName: program.name, questions: invitee.questions,
+      });
+      const url = URL.createObjectURL(new Blob([ics], { type: "text/calendar" }));
+      const a = document.createElement("a");
+      a.href = url; a.download = `${invitee.movementId}-${invitee.label.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.ics`;
+      a.click(); URL.revokeObjectURL(url);
+      setNote(`Invite downloaded · follow-up scheduled — ${invitee.label}, ${inviteDate}`);
+    } catch (error) {
+      setNote(`Couldn't schedule: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    setInvitee(null); setInviteDate("");
     window.setTimeout(() => setNote(null), 6000);
   };
 
@@ -224,13 +277,15 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
     const row = cast.find((r) => r.label === capWho);
     const text = capText.trim();
     if (!row || !text || !onSaveInputs) return;
-    const existing = String(readMovementInputs(program, "listen").interviewTranscripts ?? "");
+    const existing = String(readMovementInputs(program, row.movementId)[row.captureField] ?? "");
     const header = `— ${[row.isRole ? row.role : row.label, row.isRole ? "" : row.role, evidenceStamp()].filter(Boolean).join(", ")} —`;
     const appended = [existing.trimEnd(), `${header}\n${text}`].filter(Boolean).join("\n\n");
-    await onSaveInputs("listen", { interviewTranscripts: appended }, { attest: { action: `Captured — ${row.label}` } });
-    onRunAgent?.("contradiction-detector", "listen");
+    await onSaveInputs(row.movementId, { [row.captureField]: appended }, { attest: { action: `Captured — ${row.label}` } });
+    onRunAgent?.("contradiction-detector", row.movementId);
     setCapFor(null); setCapText("");
-    setNote(`Captured — ${row.label}. The Ontology and Atlas will refresh for ${row.area}.`);
+    setNote(row.movementId === "listen"
+      ? `Captured — ${row.label}. The Ontology and Atlas will refresh for ${row.area}.`
+      : `Captured — ${row.label}. The Charter and Discovery Kit will refresh.`);
     window.setTimeout(() => setNote(null), 6000);
   };
 
@@ -261,9 +316,10 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
 
       {note ? <div className="v3ln-toast" role="status">{note}</div> : null}
 
-      {tab === "work" ? model.bands.map((band) => (
+      {tab === "work" ? model.bands.map((band, bi) => (
         <section key={band.id} className={`v3ln-band${band.id === "loop" ? " loop" : ""}`} aria-label={band.name}>
-          <header className="v3ln-band-h">
+          <header className="v3ln-band-h spine">
+            <span className="v3ln-band-i" aria-hidden="true">{String(bi + 1).padStart(2, "0")}</span>
             <span className="v3ln-band-n">{band.name}</span>
             {band.half ? <span className="v3ln-half">{band.half}</span> : null}
             <span className="v3ln-scope">{band.scope}</span>
@@ -292,15 +348,28 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
         <section className="v3ln-band" aria-label="Discovery">
           <header className="v3ln-band-h">
             <span className="v3ln-band-n">Discovery</span>
-            <span className="v3ln-scope">one durable link per voice · verdicts and sign-offs land here later</span>
+            <span className="v3ln-scope">{cast[0]?.movementId === "frame" ? "the sponsor is the starting voice — the Kit casts the rest" : "one durable link per voice · verdicts and sign-offs land here later"}</span>
             <span className="v3ln-band-sp" />
-            <span className="v3ln-scope">{cast.filter((r) => r.heard).length} of {cast.length} heard</span>
+            {castAreas.length > 1 ? (
+              <label className="v3ln-filter">
+                <span>Area</span>
+                <select value={castAreas.includes(areaFilter) ? areaFilter : ""}
+                  onChange={(e) => setAreaFilter(e.target.value)}
+                  aria-label="Filter the roster by area">
+                  <option value="">All areas · {cast.length}</option>
+                  {castAreas.map((area) => (
+                    <option key={area} value={area}>{area} · {cast.filter((r) => r.area === area).length}</option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            <span className="v3ln-scope">{filteredCast.filter((r) => r.heard).length} of {filteredCast.length} heard{areaFilter && castAreas.includes(areaFilter) ? ` in ${areaFilter}` : ""}</span>
             {onSaveInputs ? (
               <button type="button" className="v3ln-a" onClick={() => openCapture()}>＋ add to the record</button>
             ) : null}
           </header>
           <div className="v3ln-cast">
-            {cast.map((row) => (
+            {filteredCast.map((row) => (
               <div key={row.label} className="v3ln-cr">
                 <span className={`v3ln-dot ${row.heard ? "d" : row.awaiting ? "w" : "t"}`}
                   title={row.heard ? "Heard — evidence on the record" : row.awaiting ? "Link out — awaiting response" : "To reach"} />
@@ -308,7 +377,9 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                   <b>{row.label}</b>
                   <span>{row.isRole ? "role — assign a name to send" : row.role}</span>
                 </span>
-                <span className="v3ln-cr-area" title="Primary area — where their verdicts roll up">{row.area}</span>
+                <button type="button" className="v3ln-cr-area"
+                  title={areaFilter === row.area ? "Show all areas" : `Filter to ${row.area}`}
+                  onClick={() => setAreaFilter(areaFilter === row.area ? "" : row.area)}>{row.area}</button>
                 <details className="v3ln-cr-q">
                   <summary>{row.questions.length} question{row.questions.length === 1 ? "" : "s"}</summary>
                   <ul>{row.questions.map((q, i) => <li key={i}>{q}</li>)}</ul>
@@ -330,6 +401,15 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                     onFocus={(e) => e.currentTarget.select()}
                     aria-label={`${row.label}'s durable link`} />
                 ) : null}
+                {invitee?.label === row.label ? (
+                  <span className="v3ln-cr-invite">
+                    <input type="date" value={inviteDate} onChange={(e) => setInviteDate(e.target.value)}
+                      aria-label={`Follow-up date for ${row.label}`} />
+                    <button type="button" className="v3ln-btn" disabled={!inviteDate}
+                      onClick={() => void confirmInvite()}>Schedule &amp; download invite</button>
+                    <button type="button" className="v3ln-a" onClick={() => setInvitee(null)}>cancel</button>
+                  </span>
+                ) : null}
               </div>
             ))}
           </div>
@@ -348,9 +428,6 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
         </div>
       ) : null}
 
-      <input ref={dateRef} type="date" className="v3ln-hidden" aria-hidden="true" tabIndex={-1}
-        onChange={(e) => { const d = e.target.value; e.target.value = ""; void onDatePicked(d); }} />
-
       {gateFor ? <GateSheet band={gateFor} onClose={() => setGateFor(null)} /> : null}
 
       {capFor ? (
@@ -358,7 +435,7 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
           <div className="v3ln-gate-backdrop" onClick={() => setCapFor(null)} aria-hidden="true" />
           <div className="v3ln-gate" role="dialog" aria-modal="true" aria-label="Add to the record">
             <div className="v3ln-gate-h">
-              <h3>Add to the record — Listen</h3>
+              <h3>Add to the record</h3>
               <button type="button" className="v3ln-x" onClick={() => setCapFor(null)} aria-label="Close">✕</button>
             </div>
             <div className="v3ln-cap">
