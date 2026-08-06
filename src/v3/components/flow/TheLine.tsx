@@ -473,7 +473,14 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
           </header>
           <div className="v3ln-cast">
             {filteredCast.map((row) => (
-              <div key={row.label} className="v3ln-cr">
+              <div key={row.label} className="v3ln-cr"
+                onClick={(e) => {
+                  // The whole row toggles the questions — except clicks that
+                  // already mean something (buttons, links, inputs, the
+                  // details block itself).
+                  if ((e.target as HTMLElement).closest("button, a, input, select, textarea, details")) return;
+                  setQOpen((s) => ({ ...s, [row.label]: !s[row.label] }));
+                }}>
                 <span className={`v3ln-dot ${row.heard ? "d" : row.awaiting ? "w" : "t"}`}
                   title={row.heard ? "Heard — evidence on the record" : row.awaiting ? "Link out — awaiting response" : "To reach"} />
                 <span className="v3ln-cr-who">
