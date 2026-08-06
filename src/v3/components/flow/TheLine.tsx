@@ -465,14 +465,6 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
         <div className="v3ln-note">No one to hear yet — the roster arrives when the Discovery Kit casts it.</div>
       ) : null}
 
-      {tab === "work" ? (
-        <div className="v3ln-legend">
-          <span className="v3ln-sl">Segments read</span>
-          <span>{model.areas.map((a) => a).join(" · ") || "areas arrive when the Discovery Kit names them"}</span>
-          <span className="v3ln-glyphs">○ not seeded · ◔ provisional · ◑ grounded · ◕ reviewed · ● approved</span>
-        </div>
-      ) : null}
-
       {gateFor ? <GateSheet band={gateFor} onClose={() => setGateFor(null)} /> : null}
 
       {capFor ? (
