@@ -82,6 +82,16 @@
   border:1px solid var(--v3-accent-2);color:var(--v3-accent-2);border-radius:3px;padding:2px 6px;white-space:nowrap}
 .v3ln-stn-sub{font-size:10.5px;color:var(--v3-text-muted);line-height:1.4}
 
+/* many-area summary: one slim meter grouped by maturity + counts in words */
+.v3ln-seg-sum{display:flex;flex-direction:column;gap:5px}
+.v3ln-meter{display:flex;gap:1px;height:8px;border-radius:4px;overflow:hidden}
+.v3ln-mt{min-width:6px;background:var(--fs-line)}
+.v3ln-mt.m1{background:var(--ln-m1)}
+.v3ln-mt.m2{background:var(--ln-m2)}
+.v3ln-mt.m3{background:#2E93B5}
+.v3ln-mt.m4{background:var(--ln-m4)}
+.v3ln-seg-cap{font-size:10.5px;color:var(--v3-text-muted);line-height:1.4}
+
 .v3ln-seg{display:flex;gap:3px;align-items:center}
 .v3ln-sg{flex:1;height:15px;border-radius:3px;background:var(--fs-line);min-width:20px;
   display:grid;place-items:center;font-size:9.5px;font-weight:700;letter-spacing:.02em;color:var(--v3-text-primary)}
