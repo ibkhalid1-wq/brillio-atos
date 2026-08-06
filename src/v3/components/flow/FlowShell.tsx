@@ -855,7 +855,9 @@ export default function FlowShell(props: FlowShellProps) {
           <FlowGrounding program={program} onSaveInputs={props.onSaveInputs} />
         ) : view === "line" ? (
           <TheLine program={program} onSaveInputs={props.onSaveInputs}
-            onRenamePerson={props.onRenamePerson} onRenameRole={props.onRenameRole} />
+            onRenamePerson={props.onRenamePerson} onRenameRole={props.onRenameRole}
+            onMintFollowUp={props.onMintFollowUp} onScheduleFollowUp={props.onScheduleFollowUp}
+            onRunAgent={props.onRunAgent} />
         ) : view === "portfolio" ? (
           <FlowPortfolio
             onDeleteProgram={props.onDeleteProgram}
