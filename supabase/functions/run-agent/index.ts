@@ -7734,7 +7734,13 @@ function ontologyMandateContext(inner: Record<string, unknown>, programRow: Reco
   const projectMeta = normalizeProgramData(inner.projectMeta as JsonValue | null);
   const str = (v: unknown) => typeof v === "string" ? v.trim() : "";
   return {
-    mandate: [str(frame.sponsorConversation), str(frame.objective), str(frame.businessObjective)].filter(Boolean).join("\n").slice(0, 8000),
+    // The company brief leads the mandate: operator-confirmed context on who
+    // the client IS (web-fetched draft or hand-written — a human always saves
+    // it, so evidence discipline holds).
+    mandate: [
+      str(frame.companyBrief) ? `ABOUT THE COMPANY (operator-confirmed brief):\n${str(frame.companyBrief)}` : "",
+      str(frame.sponsorConversation), str(frame.objective), str(frame.businessObjective),
+    ].filter(Boolean).join("\n").slice(0, 8000),
     sponsor: str(frame.sponsor) || str(inner.sponsor) || str(projectMeta.sponsor),
     programName: str(programRow.name) || str(projectMeta.name) || "Programme",
     industry: str(frame.industry) || str(programRow.industry) || str(projectMeta.industry),

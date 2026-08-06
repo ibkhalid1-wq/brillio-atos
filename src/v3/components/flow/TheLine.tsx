@@ -26,6 +26,7 @@ import { listenCoverageAreas, listenAreaCoverage } from "@/v3/components/flow/li
 import { canonicalFrameArea, stakeholderPrimaryArea } from "@/v3/components/flow/flowAreas";
 import { buildMeetingIcs, meetingKit, sponsorLinkQuestions } from "@/v3/components/flow/flowMeetings";
 import DiscoveryKitAlign from "@/v3/components/flow/DiscoveryKitAlign";
+import { supabase } from "@/integrations/supabase/client";
 import "./theLine.css";
 
 const FlowArtifactStudio = lazy(() => import("./studio/FlowArtifactStudio"));
@@ -336,6 +337,11 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
   // that only writes to a denied clipboard reads as broken.
   const [linkShown, setLinkShown] = useState<{ who: string; url: string } | null>(null);
   const [qOpen, setQOpen] = useState<Record<string, boolean>>({});
+  // Company brief — who the client IS. A web-fetched DRAFT the operator
+  // confirms or overrides; only their save writes it to the record.
+  const [briefOpen, setBriefOpen] = useState(false);
+  const [briefText, setBriefText] = useState("");
+  const [briefBusy, setBriefBusy] = useState(false);
   const copyLink = async (row: CastRow) => {
     try {
       const existing = packFor(program, row.label, row.movementId);
@@ -360,6 +366,38 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
       setNote(`Couldn't create the link: ${error instanceof Error ? error.message : String(error)}`);
       window.setTimeout(() => setNote(null), 8000);
     }
+  };
+
+  const openBrief = () => {
+    setBriefText(String(readMovementInputs(program, "frame").companyBrief ?? ""));
+    setBriefOpen(true);
+  };
+  const fetchBrief = async () => {
+    setBriefBusy(true);
+    try {
+      const industry = String(readMovementInputs(program, "frame").industry ?? "");
+      // The CLIENT is the company; the programme name is only a fallback hint.
+      const { data, error } = await supabase.functions.invoke("company-brief", {
+        body: { company: program.client || program.name, industry, hint: program.client ? program.name : "" },
+      });
+      if (error) throw new Error(error.message);
+      const brief = typeof (data as { brief?: unknown })?.brief === "string" ? (data as { brief: string }).brief.trim() : "";
+      if (!brief) throw new Error("No brief returned.");
+      setBriefText(brief);
+    } catch (error) {
+      setNote(`Couldn't fetch the brief: ${error instanceof Error ? error.message : String(error)}`);
+      window.setTimeout(() => setNote(null), 8000);
+    } finally {
+      setBriefBusy(false);
+    }
+  };
+  const saveBrief = async () => {
+    if (!onSaveInputs) return;
+    await onSaveInputs("frame", { companyBrief: briefText.trim() },
+      { attest: { action: "Company brief updated" } });
+    setBriefOpen(false);
+    setNote("Company brief saved — the charter, kit, ontology and atlas ground in it on their next generation.");
+    window.setTimeout(() => setNote(null), 6000);
   };
 
   const copyShown = async () => {
@@ -468,6 +506,10 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
             {band.half ? <span className="v3ln-half">{band.half}</span> : null}
             <span className="v3ln-scope">{band.scope}</span>
             <span className="v3ln-band-sp" />
+            {band.id === "frame" && onSaveInputs ? (
+              <button type="button" className="v3ln-a" onClick={openBrief}
+                title="Who the client is — fetch a web-grounded draft, then confirm or override">Company brief</button>
+            ) : null}
             <button type="button" className={`v3ln-chip ${band.chip.tone}`}
               onClick={() => setGateFor(band)}
               title={`Open the ${band.name} gate's criteria`}>
@@ -686,6 +728,32 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                 <button type="button" className="v3ln-btn" disabled={!capText.trim() || !capWho}
                   onClick={() => void saveCapture()}>Capture</button>
                 <span>Lands as “— Name, Role, Date —” evidence and refreshes what depends on it. To record live or attach files, use the classic Listen board — same record.</span>
+              </div>
+            </div>
+          </div>
+        </>
+      ) : null}
+
+      {briefOpen ? (
+        <>
+          <div className="v3ln-gate-backdrop" onClick={() => setBriefOpen(false)} aria-hidden="true" />
+          <div className="v3ln-gate" role="dialog" aria-modal="true" aria-label="Company brief">
+            <div className="v3ln-gate-h">
+              <h3>Company brief — who the client is</h3>
+              <button type="button" className="v3ln-x" onClick={() => setBriefOpen(false)} aria-label="Close">✕</button>
+            </div>
+            <div className="v3ln-cap">
+              <label className="v3ln-cap-f">
+                <span>Grounds the charter, kit, ontology and atlas — edit freely; only your save writes it</span>
+                <textarea rows={11} value={briefText} onChange={(e) => setBriefText(e.target.value)}
+                  placeholder={`What ${program.name} does — market, customers, products, scale. Fetch a web-grounded draft below, or write your own.`} />
+              </label>
+              <div className="v3ln-cap-bar">
+                <button type="button" className="v3ln-a" disabled={briefBusy}
+                  onClick={() => void fetchBrief()}>{briefBusy ? "Fetching…" : "⌕ Fetch from the web"}</button>
+                <button type="button" className="v3ln-btn" disabled={briefBusy}
+                  onClick={() => void saveBrief()}>Save to the record</button>
+                <span>The fetched text is a draft with its sources — it reaches the generators only once you save it. Saving empty clears the brief.</span>
               </div>
             </div>
           </div>
