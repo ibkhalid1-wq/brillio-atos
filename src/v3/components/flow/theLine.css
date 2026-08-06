@@ -273,3 +273,15 @@
 .v3ln-cr-appr-n{font-size:11.5px;font-weight:600;color:var(--v3-text-primary)}
 .v3ln-cr-appr-s{font-size:10.5px;color:var(--v3-text-muted)}
 .v3ln-cr-appr-row .v3ln-a{margin-left:auto}
+
+/* ── persona journey strip: Listen → Design Loop, at a glance ── */
+.v3ln-journey{display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap}
+.v3ln-jseg{display:inline-flex;align-items:center;gap:5px;font:inherit;font-weight:600;font-size:10px;
+  letter-spacing:.03em;text-transform:uppercase;color:var(--v3-text-muted);
+  border:1px solid var(--fs-line);border-radius:999px;padding:2px 8px;white-space:nowrap}
+.v3ln-jdot{width:7px;height:7px;border-radius:50%;background:var(--fs-line);flex:none}
+.v3ln-jseg.approved{color:var(--ln-m4);border-color:transparent;background:#E6F2EC}
+.v3ln-jseg.approved .v3ln-jdot{background:var(--ln-m4-fill)}
+.v3ln-jseg.pending{color:var(--ln-m1);border-color:transparent;background:#FBF0DC}
+.v3ln-jseg.pending .v3ln-jdot{background:var(--ln-m1-fill)}
+.v3ln-jseg.open .v3ln-jdot{background:var(--v3-accent-2)}

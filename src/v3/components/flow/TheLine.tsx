@@ -16,8 +16,8 @@ import { Suspense, lazy, useEffect, useMemo, useState, type ComponentProps } fro
 import type { ProgramSummary } from "@/new/types";
 import { buildLineModel, LINE_GLYPHS, type LineBand, type LineStation } from "@/v3/lib/lineModel";
 import {
-  artifactDocument, attestHeardRoster, evidenceStamp, flowMovements, movementArtifacts, movementEvidence,
-  readMovementInputs, stakeholderEmail,
+  artifactDocument, attestHeardRoster, demoAcceptance, evidenceStamp, flowMovements, movementArtifacts,
+  movementEvidence, readMovementInputs, stakeholderEmail,
   type ArtifactCardModel, type EvidenceEntry,
 } from "@/v3/components/flow/flowShellData";
 import {
@@ -86,6 +86,22 @@ interface TheLineProps {
 }
 
 const MATURITY_WORDS = ["not seeded", "provisional", "grounded", "reviewed", "approved"] as const;
+
+/** One sign-off in a persona's journey, tagged with the movement it belongs to
+ * so send/copy routes correctly (Listen ontology vs Loop prototype). */
+type SignoffItem = StakeholderApprovalItem & { movementId: "listen" | "show"; sendable: boolean };
+/** A persona's two-phase engagement: validate & sign off in Listen, then meet
+ * the prototype in the Design Loop (a demo verdict, then a prototype sign-off). */
+interface PersonaJourney { listen: SignoffItem[]; loop: SignoffItem[]; verdict: string | null }
+
+/** How a whole phase's sign-offs read at a glance: every item approved fresh,
+ * something out for review, or nothing sent. */
+function phaseState(items: SignoffItem[]): "approved" | "pending" | "open" | "none" {
+  if (!items.length) return "none";
+  if (items.every((i) => i.status === "approved" && !i.preDatesDocument)) return "approved";
+  if (items.some((i) => i.status === "in-review")) return "pending";
+  return "open";
+}
 
 function Segments({ station }: { station: LineStation }) {
   if (!station.perArea) return null;
@@ -413,24 +429,40 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
       : groups;
   }, [record, recordAreas, areaFilter]);
 
-  // ── sign-offs: each heard voice's approval queue for their movement —
-  // every present artifact with THEIR latest ask/verdict, plus whether the
-  // movement is calm enough to send (classic's canSendForApproval rule).
-  const approvals = useMemo(() => {
-    const movements = flowMovements();
-    const byMovement = new Map(movements.map((m) => [m.id, m] as const));
+  // ── the persona's journey across the spine: the SAME heard voice validates
+  // and signs off the ontology in Listen, then meets the built prototype in the
+  // Design Loop (a demo verdict, then a prototype sign-off). One row, two phases
+  // — matched by name because there is no portable person-id across movements.
+  const journeys = useMemo(() => {
+    const byMovement = new Map(flowMovements().map((m) => [m.id, m] as const));
     const cards = new Map<string, ArtifactCardModel[]>();
-    const map = new Map<string, Array<StakeholderApprovalItem & { sendable: boolean }>>();
-    for (const row of cast) {
-      if (row.isRole || !row.heard) continue;
-      const items = stakeholderApprovalItems(program, row.movementId, row.label);
-      if (!items.length) continue;
-      const movement = byMovement.get(row.movementId);
-      if (movement && !cards.has(row.movementId)) cards.set(row.movementId, movementArtifacts(program, movement));
-      map.set(row.label, items.map((item) => {
-        const card = cards.get(row.movementId)?.find((a) => a.id === item.artifactId);
-        return { ...item, sendable: !!(movement && card && canSendForApproval(program, movement, card)) };
+    const itemsFor = (movementId: "listen" | "show", name: string): SignoffItem[] => {
+      const items = stakeholderApprovalItems(program, movementId, name);
+      if (!items.length) return [];
+      const movement = byMovement.get(movementId);
+      if (movement && !cards.has(movementId)) cards.set(movementId, movementArtifacts(program, movement));
+      return items.map((item) => ({
+        ...item, movementId,
+        sendable: !!(movement && cards.get(movementId)?.find((a) => a.id === item.artifactId)
+          && canSendForApproval(program, movement, cards.get(movementId)!.find((a) => a.id === item.artifactId)!)),
       }));
+    };
+    // Loop verdict — the client's reaction to their demo (show.demoTour), the
+    // "refine the prototype" signal that precedes the sign-off.
+    const tour = demoAcceptance(program).rows;
+    const verdictFor = (name: string): string | null => {
+      const key = name.trim().toLowerCase();
+      const row = tour.find((r) => (r.stakeholder ?? "").trim().toLowerCase() === key);
+      return row?.verdict?.trim() || null;
+    };
+    const map = new Map<string, PersonaJourney>();
+    for (const row of cast) {
+      if (row.isRole) continue;
+      const listen = row.heard ? itemsFor("listen", row.label) : [];
+      const loop = itemsFor("show", row.label);
+      const verdict = verdictFor(row.label);
+      if (!listen.length && !loop.length && !verdict) continue;
+      map.set(row.label, { listen, loop, verdict });
     }
     return map;
   }, [program, cast]);
@@ -446,11 +478,11 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
     }
     window.setTimeout(() => setNote(null), 6000);
   };
-  const sendApproval = async (row: CastRow, item: StakeholderApprovalItem) => {
+  const sendApproval = async (row: CastRow, item: SignoffItem) => {
     if (!onSendForApproval) return;
     try {
       const url = await onSendForApproval({
-        artifactId: item.artifactId, movementId: row.movementId, artifactTitle: item.artifactTitle,
+        artifactId: item.artifactId, movementId: item.movementId, artifactTitle: item.artifactTitle,
         approver: { name: row.label, role: row.role, email: stakeholderEmail(program, row.label) || undefined },
         snapshot: artifactDocument(program, item.artifactId) ?? undefined,
       });
@@ -780,15 +812,25 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                     <span aria-hidden="true">{qOpen[row.label] ? " ▴" : " ▾"}</span>
                   </button>
                   {(() => {
-                    const items = approvals.get(row.label);
-                    if (!items?.length) return null;
-                    const fresh = items.filter((i) => i.status === "approved" && !i.preDatesDocument).length;
-                    const pending = items.some((i) => i.status === "in-review");
-                    if (!pending && fresh !== items.length) return null;
+                    // The persona's journey at a glance: Listen (ontology) then
+                    // Loop (prototype). Each segment only appears once that phase
+                    // has a sign-off in play, so the strip grows as the voice
+                    // travels the spine.
+                    const j = journeys.get(row.label);
+                    if (!j || (!j.listen.length && !j.loop.length && !j.verdict)) return null;
+                    const seg = (label: string, state: ReturnType<typeof phaseState>, extra?: string) =>
+                      state === "none" && !extra ? null : (
+                        <span className={`v3ln-jseg ${state}`} title={`${label} — ${extra || state}`}>
+                          <span className="v3ln-jdot" aria-hidden="true" />{label}{extra ? ` · ${extra}` : ""}
+                        </span>
+                      );
+                    const verdictShort = j.verdict
+                      ? /objection/i.test(j.verdict) ? "objection" : /changes/i.test(j.verdict) ? "changes" : /accept/i.test(j.verdict) ? "accepted" : j.verdict.toLowerCase()
+                      : undefined;
                     return (
-                      <span className={`v3ln-appr ${fresh === items.length ? "ok" : "wait"}`}
-                        title={items.map((i) => `${i.artifactTitle} — ${i.preDatesDocument ? "approved an older version" : i.status}`).join("\n")}>
-                        {fresh === items.length ? `Approved ${fresh}/${items.length}` : `Pending · ${fresh}/${items.length}`}
+                      <span className="v3ln-journey" aria-label={`${row.label} journey`}>
+                        {seg("Listen", phaseState(j.listen))}
+                        {j.loop.length || j.verdict ? seg("Loop", phaseState(j.loop), verdictShort) : null}
                       </span>
                     );
                   })()}
@@ -818,32 +860,50 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                       </span>
                     ) : null}
                     {(() => {
-                      const items = approvals.get(row.label);
-                      if (!items?.length || !onSendForApproval) return null;
+                      const j = journeys.get(row.label);
+                      if (!j || !onSendForApproval) return null;
+                      const signoffRow = (item: SignoffItem) => (
+                        <span key={item.movementId + item.artifactId} className="v3ln-cr-appr-row">
+                          <span className={`v3ln-appr-dot ${item.status}${item.preDatesDocument ? " old" : ""}`} aria-hidden="true" />
+                          <span className="v3ln-cr-appr-n">{item.artifactTitle}</span>
+                          <span className="v3ln-cr-appr-s">
+                            {item.preDatesDocument ? "approved an older version"
+                              : item.status === "in-review" ? "sent — awaiting verdict"
+                              : item.status === "changes" ? "changes requested"
+                              : item.status === "approved" ? "approved" : "not sent"}
+                          </span>
+                          {item.status === "in-review" && item.token ? (
+                            <button type="button" className="v3ln-a"
+                              onClick={() => void showApprLink(row.label, approvalLinkFor(program.id, { token: item.token! }), item.artifactTitle)}>
+                              ⎘ copy link</button>
+                          ) : item.sendable ? (
+                            <button type="button" className="v3ln-a" onClick={() => void sendApproval(row, item)}>
+                              {item.preDatesDocument ? "re-request" : item.status === "changes" ? "re-send" : "send for sign-off"}
+                            </button>
+                          ) : null}
+                        </span>
+                      );
                       return (
-                        <div className="v3ln-cr-appr">
-                          <span className="v3ln-cr-appr-t">Sign-offs — the verdict lands in the Inbox</span>
-                          {items.map((item) => (
-                            <span key={item.artifactId} className="v3ln-cr-appr-row">
-                              <span className={`v3ln-appr-dot ${item.status}${item.preDatesDocument ? " old" : ""}`} aria-hidden="true" />
-                              <span className="v3ln-cr-appr-n">{item.artifactTitle}</span>
-                              <span className="v3ln-cr-appr-s">
-                                {item.preDatesDocument ? "approved an older version"
-                                  : item.status === "in-review" ? "sent — awaiting verdict"
-                                  : item.status === "changes" ? "changes requested"
-                                  : item.status === "approved" ? "approved" : "not sent"}
-                              </span>
-                              {item.status === "in-review" && item.token ? (
-                                <button type="button" className="v3ln-a"
-                                  onClick={() => void showApprLink(row.label, approvalLinkFor(program.id, { token: item.token! }), item.artifactTitle)}>
-                                  ⎘ copy link</button>
-                              ) : item.sendable ? (
-                                <button type="button" className="v3ln-a" onClick={() => void sendApproval(row, item)}>
-                                  {item.preDatesDocument ? "re-request" : item.status === "changes" ? "re-send" : "send for sign-off"}
-                                </button>
+                        <>
+                          {j.listen.length ? (
+                            <div className="v3ln-cr-appr">
+                              <span className="v3ln-cr-appr-t">Listen — validate &amp; sign off the ontology</span>
+                              {j.listen.map(signoffRow)}
+                            </div>
+                          ) : null}
+                          {j.loop.length || j.verdict ? (
+                            <div className="v3ln-cr-appr">
+                              <span className="v3ln-cr-appr-t">Design Loop — refine the prototype, sign off once aligned</span>
+                              {j.verdict ? (
+                                <span className="v3ln-cr-appr-row">
+                                  <span className={`v3ln-appr-dot ${/objection/i.test(j.verdict) ? "changes" : /accept/i.test(j.verdict) && !/changes/i.test(j.verdict) ? "approved" : "in-review"}`} aria-hidden="true" />
+                                  <span className="v3ln-cr-appr-n">Prototype demo</span>
+                                  <span className="v3ln-cr-appr-s">{j.verdict.toLowerCase()}</span>
+                                </span>
                               ) : null}
-                            </span>
-                          ))}
+                              {j.loop.map(signoffRow)}
+                            </div>
+                          ) : null}
                           {apprLink?.who === row.label ? (
                             <span className="v3ln-cr-url-row">
                               <input className="v3ln-cr-url" readOnly value={apprLink.url}
@@ -854,7 +914,7 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                                 title="Copy the link">⧉ copy</button>
                             </span>
                           ) : null}
-                        </div>
+                        </>
                       );
                     })()}
                   </div>
