@@ -235,16 +235,25 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
   // group and filter the same way the roster does.
   const record = useMemo(() => {
     const areaOf = new Map(cast.map((row) => [row.label.trim().toLowerCase(), row.area]));
+    const kitAreas = listenCoverageAreas(program).map((area) => area.label);
     return flowMovements()
       .flatMap((movement) => movementEvidence(program, movement))
       .map((entry) => {
-        const name = entry.who.split(",")[0].trim();
-        return { entry, name, area: areaOf.get(name.toLowerCase()) ?? "" };
+        // "Name, Role, stamp" — voices off the roster (the Executive Sponsor
+        // speaks in Frame, before the Kit casts anyone) still resolve to an
+        // area the same way roster rows do.
+        const parts = entry.who.split(",");
+        const name = parts[0].trim();
+        const role = (parts[1] ?? "").trim();
+        const area = areaOf.get(name.toLowerCase())
+          ?? canonicalFrameArea(kitAreas, stakeholderPrimaryArea(program, name, role));
+        return { entry, name, area: area ?? "" };
       })
       .sort((a, b) => (b.entry.capturedAt ?? "").localeCompare(a.entry.capturedAt ?? ""));
   }, [program, cast]);
   const recordGroups = useMemo(() => {
-    const order = [...castAreas.filter((area) => record.some((r) => r.area === area))];
+    const order = castAreas.filter((area) => record.some((r) => r.area === area));
+    for (const r of record) if (r.area && !order.includes(r.area)) order.push(r.area);
     if (record.some((r) => !r.area)) order.push("");
     const groups = order.map((area) => ({ area, items: record.filter((r) => r.area === area) }));
     return areaFilter && castAreas.includes(areaFilter)
