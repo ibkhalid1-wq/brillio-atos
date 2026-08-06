@@ -136,16 +136,18 @@ interface FlowShellProps {
 
 type FlowView = "today" | "flow" | "library" | "people" | "pulse" | "mission" | "grounding" | "portfolio" | "line";
 
-/** The Line — the flag-gated production-line home that runs BESIDE the
- * classic chrome: same live record, read-only projection, so the two can
- * never disagree. Entry is the appbar toggle, `?ui=line`, or the persisted
- * preference — deliberately NOT a rail tile, because it is a sibling chrome
- * for the whole programme, not an eighth view within this one. */
+/** The Line — the DEFAULT chrome, running beside the classic one: same live
+ * record, read-only projection, so the two can never disagree. Classic stays
+ * one toggle away (`?ui=classic`, or the persisted "off" the appbar toggle
+ * writes) — deliberately NOT a rail tile, because the Line is a sibling
+ * chrome for the whole programme, not an eighth view within this one. */
 const lineViewPreferred = (): boolean => {
   try {
-    if (new URLSearchParams(window.location.search).get("ui") === "line") return true;
-    return localStorage.getItem("atos.lineView") === "on";
-  } catch { return false; }
+    const ui = new URLSearchParams(window.location.search).get("ui");
+    if (ui === "line") return true;
+    if (ui === "classic") return false;
+    return localStorage.getItem("atos.lineView") !== "off";
+  } catch { return true; }
 };
 const rememberLineView = (on: boolean): void => {
   try { localStorage.setItem("atos.lineView", on ? "on" : "off"); } catch { /* private mode — fine */ }
@@ -504,7 +506,7 @@ export default function FlowShell(props: FlowShellProps) {
   // operator was on (typically Portfolio, where they clicked "New programme").
   const jumpNonce = props.jumpToFlowNonce ?? 0;
   useEffect(() => {
-    if (jumpNonce > 0) { setView("flow"); window.scrollTo({ top: 0 }); }
+    if (jumpNonce > 0) { setView(lineViewPreferred() ? "line" : "flow"); window.scrollTo({ top: 0 }); }
   }, [jumpNonce]);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
