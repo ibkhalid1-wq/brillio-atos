@@ -475,47 +475,55 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
             {filteredCast.map((row) => (
               <div key={row.label} className="v3ln-cr"
                 onClick={(e) => {
-                  // The whole row toggles the questions — except clicks that
-                  // already mean something (buttons, links, inputs, the
-                  // details block itself).
-                  if ((e.target as HTMLElement).closest("button, a, input, select, textarea, details")) return;
+                  // The whole row toggles the expansion — except clicks that
+                  // already mean something (buttons, links, inputs).
+                  if ((e.target as HTMLElement).closest("button, a, input, select, textarea")) return;
                   setQOpen((s) => ({ ...s, [row.label]: !s[row.label] }));
                 }}>
-                <span className={`v3ln-dot ${row.heard ? "d" : row.awaiting ? "w" : "t"}`}
-                  title={row.heard ? "Heard — evidence on the record" : row.awaiting ? "Link out — awaiting response" : "To reach"} />
-                <span className="v3ln-cr-who">
-                  <b>{row.label}</b>
-                  {row.isRole ? <span>role — assign a name to send</span>
-                    : row.role && row.role !== row.label ? <span>{row.role}</span> : null}
-                </span>
-                <button type="button" className="v3ln-cr-area"
-                  title={areaFilter === row.area ? "Show all areas" : `Filter to ${row.area}`}
-                  onClick={() => setAreaFilter(areaFilter === row.area ? "" : row.area)}>{row.area}</button>
-                <details className="v3ln-cr-q" open={!!qOpen[row.label]}
-                  onToggle={(e) => { const open = e.currentTarget.open; setQOpen((s) => (s[row.label] === open ? s : { ...s, [row.label]: open })); }}>
-                  <summary>{row.questions.length} question{row.questions.length === 1 ? "" : "s"}</summary>
-                  <ul>{row.questions.map((q, i) => <li key={i}>{q}</li>)}</ul>
-                </details>
-                <span className="v3ln-cr-act">
-                  <button type="button" className="v3ln-a" onClick={() => void copyLink(row)}
-                    title="Their one durable link — minted once, reused forever">⎘ link</button>
-                  {onSaveInputs ? (
-                    <button type="button" className="v3ln-a" onClick={() => openCapture(row)}
-                      title={`Capture what ${row.label} said`}>✎ capture</button>
-                  ) : null}
-                  {onScheduleFollowUp ? (
-                    <button type="button" className="v3ln-a" onClick={() => pickDate(row)}
-                      title="Schedule a follow-up and download the calendar invite">🗓 invite</button>
-                  ) : null}
-                </span>
-                {linkShown?.who === row.label && qOpen[row.label] ? (
-                  <span className="v3ln-cr-url-row">
-                    <input className="v3ln-cr-url" readOnly value={linkShown.url}
-                      onFocus={(e) => e.currentTarget.select()}
-                      aria-label={`${row.label}'s durable link`} />
-                    <button type="button" className="v3ln-a" onClick={() => void copyShown()}
-                      title="Copy the link">⧉ copy</button>
+                {/* The top bar holds everything actionable and NEVER moves —
+                  * expansion only ever adds a body underneath. */}
+                <div className="v3ln-cr-top">
+                  <span className={`v3ln-dot ${row.heard ? "d" : row.awaiting ? "w" : "t"}`}
+                    title={row.heard ? "Heard — evidence on the record" : row.awaiting ? "Link out — awaiting response" : "To reach"} />
+                  <span className="v3ln-cr-who">
+                    <b>{row.label}</b>
+                    {row.isRole ? <span>role — assign a name to send</span>
+                      : row.role && row.role !== row.label ? <span>{row.role}</span> : null}
                   </span>
+                  <button type="button" className="v3ln-cr-area"
+                    title={areaFilter === row.area ? "Show all areas" : `Filter to ${row.area}`}
+                    onClick={() => setAreaFilter(areaFilter === row.area ? "" : row.area)}>{row.area}</button>
+                  <button type="button" className="v3ln-cr-qbtn" aria-expanded={!!qOpen[row.label]}
+                    onClick={() => setQOpen((s) => ({ ...s, [row.label]: !s[row.label] }))}>
+                    {row.questions.length} question{row.questions.length === 1 ? "" : "s"}
+                    <span aria-hidden="true">{qOpen[row.label] ? " ▴" : " ▾"}</span>
+                  </button>
+                  <span className="v3ln-cr-act">
+                    <button type="button" className="v3ln-a" onClick={() => void copyLink(row)}
+                      title="Their one durable link — minted once, reused forever">⎘ link</button>
+                    {onSaveInputs ? (
+                      <button type="button" className="v3ln-a" onClick={() => openCapture(row)}
+                        title={`Capture what ${row.label} said`}>✎ capture</button>
+                    ) : null}
+                    {onScheduleFollowUp ? (
+                      <button type="button" className="v3ln-a" onClick={() => pickDate(row)}
+                        title="Schedule a follow-up and download the calendar invite">🗓 invite</button>
+                    ) : null}
+                  </span>
+                </div>
+                {qOpen[row.label] ? (
+                  <div className="v3ln-cr-body">
+                    <ul className="v3ln-cr-qs">{row.questions.map((q, i) => <li key={i}>{q}</li>)}</ul>
+                    {linkShown?.who === row.label ? (
+                      <span className="v3ln-cr-url-row">
+                        <input className="v3ln-cr-url" readOnly value={linkShown.url}
+                          onFocus={(e) => e.currentTarget.select()}
+                          aria-label={`${row.label}'s durable link`} />
+                        <button type="button" className="v3ln-a" onClick={() => void copyShown()}
+                          title="Copy the link">⧉ copy</button>
+                      </span>
+                    ) : null}
+                  </div>
                 ) : null}
                 {invitee?.label === row.label ? (
                   <span className="v3ln-cr-invite">
