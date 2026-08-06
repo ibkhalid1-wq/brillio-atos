@@ -133,7 +133,8 @@
 .v3ln-a:hover{border-color:var(--v3-accent-2)}
 .v3ln-intake .v3ln-a{margin-left:auto}
 .v3ln-cast{display:flex;flex-direction:column}
-.v3ln-cr{display:flex;align-items:center;gap:12px;padding:9px 14px;border-bottom:1px solid var(--fs-line);flex-wrap:wrap}
+.v3ln-cr{display:flex;align-items:center;gap:12px;padding:9px 14px;border-bottom:1px solid var(--fs-line);flex-wrap:wrap;cursor:pointer}
+.v3ln-cr:hover{background:color-mix(in srgb,var(--v3-accent-2) 3%,var(--fs-card))}
 .v3ln-cr:last-child{border-bottom:0}
 .v3ln-dot{width:9px;height:9px;border-radius:50%;flex:none}
 .v3ln-dot.d{background:var(--ln-m4-fill)}
