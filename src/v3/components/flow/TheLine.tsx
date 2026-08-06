@@ -142,7 +142,7 @@ function Station({ station, onOpen, onRegen, regenerating }: {
                 e.preventDefault(); e.stopPropagation();
                 if (!regenerating) onRegen!(station.card!);
               }}>
-              {regenerating ? "regenerating…" : "regenerate ↻"}
+              {regenerating ? "regenerating…" : "needs refresh ↻"}
             </span>
           ) : <span className="v3ln-rf">needs refresh ↻</span>
         ) : null}
