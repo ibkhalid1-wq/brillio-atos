@@ -239,10 +239,30 @@ export function programAreas(program: ProgramSummary): string[] {
   // So the kit's domains land first, and a modelled label is canonicalised onto
   // them. A label that matches nothing still stands on its own — a genuinely
   // new area the model found must not be swallowed. Compound spanning tags
-  // ("Finance / Sales / Practices") are left alone; they are not areas.
-  for (const domain of kitCoverageDomains(program)) add(domain);
-  for (const workflow of atlasWorkflows(program)) add(alignAreaToKit(program, workflowArea(workflow)));
-  for (const entity of ontologyEntities(program)) add(alignAreaToKit(program, entityArea(entity, program)));
+  // ("Finance / Sales / Practices") are not areas — they are how the kit tags
+  // a question row that spans several — so a slashed domain whose every
+  // segment is itself a kit domain is skipped; a slashed name whose segments
+  // are NOT areas ("IT / Integration") still stands as one area.
+  const kitDomains = kitCoverageDomains(program);
+  const modelled = [
+    ...atlasWorkflows(program).map((workflow) => alignAreaToKit(program, workflowArea(workflow))),
+    ...ontologyEntities(program).map((entity) => alignAreaToKit(program, entityArea(entity, program))),
+  ];
+  // The single-area vocabulary spans BOTH sources — a kit whose every domain
+  // row is a compound tag still decomposes against the modelled labels.
+  const singleKeys = new Set([...kitDomains, ...modelled]
+    .filter((label) => label && !label.includes("/"))
+    .map(areaKey));
+  const isSpanningTag = (domain: string): boolean => {
+    if (!domain.includes("/")) return false;
+    const parts = domain.split("/").map((p) => p.trim()).filter(Boolean);
+    return parts.length > 1 && parts.every((p) => singleKeys.has(areaKey(p)));
+  };
+  // Spanning tags appear on BOTH sides — kit domains ("Finance / Sales") and
+  // modelled labels (an atlas workflow tagged "Delivery / Talent Acquisition")
+  // — and neither is an area when every segment already is one.
+  for (const domain of kitDomains) if (!isSpanningTag(domain)) add(domain);
+  for (const label of modelled) if (!isSpanningTag(label)) add(label);
   return [...byKey.values()].sort((a, b) => {
     if (a === GENERAL_AREA) return 1;
     if (b === GENERAL_AREA) return -1;
