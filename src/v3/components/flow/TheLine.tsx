@@ -139,6 +139,12 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
   const model = useMemo(() => buildLineModel(program), [program]);
   const [gateFor, setGateFor] = useState<LineBand | null>(null);
   const [docFor, setDocFor] = useState<ArtifactCardModel | null>(null);
+  // Two projections of the one record: the WORK board (where the programme
+  // is) and the CAST (who it runs through — links, capture, invites). Split
+  // by projection, not by phase: "discovery" is only the Cast's Listen-phase
+  // face; the same people carry demo verdicts and sign-offs later, so the
+  // tab stays load-bearing for the whole spine.
+  const [tab, setTab] = useState<"work" | "cast">("work");
 
   // ── the cast: the Listen roster with area, heard state and their questions.
   const cast = useMemo<CastRow[]>(() => {
@@ -230,10 +236,24 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
 
   return (
     <div className="v3ln">
+      <div className="v3ln-tabs" role="tablist" aria-label="Line projections">
+        <button type="button" role="tab" aria-selected={tab === "work"}
+          className={tab === "work" ? "on" : undefined} onClick={() => setTab("work")}>
+          Work<span>the board — bands, stations, gates</span>
+        </button>
+        <button type="button" role="tab" aria-selected={tab === "cast"}
+          className={tab === "cast" ? "on" : undefined} onClick={() => setTab("cast")}>
+          Cast<span>the people — links, capture, invites</span>
+        </button>
+      </div>
+
       <div className="v3ln-stats">
         <div><span className="v3ln-sl">Round</span><span className="v3ln-sv">{model.round}</span></div>
         <div><span className="v3ln-sl">Converged — signed off</span><span className="v3ln-sv">{model.stats.converged} of {model.stats.areasTotal} areas</span></div>
-        <div><span className="v3ln-sl">Voices heard</span><span className="v3ln-sv">{model.stats.heardTotal > 0 ? `${model.stats.heardDone} of ${model.stats.heardTotal}` : "—"}</span></div>
+        <button type="button" className="v3ln-statbtn" onClick={() => setTab("cast")}
+          title="Open the Cast — who has been heard, who is waiting">
+          <span className="v3ln-sl">Voices heard</span><span className="v3ln-sv">{model.stats.heardTotal > 0 ? `${model.stats.heardDone} of ${model.stats.heardTotal}` : "—"}</span>
+        </button>
         <div><span className="v3ln-sl">Needs refresh</span><span className={`v3ln-sv${model.stats.refresh > 0 ? " acc" : ""}`}>{model.stats.refresh > 0 ? `${model.stats.refresh} station${model.stats.refresh === 1 ? "" : "s"}` : "—"}</span></div>
         <div className="v3ln-sp" />
         <span className="v3ln-ro" title="Both chromes read and write the same live record — switch back any time; nothing diverges.">one record · both chromes live</span>
@@ -241,7 +261,7 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
 
       {note ? <div className="v3ln-toast" role="status">{note}</div> : null}
 
-      {model.bands.map((band) => (
+      {tab === "work" ? model.bands.map((band) => (
         <section key={band.id} className={`v3ln-band${band.id === "loop" ? " loop" : ""}`} aria-label={band.name}>
           <header className="v3ln-band-h">
             <span className="v3ln-band-n">{band.name}</span>
@@ -266,15 +286,18 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
           </div>
           {band.note ? <div className="v3ln-note">{band.note}</div> : null}
         </section>
-      ))}
+      )) : null}
 
-      {cast.length > 0 ? (
+      {tab === "cast" && cast.length > 0 ? (
         <section className="v3ln-band" aria-label="The cast">
           <header className="v3ln-band-h">
             <span className="v3ln-band-n">The Cast</span>
-            <span className="v3ln-scope">Listen · one durable link per voice</span>
+            <span className="v3ln-scope">one durable link per voice · verdicts and sign-offs land here later</span>
             <span className="v3ln-band-sp" />
             <span className="v3ln-scope">{cast.filter((r) => r.heard).length} of {cast.length} heard</span>
+            {onSaveInputs ? (
+              <button type="button" className="v3ln-a" onClick={() => openCapture()}>＋ add to the record</button>
+            ) : null}
           </header>
           <div className="v3ln-cast">
             {cast.map((row) => (
@@ -313,12 +336,17 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
           <div className="v3ln-note">A person&rsquo;s link is minted once and re-asks forever — new questions supersede old ones on the same URL. Copying always shows the link here too, in case the clipboard is denied.</div>
         </section>
       ) : null}
+      {tab === "cast" && cast.length === 0 ? (
+        <div className="v3ln-note">No cast yet — it arrives when the Discovery Kit casts the roster.</div>
+      ) : null}
 
-      <div className="v3ln-legend">
-        <span className="v3ln-sl">Segments read</span>
-        <span>{model.areas.map((a) => a).join(" · ") || "areas arrive when the Discovery Kit names them"}</span>
-        <span className="v3ln-glyphs">○ not seeded · ◔ provisional · ◑ grounded · ◕ reviewed · ● approved</span>
-      </div>
+      {tab === "work" ? (
+        <div className="v3ln-legend">
+          <span className="v3ln-sl">Segments read</span>
+          <span>{model.areas.map((a) => a).join(" · ") || "areas arrive when the Discovery Kit names them"}</span>
+          <span className="v3ln-glyphs">○ not seeded · ◔ provisional · ◑ grounded · ◕ reviewed · ● approved</span>
+        </div>
+      ) : null}
 
       <input ref={dateRef} type="date" className="v3ln-hidden" aria-hidden="true" tabIndex={-1}
         onChange={(e) => { const d = e.target.value; e.target.value = ""; void onDatePicked(d); }} />
