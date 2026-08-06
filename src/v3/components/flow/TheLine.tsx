@@ -149,11 +149,11 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
   // load-bearing past Listen — the same people carry demo verdicts and
   // sign-offs later, and they land here.
   const [tab, setTab] = useState<"work" | "discovery">("work");
-  // Discovery's area filter — narrows the roster to one lane ("" = all).
+  // Discover's area filter — narrows the roster to one lane ("" = all).
   const [areaFilter, setAreaFilter] = useState<string>("");
 
   // ── the cast: the Listen roster with area, heard state and their questions.
-  // Pre-Kit, the roster IS the sponsor: a new programme's Discovery opens on
+  // Pre-Kit, the roster IS the sponsor: a new programme's Discover tab opens on
   // the Executive Sponsor (named from Frame, else a placeholder whose script
   // and link exist before the name does — a thread waiting).
   const cast = useMemo<CastRow[]>(() => {
@@ -311,7 +311,7 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
         </button>
         <button type="button" role="tab" aria-selected={tab === "discovery"}
           className={tab === "discovery" ? "on" : undefined} onClick={() => setTab("discovery")}>
-          Discovery<span>the people — links, capture, invites</span>
+          Discover<span>the people — links, capture, invites</span>
         </button>
       </div>
 
@@ -320,7 +320,7 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
           <div><span className="v3ln-sl">Round</span><span className="v3ln-sv">{model.round}</span></div>
           <div><span className="v3ln-sl">Converged</span><span className="v3ln-sv">{model.stats.converged} of {model.stats.areasTotal} areas</span></div>
           <button type="button" className="v3ln-statbtn" onClick={() => setTab("discovery")}
-            title="Open Discovery — who has been heard, who is waiting">
+            title="Open Discover — who has been heard, who is waiting">
             <span className="v3ln-sl">Voices heard</span><span className="v3ln-sv">{model.stats.heardTotal > 0 ? `${model.stats.heardDone} of ${model.stats.heardTotal}` : "—"}</span>
           </button>
           <div><span className="v3ln-sl">Needs refresh</span><span className={`v3ln-sv${model.stats.refresh > 0 ? " acc" : ""}`}>{model.stats.refresh > 0 ? `${model.stats.refresh} station${model.stats.refresh === 1 ? "" : "s"}` : "—"}</span></div>
@@ -359,9 +359,9 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
       ))}</div> : null}
 
       {tab === "discovery" && cast.length > 0 ? (
-        <section className="v3ln-band" aria-label="Discovery">
+        <section className="v3ln-band" aria-label="Discover">
           <header className="v3ln-band-h">
-            <span className="v3ln-band-n">Discovery</span>
+            <span className="v3ln-band-n">Discover</span>
             {cast[0]?.movementId === "frame" ? (
               <span className="v3ln-scope">the sponsor is the starting voice — the Kit casts the rest</span>
             ) : null}
