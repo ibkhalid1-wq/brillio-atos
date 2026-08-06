@@ -31,6 +31,16 @@
 .v3ln-band.loop{border-left:3px solid var(--v3-accent-2)}
 .v3ln-band-h{display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--fs-line);flex-wrap:wrap}
 .v3ln-band-n{font-weight:750;font-size:14px;color:var(--v3-text-primary)}
+/* spine headers — the movements are the backbone of the board, so their signage
+ * reads a register louder than everything inside the band */
+.v3ln-band-h.spine{padding:11px 14px;
+  background:color-mix(in srgb,var(--v3-accent-2) 5%,var(--fs-card));
+  border-bottom:2px solid color-mix(in srgb,var(--v3-accent-2) 30%,var(--fs-line))}
+.v3ln-band-i{font:800 10.5px/1 var(--mono,ui-monospace);letter-spacing:.06em;color:#fff;
+  background:var(--v3-accent-2);border-radius:3px;padding:4px 5px;flex:none;
+  font-variant-numeric:tabular-nums}
+.v3ln-band-h.spine .v3ln-band-n{font-size:15.5px;font-weight:800;letter-spacing:.10em;
+  text-transform:uppercase}
 .v3ln-half,.v3ln-scope{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--v3-text-muted)}
 .v3ln-chip{font:600 10.5px/1.4 inherit;letter-spacing:.05em;text-transform:uppercase;
   padding:3px 9px;border-radius:4px;border:1px solid var(--fs-line);background:none;
@@ -93,8 +103,16 @@
 .v3ln-cr-who{display:flex;flex-direction:column;min-width:150px;flex:1}
 .v3ln-cr-who b{font-size:12.5px;font-weight:650;color:var(--v3-text-primary)}
 .v3ln-cr-who span{font-size:10.5px;color:var(--v3-text-muted)}
-.v3ln-cr-area{font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--v3-accent-2);
-  background:color-mix(in srgb,var(--v3-accent-2) 8%,transparent);border-radius:3px;padding:2px 8px;white-space:nowrap}
+.v3ln-cr-area{font:600 10px/1.5 inherit;letter-spacing:.05em;text-transform:uppercase;color:var(--v3-accent-2);
+  background:color-mix(in srgb,var(--v3-accent-2) 8%,transparent);border:0;border-radius:3px;
+  padding:2px 8px;white-space:nowrap;cursor:pointer}
+.v3ln-cr-area:hover{background:color-mix(in srgb,var(--v3-accent-2) 16%,transparent)}
+.v3ln-cr-area:focus-visible{outline:2px solid var(--v3-accent-2);outline-offset:1px}
+.v3ln-filter{display:flex;align-items:center;gap:7px;font-size:10px;letter-spacing:.05em;
+  text-transform:uppercase;color:var(--v3-text-muted)}
+.v3ln-filter select{font:600 12px/1.4 inherit;color:var(--v3-text-primary);border:1px solid var(--fs-line);
+  border-radius:4px;padding:4px 8px;background:var(--fs-card);max-width:240px;cursor:pointer}
+.v3ln-filter select:focus-visible{outline:2px solid var(--v3-accent-2);outline-offset:-1px}
 .v3ln-cr-q{font-size:11px;color:var(--v3-text-muted);min-width:90px}
 .v3ln-cr-q summary{cursor:pointer;white-space:nowrap}
 .v3ln-cr-q ul{margin:6px 0 0;padding:0 0 0 16px;max-width:520px}
@@ -102,7 +120,6 @@
 .v3ln-cr-act{display:flex;gap:6px;flex:none}
 .v3ln-cr-url{flex-basis:100%;font:11px var(--mono,ui-monospace);color:var(--v3-text-muted);
   border:1px dashed var(--fs-line);border-radius:4px;padding:5px 9px;background:none;margin-top:2px}
-.v3ln-hidden{position:absolute;width:0;height:0;opacity:0;pointer-events:none}
 
 /* ── capture dialog body (inside the shared gate frame) ── */
 .v3ln-cap{padding:12px 18px 16px;display:flex;flex-direction:column;gap:12px}
@@ -140,3 +157,9 @@
 .v3ln-gate-empty{padding:14px 18px;font-size:12.5px;color:var(--v3-text-muted)}
 .v3ln-gate-f{padding:10px 18px;margin:0;font-size:10.5px;line-height:1.5;color:var(--v3-text-muted);
   border-top:1px dashed var(--fs-line)}
+
+/* inline invite bar — visible date picker (showPicker is iframe-hostile) */
+.v3ln-cr-invite{flex-basis:100%;display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:2px}
+.v3ln-cr-invite input[type="date"]{font:600 12px/1.4 inherit;color:var(--v3-text-primary);
+  border:1px solid var(--fs-line);border-radius:4px;padding:5px 9px;background:var(--fs-card)}
+.v3ln-cr-invite input[type="date"]:focus-visible{outline:2px solid var(--v3-accent-2);outline-offset:-1px}
