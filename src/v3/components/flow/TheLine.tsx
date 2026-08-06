@@ -236,19 +236,22 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
   const record = useMemo(() => {
     const areaOf = new Map(cast.map((row) => [row.label.trim().toLowerCase(), row.area]));
     const kitAreas = listenCoverageAreas(program).map((area) => area.label);
-    // The sponsor's voice is its own lane on the record — named by the role
-    // ("Executive Leadership" / "Executive Sponsor") — never folded into a
-    // delivery area. Frame is where they speak, so frame entries land there
-    // too even when unattributed.
+    // Leadership is ONE lane on the record — the sponsor's frame conversation
+    // and every executive-titled voice merge under a single label (the
+    // roster's client-facing title when it has one, else the frame role) —
+    // never folded into a delivery area.
+    const exec = (s?: string) => !!s && /\bexecutive\b/i.test(s);
     const frameVoices = resolveMovementStakeholders(program, "frame");
-    const sponsorLaneOf = new Map<string, string>();
+    const rosterExec = cast.find((row) => exec(row.role) || exec(row.label));
+    const leadLane = (rosterExec && (exec(rosterExec.role) ? rosterExec.role : rosterExec.label))
+      || frameVoices[0]?.role.trim()
+      || "Executive Sponsor";
+    const sponsorKeys = new Set<string>();
     for (const voice of frameVoices) {
-      const lane = voice.role.trim() || "Executive Sponsor";
       for (const key of [voice.name, voice.role]) {
-        if (key?.trim()) sponsorLaneOf.set(key.trim().toLowerCase(), lane);
+        if (key?.trim()) sponsorKeys.add(key.trim().toLowerCase());
       }
     }
-    const frameLane = frameVoices[0]?.role.trim() || "Executive Sponsor";
     return flowMovements()
       .flatMap((movement) => movementEvidence(program, movement))
       .map((entry) => {
@@ -257,14 +260,10 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
         const parts = entry.who.split(",");
         const name = parts[0].trim();
         const role = (parts[1] ?? "").trim();
-        // Any executive-titled voice lanes under its own title ("Executive
-        // Leadership"), not a delivery area.
-        const execLane = /\bexecutive\b/i.test(role) ? role
-          : /\bexecutive\b/i.test(name) ? name : undefined;
-        const area = execLane
-          ?? sponsorLaneOf.get(name.toLowerCase())
-          ?? sponsorLaneOf.get(role.toLowerCase())
-          ?? (entry.movementId === "frame" ? frameLane : undefined)
+        const isLeadership = exec(role) || exec(name)
+          || sponsorKeys.has(name.toLowerCase()) || sponsorKeys.has(role.toLowerCase())
+          || entry.movementId === "frame";
+        const area = (isLeadership ? leadLane : undefined)
           ?? areaOf.get(name.toLowerCase())
           ?? canonicalFrameArea(kitAreas, stakeholderPrimaryArea(program, name, role));
         return { entry, name, area: area ?? "" };
