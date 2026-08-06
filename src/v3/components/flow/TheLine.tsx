@@ -66,16 +66,40 @@ interface TheLineProps {
   onRunAgent?: (agentId: string, phaseId?: string) => void;
 }
 
+const MATURITY_WORDS = ["not seeded", "provisional", "grounded", "reviewed", "approved"] as const;
+
 function Segments({ station }: { station: LineStation }) {
   if (!station.perArea) return null;
+  // A pill per area is legible up to a handful of lanes; past that the
+  // initials collide and the strip reads as noise, so it collapses into a
+  // maturity meter with the counts spelled out.
+  if (station.perArea.length <= 8) {
+    return (
+      <div className="v3ln-seg" aria-label={`${station.title} — maturity per area`}>
+        {station.perArea.map((seg) => (
+          <span key={seg.area} className={`v3ln-sg m${seg.maturity}`}
+            title={`${seg.area} · ${LINE_GLYPHS[seg.maturity]} ${MATURITY_WORDS[seg.maturity]}`}>
+            {seg.maturity > 0 ? seg.initials : ""}
+          </span>
+        ))}
+      </div>
+    );
+  }
+  const buckets = [4, 3, 2, 1, 0]
+    .map((m) => ({ m, areas: station.perArea!.filter((seg) => seg.maturity === m) }))
+    .filter((bucket) => bucket.areas.length > 0);
   return (
-    <div className="v3ln-seg" aria-label={`${station.title} — maturity per area`}>
-      {station.perArea.map((seg) => (
-        <span key={seg.area} className={`v3ln-sg m${seg.maturity}`}
-          title={`${seg.area} · ${LINE_GLYPHS[seg.maturity]}`}>
-          {seg.maturity > 0 ? seg.initials : ""}
-        </span>
-      ))}
+    <div className="v3ln-seg-sum" aria-label={`${station.title} — maturity across ${station.perArea.length} areas`}>
+      <span className="v3ln-meter" aria-hidden="true">
+        {buckets.map((bucket) => (
+          <span key={bucket.m} className={`v3ln-mt m${bucket.m}`}
+            style={{ flexGrow: bucket.areas.length }}
+            title={`${MATURITY_WORDS[bucket.m]} — ${bucket.areas.map((seg) => seg.area).join(", ")}`} />
+        ))}
+      </span>
+      <span className="v3ln-seg-cap">
+        {station.perArea.length} areas · {buckets.map((bucket) => `${bucket.areas.length} ${MATURITY_WORDS[bucket.m]}`).join(" · ")}
+      </span>
     </div>
   );
 }
