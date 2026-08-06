@@ -504,7 +504,7 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                   aria-label="Filter the roster by area">
                   <option value="">All areas · {cast.length}</option>
                   {castAreas.map((area) => (
-                    <option key={area} value={area}>{area} · {cast.filter((r) => r.area === area).length}</option>
+                    <option key={area} value={area}>{area} · {cast.filter((r) => r.areas.includes(area)).length}</option>
                   ))}
                 </select>
               </label>
@@ -535,7 +535,8 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                   </span>
                   <span className="v3ln-cr-areas">
                     {row.areas.map((area) => (
-                      <button key={area} type="button" className="v3ln-cr-area"
+                      <button key={area} type="button"
+                        className={`v3ln-cr-area${areaFilter === area ? " on" : areaFilter && castAreas.includes(areaFilter) ? " dim" : ""}`}
                         title={areaFilter === area ? "Show all areas" : `Filter to ${area}`}
                         onClick={() => setAreaFilter(areaFilter === area ? "" : area)}>{area}</button>
                     ))}

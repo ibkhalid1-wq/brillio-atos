@@ -161,6 +161,13 @@
   padding:3px 10px;white-space:nowrap;cursor:pointer}
 .v3ln-cr-area:hover{background:color-mix(in srgb,var(--v3-accent-2) 16%,transparent)}
 .v3ln-cr-area:focus-visible{outline:2px solid var(--v3-accent-2);outline-offset:1px}
+/* an active filter lights its chip and dulls the rest */
+.v3ln-cr-area.on{background:var(--v3-accent-2);color:#fff}
+.v3ln-cr-area.on:hover{background:color-mix(in srgb,var(--v3-accent-2) 85%,#000)}
+.v3ln-cr-area.dim{color:var(--v3-text-muted);opacity:.5;
+  background:color-mix(in srgb,var(--v3-text-muted) 8%,transparent)}
+.v3ln-cr-area.dim:hover{opacity:1;color:var(--v3-accent-2);
+  background:color-mix(in srgb,var(--v3-accent-2) 12%,transparent)}
 .v3ln-filter{display:flex;align-items:center;gap:7px;font-size:10px;letter-spacing:.05em;
   text-transform:uppercase;color:var(--v3-text-muted)}
 .v3ln-filter select{font:inherit;font-weight:600;font-size:12px;line-height:1.4;color:var(--v3-text-primary);border:1px solid var(--fs-line);
