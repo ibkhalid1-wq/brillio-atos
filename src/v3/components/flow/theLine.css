@@ -257,3 +257,19 @@
 .v3ln-cr-invite input[type="date"]{font:inherit;font-weight:600;font-size:12px;line-height:1.4;color:var(--v3-text-primary);
   border:1px solid var(--fs-line);border-radius:4px;padding:5px 9px;background:var(--fs-card)}
 .v3ln-cr-invite input[type="date"]:focus-visible{outline:2px solid var(--v3-accent-2);outline-offset:-1px}
+
+/* ── sign-offs on Discover rows ── */
+.v3ln-appr{font:inherit;font-weight:650;font-size:10.5px;border-radius:999px;padding:2px 9px;white-space:nowrap}
+.v3ln-appr.ok{background:#E6F2EC;color:var(--ln-m4)}
+.v3ln-appr.wait{background:#FBF0DC;color:var(--ln-m1)}
+.v3ln-cr-appr{display:flex;flex-direction:column;gap:6px;border-top:1px dashed var(--fs-line);padding-top:8px}
+.v3ln-cr-appr-t{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--v3-text-muted)}
+.v3ln-cr-appr-row{display:flex;align-items:center;gap:8px;max-width:560px}
+.v3ln-appr-dot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--fs-line)}
+.v3ln-appr-dot.approved{background:var(--ln-m4-fill)}
+.v3ln-appr-dot.approved.old{background:var(--ln-m1-fill)}
+.v3ln-appr-dot.in-review{background:var(--ln-m1-fill)}
+.v3ln-appr-dot.changes{background:#B4552D}
+.v3ln-cr-appr-n{font-size:11.5px;font-weight:600;color:var(--v3-text-primary)}
+.v3ln-cr-appr-s{font-size:10.5px;color:var(--v3-text-muted)}
+.v3ln-cr-appr-row .v3ln-a{margin-left:auto}
