@@ -107,6 +107,19 @@
 .v3ln-sg.m3{background:#2E93B5;color:#fff}
 .v3ln-sg.m4{background:var(--ln-m4);color:#fff}
 
+/* ── the legend: colors + harvey balls, at the foot of the board ── */
+.v3ln-legend{display:flex;gap:16px;align-items:center;flex-wrap:wrap;
+  margin-left:40px;padding:10px 2px 0;font-size:11px;color:var(--v3-text-muted)}
+.v3ln-legend .v3ln-sl{display:inline;margin:0}
+.v3ln-lg{display:inline-flex;align-items:center;gap:6px}
+.v3ln-lg-sw{width:10px;height:10px;border-radius:3px;background:var(--fs-line);flex:none}
+.v3ln-lg-sw.m1{background:var(--ln-m1)}
+.v3ln-lg-sw.m2{background:var(--ln-m2)}
+.v3ln-lg-sw.m3{background:#2E93B5}
+.v3ln-lg-sw.m4{background:var(--ln-m4)}
+.v3ln-lg .v3ln-g{font-size:13px}
+@media(max-width:680px){.v3ln-legend{margin-left:30px}}
+
 /* ── the record: who said what, when — grouped by area ── */
 .v3ln-rec-grp{border-bottom:1px solid var(--fs-line)}
 .v3ln-rec-grp:last-child{border-bottom:0}
