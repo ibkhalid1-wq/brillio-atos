@@ -572,7 +572,9 @@ export default function FlowShell(props: FlowShellProps) {
       const index = Number.parseInt(event.key, 10) - 1;
       const id = DOCK_ORDER[index];
       if (!Number.isNaN(index) && id) {
-        setView(id);
+        // "Flow" means whichever chrome is active — the Line unless the
+        // operator toggled Classic.
+        setView(id === "flow" && lineViewPreferred() ? "line" : id);
         window.scrollTo({ top: 0 });
       }
     };
@@ -638,14 +640,15 @@ export default function FlowShell(props: FlowShellProps) {
               const shortcut = DOCK_ORDER.indexOf(id) + 1;
               const isNext = id === nextId && view !== nextId;
               return (
-                <button key={id} type="button" className={`${view === id ? "on" : ""}${isNext ? " v3fs-dock-next" : ""}`.trim()}
+                <button key={id} type="button" className={`${view === id || (id === "flow" && view === "line") ? "on" : ""}${isNext ? " v3fs-dock-next" : ""}`.trim()}
                   data-tip={DOCK_TIPS[id]}
                   aria-label={`${label} (shortcut ${shortcut})${isNext ? " — go here next" : ""}`}
                   onClick={() => {
                     // Navigating dismisses whatever overlay is up — the rail is
                     // always an exit, never dead under a modal.
                     setSearchOpen(false); setHelpOpen(false); setDrillOpen(false);
-                    setView(id); window.scrollTo({ top: 0 });
+                    setView(id === "flow" && lineViewPreferred() ? "line" : id);
+                    window.scrollTo({ top: 0 });
                   }}>
                   {id === "today" && waitingCount > 0 ? <span className="v3fs-dock-n">{waitingCount}</span> : null}
                   <DockIcon id={id} /><span className="v3fs-rlb">{label}</span>
@@ -831,14 +834,14 @@ export default function FlowShell(props: FlowShellProps) {
         {view === "today" ? (
           <FlowToday program={program} programs={props.programs} onSelectProgram={props.onSelectProgram} onResolveDecision={props.onResolveDecision} onSaveInputs={props.onSaveInputs}
             onIngestPortalItem={props.onIngestPortalItem} onDismissPortalItem={props.onDismissPortalItem} onRecordApproval={props.onRecordApproval}
-            onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} />
+            onGoFlow={() => { setView(lineViewPreferred() ? "line" : "flow"); window.scrollTo({ top: 0 }); }} />
         ) : view === "flow" ? (
           <FlowCanvas program={program} programs={props.programs} runningAgentIds={props.runningAgentIds} regenActiveIds={props.regenActiveIds} onEnqueueRegen={props.onEnqueueRegen} agentErrors={props.agentErrors} relatedPrograms={[...(drillParent ? [drillParent] : []), ...listChildDrilldowns(program, props.programs).map((c) => c.child)]} onSelectProgram={props.onSelectProgram} onComment={props.onComment} onRunAgent={props.onRunAgent} onSaveInputs={props.onSaveInputs} onMintPacks={props.onMintPacks} onMintDemoInvites={props.onMintDemoInvites} onCompileShipLanes={props.onCompileShipLanes} onToggleShipItem={props.onToggleShipItem} onSetShipLane={props.onSetShipLane} onScheduleFollowUp={props.onScheduleFollowUp} onMintFollowUp={props.onMintFollowUp} onMintReview={props.onMintReview} onRecordShowPass={props.onRecordShowPass} onSaveArtifactDoc={props.onSaveArtifactDoc} onRecordGate={props.onRecordGate} onReopenGate={props.onReopenGate} onRunAgentAndWait={props.onRunAgentAndWait} onSendForApproval={props.onSendForApproval} onRenamePerson={props.onRenamePerson} onRenameRole={props.onRenameRole} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }}
           />
         ) : view === "people" ? (
           <FlowPeople program={program} onSaveInputs={props.onSaveInputs} onRenamePerson={props.onRenamePerson} onGoInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }} />
         ) : view === "library" ? (
-          <FlowLibrary program={program} programs={props.programs} onSelectProgram={props.onSelectProgram} onSaveInputs={props.onSaveInputs} onTagClaim={props.onTagClaim} onComment={props.onComment} onSaveArtifactDoc={props.onSaveArtifactDoc} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }} onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} onRenamePerson={props.onRenamePerson} onRenameRole={props.onRenameRole} />
+          <FlowLibrary program={program} programs={props.programs} onSelectProgram={props.onSelectProgram} onSaveInputs={props.onSaveInputs} onTagClaim={props.onTagClaim} onComment={props.onComment} onSaveArtifactDoc={props.onSaveArtifactDoc} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }} onGoFlow={() => { setView(lineViewPreferred() ? "line" : "flow"); window.scrollTo({ top: 0 }); }} onRenamePerson={props.onRenamePerson} onRenameRole={props.onRenameRole} />
         ) : view === "mission" ? (
           <FlowMission
             aiStatus={props.aiStatus}
@@ -866,7 +869,7 @@ export default function FlowShell(props: FlowShellProps) {
             onRenameProgram={props.onRenameProgram}
             programs={props.programs}
             activeId={program.id}
-            onSelectProgram={(id) => { props.onSelectProgram(id); setView("flow"); window.scrollTo({ top: 0 }); }}
+            onSelectProgram={(id) => { props.onSelectProgram(id); setView(lineViewPreferred() ? "line" : "flow"); window.scrollTo({ top: 0 }); }}
             onHydratePrograms={props.onHydratePrograms}
           />
         ) : (
