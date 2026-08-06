@@ -12,11 +12,11 @@
  * One write path, two skins: the chromes can run at the same time and can
  * never disagree, because there is nothing here to disagree with.
  */
-import { Suspense, lazy, useMemo, useState, type ComponentProps } from "react";
+import { Suspense, lazy, useEffect, useMemo, useState, type ComponentProps } from "react";
 import type { ProgramSummary } from "@/new/types";
 import { buildLineModel, LINE_GLYPHS, type LineBand, type LineStation } from "@/v3/lib/lineModel";
 import {
-  evidenceStamp, flowMovements, movementEvidence, readMovementInputs, stakeholderEmail,
+  attestHeardRoster, evidenceStamp, flowMovements, movementEvidence, readMovementInputs, stakeholderEmail,
   type ArtifactCardModel, type EvidenceEntry,
 } from "@/v3/components/flow/flowShellData";
 import { resolveMovementStakeholders, type MovementStakeholder } from "@/v3/components/flow/flowStakeholders";
@@ -70,6 +70,10 @@ interface TheLineProps {
   onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string; unnamed?: boolean }) => Promise<string | null>;
   onScheduleFollowUp?: (movementId: string, who: string, date: string) => Promise<void>;
   onRunAgent?: (agentId: string, phaseId?: string) => void;
+  /** Record a movement's gate — demonstrated. Reopen — evidence changed.
+   * Classic's own handlers; the parent re-checks criteria at write time. */
+  onRecordGate?: (movementId: string) => Promise<void>;
+  onReopenGate?: (movementId: string, reason: string) => Promise<void>;
 }
 
 const MATURITY_WORDS = ["not seeded", "provisional", "grounded", "reviewed", "approved"] as const;
@@ -153,7 +157,40 @@ function Station({ station, onOpen, onRegen, regenerating }: {
   );
 }
 
-function GateSheet({ band, onClose }: { band: LineBand; onClose: () => void }) {
+/** Classic's armed two-step confirm, in Line clothes: first press arms (and
+ * auto-disarms after 4s), second press acts. */
+function LineGateAction({ idle, armedLabel, busyLabel, onAct }: {
+  idle: string; armedLabel: string; busyLabel: string; onAct: () => Promise<void>;
+}) {
+  const [armed, setArmed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!armed) return;
+    const timer = window.setTimeout(() => setArmed(false), 4000);
+    return () => window.clearTimeout(timer);
+  }, [armed]);
+  const press = async () => {
+    if (!armed) { setArmed(true); return; }
+    setBusy(true);
+    try { await onAct(); } finally { setBusy(false); setArmed(false); }
+  };
+  return (
+    <button type="button" className={`v3ln-gate-act${armed ? " armed" : ""}`} disabled={busy}
+      onClick={() => void press()}>
+      {busy ? busyLabel : armed ? armedLabel : idle}
+    </button>
+  );
+}
+
+function GateSheet({ band, approved, onClose, onRecord, onReopen }: {
+  band: LineBand;
+  approved: boolean;
+  onClose: () => void;
+  onRecord?: () => Promise<void>;
+  onReopen?: () => Promise<void>;
+}) {
+  const gating = band.gate.filter((item) => !item.advisory);
+  const ready = gating.length > 0 && gating.every((item) => item.done);
   return (
     <>
       <div className="v3ln-gate-backdrop" onClick={onClose} aria-hidden="true" />
@@ -178,6 +215,18 @@ function GateSheet({ band, onClose }: { band: LineBand; onClose: () => void }) {
             ))}
           </ul>
         )}
+        {onRecord && ready && !approved ? (
+          <div className="v3ln-gate-actions">
+            <LineGateAction idle="Record the gate — demonstrated" armedLabel="Confirm — records the gate and locks inputs"
+              busyLabel="Recording…" onAct={onRecord} />
+          </div>
+        ) : null}
+        {onReopen && approved ? (
+          <div className="v3ln-gate-actions">
+            <LineGateAction idle="Reopen the gate — evidence changed" armedLabel="Confirm — reopens the gate and unlocks inputs"
+              busyLabel="Reopening…" onAct={onReopen} />
+          </div>
+        ) : null}
         <p className="v3ln-gate-f">Frame, Listen and the Loop close themselves when every criterion is met. Ship and Evolve stay deliberate decisions.</p>
       </div>
     </>
@@ -193,7 +242,7 @@ function packFor(program: ProgramSummary, who: string, movementId: "frame" | "li
     && (movementId === "listen" ? (!pack.movementId || pack.movementId === "listen") : pack.movementId === movementId));
 }
 
-export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenameRole, onMintFollowUp, onScheduleFollowUp, onRunAgent }: TheLineProps) {
+export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenameRole, onMintFollowUp, onScheduleFollowUp, onRunAgent, onRecordGate, onReopenGate }: TheLineProps) {
   const model = useMemo(() => buildLineModel(program), [program]);
   const [gateFor, setGateFor] = useState<LineBand | null>(null);
   const [docFor, setDocFor] = useState<ArtifactCardModel | null>(null);
@@ -403,6 +452,26 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
     setNote(`Regenerating ${card.title} from the record — the station refreshes when it lands.`);
     window.setTimeout(() => setNote(null), 6000);
   };
+
+  // AUTO-ACCEPT heard voices — classic runs this on canvas mount; without it
+  // a Line-only session never marks evidence-backed voices Heard. Identical
+  // write, idempotent: attestHeardRoster returns null once settled.
+  useEffect(() => {
+    if (!onSaveInputs) return;
+    const listen = flowMovements().find((m) => m.id === "listen");
+    if (!listen) return;
+    const heardNames = [...new Set(movementEvidence(program, listen).map((e) => e.who).filter(Boolean))];
+    if (!heardNames.length) return;
+    const proposal = attestHeardRoster(program, heardNames);
+    if (!proposal) return;
+    void onSaveInputs("listen", { interviewRoster: proposal.value }, {
+      silent: true,
+      attest: {
+        action: `Roster auto-attested — ${proposal.attested.length} voice${proposal.attested.length === 1 ? "" : "s"} Heard on evidence`,
+        detail: proposal.attested.join(", ").slice(0, 140),
+      },
+    });
+  }, [program, onSaveInputs]);
 
   const briefSet = !!String(readMovementInputs(program, "frame").companyBrief ?? "").trim();
   const openBrief = () => {
@@ -752,7 +821,21 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
         </Suspense>
       ) : null}
 
-      {gateFor ? <GateSheet band={gateFor} onClose={() => setGateFor(null)} /> : null}
+      {gateFor ? (() => {
+        // The loop band folds Envision+Show — its convergence closes itself,
+        // so record/reopen apply only to bands that ARE movements.
+        const gateMovement = ["frame", "listen", "ship", "evolve"].includes(gateFor.id) ? gateFor.id : null;
+        const gateApproved = !!gateMovement && program.gateReviews?.[gateMovement]?.status === "approved";
+        return (
+          <GateSheet band={gateFor} approved={gateApproved} onClose={() => setGateFor(null)}
+            onRecord={gateMovement && onRecordGate
+              ? async () => { await onRecordGate(gateMovement); setGateFor(null); }
+              : undefined}
+            onReopen={gateMovement && onReopenGate
+              ? async () => { await onReopenGate(gateMovement, "Evidence changed after the demonstration"); setGateFor(null); }
+              : undefined} />
+        );
+      })() : null}
 
       {capFor ? (
         <>
