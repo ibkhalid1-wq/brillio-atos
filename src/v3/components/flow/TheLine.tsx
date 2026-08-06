@@ -488,6 +488,20 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
         </div>
       ))}</div> : null}
 
+      {tab === "work" ? (
+        <div className="v3ln-legend" role="note" aria-label="How to read the board">
+          <span className="v3ln-sl">Maturity</span>
+          {([0, 1, 2, 3, 4] as const).map((m) => (
+            <span key={m} className="v3ln-lg">
+              <i className={`v3ln-lg-sw m${m}`} aria-hidden="true" />
+              <span className={`v3ln-g m${m}`} aria-hidden="true">{LINE_GLYPHS[m]}</span>
+              {MATURITY_WORDS[m]}
+            </span>
+          ))}
+          <span className="v3ln-lg"><span className="v3ln-rf">needs refresh ↻</span>evidence changed beneath it</span>
+        </div>
+      ) : null}
+
       {tab === "discovery" && cast.length > 0 ? (
         <section className="v3ln-band" aria-label="Discover">
           <header className="v3ln-band-h">
