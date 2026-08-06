@@ -236,30 +236,57 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
   const record = useMemo(() => {
     const areaOf = new Map(cast.map((row) => [row.label.trim().toLowerCase(), row.area]));
     const kitAreas = listenCoverageAreas(program).map((area) => area.label);
+    // The sponsor's voice is its own lane on the record — named by the role
+    // ("Executive Leadership" / "Executive Sponsor") — never folded into a
+    // delivery area. Frame is where they speak, so frame entries land there
+    // too even when unattributed.
+    const frameVoices = resolveMovementStakeholders(program, "frame");
+    const sponsorLaneOf = new Map<string, string>();
+    for (const voice of frameVoices) {
+      const lane = voice.role.trim() || "Executive Sponsor";
+      for (const key of [voice.name, voice.role]) {
+        if (key?.trim()) sponsorLaneOf.set(key.trim().toLowerCase(), lane);
+      }
+    }
+    const frameLane = frameVoices[0]?.role.trim() || "Executive Sponsor";
     return flowMovements()
       .flatMap((movement) => movementEvidence(program, movement))
       .map((entry) => {
-        // "Name, Role, stamp" — voices off the roster (the Executive Sponsor
-        // speaks in Frame, before the Kit casts anyone) still resolve to an
+        // "Name, Role, stamp" — voices off the roster still resolve to an
         // area the same way roster rows do.
         const parts = entry.who.split(",");
         const name = parts[0].trim();
         const role = (parts[1] ?? "").trim();
-        const area = areaOf.get(name.toLowerCase())
+        // Any executive-titled voice lanes under its own title ("Executive
+        // Leadership"), not a delivery area.
+        const execLane = /\bexecutive\b/i.test(role) ? role
+          : /\bexecutive\b/i.test(name) ? name : undefined;
+        const area = execLane
+          ?? sponsorLaneOf.get(name.toLowerCase())
+          ?? sponsorLaneOf.get(role.toLowerCase())
+          ?? (entry.movementId === "frame" ? frameLane : undefined)
+          ?? areaOf.get(name.toLowerCase())
           ?? canonicalFrameArea(kitAreas, stakeholderPrimaryArea(program, name, role));
         return { entry, name, area: area ?? "" };
       })
       .sort((a, b) => (b.entry.capturedAt ?? "").localeCompare(a.entry.capturedAt ?? ""));
   }, [program, cast]);
-  const recordGroups = useMemo(() => {
+  // The Record's filterable lanes: every area that actually holds entries —
+  // roster areas in kit order, then off-roster lanes (the sponsor's included)
+  // by first appearance.
+  const recordAreas = useMemo(() => {
     const order = castAreas.filter((area) => record.some((r) => r.area === area));
     for (const r of record) if (r.area && !order.includes(r.area)) order.push(r.area);
+    return order;
+  }, [record, castAreas]);
+  const recordGroups = useMemo(() => {
+    const order: string[] = [...recordAreas];
     if (record.some((r) => !r.area)) order.push("");
     const groups = order.map((area) => ({ area, items: record.filter((r) => r.area === area) }));
-    return areaFilter && castAreas.includes(areaFilter)
+    return areaFilter && recordAreas.includes(areaFilter)
       ? groups.filter((g) => g.area === areaFilter)
       : groups;
-  }, [record, castAreas, areaFilter]);
+  }, [record, recordAreas, areaFilter]);
 
   // ── per-person link: existing pack's URL, else mint (returns the URL).
   // The URL ALWAYS renders inline; the clipboard is best-effort on top —
@@ -507,14 +534,14 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
           <header className="v3ln-band-h">
             <span className="v3ln-band-n">Record</span>
             <span className="v3ln-band-sp" />
-            {castAreas.length > 1 ? (
+            {recordAreas.length > 1 ? (
               <label className="v3ln-filter">
                 <span>Area</span>
-                <select value={castAreas.includes(areaFilter) ? areaFilter : ""}
+                <select value={recordAreas.includes(areaFilter) ? areaFilter : ""}
                   onChange={(e) => setAreaFilter(e.target.value)}
                   aria-label="Filter the record by area">
                   <option value="">All areas · {record.length}</option>
-                  {castAreas.map((area) => (
+                  {recordAreas.map((area) => (
                     <option key={area} value={area}>{area} · {record.filter((r) => r.area === area).length}</option>
                   ))}
                 </select>
