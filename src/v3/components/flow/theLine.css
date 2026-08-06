@@ -36,9 +36,18 @@
 .v3ln-band-h.spine{padding:11px 14px;
   background:color-mix(in srgb,var(--v3-accent-2) 5%,var(--fs-card));
   border-bottom:2px solid color-mix(in srgb,var(--v3-accent-2) 30%,var(--fs-line))}
-.v3ln-band-i{font:800 10.5px/1 var(--mono,ui-monospace);letter-spacing:.06em;color:#fff;
-  background:var(--v3-accent-2);border-radius:3px;padding:4px 5px;flex:none;
-  font-variant-numeric:tabular-nums}
+/* the spine — one numbered rail, five movements: the whole methodology on one line */
+.v3ln-spine-row{position:relative;display:grid;grid-template-columns:40px minmax(0,1fr);align-items:start}
+.v3ln-spine-row::before{content:"";position:absolute;left:19px;top:0;bottom:0;width:2px;
+  background:color-mix(in srgb,var(--v3-accent-2) 28%,var(--fs-line))}
+.v3ln-spine-row:first-child::before{top:8px}
+.v3ln-spine-row:last-child::before{bottom:auto;height:34px}
+.v3ln-rail-n{position:relative;z-index:1;justify-self:center;margin-top:7px;
+  width:26px;height:26px;display:grid;place-items:center;
+  font:800 10.5px/1 var(--mono,ui-monospace);letter-spacing:.04em;color:#fff;
+  background:var(--v3-accent-2);border-radius:50%;font-variant-numeric:tabular-nums}
+@media(max-width:680px){.v3ln-spine-row{grid-template-columns:30px minmax(0,1fr)}
+  .v3ln-spine-row::before{left:14px}}
 .v3ln-band-h.spine .v3ln-band-n{font-size:15.5px;font-weight:800;letter-spacing:.10em;
   text-transform:uppercase}
 .v3ln-half,.v3ln-scope{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--v3-text-muted)}
@@ -118,7 +127,8 @@
 .v3ln-cr-q ul{margin:6px 0 0;padding:0 0 0 16px;max-width:520px}
 .v3ln-cr-q li{margin:0 0 4px;line-height:1.45}
 .v3ln-cr-act{display:flex;gap:6px;flex:none}
-.v3ln-cr-url{flex-basis:100%;font:11px var(--mono,ui-monospace);color:var(--v3-text-muted);
+.v3ln-cr-url-row{flex-basis:100%;display:flex;gap:8px;align-items:center}
+.v3ln-cr-url{flex:1;min-width:0;font:11px var(--mono,ui-monospace);color:var(--v3-text-muted);
   border:1px dashed var(--fs-line);border-radius:4px;padding:5px 9px;background:none;margin-top:2px}
 
 /* ── capture dialog body (inside the shared gate frame) ── */

@@ -142,7 +142,7 @@ function gateChip(items: LineGateItem[], approved: boolean): LineBand["chip"] {
   const done = gating.filter((item) => item.done).length;
   if (approved) return { text: `Closed at ${done}/${gating.length}`, tone: "green" };
   if (gating.length === 0) return { text: "Not seeded", tone: "dim" };
-  return { text: `Gate ${done}/${gating.length} · auto-closes`, tone: done > 0 ? "amber" : "dim" };
+  return { text: `Gate ${done}/${gating.length}`, tone: done > 0 ? "amber" : "dim" };
 }
 
 export function buildLineModel(program: ProgramSummary): LineModel {
@@ -249,7 +249,7 @@ export function buildLineModel(program: ProgramSummary): LineModel {
       id: "ship", name: "Ship", scope: "programme-wide · lanes",
       chip: shipOk
         ? { text: "Shipped", tone: "green" }
-        : { text: "Deliberate — never auto-closes", tone: card("hardening-plan")?.present ? "amber" : "dim" },
+        : { text: "Deliberate gate", tone: card("hardening-plan")?.present ? "amber" : "dim" },
       gate: shipGate,
       note: "Six lanes compile from the Blueprint, the hardening plan and the roster when the plan is adopted: Build · Data · Validation & evals · Hardening · Enablement · Cutover.",
       stations: [
