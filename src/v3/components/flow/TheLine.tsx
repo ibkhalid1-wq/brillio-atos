@@ -365,7 +365,7 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
             <button type="button" className={`v3ln-chip ${band.chip.tone}`}
               onClick={() => setGateFor(band)}
               title={`Open the ${band.name} gate's criteria`}>
-              {band.chip.text} ›
+              {band.chip.text}<span className="v3ln-chev" aria-hidden="true">›</span>
             </button>
           </header>
           {band.intake ? (

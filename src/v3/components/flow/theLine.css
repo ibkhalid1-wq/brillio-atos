@@ -51,13 +51,20 @@
 .v3ln-band-h.spine .v3ln-band-n{font-size:15.5px;font-weight:800;letter-spacing:.10em;
   text-transform:uppercase}
 .v3ln-half,.v3ln-scope{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--v3-text-muted)}
-.v3ln-chip{font:600 10.5px/1.4 inherit;letter-spacing:.05em;text-transform:uppercase;
-  padding:3px 9px;border-radius:4px;border:1px solid var(--fs-line);background:none;
-  color:var(--v3-text-muted);cursor:pointer}
+/* gate chips — quiet pills in sentence case; tone carries the state, the
+ * chevron whispers "openable" */
+.v3ln-chip{font:650 11px/1.4 inherit;padding:4px 11px;border-radius:999px;
+  border:1px solid var(--fs-line);background:var(--fs-card);
+  color:var(--v3-text-muted);cursor:pointer;white-space:nowrap}
 .v3ln-chip:hover{border-color:var(--v3-accent-2);color:var(--v3-accent-2)}
-.v3ln-chip.green{background:#E6F2EC;border-color:#BFDDD0;color:var(--ln-m4)}
-.v3ln-chip.amber{background:#FBF0DC;border-color:#E8D5A8;color:var(--ln-m1)}
-.v3ln-chip.accent{background:color-mix(in srgb,var(--v3-accent-2) 10%,transparent);border-color:color-mix(in srgb,var(--v3-accent-2) 30%,transparent);color:var(--v3-accent-2)}
+.v3ln-chev{margin-left:5px;opacity:.55}
+.v3ln-chip:hover .v3ln-chev{opacity:1}
+.v3ln-chip.green{background:#E6F2EC;border-color:transparent;color:var(--ln-m4)}
+.v3ln-chip.green:hover{background:#D8EBDF;color:var(--ln-m4)}
+.v3ln-chip.amber{background:#FBF0DC;border-color:transparent;color:var(--ln-m1)}
+.v3ln-chip.amber:hover{background:#F6E7C8;color:var(--ln-m1)}
+.v3ln-chip.accent{background:color-mix(in srgb,var(--v3-accent-2) 9%,transparent);border-color:transparent;color:var(--v3-accent-2)}
+.v3ln-chip.accent:hover{background:color-mix(in srgb,var(--v3-accent-2) 16%,transparent);color:var(--v3-accent-2)}
 .v3ln-intake{display:flex;gap:10px;align-items:baseline;padding:8px 14px;border-bottom:1px solid var(--fs-line);
   font-size:11.5px;color:var(--v3-text-muted)}
 .v3ln-intake>span:first-child{font-size:10px;letter-spacing:.1em;text-transform:uppercase;flex:none}

@@ -227,9 +227,11 @@ export function buildLineModel(program: ProgramSummary): LineModel {
     {
       id: "loop", name: "Design Loop", half: "Envision ▸ Show", scope: "per area",
       chip: {
+        // The round number lives in the stats strip — the chip carries only
+        // the loop's own arithmetic.
         text: loop.converged
-          ? `Converged · round ${loop.round}`
-          : `Round ${loop.round} · ${loop.areasConverged} of ${loop.areasTotal || areas.length} converged`,
+          ? "Converged"
+          : `${loop.areasConverged} of ${loop.areasTotal || areas.length} converged`,
         tone: loop.converged ? "green" : "accent",
       },
       gate: loopGate,
