@@ -148,6 +148,7 @@
 .v3ln-cr-who{display:flex;flex-direction:column;min-width:150px;flex:1}
 .v3ln-cr-who b{font-size:12.5px;font-weight:650;color:var(--v3-text-primary)}
 .v3ln-cr-who span{font-size:10.5px;color:var(--v3-text-muted)}
+.v3ln-cr-areas{display:flex;gap:4px;flex-wrap:wrap}
 .v3ln-cr-area{font:inherit;font-weight:600;font-size:11px;line-height:1.5;color:var(--v3-accent-2);
   background:color-mix(in srgb,var(--v3-accent-2) 8%,transparent);border:0;border-radius:999px;
   padding:3px 10px;white-space:nowrap;cursor:pointer}

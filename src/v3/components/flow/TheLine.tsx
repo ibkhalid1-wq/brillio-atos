@@ -48,7 +48,11 @@ interface CastRow {
    * capture write and the link mint to the right conversation field. */
   movementId: "frame" | "listen";
   captureField: string;
+  /** Primary area (first coverage lane) — what the record attributes to. */
   area: string;
+  /** EVERY area this voice covers. One person, one engagement: the roster
+   * never repeats a persona per area; their one link asks across all lanes. */
+  areas: string[];
   heard: boolean;
   awaiting: boolean;      // link out, nothing back yet
   questions: string[];
@@ -193,19 +197,52 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
       return people.map((stakeholder) => {
         const label = stakeholder.name || stakeholder.role;
         const col = stakeholderCollection(movementId, stakeholder, packs, evidence);
-        const covered = coverage.find((row) =>
-          row.roles.some((who) => who.trim().toLowerCase() === label.trim().toLowerCase()));
-        const area = covered?.area
-          ?? canonicalFrameArea(kitAreas, stakeholderPrimaryArea(program, stakeholder.name ?? "", stakeholder.role));
+        // EVERY lane that covers this voice, kit order — not just the first.
+        const covered = coverage
+          .filter((row) => row.roles.some((who) => who.trim().toLowerCase() === label.trim().toLowerCase()))
+          .map((row) => row.area);
+        const areas = covered.length ? [...new Set(covered)]
+          : [canonicalFrameArea(kitAreas, stakeholderPrimaryArea(program, stakeholder.name ?? "", stakeholder.role))].filter(Boolean) as string[];
         return {
-          label, role: stakeholder.role, isRole: stakeholder.isRole, movementId, captureField, area,
+          label, role: stakeholder.role, isRole: stakeholder.isRole, movementId, captureField,
+          area: areas[0] ?? "", areas,
           heard: col.heard, awaiting: !col.heard && !!col.pack,
-          questions: stakeholder.linkQuestions ?? stakeholder.questions,
+          questions: [...new Set(stakeholder.linkQuestions ?? stakeholder.questions)],
           stakeholder,
         };
       });
     };
-    const listenRows = rows("listen", "interviewTranscripts", resolveMovementStakeholders(program, "listen"));
+    // One person, one engagement: a named person absorbs their role's row —
+    // "Ibrahim Khalid, Sales reps - Markets" is ONE voice with the union of
+    // that role's areas and questions, never a second entry beside the role.
+    const consolidate = (all: CastRow[]): CastRow[] => {
+      const key = (s: string) => s.trim().toLowerCase();
+      const fillersByRole = new Map<string, CastRow[]>();
+      for (const row of all) {
+        if (!row.role || key(row.label) === key(row.role)) continue;
+        const k = key(row.role);
+        const list = fillersByRole.get(k) ?? [];
+        list.push(row);
+        fillersByRole.set(k, list);
+      }
+      const out: CastRow[] = [];
+      for (const row of all) {
+        const fillers = key(row.label) === key(row.role || row.label) ? fillersByRole.get(key(row.label)) : undefined;
+        if (fillers?.length) {
+          for (const person of fillers) {
+            for (const area of row.areas) if (!person.areas.includes(area)) person.areas.push(area);
+            person.area = person.areas[0] ?? person.area;
+            for (const q of row.questions) if (!person.questions.includes(q)) person.questions.push(q);
+            person.heard = person.heard || row.heard;
+            person.awaiting = !person.heard && (person.awaiting || row.awaiting);
+          }
+          continue;
+        }
+        out.push(row);
+      }
+      return out;
+    };
+    const listenRows = consolidate(rows("listen", "interviewTranscripts", resolveMovementStakeholders(program, "listen")));
     if (listenRows.length) return listenRows;
     const kit = meetingKit(program, "frame");
     const captureField = kit?.captureField ?? "sponsorConversation";
@@ -223,11 +260,11 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
   // first appearance; the filter narrows without ever hiding its own option.
   const castAreas = useMemo(() => {
     const seen: string[] = [];
-    for (const row of cast) if (!seen.includes(row.area)) seen.push(row.area);
+    for (const row of cast) for (const area of row.areas) if (!seen.includes(area)) seen.push(area);
     return seen;
   }, [cast]);
   const filteredCast = areaFilter && castAreas.includes(areaFilter)
-    ? cast.filter((row) => row.area === areaFilter)
+    ? cast.filter((row) => row.areas.includes(areaFilter))
     : cast;
 
   // ── the record: every attributed evidence entry across the spine, newest
@@ -235,6 +272,12 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
   // group and filter the same way the roster does.
   const record = useMemo(() => {
     const areaOf = new Map(cast.map((row) => [row.label.trim().toLowerCase(), row.area]));
+    // Folded role rows are gone from the roster, but the record may still
+    // carry entries attributed to the role — keep them resolvable.
+    for (const row of cast) {
+      const roleKey = row.role.trim().toLowerCase();
+      if (roleKey && !areaOf.has(roleKey)) areaOf.set(roleKey, row.area);
+    }
     const kitAreas = listenCoverageAreas(program).map((area) => area.label);
     // Leadership is ONE lane on the record — the sponsor's frame conversation
     // and every executive-titled voice merge under a single label (the
@@ -490,9 +533,13 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                     {row.isRole ? <span>role — assign a name to send</span>
                       : row.role && row.role !== row.label ? <span>{row.role}</span> : null}
                   </span>
-                  <button type="button" className="v3ln-cr-area"
-                    title={areaFilter === row.area ? "Show all areas" : `Filter to ${row.area}`}
-                    onClick={() => setAreaFilter(areaFilter === row.area ? "" : row.area)}>{row.area}</button>
+                  <span className="v3ln-cr-areas">
+                    {row.areas.map((area) => (
+                      <button key={area} type="button" className="v3ln-cr-area"
+                        title={areaFilter === area ? "Show all areas" : `Filter to ${area}`}
+                        onClick={() => setAreaFilter(areaFilter === area ? "" : area)}>{area}</button>
+                    ))}
+                  </span>
                   <button type="button" className="v3ln-cr-qbtn" aria-expanded={!!qOpen[row.label]}
                     onClick={() => setQOpen((s) => ({ ...s, [row.label]: !s[row.label] }))}>
                     {row.questions.length} question{row.questions.length === 1 ? "" : "s"}
