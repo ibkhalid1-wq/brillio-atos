@@ -10,11 +10,14 @@
  * the same time, on the same programme, and can never disagree or conflict:
  * there is one write path, and it lives in the classic views.
  */
-import { Suspense, lazy, useMemo, useState } from "react";
+import { Suspense, lazy, useMemo, useState, type ComponentProps } from "react";
 import type { ProgramSummary } from "@/new/types";
 import { buildLineModel, LINE_GLYPHS, type LineBand, type LineStation } from "@/v3/lib/lineModel";
 import type { ArtifactCardModel } from "@/v3/components/flow/flowShellData";
+import DiscoveryKitAlign from "@/v3/components/flow/DiscoveryKitAlign";
 import "./theLine.css";
+
+type KitAlignProps = ComponentProps<typeof DiscoveryKitAlign>;
 
 const FlowArtifactStudio = lazy(() => import("./studio/FlowArtifactStudio"));
 
@@ -82,7 +85,15 @@ function GateSheet({ band, onClose }: { band: LineBand; onClose: () => void }) {
   );
 }
 
-export default function TheLine({ program }: { program: ProgramSummary }) {
+export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenameRole }: {
+  program: ProgramSummary;
+  /** The classic chrome's own write path, passed through untouched — the Kit
+   * matrix inside the Line edits coverage exactly the way Frame's tab does.
+   * Omitted (e.g. in a future sponsor lens), the matrix renders read-only. */
+  onSaveInputs?: KitAlignProps["onSaveInputs"];
+  onRenamePerson?: KitAlignProps["onRenamePerson"];
+  onRenameRole?: KitAlignProps["onRenameRole"];
+}) {
   const model = useMemo(() => buildLineModel(program), [program]);
   const [gateFor, setGateFor] = useState<LineBand | null>(null);
   const [docFor, setDocFor] = useState<ArtifactCardModel | null>(null);
@@ -128,7 +139,16 @@ export default function TheLine({ program }: { program: ProgramSummary }) {
       {gateFor ? <GateSheet band={gateFor} onClose={() => setGateFor(null)} /> : null}
       {docFor ? (
         <Suspense fallback={null}>
-          <FlowArtifactStudio program={program} artifact={docFor} onClose={() => setDocFor(null)} />
+          <FlowArtifactStudio program={program} artifact={docFor} onClose={() => setDocFor(null)}
+            // The Discovery Kit opens with the people × areas matrix on top —
+            // the same header, the same write path, as the classic Frame tab.
+            // The document below stays read-only; coverage edits are inputs.
+            header={docFor.id === "discovery-kit"
+              ? <DiscoveryKitAlign program={program} onSaveInputs={onSaveInputs}
+                  onRenamePerson={onRenamePerson} onRenameRole={onRenameRole}
+                  locked={program.gateReviews?.frame?.status === "approved"}
+                  onOpenGate={() => setGateFor(model.bands.find((b) => b.id === "frame") ?? null)} />
+              : undefined} />
         </Suspense>
       ) : null}
     </div>
