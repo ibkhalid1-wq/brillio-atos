@@ -140,11 +140,11 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
   const [gateFor, setGateFor] = useState<LineBand | null>(null);
   const [docFor, setDocFor] = useState<ArtifactCardModel | null>(null);
   // Two projections of the one record: the WORK board (where the programme
-  // is) and the CAST (who it runs through — links, capture, invites). Split
-  // by projection, not by phase: "discovery" is only the Cast's Listen-phase
-  // face; the same people carry demo verdicts and sign-offs later, so the
-  // tab stays load-bearing for the whole spine.
-  const [tab, setTab] = useState<"work" | "cast">("work");
+  // is) and DISCOVERY (who it runs through — links, capture, invites; named
+  // to match the classic chrome's Discovery tab). The surface itself stays
+  // load-bearing past Listen — the same people carry demo verdicts and
+  // sign-offs later, and they land here.
+  const [tab, setTab] = useState<"work" | "discovery">("work");
 
   // ── the cast: the Listen roster with area, heard state and their questions.
   const cast = useMemo<CastRow[]>(() => {
@@ -241,17 +241,17 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
           className={tab === "work" ? "on" : undefined} onClick={() => setTab("work")}>
           Work<span>the board — bands, stations, gates</span>
         </button>
-        <button type="button" role="tab" aria-selected={tab === "cast"}
-          className={tab === "cast" ? "on" : undefined} onClick={() => setTab("cast")}>
-          Cast<span>the people — links, capture, invites</span>
+        <button type="button" role="tab" aria-selected={tab === "discovery"}
+          className={tab === "discovery" ? "on" : undefined} onClick={() => setTab("discovery")}>
+          Discovery<span>the people — links, capture, invites</span>
         </button>
       </div>
 
       <div className="v3ln-stats">
         <div><span className="v3ln-sl">Round</span><span className="v3ln-sv">{model.round}</span></div>
         <div><span className="v3ln-sl">Converged — signed off</span><span className="v3ln-sv">{model.stats.converged} of {model.stats.areasTotal} areas</span></div>
-        <button type="button" className="v3ln-statbtn" onClick={() => setTab("cast")}
-          title="Open the Cast — who has been heard, who is waiting">
+        <button type="button" className="v3ln-statbtn" onClick={() => setTab("discovery")}
+          title="Open Discovery — who has been heard, who is waiting">
           <span className="v3ln-sl">Voices heard</span><span className="v3ln-sv">{model.stats.heardTotal > 0 ? `${model.stats.heardDone} of ${model.stats.heardTotal}` : "—"}</span>
         </button>
         <div><span className="v3ln-sl">Needs refresh</span><span className={`v3ln-sv${model.stats.refresh > 0 ? " acc" : ""}`}>{model.stats.refresh > 0 ? `${model.stats.refresh} station${model.stats.refresh === 1 ? "" : "s"}` : "—"}</span></div>
@@ -288,10 +288,10 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
         </section>
       )) : null}
 
-      {tab === "cast" && cast.length > 0 ? (
-        <section className="v3ln-band" aria-label="The cast">
+      {tab === "discovery" && cast.length > 0 ? (
+        <section className="v3ln-band" aria-label="Discovery">
           <header className="v3ln-band-h">
-            <span className="v3ln-band-n">The Cast</span>
+            <span className="v3ln-band-n">Discovery</span>
             <span className="v3ln-scope">one durable link per voice · verdicts and sign-offs land here later</span>
             <span className="v3ln-band-sp" />
             <span className="v3ln-scope">{cast.filter((r) => r.heard).length} of {cast.length} heard</span>
@@ -336,8 +336,8 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
           <div className="v3ln-note">A person&rsquo;s link is minted once and re-asks forever — new questions supersede old ones on the same URL. Copying always shows the link here too, in case the clipboard is denied.</div>
         </section>
       ) : null}
-      {tab === "cast" && cast.length === 0 ? (
-        <div className="v3ln-note">No cast yet — it arrives when the Discovery Kit casts the roster.</div>
+      {tab === "discovery" && cast.length === 0 ? (
+        <div className="v3ln-note">No one to hear yet — the roster arrives when the Discovery Kit casts it.</div>
       ) : null}
 
       {tab === "work" ? (
