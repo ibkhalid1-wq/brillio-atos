@@ -16,9 +16,13 @@ import { Suspense, lazy, useEffect, useMemo, useState, type ComponentProps } fro
 import type { ProgramSummary } from "@/new/types";
 import { buildLineModel, LINE_GLYPHS, type LineBand, type LineStation } from "@/v3/lib/lineModel";
 import {
-  attestHeardRoster, evidenceStamp, flowMovements, movementEvidence, readMovementInputs, stakeholderEmail,
+  artifactDocument, attestHeardRoster, evidenceStamp, flowMovements, movementArtifacts, movementEvidence,
+  readMovementInputs, stakeholderEmail,
   type ArtifactCardModel, type EvidenceEntry,
 } from "@/v3/components/flow/flowShellData";
+import {
+  approvalLinkFor, canSendForApproval, stakeholderApprovalItems, type StakeholderApprovalItem,
+} from "@/v3/components/flow/flowApprovals";
 import { resolveMovementStakeholders, type MovementStakeholder } from "@/v3/components/flow/flowStakeholders";
 import { listInterviewPacks, portalLinkFor } from "@/v3/components/flow/flowPortal";
 import { stakeholderCollection } from "@/v3/components/flow/CollectBoard";
@@ -74,6 +78,11 @@ interface TheLineProps {
    * Classic's own handlers; the parent re-checks criteria at write time. */
   onRecordGate?: (movementId: string) => Promise<void>;
   onReopenGate?: (movementId: string, reason: string) => Promise<void>;
+  /** Mint a no-login sign-off link for an artifact — returns the URL. */
+  onSendForApproval?: (input: {
+    artifactId: string; movementId: string; artifactTitle: string;
+    approver: { name: string; role: string; email?: string }; snapshot?: string;
+  }) => Promise<string | null>;
 }
 
 const MATURITY_WORDS = ["not seeded", "provisional", "grounded", "reviewed", "approved"] as const;
@@ -242,7 +251,7 @@ function packFor(program: ProgramSummary, who: string, movementId: "frame" | "li
     && (movementId === "listen" ? (!pack.movementId || pack.movementId === "listen") : pack.movementId === movementId));
 }
 
-export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenameRole, onMintFollowUp, onScheduleFollowUp, onRunAgent, onRecordGate, onReopenGate }: TheLineProps) {
+export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenameRole, onMintFollowUp, onScheduleFollowUp, onRunAgent, onRecordGate, onReopenGate, onSendForApproval }: TheLineProps) {
   const model = useMemo(() => buildLineModel(program), [program]);
   const [gateFor, setGateFor] = useState<LineBand | null>(null);
   const [docFor, setDocFor] = useState<ArtifactCardModel | null>(null);
@@ -403,6 +412,55 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
       ? groups.filter((g) => g.area === areaFilter)
       : groups;
   }, [record, recordAreas, areaFilter]);
+
+  // ── sign-offs: each heard voice's approval queue for their movement —
+  // every present artifact with THEIR latest ask/verdict, plus whether the
+  // movement is calm enough to send (classic's canSendForApproval rule).
+  const approvals = useMemo(() => {
+    const movements = flowMovements();
+    const byMovement = new Map(movements.map((m) => [m.id, m] as const));
+    const cards = new Map<string, ArtifactCardModel[]>();
+    const map = new Map<string, Array<StakeholderApprovalItem & { sendable: boolean }>>();
+    for (const row of cast) {
+      if (row.isRole || !row.heard) continue;
+      const items = stakeholderApprovalItems(program, row.movementId, row.label);
+      if (!items.length) continue;
+      const movement = byMovement.get(row.movementId);
+      if (movement && !cards.has(row.movementId)) cards.set(row.movementId, movementArtifacts(program, movement));
+      map.set(row.label, items.map((item) => {
+        const card = cards.get(row.movementId)?.find((a) => a.id === item.artifactId);
+        return { ...item, sendable: !!(movement && card && canSendForApproval(program, movement, card)) };
+      }));
+    }
+    return map;
+  }, [program, cast]);
+  const [apprLink, setApprLink] = useState<{ who: string; url: string } | null>(null);
+  const showApprLink = async (who: string, url: string, label: string) => {
+    setApprLink({ who, url });
+    setQOpen((s) => ({ ...s, [who]: true }));
+    try {
+      await navigator.clipboard.writeText(url);
+      setNote(`Sign-off link copied — ${label} → ${who}. It's also shown in their row.`);
+    } catch {
+      setNote(`Sign-off link ready — copy it from ${who}'s row.`);
+    }
+    window.setTimeout(() => setNote(null), 6000);
+  };
+  const sendApproval = async (row: CastRow, item: StakeholderApprovalItem) => {
+    if (!onSendForApproval) return;
+    try {
+      const url = await onSendForApproval({
+        artifactId: item.artifactId, movementId: row.movementId, artifactTitle: item.artifactTitle,
+        approver: { name: row.label, role: row.role, email: stakeholderEmail(program, row.label) || undefined },
+        snapshot: artifactDocument(program, item.artifactId) ?? undefined,
+      });
+      if (!url) throw new Error("no link returned");
+      await showApprLink(row.label, url, item.artifactTitle);
+    } catch (error) {
+      setNote(`Couldn't send for approval: ${error instanceof Error ? error.message : String(error)}`);
+      window.setTimeout(() => setNote(null), 8000);
+    }
+  };
 
   // ── per-person link: existing pack's URL, else mint (returns the URL).
   // The URL ALWAYS renders inline; the clipboard is best-effort on top —
@@ -721,6 +779,19 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                     {row.questions.length} question{row.questions.length === 1 ? "" : "s"}
                     <span aria-hidden="true">{qOpen[row.label] ? " ▴" : " ▾"}</span>
                   </button>
+                  {(() => {
+                    const items = approvals.get(row.label);
+                    if (!items?.length) return null;
+                    const fresh = items.filter((i) => i.status === "approved" && !i.preDatesDocument).length;
+                    const pending = items.some((i) => i.status === "in-review");
+                    if (!pending && fresh !== items.length) return null;
+                    return (
+                      <span className={`v3ln-appr ${fresh === items.length ? "ok" : "wait"}`}
+                        title={items.map((i) => `${i.artifactTitle} — ${i.preDatesDocument ? "approved an older version" : i.status}`).join("\n")}>
+                        {fresh === items.length ? `Approved ${fresh}/${items.length}` : `Pending · ${fresh}/${items.length}`}
+                      </span>
+                    );
+                  })()}
                   <span className="v3ln-cr-act">
                     <button type="button" className="v3ln-a" onClick={() => void copyLink(row)}
                       title="Their one durable link — minted once, reused forever">⎘ link</button>
@@ -746,6 +817,46 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                           title="Copy the link">⧉ copy</button>
                       </span>
                     ) : null}
+                    {(() => {
+                      const items = approvals.get(row.label);
+                      if (!items?.length || !onSendForApproval) return null;
+                      return (
+                        <div className="v3ln-cr-appr">
+                          <span className="v3ln-cr-appr-t">Sign-offs — the verdict lands in the Inbox</span>
+                          {items.map((item) => (
+                            <span key={item.artifactId} className="v3ln-cr-appr-row">
+                              <span className={`v3ln-appr-dot ${item.status}${item.preDatesDocument ? " old" : ""}`} aria-hidden="true" />
+                              <span className="v3ln-cr-appr-n">{item.artifactTitle}</span>
+                              <span className="v3ln-cr-appr-s">
+                                {item.preDatesDocument ? "approved an older version"
+                                  : item.status === "in-review" ? "sent — awaiting verdict"
+                                  : item.status === "changes" ? "changes requested"
+                                  : item.status === "approved" ? "approved" : "not sent"}
+                              </span>
+                              {item.status === "in-review" && item.token ? (
+                                <button type="button" className="v3ln-a"
+                                  onClick={() => void showApprLink(row.label, approvalLinkFor(program.id, { token: item.token! }), item.artifactTitle)}>
+                                  ⎘ copy link</button>
+                              ) : item.sendable ? (
+                                <button type="button" className="v3ln-a" onClick={() => void sendApproval(row, item)}>
+                                  {item.preDatesDocument ? "re-request" : item.status === "changes" ? "re-send" : "send for sign-off"}
+                                </button>
+                              ) : null}
+                            </span>
+                          ))}
+                          {apprLink?.who === row.label ? (
+                            <span className="v3ln-cr-url-row">
+                              <input className="v3ln-cr-url" readOnly value={apprLink.url}
+                                onFocus={(e) => e.currentTarget.select()}
+                                aria-label={`${row.label}'s sign-off link`} />
+                              <button type="button" className="v3ln-a"
+                                onClick={() => void showApprLink(row.label, apprLink.url, "the sign-off")}
+                                title="Copy the link">⧉ copy</button>
+                            </span>
+                          ) : null}
+                        </div>
+                      );
+                    })()}
                   </div>
                 ) : null}
                 {invitee?.label === row.label ? (

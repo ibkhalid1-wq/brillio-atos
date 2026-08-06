@@ -863,7 +863,8 @@ export default function FlowShell(props: FlowShellProps) {
             onRenamePerson={props.onRenamePerson} onRenameRole={props.onRenameRole}
             onMintFollowUp={props.onMintFollowUp} onScheduleFollowUp={props.onScheduleFollowUp}
             onRunAgent={props.onRunAgent}
-            onRecordGate={props.onRecordGate} onReopenGate={props.onReopenGate} />
+            onRecordGate={props.onRecordGate} onReopenGate={props.onReopenGate}
+            onSendForApproval={props.onSendForApproval} />
         ) : view === "portfolio" ? (
           <FlowPortfolio
             onDeleteProgram={props.onDeleteProgram}
