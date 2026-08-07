@@ -201,6 +201,12 @@ Seven values — the *type* of thing an action touches. The exact sub-element is
    module header. Adding a write path = find the action here; if it exists, reuse the
    exact string; if not, add it here **and** to `ACTION_TYPES` in the same PR, so a
    reviewer sees a *new* audit verb enter the vocabulary deliberately.
+   - **2a. Derivability check (before you add a verb for a *sub-distinction*).** If the
+     new "action" is really a variant of an existing one — first-time vs repeat, scoped
+     vs full, tile vs queue, one path vs another UI affordance — do **not** add a verb.
+     Test whether the distinction is already derivable from `affected_id` + timestamp +
+     the existing insert/supersede split on the row. Prefer derivation. A verb for a
+     derivable distinction is a synonym (see F7).
 3. **What stops a synonym:** the Step-1b **enumeration test** (already required to
    assert every state write publishes intent) additionally asserts **every emitted
    `action_type` ∈ `ACTION_TYPES`**, and (client-side) the union type rejects an
@@ -246,6 +252,22 @@ Seven values — the *type* of thing an action touches. The exact sub-element is
   path uses a non-literal table reference (none found today — every write is a
   double-quoted `.from("<table>")`), this census would miss it; the Step-1b trigger
   catches it regardless (completeness is the trigger's job, this doc's is the naming).
+- **F7 — first live test of §6: Generate vs Regenerate needs NO new action.** The Line's
+  Generate button (added *after* this vocabulary was closed) dispatches the **identical**
+  `onRunAgent(card.id, movementId)` → `runProgramAgent({ triggeredBy: "user" })` that the
+  Regenerate chip does — byte-for-byte the same call, neither passing regen guidance
+  (`TheLine.tsx` `generate` and `regenerate` are twins). So at the audit level both are
+  one existing action: **`request_agent_run`** (the user's ask) then **`system.generate_artifact`**
+  (the produce). Applying §6 step 2: the action already exists → **reuse, don't add.** The
+  reader's *"when first produced vs how often redone"* is **derivable** from existing data —
+  `system.generate_artifact` carries `affected_id` (the artifact) + `ts`, and the edge already
+  splits first-vs-repeat at the row (**insert** run-agent:5025 vs **supersede** :5043). A
+  `system.regenerate_artifact` / `first_generate_artifact` verb would be a **synonym** for
+  "produce this artifact" — exactly what §6's guard rejects. **Did the rule work?** Yes — it
+  resolved to reuse and blocked a redundant verb. **Amendment it surfaced:** the new step
+  **2a** (derivability check) — before adding a verb for a *sub-distinction*, test whether
+  `affected_id` + `ts` + insert/supersede already answers it. This was the rule's first live
+  exercise; it held, with that one clarification added.
 
 ---
 
