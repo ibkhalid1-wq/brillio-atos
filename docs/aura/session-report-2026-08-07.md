@@ -208,3 +208,22 @@ a **scheduled step-4 fix, not urgent**. (Measured, not fixed, as instructed.)
   instance to a **cross-engagement generation defect**. A's recurrence (infra entities the generator
   omits) is a **generator-scoping** ask, not per-engagement curation.
 - **Not urgent (scheduled):** D — DrillAnchor index refId (blast radius 1).
+
+## F · Item 11 — duplicate-definition sweep
+
+Swept the remaining Tier-1 findings. S1 (flowAreas) and S2 (200-cap) were closed earlier this
+session; S3 (AGENT_ID_ALIASES) is the I7 finding (not a duplicate — divergent maps). The remaining
+unmanaged client↔edge contract, **S4**, is now managed: the **20,000-char portal answer cap** was a
+shared numeric contract with no guard (a client `maxLength` above the edge `MAX_ANSWER_CHARS`
+silently truncates a stakeholder's answer on submit). Extracted `MAX_ANSWER_CHARS` in `blobGuard.ts`,
+bound the two `FlowRespond` answer fields to it, and added `answerCapLockstep.test.ts` pinning it to
+the edge `flow-portal` literal (text-parse, the edgeLockstep idiom). The `1200` copilot-token cap
+stays edge-internal (the client `1200` is a different concept — not the same contract).
+
+## G · Step 1b static test — **deferred (not started)**
+
+Lowest-priority "if time remains" item, and Step-1-adjacent (action_type / affected_kind are the
+intent/audit payload). Deferred rather than rushed near sensitive territory. It is a clean bounded
+follow-on: author a source-reading static test asserting every emitted `action_type` ∈ its documented
+closed set, every `affected_kind` ∈ its closed set, and no client call site passes `actor` — test
+only, no intent wiring, no payload change.
