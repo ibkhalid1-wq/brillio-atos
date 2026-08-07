@@ -24,6 +24,9 @@ Run by: __________   Date: __________   Step 1 migration commit: `ba0d961`
 | C5b actor from JWT not client intent | ☐ PASS ☐ FAIL | |
 | C5c spoofed actor recorded (not dropped) | ☐ PASS ☐ FAIL | `actor_intent_mismatch` |
 | C6 owner-only read | ☐ PASS ☐ FAIL | |
+| C7a intent_missing => partial NULL | ☐ PASS ☐ FAIL | |
+| C7b asserted partial=false recorded | ☐ PASS ☐ FAIL | |
+| C7c NULL distinct from false | ☐ PASS ☐ FAIL | |
 
 Trigger correction (actor JWT-wins + `actor_intent_mismatch`): APPLIED in migration. Any concern? __________
 

@@ -126,6 +126,29 @@ begin
 end $$;
 
 update public.aura_audit_config set enforce = false;
+
+-- ── C7: `partial` is 3-state. NULL = nobody asserted (the default); never false by
+-- default. An intent_missing event is NULL; an affirmative partial=false is
+-- distinguishable from a never-asserted NULL.
+select set_config('aura.intent','', true);                                                -- no intent
+update public.adam_programs set data = jsonb_set(data,'{k}','71') where id='cc-prog-1';    -- intent_missing event
+select set_config('aura.intent','{"action_type":"asserted_complete","partial":false}', true);
+update public.adam_programs set data = jsonb_set(data,'{k}','72') where id='cc-prog-1';     -- affirmatively complete
+do $$
+declare p_missing boolean; p_asserted boolean; n_bad int;
+begin
+  select partial is null into p_missing from public.audit_events
+    where row_pk='cc-prog-1' and intent_missing order by id desc limit 1;
+  select partial = false into p_asserted from public.audit_events
+    where row_pk='cc-prog-1' and action_type='asserted_complete' order by id desc limit 1;
+  select count(*) into n_bad from public.audit_events
+    where row_pk='cc-prog-1' and intent_missing and partial is not null;                   -- must be 0
+  raise notice 'C7a intent_missing => partial NULL:%', case when p_missing then ' PASS' else ' FAIL' end;
+  raise notice 'C7b asserted partial=false recorded:%', case when p_asserted then ' PASS' else ' FAIL' end;
+  raise notice 'C7c NULL (never asserted) distinct from false:%',
+    case when n_bad = 0 then ' PASS' else ' FAIL ('||n_bad||' intent_missing rows carried non-null partial)' end;
+end $$;
+
 drop function if exists public._test_definer_write(text);
 
 rollback;   -- leaves no trace

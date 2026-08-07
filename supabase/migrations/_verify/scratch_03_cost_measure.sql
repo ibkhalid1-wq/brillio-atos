@@ -71,7 +71,7 @@ begin
                case when TG_TABLE_NAME='adam_programs' then coalesce(v_new->>'id', v_old->>'id') end),
       v_actor, v_mismatch,
       v_intent->>'action_type', v_intent->>'affected_kind', v_intent->>'affected_id',
-      coalesce((v_intent->>'partial')::boolean,false), v_missing,
+      (v_intent->>'partial')::boolean, v_missing,
       null, null,                       -- << md5 fingerprints skipped
       v_changed, v_intent);
   return null;
