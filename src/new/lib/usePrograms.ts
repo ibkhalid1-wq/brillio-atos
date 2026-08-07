@@ -8,7 +8,6 @@ import type { ProgramSummary, DecisionSummary } from "@/new/types";
 import { pushV3Toast } from "@/v3/utils";
 import { enqueueWrite, flushWriteQueue, getQueuedWriteCount } from "@/lib/writeQueue";
 import { hasSubstantiveProgramData } from "@/v3/lib/programDataGuard";
-import { logFlowEvent } from "@/v3/lib/flowEvents";
 import { persistExternalTexts, hydrateExternalTexts } from "@/v3/lib/programTextsSync";
 import { pruneFlowDecisionsForStorage } from "@/v3/components/flow/flowDecisions";
 
@@ -701,10 +700,6 @@ export function usePrograms({ enabled = true, userId = null }: UseProgramsOption
       await refreshPrograms();
       return;
     }
-    // Design rec 2: every successful blob write is shadowed by an append-only,
-    // server-timestamped journal event — history the client cannot rewrite.
-    // No-op until the delivered event-journal migration is applied.
-    logFlowEvent({ programId, kind: "program.updated", detail: { at: nextUpdatedAt } });
     // If 0 rows were updated (RLS blocked it or row doesn't exist yet), upsert with full data
     if (!updatedRows || updatedRows.length === 0) {
       console.warn("[updateProgramData] UPDATE affected 0 rows — attempting upsert for programId:", programId);
