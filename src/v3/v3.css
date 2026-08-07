@@ -7936,6 +7936,15 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-seam-edit-acts .v3fs-a {font-size:11px;font-weight:600}
 .v3fs-seam-del {font:inherit;font-size:11px;font-weight:600;color:var(--v3-red);background:none;border:none;padding:0;cursor:pointer;margin-left:auto}
 .v3fs-seam-del:hover {text-decoration:underline}
+.v3fs-seam-wf-editbtn {font:inherit;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--v3-text-secondary);background:var(--fs-card);border:1px solid var(--v3-border-soft);border-radius:6px;padding:3px 8px;cursor:pointer;flex:none;margin-left:auto}
+.v3fs-seam-wf-editbtn[aria-pressed="true"]{color:var(--v3-accent);border-color:color-mix(in srgb,var(--v3-accent) 45%,var(--fs-line));background:color-mix(in srgb,var(--v3-accent) 8%,var(--fs-card))}
+.v3fs-seam-wf-editbtn:focus-visible{outline:2px solid var(--v3-accent-2);outline-offset:2px}
+.v3fs-seam-wfedit {display:grid;grid-template-columns:repeat(3,1fr);gap:9px 14px;padding:12px 14px;background:var(--v3-surface-2);border-bottom:1px solid var(--fs-line)}
+.v3fs-seam-wfedit label {display:flex;flex-direction:column;gap:4px;font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--v3-text-muted)}
+.v3fs-seam-wfedit label.wide {grid-column:span 3}
+.v3fs-seam-wfedit input,.v3fs-seam-wfedit select {font:inherit;font-size:12.5px;font-weight:400;letter-spacing:0;text-transform:none;color:var(--v3-text-primary);background:var(--fs-card);border:1px solid var(--fs-line);border-radius:6px;padding:6px 8px}
+.v3fs-seam-wfedit input:focus,.v3fs-seam-wfedit select:focus {outline:2px solid var(--v3-accent-2);outline-offset:1px}
+@media (max-width:680px){.v3fs-seam-wfedit{grid-template-columns:1fr 1fr}.v3fs-seam-wfedit label.wide{grid-column:span 2}}
 .v3fs-seam-wf-del {font:inherit;font-size:12px;line-height:1;color:var(--v3-text-muted);background:none;border:1px solid var(--v3-border-soft);border-radius:6px;width:22px;height:22px;cursor:pointer;flex:none;margin-left:2px}
 .v3fs-seam-wf-del:hover {color:var(--v3-red);border-color:color-mix(in srgb,var(--v3-red) 45%,transparent)}
 .v3fs-seam-wf-del:focus-visible {outline:2px solid var(--v3-accent-2);outline-offset:2px}
