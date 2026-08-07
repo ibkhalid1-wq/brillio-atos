@@ -54,21 +54,21 @@ const STATION_SECTIONS: Record<string, Array<{ key: string; label: string; count
 
 /** Present sections of an artifact, as compact preview strings — read from its
  * stored document so the Work board shows what's inside without opening it. */
-function sectionPreview(program: ProgramSummary, artifactId: string): string[] | undefined {
+function sectionPreview(program: ProgramSummary, artifactId: string): Array<{ key: string; label: string }> | undefined {
   const spec = STATION_SECTIONS[artifactId];
   const fieldKey = FORMAL_ARTIFACT_FIELD_KEYS[artifactId];
   if (!spec || !fieldKey) return undefined;
   const doc = readArtifactDoc(program, fieldKey);
   if (!doc) return undefined;
-  const out: string[] = [];
+  const out: Array<{ key: string; label: string }> = [];
   for (const section of spec) {
     const value = doc[section.key];
     if (value == null || (typeof value === "string" && !value.trim())) continue;
     if (Array.isArray(value)) {
       if (!value.length) continue;
-      out.push(section.count ? `${value.length} ${section.label}` : section.label);
+      out.push({ key: section.key, label: section.count ? `${value.length} ${section.label}` : section.label });
     } else {
-      out.push(section.label);
+      out.push({ key: section.key, label: section.label });
     }
   }
   return out.length ? out : undefined;
@@ -89,8 +89,9 @@ export interface LineStation {
   perArea: LineSegment[] | null;
   needsRefresh: boolean;
   /** The artifact's own sections at a glance ("intent · theme · 6 screens"),
-   * drawn from its stored document — visibility without opening the studio. */
-  sections?: string[];
+   * drawn from its stored document. Each chip is a direct link — `key` matches
+   * the document's `data-dv-sec` so the studio can open jumped to it. */
+  sections?: Array<{ key: string; label: string }>;
   /** Which half of the Design Loop this station belongs to: designing the
    * build (Envision) vs validating it with clients (Show). */
   lane?: "design" | "validate";

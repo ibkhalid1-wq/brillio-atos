@@ -52,11 +52,13 @@ export interface ArtifactEditInput {
   doc: Record<string, unknown>;
 }
 
-export default function FlowArtifactStudio({ program, artifact, onClose, onRegenerate, onSaveDoc, onOpenInbox, onOpenArtifact, onSaveInputs, embedded, regenerating, header }: {
+export default function FlowArtifactStudio({ program, artifact, onClose, onRegenerate, onSaveDoc, onOpenInbox, onOpenArtifact, onSaveInputs, embedded, regenerating, header, initialSection }: {
   program: ProgramSummary;
   artifact: ArtifactCardModel;
   onClose: () => void;
   onRegenerate?: () => void;
+  /** Open scrolled to this document section (a Work-board section chip). */
+  initialSection?: string;
   /** Render inline inside a movement tab (no backdrop, no dialog chrome, no
    *  Close) rather than as a full-screen overlay. */
   embedded?: boolean;
@@ -751,6 +753,7 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
                   // On EXPORT they come back: a printed kit that omits the
                   // questions isn't the kit, it's the cover sheet.
                   hideKeys={artifact.id === "discovery-kit" && !printing ? new Set(["interviews"]) : undefined}
+                  openToSection={initialSection}
                   onPatch={editable ? (key, value) => { setDraft({ ...draft, [key]: value }); setDirty(true); } : undefined}
                   onOpenFullEditor={editable ? () => setEditing(true) : undefined} />
               ) : (

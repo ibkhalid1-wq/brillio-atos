@@ -7545,7 +7545,11 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-dv-outline button:hover{color:var(--v3-text-primary)}
 .v3fs-dv-outline button.on{color:var(--v3-accent-2);border-left-color:var(--v3-accent-2)}
 .v3fs-dv-layout.with-outline .v3fs-dv{flex:1;min-width:0}
-.v3fs-dv-secwrap{position:relative}
+.v3fs-dv-secwrap{position:relative;scroll-margin-top:12px}
+/* deep-link flash — a section opened from the Work board's chip glows briefly */
+.v3fs-dv-secwrap.v3fs-dv-flash{animation:v3fs-dv-flash 1.6s ease-out}
+@keyframes v3fs-dv-flash{0%,30%{background:color-mix(in srgb,var(--v3-accent) 12%,transparent);border-radius:8px}100%{background:transparent}}
+@media (prefers-reduced-motion:reduce){.v3fs-dv-secwrap.v3fs-dv-flash{animation:none}}
 .v3fs-dv-pencil{position:absolute;right:0;top:-2px;font:inherit;font-size:11.5px;font-weight:600;color:var(--v3-text-muted);background:var(--fs-card);border:1px solid var(--fs-line);border-radius:7px;padding:3px 9px;cursor:pointer;opacity:0;transition:opacity .12s ease,color .12s ease;z-index:2}
 .v3fs-dv-secwrap:hover .v3fs-dv-pencil,.v3fs-dv-pencil:focus-visible,.v3fs-dv-secwrap.editing .v3fs-dv-pencil{opacity:1}
 .v3fs-dv-pencil:hover{color:var(--v3-accent-2);border-color:var(--v3-accent-2)}

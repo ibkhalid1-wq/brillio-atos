@@ -232,9 +232,12 @@ function ValueBlock({ k, value, depth, nested }: { k: string; value: unknown; de
   return <section className="v3fs-dv-sec">{label}<p className="v3fs-dv-p">{s}</p></section>;
 }
 
-export default function DocumentView({ doc, order, hideKeys, onPatch, onOpenFullEditor }: {
+export default function DocumentView({ doc, order, hideKeys, onPatch, onOpenFullEditor, openToSection }: {
   doc: Record<string, unknown>;
   order?: string[];
+  /** Open scrolled to this section key (a `data-dv-sec` value) — the Work
+   * board's section chips deep-link here. */
+  openToSection?: string;
   /** Top-level sections to omit from this read view (lowercased keys) — e.g. the
    * Discovery Kit hides "interviews" because those questions are asked, and
    * edited, in the Listen phase, not here. */
@@ -288,6 +291,20 @@ export default function DocumentView({ doc, order, hideKeys, onPatch, onOpenFull
   const jumpTo = (key: string) => {
     rootRef.current?.querySelector(`[data-dv-sec="${key}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
+
+  // Deep-link: when opened to a section (a Work-board chip), scroll to it once
+  // the body has laid out and flash it so the eye lands there.
+  useEffect(() => {
+    if (!openToSection) return;
+    const el = rootRef.current?.querySelector(`[data-dv-sec="${openToSection}"]`);
+    if (!(el instanceof HTMLElement)) return;
+    const timer = window.setTimeout(() => {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+      el.classList.add("v3fs-dv-flash");
+      window.setTimeout(() => el.classList.remove("v3fs-dv-flash"), 1600);
+    }, 60);
+    return () => window.clearTimeout(timer);
+  }, [openToSection]);
 
   const pencil = (key: string) => onPatch ? (
     <button type="button" className="v3fs-dv-pencil" aria-label={`Edit ${humanize(key)}`}

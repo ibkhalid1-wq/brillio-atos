@@ -141,7 +141,7 @@ function Segments({ station }: { station: LineStation }) {
 
 function Station({ station, onOpen, onRegen, regenerating }: {
   station: LineStation;
-  onOpen: (card: ArtifactCardModel) => void;
+  onOpen: (card: ArtifactCardModel, section?: string) => void;
   onRegen?: (card: ArtifactCardModel) => void;
   regenerating?: boolean;
 }) {
@@ -179,7 +179,19 @@ function Station({ station, onOpen, onRegen, regenerating }: {
       {station.subtitle ? <span className="v3ln-stn-sub">{station.subtitle}</span> : null}
       {station.sections?.length ? (
         <span className="v3ln-stn-secs">
-          {station.sections.map((s, i) => <span key={i} className="v3ln-stn-sec">{s}</span>)}
+          {station.sections.map((s) => (
+            // A direct link: opens the studio jumped to this section. role=button
+            // (not a nested <button>, invalid inside the station button) with
+            // stopPropagation so it doesn't also fire the station's own open.
+            <span key={s.key} role="button" tabIndex={0} className="v3ln-stn-sec"
+              title={`Open ${station.title} at ${s.label}`}
+              onClick={(e) => { e.stopPropagation(); if (station.card) onOpen(station.card, s.key); }}
+              onKeyDown={(e) => {
+                if (e.key !== "Enter" && e.key !== " ") return;
+                e.preventDefault(); e.stopPropagation();
+                if (station.card) onOpen(station.card, s.key);
+              }}>{s.label}</span>
+          ))}
         </span>
       ) : null}
       <Segments station={station} />
@@ -276,6 +288,9 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
   const model = useMemo(() => buildLineModel(program), [program]);
   const [gateFor, setGateFor] = useState<LineBand | null>(null);
   const [docFor, setDocFor] = useState<ArtifactCardModel | null>(null);
+  // A section chip on the board deep-links into the studio at that section.
+  const [docSection, setDocSection] = useState<string | undefined>(undefined);
+  const openStation = (card: ArtifactCardModel, section?: string) => { setDocSection(section); setDocFor(card); };
   // Two projections of the one record: the WORK board (where the programme
   // is) and DISCOVERY (who it runs through — links, capture, invites; named
   // to match the classic chrome's Discovery tab). The surface itself stays
@@ -733,7 +748,7 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                   <div className="v3ln-lane-h">{lane === "design" ? "Design — the team builds it" : "Validate — clients sign off"}</div>
                   <div className={`v3ln-stns n${stns.length}`}>
                     {stns.map((s) => (
-                      <Station key={s.id} station={s} onOpen={setDocFor}
+                      <Station key={s.id} station={s} onOpen={openStation}
                         onRegen={onRunAgent ? regenerate : undefined}
                         regenerating={!!(s.card && regenBusy[s.card.id])} />
                     ))}
@@ -757,7 +772,7 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
               </button>
             ) : null}
             {band.stations.map((s) => (
-              <Station key={s.id} station={s} onOpen={setDocFor}
+              <Station key={s.id} station={s} onOpen={openStation}
                 onRegen={onRunAgent ? regenerate : undefined}
                 regenerating={!!(s.card && regenBusy[s.card.id])} />
             ))}
@@ -1096,7 +1111,8 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
 
       {docFor ? (
         <Suspense fallback={null}>
-          <FlowArtifactStudio program={program} artifact={docFor} onClose={() => setDocFor(null)}
+          <FlowArtifactStudio program={program} artifact={docFor} initialSection={docSection}
+            onClose={() => { setDocFor(null); setDocSection(undefined); }}
             onRegenerate={onRunAgent ? () => regenerate(docFor) : undefined}
             regenerating={!!regenBusy[docFor.id]}
             header={docFor.id === "discovery-kit"
