@@ -140,6 +140,37 @@ and the Design Loop's **semantic-conflict detection** are meant to catch; today 
 
 ---
 
+## F-D · The prototype generator doesn't emit the house design system
+
+**Defect.** Generated prototypes have no governed appearance. The Prototype Build is one
+self-contained HTML document the edge generator authors, and `experienceDesign.theme` has **no
+default** (`?? {}`) — so colour, type, and component styling are whatever the model improvises per
+run, inconsistent across engagements and runs. A reusable design system now exists
+(**Meridian** — `src/v3/lib/prototypeDesignSystem.ts`, documented in
+`docs/aura/prototype-design-system.md`), extracted from a coherent reference app and made
+engagement-neutral, but the generator does not use it.
+
+**Client-side (done, not gated).** `resolveTheme()` makes Meridian the token floor, and every
+export now ships `meridian.css` (the appearance layer) plus a complete `design-tokens.json` — so a
+coding agent handed the export can apply the house system. Verified by rendering
+`public/prototype-design-system.html` in the preview against the source app.
+
+**Proposed generator change (gated — specify, do not make):** the prototype-build prompt in
+`supabase/functions/run-agent/index.ts` should instruct the model to (a) link/inline
+`meridian.css` as the base sheet, (b) build screens from the `.m-*` component classes (shell, nav,
+page header, card, form, table, tabs, pill/badge, empty/toast) rather than bespoke markup, and
+(c) put only screen-specific layout in the prototype's own `styles.css`. The two-pass craft step
+then refines *within* the system instead of reinventing it.
+
+**Cost.**
+- *Generator:* prompt + output-contract change; no schema field. **Gated** — no Deno/executable
+  verification here, and prompt changes need a real generation to validate.
+- *Existing artifacts:* none forced — the client wire-in already dresses exports; regeneration
+  picks up the house markup once the prompt lands.
+- *Readers:* none — the in-app preview renders whatever HTML the generator emits.
+
+---
+
 ## Priority
 
 | Finding | Blocks Architect? | Needs the gate? | Cheapest first move |
