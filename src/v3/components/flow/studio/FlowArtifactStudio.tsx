@@ -651,13 +651,6 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
 
           {studioActive && entry && draft ? (
             <>
-              {/* Derived artifacts read-only: a compact marker, not a paragraph.
-                  Curatable and design-team artifacts show nothing here. */}
-              {!editable ? (
-                <div className="v3fs-derived-chip" role="note">
-                  <span aria-hidden="true">↻</span> Derived from the record — capture a correction as evidence to change it
-                </div>
-              ) : null}
               {/* Copilot command card — refine THIS section with a plain-language
                   command (type or speak) plus optional reference documents.
                   Architecture Strategy / Experience Design / Agentic Blueprint;
