@@ -92,7 +92,11 @@ they keep writing during warn mode and are retired only after enforce-flip with
 4. **CI enumeration test (vitest, static).** Assert every `.from("<state table>")`
    write is preceded by an intent publish; fail CI on a bare write. Additionally
    assert **no client-side call site passes `actor`** and **every edge-side call site
-   does**. Secondary guard; the trigger remains the completeness guarantee.
+   does**. Additionally assert **every published `action_type` is a member of the
+   committed `ACTION_TYPES` set** (the closed vocabulary decided in
+   `docs/aura/action-type-vocabulary.md`) — so no synonym for an existing action can
+   enter the audit trail. Secondary guard; the trigger remains the completeness
+   guarantee.
 5. **Watch `intent_missing`.** `select count(*) from audit_events where intent_missing`
    must trend to 0. Then set `aura_audit_config.enforce = true` and, in a follow-up,
    retire `adam_audit_log` (rename + revoke insert; make `writeAuditLog` a shim that
