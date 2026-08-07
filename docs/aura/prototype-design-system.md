@@ -135,7 +135,7 @@ automatically, the generator prompt in `supabase/functions/run-agent/index.ts` m
 against the `.m-*` classes and link/inline `meridianStylesheet()` as the base sheet (screen-specific
 CSS layered on top). That is a generator-prompt change with no local executable verification (no
 Deno here) and needs its own gated pass — recorded in
-[`artifact-schema-findings.md`](./artifact-schema-findings.md) as **F-D**.
+[`artifact-schema-findings.md`](./artifact-schema-findings.md) as **F-E**.
 
 ---
 
