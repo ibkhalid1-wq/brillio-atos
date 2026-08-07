@@ -88,6 +88,11 @@ export interface LineStation {
   maturity: LineMaturity;
   perArea: LineSegment[] | null;
   needsRefresh: boolean;
+  /** True when the artifact is not on the record yet but every upstream input
+   * it needs IS present — the Line offers a Generate button instead of a dead
+   * "not seeded" tile (e.g. a provisional Ontology and Atlas the moment the
+   * Discovery Kit lands). Computed in buildLineModel's readiness post-pass. */
+  canGenerate: boolean;
   /** The artifact's own sections at a glance ("intent · theme · 6 screens"),
    * drawn from its stored document. Each chip is a direct link — `key` matches
    * the document's `data-dv-sec` so the studio can open jumped to it. */
@@ -176,8 +181,41 @@ function station(
     maturity,
     perArea: over?.perArea ?? null,
     needsRefresh: !!card?.stale,
+    canGenerate: false, // set in buildLineModel's readiness post-pass
     ...(over?.perArea !== undefined ? { perArea: over.perArea } : {}),
   };
+}
+
+/**
+ * What each generated artifact needs on the record before it can be generated,
+ * keyed by artifact id (card.id). Each entry is a list of requirement GROUPS:
+ * a group is satisfied when ANY id in it is present, and EVERY group must be
+ * satisfied. An artifact with no entry (the Charter, which opens the spine)
+ * can be generated as soon as it is absent. This mirrors the edge's
+ * AGENT_DEPENDENCIES intent at the grain the Line renders — it is why a
+ * provisional Ontology and Atlas light up the moment the Discovery Kit lands,
+ * without waiting for the Listen gate. Prototype has two possible ids
+ * (build/pack); demo-scripts is satisfied by either. */
+const GENERATION_PREREQS: Record<string, string[][]> = {
+  "discovery-kit": [["charter"]],
+  "domain-ontology": [["discovery-kit"]],
+  "current-state-atlas": [["discovery-kit"]],
+  "architecture-strategy": [["domain-ontology"], ["current-state-atlas"]],
+  "experience-design": [["architecture-strategy"]],
+  "agentic-blueprint": [["experience-design"]],
+  "prototype-build": [["agentic-blueprint"]],
+  "prototype-pack": [["agentic-blueprint"]],
+  "demo-scripts": [["prototype-build", "prototype-pack"]],
+  "hardening-plan": [["agentic-blueprint"]],
+  "eval-suite": [["agentic-blueprint"]],
+  "runbook": [["agentic-blueprint"]],
+  "benefits-tracker": [["agentic-blueprint"]],
+  "optimization-backlog": [["agentic-blueprint"]],
+};
+
+/** An absent artifact can be generated once every prerequisite group is met. */
+function canGenerateArtifact(id: string, present: ReadonlySet<string>): boolean {
+  return (GENERATION_PREREQS[id] ?? []).every((group) => group.some((dep) => present.has(dep)));
 }
 
 function gateItems(program: ProgramSummary, movementId: string): LineGateItem[] {
@@ -333,6 +371,18 @@ export function buildLineModel(program: ProgramSummary): LineModel {
   // in tests rather than silently misrendering.
   if (!byId.has("frame") || !byId.has("listen")) {
     // Methodology drift — render what we can; tests assert against this.
+  }
+
+  // Readiness post-pass: an artifact not yet on the record whose upstream
+  // inputs ARE present gets a Generate affordance instead of a dead "not
+  // seeded" tile. Done here (not in station()) so the presence of EVERY
+  // artifact across all bands is known before any tile is judged.
+  const presentIds = new Set<string>();
+  for (const c of cards.values()) if (c.present) presentIds.add(c.id);
+  for (const b of bands) {
+    for (const s of b.stations) {
+      s.canGenerate = !!s.card && !s.card.present && canGenerateArtifact(s.card.id, presentIds);
+    }
   }
 
   const refresh = bands.reduce((n, b) => n + b.stations.filter((s) => s.needsRefresh).length, 0);
