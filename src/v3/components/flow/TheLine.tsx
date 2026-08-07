@@ -806,6 +806,7 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                         onClick={() => setAreaFilter(areaFilter === area ? "" : area)}>{area}</button>
                     ))}
                   </span>
+                  <span className="v3ln-cr-right">
                   <button type="button" className="v3ln-cr-qbtn" aria-expanded={!!qOpen[row.label]}
                     onClick={() => setQOpen((s) => ({ ...s, [row.label]: !s[row.label] }))}>
                     {row.questions.length} question{row.questions.length === 1 ? "" : "s"}
@@ -845,6 +846,7 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                       <button type="button" className="v3ln-a" onClick={() => pickDate(row)}
                         title="Schedule a follow-up and download the calendar invite">🗓 invite</button>
                     ) : null}
+                  </span>
                   </span>
                 </div>
                 {qOpen[row.label] ? (
