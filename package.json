@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit",
     "validate": "npm run typecheck && npm run lint && npm run build && npm run test",
     "test": "vitest run",
+    "claims:regen": "vite-node scripts/claims/regen.ts",
     "test:watch": "vitest",
     "test:ui": "vitest --ui"
   },
