@@ -349,7 +349,7 @@ function FlowHelp({ onClose }: { onClose: () => void }) {
         <div className="v3fs-help-body">
           <section>
             <h3>One live programme, six movements</h3>
-            <p>The programme runs as a single spine, left to right. Each movement collects evidence from the people it depends on, then generates artifacts traceable back to that evidence. A movement&rsquo;s gate opens when its documents are grounded and confirmed.</p>
+            <p>The programme runs as a single spine, left to right. Each movement collects evidence from the people it depends on, then generates artifacts from that evidence. A movement&rsquo;s gate opens when its documents are grounded and confirmed.</p>
             <ol className="v3fs-help-steps">
               {HELP_MOVEMENTS.map(([name, desc]) => (
                 <li key={name}><b>{name}</b> — {desc}</li>
@@ -2982,7 +2982,7 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
       <div className="v3fs-panel">
         <div className="v3fs-ph">
           <h3>Artifacts</h3>
-          <span>{staleCount ? `${staleCount} need regenerating — shown first` : "generated, traceable to evidence"}</span>
+          <span>{staleCount ? `${staleCount} need regenerating — shown first` : "generated from your evidence"}</span>
           {staleCount && onGoFlow ? (
             <button type="button" className="v3fs-a" title="The spine runner lives on the Flow page — its Up-next queue leads with this"
               onClick={() => onGoFlow()}>↻ regenerate in Flow</button>
