@@ -546,6 +546,9 @@ export default function FlowShell(props: FlowShellProps) {
   // so it guides without nagging.
   const nextId: FlowView = waitingCount > 0 ? "today" : "flow";
   const nextHint = nextId === "today" ? `${waitingCount} waiting` : "Continue";
+  // Already on the next stop? Flow renders as the Line, so "line" counts as being
+  // on flow — otherwise the pointer never quiets once the operator arrives there.
+  const atNext = view === nextId || (nextId === "flow" && view === "line");
 
   // The switcher dismisses like a menu should: backdrop click or Escape.
   useEffect(() => {
@@ -638,7 +641,7 @@ export default function FlowShell(props: FlowShellProps) {
             <div className="v3fs-dock-sep" aria-hidden="true" />
             {zone.map(([id, label]) => {
               const shortcut = DOCK_ORDER.indexOf(id) + 1;
-              const isNext = id === nextId && view !== nextId;
+              const isNext = id === nextId && !atNext;
               return (
                 <button key={id} type="button" className={`${view === id || (id === "flow" && view === "line") ? "on" : ""}${isNext ? " v3fs-dock-next" : ""}`.trim()}
                   data-tip={DOCK_TIPS[id]}
