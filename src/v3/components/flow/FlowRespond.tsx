@@ -8,6 +8,7 @@ import {
 } from "@/v3/components/flow/flowDemoRun";
 import { stakeholderPrimaryArea, hasMultipleAreas } from "@/v3/components/flow/flowAreas";
 import type { ProgramSummary } from "@/new/types";
+import { MAX_ANSWER_CHARS } from "@/v3/lib/blobGuard";
 import { DictationButton, joinDictation } from "@/v3/components/flow/FlowDictation";
 import { usePortalAttach, AttachClip } from "@/v3/components/flow/PortalAttach";
 import PilotApp from "@/v3/components/flow/PilotApp";
@@ -665,7 +666,7 @@ export default function FlowRespond({ token }: { token: string }) {
                       value={answers[index] ?? ""}
                       onChange={(event) => setAnswers((current) => ({ ...current, [index]: event.target.value }))}
                       rows={3}
-                      maxLength={20000}
+                      maxLength={MAX_ANSWER_CHARS}
                       placeholder="In your own words — type, or speak it."
                     />
                     )}
@@ -704,7 +705,7 @@ export default function FlowRespond({ token }: { token: string }) {
                 <label className={`v3fs-portal-card extra${extra.trim() ? " done" : ""}`}>
                   <span className="v3fs-portal-qn"><b>＋</b><em aria-hidden="true">✓</em></span>
                   <span className="v3fs-portal-qt">Anything we didn&rsquo;t ask about that we should know?</span>
-                  <textarea value={extra} onChange={(event) => setExtra(event.target.value)} rows={3} maxLength={20000} placeholder="Optional — type, or speak it." />
+                  <textarea value={extra} onChange={(event) => setExtra(event.target.value)} rows={3} maxLength={MAX_ANSWER_CHARS} placeholder="Optional — type, or speak it." />
                   <DictationButton onText={(spoken) => setExtra((current) => joinDictation(current, spoken))} />
                   <AttachClip fieldKey="extra" context="Anything we didn't ask about" busyKey={attachBusyKey}
                     docs={attachments["extra"]} onRemove={(i) => removeDoc("extra", i)}

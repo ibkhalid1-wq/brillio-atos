@@ -27,6 +27,16 @@ export const BLOB_VERSION = 2;
  */
 export const FLOW_ATTESTATION_CAP = 200;
 
+/**
+ * Portal answer length cap. A shared client↔edge numeric contract: the client
+ * `maxLength` on the stakeholder answer fields must match the edge's
+ * `MAX_ANSWER_CHARS` in `supabase/functions/flow-portal/index.ts`, or a client
+ * that allows MORE than the edge lets the user type text the server silently
+ * truncates on submit (data loss, no notice). Kept in lockstep by
+ * `answerCapLockstep.test.ts`, since the boundary prevents a shared import.
+ */
+export const MAX_ANSWER_CHARS = 20_000;
+
 const record = z.record(z.string(), z.unknown());
 
 const decision = z.object({
