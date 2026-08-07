@@ -714,7 +714,7 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
       {note ? <div className="v3ln-toast" role="status">{note}</div> : null}
 
       {tab === "work" ? <div className="v3ln-spine">{model.bands.map((band, bi) => (
-        <div key={band.id} className="v3ln-spine-row">
+        <div key={band.id} data-mv={band.id} className="v3ln-spine-row">
         <span className="v3ln-rail-n" aria-hidden="true">{String(bi + 1).padStart(2, "0")}</span>
         <section className={`v3ln-band${band.id === "loop" ? " loop" : ""}`} aria-label={band.name}>
           <header className="v3ln-band-h spine">
