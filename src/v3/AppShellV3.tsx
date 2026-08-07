@@ -72,7 +72,7 @@ import { listOpenFlowDecisions } from "@/v3/components/flow/flowDecisions";
 import { listPortalInbox } from "@/v3/components/flow/flowPortal";
 import { governedExceptionsForInbox } from "@/v3/components/flow/flowExceptions";
 import { personaAreas } from "@/v3/components/flow/flowAreas";
-import { validateProgramBlob, migrateProgramBlob } from "@/v3/lib/blobGuard";
+import { validateProgramBlob, migrateProgramBlob, FLOW_ATTESTATION_CAP } from "@/v3/lib/blobGuard";
 import { unrosteredVoicesProposal, reDemoProposal, ontologyRepairProposal, retroAttributionProposal, negatedClaimProposal, queueWatcherProposal, contradictionEvidenceDigest } from "@/v3/components/flow/flowWatchers";
 import { mergePhaseInputBucket } from "@/v3/lib/phaseInputMerge";
 import { isDecisionOpen, pushV3Toast } from "@/v3/utils";
@@ -2248,7 +2248,7 @@ export default function AppShellV3() {
         attestPatch.flowAttestations = [...log, {
           ts: new Date().toISOString(), agentId: "you", phaseId, tier: 1,
           action: opts.attest.action, ...(opts.attest.detail ? { detail: opts.attest.detail } : {}),
-        }].slice(-200);
+        }].slice(-FLOW_ATTESTATION_CAP);
       }
       const payload = cloned.commit({ ...cloned.inner, phaseInputs: existing, phaseArtifacts: artifactBuckets, ...reviewPatch, ...attestPatch });
       return { payload, staled: allStaled, crossStaled };
@@ -2787,7 +2787,7 @@ export default function AppShellV3() {
             inner.flowAttestations = [...log, {
               ts: new Date().toISOString(), agentId: currentUser?.email || "you", phaseId: "programme", tier: 2,
               action: "Record restored from a local snapshot",
-            }].slice(-200);
+            }].slice(-FLOW_ATTESTATION_CAP);
             await updateProgramData(activeProgram.id, data, activeProgram.updatedAt);
             pushV3Toast("Restored — and the state it replaced was saved as a snapshot too.", { duration: 4500 });
           }}

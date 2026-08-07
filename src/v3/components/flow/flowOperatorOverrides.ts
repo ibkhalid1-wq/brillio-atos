@@ -9,6 +9,7 @@
  * A leaf module: pure functions over doc shapes, no imports from the flow UI.
  */
 import type { ProgramSummary } from "@/new/types";
+import { FLOW_ATTESTATION_CAP } from "@/v3/lib/blobGuard";
 import { getProgramState } from "@/new/lib/programState";
 
 export interface OperatorOverride {
@@ -141,7 +142,7 @@ export function appendOperatorOverrides(
   by: string,
 ): OperatorOverride[] {
   const log = Array.isArray(existing) ? (existing.filter(isRecord) as unknown as OperatorOverride[]) : [];
-  return [...log, ...notes.map((note) => ({ ts, by, fieldKey, note }))].slice(-200);
+  return [...log, ...notes.map((note) => ({ ts, by, fieldKey, note }))].slice(-FLOW_ATTESTATION_CAP);
 }
 
 /** The regeneration guidance block for one document: the operator's stored

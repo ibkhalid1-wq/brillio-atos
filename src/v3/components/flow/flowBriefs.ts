@@ -6,6 +6,7 @@
  * whoever holds the link. Capped and attested like every other blob write.
  */
 import type { ProgramSummary } from "@/new/types";
+import { FLOW_ATTESTATION_CAP } from "@/v3/lib/blobGuard";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
 import {
   flowMovements, movementArtifacts, gateChecklist, gateReadiness,
@@ -88,7 +89,7 @@ export function mintBrief(program: ProgramSummary, actor: string): Record<string
   return wrapProgramState(wrapper, {
     ...inner,
     flowBriefs: [...existing, brief].slice(-BRIEF_CAP),
-    flowAttestations: [...log, attestation].slice(-200),
+    flowAttestations: [...log, attestation].slice(-FLOW_ATTESTATION_CAP),
   }, usesNestedData);
 }
 

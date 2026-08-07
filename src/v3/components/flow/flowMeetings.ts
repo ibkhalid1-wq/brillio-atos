@@ -7,6 +7,7 @@
  * no model call.
  */
 import type { ProgramSummary } from "@/new/types";
+import { FLOW_ATTESTATION_CAP } from "@/v3/lib/blobGuard";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
 import { flowMovements, movementArtifacts, movementOpenIssues, kitPersonas, gateChecklist, readMovementInputs, parseGridRows, readContradictions, falsifiedGap, frameFactOnRecord, deferredAsks } from "@/v3/components/flow/flowShellData";
 import { FORMAL_ARTIFACT_FIELD_KEYS, FORMAL_ARTIFACT_PHASES } from "@/v3/lib/formalArtifacts";
@@ -601,7 +602,7 @@ export function scheduleFollowUp(
   return wrapProgramState(wrapper, {
     ...inner,
     flowFollowUps: [...list, entry].slice(-30),
-    flowAttestations: [...log, attestation].slice(-200),
+    flowAttestations: [...log, attestation].slice(-FLOW_ATTESTATION_CAP),
   }, usesNestedData);
 }
 

@@ -9,6 +9,7 @@
  * pure blob transforms; callers persist via updateProgramData.
  */
 import type { ProgramSummary } from "@/new/types";
+import { FLOW_ATTESTATION_CAP } from "@/v3/lib/blobGuard";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
 
 export interface ShipItem {
@@ -175,7 +176,7 @@ export function compileShipLanes(program: ProgramSummary, actor: string): Record
   return wrapProgramState(wrapper, {
     ...inner,
     shipLanes: { adoptedAt: new Date().toISOString(), lanes },
-    flowAttestations: [...log, attestation].slice(-200),
+    flowAttestations: [...log, attestation].slice(-FLOW_ATTESTATION_CAP),
   }, usesNestedData);
 }
 
@@ -207,7 +208,7 @@ export function setShipLane(program: ProgramSummary, laneId: string, done: boole
     ts: new Date().toISOString(), agentId: actor, phaseId: "ship", tier: 1,
     action: done ? `Ship lane checked off — ${laneName}` : `Ship lane reset — ${laneName}`,
   };
-  return wrapProgramState(wrapper, { ...inner, shipLanes: { ...doc, lanes }, flowAttestations: [...log, attestation].slice(-200) }, usesNestedData);
+  return wrapProgramState(wrapper, { ...inner, shipLanes: { ...doc, lanes }, flowAttestations: [...log, attestation].slice(-FLOW_ATTESTATION_CAP) }, usesNestedData);
 }
 
 export function toggleShipItem(program: ProgramSummary, laneId: string, itemId: string, actor: string): Record<string, unknown> | null {
@@ -235,7 +236,7 @@ export function toggleShipItem(program: ProgramSummary, laneId: string, itemId: 
     log = [...log, {
       ts: new Date().toISOString(), agentId: actor, phaseId: "ship", tier: 1,
       action: `Ship lane complete — ${laneJustCompleted}`,
-    }].slice(-200);
+    }].slice(-FLOW_ATTESTATION_CAP);
   }
 
   return wrapProgramState(wrapper, { ...inner, shipLanes: { ...doc, lanes }, flowAttestations: log }, usesNestedData);

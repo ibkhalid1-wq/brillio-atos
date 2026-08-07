@@ -13,6 +13,7 @@
  * updateProgramData.
  */
 import type { ProgramSummary } from "@/new/types";
+import { FLOW_ATTESTATION_CAP } from "@/v3/lib/blobGuard";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
 import { parseBeatRecords } from "@/v3/components/flow/flowDemoRun";
 
@@ -399,7 +400,7 @@ export function mintInterviewPacks(program: ProgramSummary, actor: string): Reco
   return wrapProgramState(wrapper, {
     ...inner,
     flowInterviewPacks: capInterviewPacks([...updatedExisting, ...additions]),
-    flowAttestations: [...log, attestation].slice(-200),
+    flowAttestations: [...log, attestation].slice(-FLOW_ATTESTATION_CAP),
   }, usesNestedData);
 }
 
@@ -457,7 +458,7 @@ export function mintDemoInvites(program: ProgramSummary, actor: string): Record<
   return wrapProgramState(wrapper, {
     ...inner,
     flowDemoInvites: [...existing, ...additions].slice(-30),
-    flowAttestations: [...log, attestation].slice(-200),
+    flowAttestations: [...log, attestation].slice(-FLOW_ATTESTATION_CAP),
   }, usesNestedData);
 }
 
@@ -516,7 +517,7 @@ export function mintFollowUpPack(
   return wrapProgramState(wrapper, {
     ...inner,
     flowInterviewPacks: capInterviewPacks([...rest, pack]),
-    flowAttestations: [...log, attestation].slice(-200),
+    flowAttestations: [...log, attestation].slice(-FLOW_ATTESTATION_CAP),
   }, usesNestedData);
 }
 
@@ -590,7 +591,7 @@ export function mintReviewPack(
   return wrapProgramState(wrapper, {
     ...inner,
     flowInterviewPacks: capInterviewPacks([...rest, pack]),
-    flowAttestations: [...log, attestation].slice(-200),
+    flowAttestations: [...log, attestation].slice(-FLOW_ATTESTATION_CAP),
   }, usesNestedData);
 }
 
@@ -829,7 +830,7 @@ function ingestInterviewResponse(program: ProgramSummary, itemId: string, actor:
     flowInterviewPacks: nextPacks,
     flowDecisions: decisions,
     flowPortalInbox: inbox.filter((entry) => !(isRecord(entry) && entry.id === itemId)),
-    flowAttestations: [...log, attestation].slice(-200),
+    flowAttestations: [...log, attestation].slice(-FLOW_ATTESTATION_CAP),
   }, usesNestedData);
 }
 
@@ -924,7 +925,7 @@ function ingestDemoVerdict(program: ProgramSummary, itemId: string, actor: strin
     tracks: nextTracks,
     flowDemoInvites: nextInvites,
     flowPortalInbox: inbox.filter((entry) => !(isRecord(entry) && entry.id === itemId)),
-    flowAttestations: [...log, attestation].slice(-200),
+    flowAttestations: [...log, attestation].slice(-FLOW_ATTESTATION_CAP),
   }, usesNestedData);
 }
 
@@ -942,6 +943,6 @@ export function dismissPortalResponse(program: ProgramSummary, itemId: string, a
   return wrapProgramState(wrapper, {
     ...inner,
     flowPortalInbox: inbox.filter((entry) => !(isRecord(entry) && entry.id === itemId)),
-    flowAttestations: [...log, attestation].slice(-200),
+    flowAttestations: [...log, attestation].slice(-FLOW_ATTESTATION_CAP),
   }, usesNestedData);
 }
