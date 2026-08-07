@@ -2,7 +2,6 @@ import { supabase, isSupabaseConfigured } from "@/integrations/supabase/client";
 import type { Database, Json } from "@/integrations/supabase/types";
 
 type ProgramRow = Database["public"]["Tables"]["adam_programs"]["Row"];
-type ProgramInsert = Database["public"]["Tables"]["adam_programs"]["Insert"];
 type PortfolioRow = Database["public"]["Tables"]["adam_portfolio"]["Row"];
 type AuditLogInsert = Database["public"]["Tables"]["adam_audit_log"]["Insert"];
 type AgentRunRow = Database["public"]["Tables"]["adam_agent_runs"]["Row"];
@@ -105,47 +104,6 @@ export async function loadProgramFromSupabase(programId: string): Promise<Record
     return null;
   }
   return normalizeProgramShape(data as ProgramShapeRow);
-}
-
-export async function saveProgramToSupabase(program: Record<string, unknown>): Promise<boolean> {
-  if (!isSupabaseConfigured || !supabase) return false;
-  const { data: auth } = await supabase.auth.getUser();
-  if (!auth?.user) return false;
-  const meta = (program?.projectMeta as Record<string, unknown> | undefined) ?? {};
-  const record = program?.data
-    ? program
-    : {
-        id: program?.id,
-        name: meta.name || program?.name || "Untitled Program",
-        client: meta.client || program?.client || null,
-        industry: meta.industry || program?.industry || null,
-        data: program,
-      };
-  const syncedAt = new Date().toISOString();
-  const payload: ProgramRecord = {
-    ...record,
-    data: {
-      ...((record?.data as Record<string, unknown>) || {}),
-      _syncedAt: syncedAt,
-    },
-  };
-  const upsertRecord: ProgramInsert = {
-    id: typeof record.id === "string" ? record.id : undefined,
-    name: typeof record.name === "string" ? record.name : "Untitled",
-    client: typeof record.client === "string" ? record.client : null,
-    industry: typeof record.industry === "string" ? record.industry : null,
-    owner_id: auth.user.id,
-    data: payload as Json,
-    updated_at: syncedAt,
-  };
-  const { error } = await supabase
-    .from("adam_programs")
-    .upsert(upsertRecord, { onConflict: "id" });
-  if (error) {
-    console.error("AURA sync save error:", error);
-    return false;
-  }
-  return true;
 }
 
 /**
