@@ -56,7 +56,7 @@ export const MERIDIAN_TOKENS: PrototypeTheme = {
   surface2: "#faf9fc",
   line: "#e6e3ee",
   positive: "#177a2f",
-  warn: "#b26a12",
+  warn: "#9c5c0e", // AA on white (5.32:1); source #b26a12 failed AA-normal at 4.23
   danger: "#b3402a",
   radius: 12,
   fontSans: '"Inter", "Outfit", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',

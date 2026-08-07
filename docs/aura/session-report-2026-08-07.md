@@ -131,4 +131,80 @@ populated prototype was produced to screenshot; that is the honest gap against t
   means the "remove the separate form" ask is only partially met (inline editing added; the separate
   form still exists).
 
-*(Continued-queue results are appended below as they complete.)*
+---
+
+# Continued queue — measurement results
+
+Read across **all 120 programs** via the app's authenticated session (owner-scoped, read-only).
+**57** carry a domain ontology; ~18 also carry an atlas with steps (the rest are empty test blobs).
+
+## A · Cross-engagement ontology gap census
+
+- **49 distinct** unresolved-reference names (atlas step entities not in the ontology) across
+  engagements; **17 recur in ≥2 engagements (35%)**. Top recurring:
+  `OnboardingRequest`×6, `FNOL`×5, `Reporting`×5, `SAP`×5, `Physician`×4, `Document`×4, `Inquiry`×4,
+  `Service`×4, `ComplianceCheck`×3, `Candidate`×3, then `Company`/`RiskScore`/`RetentionOffer`/`User`/
+  `Persona`×2.
+- **Answer the data supports: partially reducible — the build plan's fully-per-engagement assumption
+  is too pessimistic for ~a third of the residue.** The *most*-recurring names split into two fixable
+  buckets: (1) **generic infrastructure/cross-cutting concepts the generator systematically omits** —
+  `Document`, `Reporting`, `Service`, `User`, `Persona`, `Company`, `SAP` (a system, not an entity) —
+  captured by **one generator-scoping change**, applied once; (2) **domain-standard concepts within a
+  vertical** — `FNOL` (insurance), `Physician` (healthcare), `Candidate` (recruitment),
+  `RetentionOffer` (telecom) — captured by a **per-vertical standard vocabulary**. The long tail (32
+  names appearing once) is irreducibly per-engagement curation. So the standing cost is *real but
+  smaller than assumed*: generator scoping + per-vertical vocab removes the top recurring third.
+
+## B · Does the semantic derivation generalise? — **yes, universally**
+
+Across **all 57 ontologies**: **`typedPct = 0` on every one** (attributes untyped everywhere), and
+**`optionality present = 0` on every one** (absent everywhere). Structural roles derive at 100%
+(cardinality is present everywhere). **No engagement carries attribute types or optionality** — so
+nothing "suppressed it here"; F-D is a **systemic generator/schema gap, not Laila-specific**. That
+also means the value-role-at-0% number is not an artefact of one ontology; it is the platform state.
+
+## C · Atlas quality audit across engagements (rates)
+
+Over engagements that have an atlas with steps:
+
+- **Steps referencing entities the ontology doesn't hold** — high and widespread: Laila 0.24,
+  Legend-commerce 0.24, Archroma 0.43, ClaimPilot 0.52, Healthcare 0.57, Laila-CRM 0.70,
+  Telecom 1.33, **BFSI 1.57** (>1 = multiple missing refs per step). A minority are clean (0).
+- **Ontology entities no workflow touches (orphans)** — consistently high: Archroma 0.19,
+  Laila-CRM 0.20, Laila 0.24, ClaimPilot 0.40, Legend-commerce 0.44, Healthcare 0.78.
+- **Cross-area workflow with no hand-off** — my proxy (≥2 distinct actors + empty `handoffs`) found
+  **0 across all engagements**: multi-actor workflows *do* carry a `handoffs` field. The real Laila
+  defect is the **inverse** (hand-offs declared with no step-crossing — 13 in Laila), which this
+  proxy does not measure; flagged as a measurement limitation, not a clean result.
+- **Verdict:** the first two are **artifact-generation defects that hold across engagements**, not
+  Laila findings — they are F-C generalised and belong in `artifact-schema-findings.md` as rates.
+
+## D · DrillAnchor blast radius — **1**
+
+Of 120 programs, exactly **one** child carries a persisted drill anchor, and it **already
+mispoints**: `refId: wf-0` was written against *"Quote Creation and Approval"* but the parent's
+`workflows[0]` now resolves to *"Quote-to-Cash Workflow"* (parent regenerated/reordered since). So
+the index-`refId` bug is **real and demonstrated**, but the current blast radius is **1 anchor** →
+a **scheduled step-4 fix, not urgent**. (Measured, not fixed, as instructed.)
+
+## E · Accessibility & performance on the new surfaces
+
+- **Contrast (Meridian tokens, WCAG):** 13 of 14 key pairs pass AA. The one failure — `warn`
+  `#b26a12` on white = **4.23** (fails AA-normal 4.5) — was **fixed** to `#9c5c0e` = **5.32**
+  (module + regenerated demo + doc). Full pass set: ink/surface 16.4, inkSoft 10.0, muted 6.3,
+  white-on-brand 16.4, positive 5.4, danger 5.7, sidebar text 5.3–14.7.
+- **Keyboard / focus / colour-only:** swimlane tiles are `tabIndex=0` with `focus-visible` outlines;
+  findings, area chips, workflow picker, and inline editors are native buttons/inputs (DOM focus
+  order = read order); no signal is colour-only — coherence gap = ⚠ glyph + red, undeclared crossing
+  = dashed line + amber + ◇, status pills carry text, area identity = dot **and** lane label.
+- **Performance:** the swimlane at all ten areas (46 tiles + elbow connectors) and Laila's atlas (the
+  largest, 46 steps) render without observable lag in the preview. No profiling instrument was run —
+  stated rather than claimed as measured.
+
+## Findings to promote (out of the report)
+
+- **`artifact-schema-findings.md`:** F-D confirmed **universal** (B — 0% typed, 0% optionality on all
+  57 ontologies). C's two rates (steps→missing-entities, orphan entities) generalise F-C from a Laila
+  instance to a **cross-engagement generation defect**. A's recurrence (infra entities the generator
+  omits) is a **generator-scoping** ask, not per-engagement curation.
+- **Not urgent (scheduled):** D — DrillAnchor index refId (blast radius 1).
