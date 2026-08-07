@@ -1,0 +1,41 @@
+{
+  "_doc": "Machine-readable guard for docs/aura/claims-register.md. Enforced by src/v3/__tests__/claimsRegister.test.ts. Each key is a claim-surface file permitted to contain self-claim vocabulary, with the number of vocab-bearing lines recorded when the register was last swept. The test FAILS when: (a) a surface file contains claim vocabulary but is NOT listed here (a new claim surface), or (b) a listed file's vocab-line count RISES above its recorded number (a new claim). Either way: update the register first, then update this file. Counts are case-insensitive vocab-line counts (matching the test's matcher), calibrated 2026-08-07.",
+  "surfaces": {
+    "componentsDir": "src/v3/components",
+    "componentsExt": ".tsx",
+    "libFiles": ["src/v3/lib/agentMeta.ts", "src/v3/lib/methodology.ts", "src/v3/lib/adamUserGuide.ts"],
+    "edgeGlob": "supabase/functions/*/index.ts"
+  },
+  "vocab": [
+    "traceab", "grounded", "grounding", "auditable", "provenance",
+    "reproducib", "evidence-based", "end-to-end", "governed", "verifiab",
+    "single source of truth", "source of truth"
+  ],
+  "strictCounts": true,
+  "allowed": {
+    "supabase/functions/run-agent/index.ts": 139,
+    "src/v3/lib/methodology.ts": 39,
+    "src/v3/components/flow/FlowShell.tsx": 24,
+    "supabase/functions/copilot-chat/index.ts": 21,
+    "src/v3/components/PhaseInputsPanel.tsx": 18,
+    "src/v3/components/flow/studio/FlowArtifactStudio.tsx": 17,
+    "src/v3/components/flow/CollectBoard.tsx": 14,
+    "src/v3/components/flow/FlowGrounding.tsx": 8,
+    "src/v3/lib/agentMeta.ts": 6,
+    "supabase/functions/flow-portal/index.ts": 5,
+    "src/v3/components/flow/studio/StudioKit.tsx": 5,
+    "supabase/functions/company-brief/index.ts": 4,
+    "src/v3/components/flow/studio/ExperienceDesignStudio.tsx": 3,
+    "src/v3/components/flow/TheLine.tsx": 3,
+    "src/v3/components/flow/FlowRespond.tsx": 2,
+    "src/v3/components/ProgramSetupWizard.tsx": 2,
+    "supabase/functions/document-intelligence/index.ts": 1,
+    "src/v3/components/flow/studio/WorkflowStudio.tsx": 1,
+    "src/v3/components/flow/studio/JourneyGrid.tsx": 1,
+    "src/v3/components/flow/studio/DocumentView.tsx": 1,
+    "src/v3/components/flow/MeetingKitCard.tsx": 1,
+    "src/v3/components/flow/FlowCanvas.tsx": 1,
+    "src/v3/components/flow/EvidenceReader.tsx": 1,
+    "src/v3/components/CoPilotSidebar.tsx": 1
+  }
+}
