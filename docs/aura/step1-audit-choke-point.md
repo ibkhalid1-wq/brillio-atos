@@ -211,6 +211,34 @@ that implied full coverage would be worse than none — these are the holes.
   sites per action (four chances to diverge) and a later consolidation re-touches all four.
   Consolidate-first is cheaper and safer.
 
+  **DEFERRED after closer reading (2026-08-07) — not the clean copy-paste the count implied,
+  and unverifiable here.** Site inventory in `run-agent/index.ts`:
+  - **fail — 4 sites, but only 3 are the same action.** `:10454` (governance halt), `:10502`
+    (budget), `:11844` (catch-all) are byte-identical per-run fails
+    (`{status:"failed", completed_at, error_message}` `.eq("id", runId)`) → a `setRunFailed`
+    helper fits cleanly. **`:10156` is a DIFFERENT operation** — a bulk self-heal that fails
+    *other* stale runs (`.in("status",["queued","running"]).lt("started_at", cutoff).neq("id", runId)`).
+    It must NOT be folded into `setRunFailed`; it is its own thing (`system.fail_agent_run`
+    with a reconcile reason, over a set, not the current run).
+  - **complete — 4 sites, same transition, DIVERGENT payloads.** `:10258` / `:10312`
+    (pattern-query & closure fast paths: `tokens_used:0`, fixed confidence), `:11490`
+    (normal parsed result: computed `tokens_used`), `:11746` (handoff result: real
+    `handoff`, `reasoning_trace`, `{summary,artifacts,decisions}` output). A `setRunComplete`
+    must take `{output, handoff, reasoningTrace, confidence, tokensUsed}` as params and keep
+    only `status:"complete"`, `completed_at`, `awaiting_decision_id:null` fixed. Doable, but
+    it is a behaviour-preserving refactor, not a dedup — a dropped field silently corrupts a
+    run record.
+  - **pause — 1 site (`:11590`). No duplication.**
+
+  **Why deferred, not done now:** `run-agent/index.ts` (~11k lines, Deno) has **no
+  executable verification in this environment** — it is outside the client `tsconfig`
+  (`include: src/**` only), no `tsconfig` exists under `supabase/`, `deno` is not installed,
+  and the vitest suite imports only small `_shared/*` modules, never this file. So the
+  refactor could only be eyeballed, and its sole payoff (set intent once) cannot be collected
+  until the gated Step-1b wiring. Do it **with** that wiring, in an environment where the edge
+  is `deno check`-able / exercised, using the corrected inventory above. (`saveProgramToSupabase`
+  delete and the vocabulary census enumeration, the two lower-risk pre-wiring items, ARE done.)
+
 ## Definition-of-done status for Step 1
 - [x] Invariant designed and expressed as a migration + verify script.
 - [ ] Migration applied and reversible — **blocked on your environment** (author-side had no DB).
