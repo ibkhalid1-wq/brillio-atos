@@ -148,6 +148,6 @@ gaps; seed generation makes them concrete.
   slice.
 - **Model-dependent (gated):** *realistic* content — plausible company names, believable
   descriptions, sensible status vocabularies — genuinely needs a model call. Structure and
-  referential consistency do not. Recorded alongside **F-D** in `artifact-schema-findings.md` as the
+  referential consistency do not. Recorded alongside **F-E** in `artifact-schema-findings.md` as the
   content-generation gated item; the deterministic skeleton (ids, FKs, counts, synthetic
   placeholders) is buildable and testable without it.

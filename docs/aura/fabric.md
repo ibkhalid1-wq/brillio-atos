@@ -144,6 +144,6 @@ model authoring the same structure, so the floor is a strict improvement.
   this doc's commit to avoid coupling a large module to a spec).
 - **Model-dependent:** copy only (labels, help text, flow narrative) — a scoped, per-region prompt.
 - **Gated (edge):** teaching the generator to emit region-tagged markup (`data-fabric-id`) against
-  the fabric instead of a free-form document — the same gated change as **F-D** in
+  the fabric instead of a free-form document — the same gated change as **F-E** in
   `artifact-schema-findings.md`. Deterministic rendering can also run entirely client-side, which
   would remove the edge dependency for structure altogether; that is the recommended direction.

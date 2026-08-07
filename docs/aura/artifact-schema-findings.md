@@ -140,7 +140,62 @@ and the Design Loop's **semantic-conflict detection** are meant to catch; today 
 
 ---
 
-## F-D · The prototype generator doesn't emit the house design system
+## F-D · The ontology schema discards the signals that would make generation deterministic
+
+**Defect.** The ontology records *less* than it knows, and the gaps fall exactly where prototype
+generation needs determinism. Measured on Laila's live ontology (33 entities, 35 relations, 178
+attributes):
+
+- **Entity attributes have no type field** — all **178** are bare untyped strings (`"amount"`,
+  `"closeDate"`, `"stage"`, `"annualRevenue"`). There is nowhere to record that `amount` is money.
+- **Relations have no optionality field** — **absent on all 35**. Cardinality is present (`1:N` etc.)
+  but not whether a child *requires* its parent.
+- **`standardAlignment` is entity-level** (`Account → schema.org/Organization`, `skos:closeMatch`),
+  **not per-attribute** — it aligns the entity, not `amount → FIBO MonetaryAmount`.
+
+**Consequence** (see `semantic-roles.md`): structural semantic roles derive at **100%** from
+cardinality; value roles at **0%**. Every value role is a name-heuristic or a model call — not
+because the information is unknowable, but because the ontology *has nowhere to put it*. This is the
+schema-shaped root cause under F-A/F-B (which add step fields) generalised to the ontology: the
+artifact discards what it already knows.
+
+**Proposed schema additions.**
+
+```jsonc
+// ontology.entity.attributes[] — today a string[]; make each an object:
+{ "name": "amount", "type": "monetary" | "date" | "quantity" | "code" | "text" | "boolean",
+  "typeConfidence": "asserted" | "generated",   // generator may propose; stakeholder confirms
+  "standard": "https://spec.edmcouncil.org/fibo/…"   // optional per-attribute code, where known
+}
+
+// ontology.relations[] — add:
+{ "optionality": { "childRequiresParent": true|false, "parentRequiresChild": true|false },
+  "optionalityConfidence": "asserted" | "assumed" }
+```
+
+**Cost — and the remediation split (this is the point).** The 213 missing signals are *not* one
+homogeneous "capture in Listen" cost. They split three ways:
+
+- **~178 attribute types → a schema + generator-prompt fix. Gated, small. NOT a Listen ask.** They
+  are untyped because there is no field, not because nobody was asked. The generator would emit
+  `amount: monetary` today if there were somewhere to put it. Stakeholders answer this *badly*
+  anyway — nobody says "that attribute is of type monetary"; they say "that's a dollar figure". So
+  the generator proposes the type (high accuracy from the name) and it is confirmed in passing, not
+  interviewed.
+- **~35 optionalities → a genuine Listen ask.** Required-vs-optional is a business rule only a
+  domain owner can state. **One question per relation**, distributed to the sessions that own those
+  relations — not a bulk survey.
+- **Per-attribute standard alignment → mixed.** A generator can *propose* the FIBO/FHIR code; only
+  domain work *confirms* it.
+
+So the honest cost is **one gated schema change + one generator-prompt change + one question per
+relation** — not "213 things need stakeholder time." Generator/edge portions are gated (no Deno
+verification here); the reader side (consuming `type`/`optionality` when present) is client-buildable
+and composes with the `deriveRoles()` contract in `semantic-roles.md`.
+
+---
+
+## F-E · The prototype generator doesn't emit the house design system
 
 **Defect.** Generated prototypes have no governed appearance. The Prototype Build is one
 self-contained HTML document the edge generator authors, and `experienceDesign.theme` has **no
@@ -178,7 +233,11 @@ then refines *within* the system instead of reinventing it.
 | **F-A** automation boundary | **Yes, every workflow** | Generator does; reader-default + editor does not | Reader-default `human-only/generated` + step-inspector editor (client) |
 | **F-B** decision points | Yes for judgment steps | Generator does; optional field means readers don't | Optional field + inspector editor (client) |
 | **F-C** cross-artifact coherence | Yes (silent incoherence) | **No** — pure client derivation | Client coherence pass + in-diagram marks (already surfaced by the multi-area swimlane) |
+| **F-D** ontology discards types/optionality | Indirectly (keeps generation generative) | Schema + generator do; readers don't | Attribute-`type` + relation-`optionality` fields; generator proposes types, Listen confirms optionality |
+| **F-E** generator ignores the design system | No (appearance) | Generator does; client export does not | `meridian.css` in every export (done); generator emits `.m-*` markup (gated) |
 
-F-A and F-B are one gated generator pass together (both extend the step contract). F-C is
-independent and client-only; it should ship first, because it makes the other two's gaps visible
-while they wait for the gate.
+F-A and F-B are one gated generator pass together (both extend the step contract). F-D is the same
+class one level up (the ontology contract), and pairs naturally with them — one gated schema pass
+adds step fields (F-A/B) and the attribute-`type` + relation-`optionality` fields (F-D) together;
+optionality is the only part that needs a Listen question. F-C and the client side of F-E ship now,
+gate-free. F-E's generator markup is the last gated piece.

@@ -82,7 +82,8 @@ So it tells us *Account is an Organization, Contact is a Person* — which fixes
 detail-header shape. It does **not** carry the per-attribute FIBO amount / FHIR quantity codes the
 ideal design hoped for — those aren't in this ontology. **Finding:** attribute-level standard
 alignment is where monetary/quantity/date roles *could* become fully deterministic; today they can't
-be read, so they fall to the heuristic below. (Recorded as an ontology-enrichment ask for Listen.)
+be read, so they fall to the heuristic below. (Recorded as **F-D**; per-attribute alignment is
+*mixed* — a generator proposes the code, domain work confirms it — not a pure Listen ask.)
 
 ### Value-type roles — from attribute types *(NOT derivable here — types are absent)*
 
@@ -122,10 +123,27 @@ generative**:
 
 **Headline:** the *structural* roles (all 35 relationship roles) are 100% deterministic today — the
 fabric can wire every list, nested list, and parent link with **no model call**. The *value* roles
-are the opposite — 0% type-derived, because the ontology discards attribute types. So the biggest
-single lever to make prototype generation less generative is **capturing attribute types and
-optionality in Listen**; doing so would move ~213 assignments (178 attributes + 35 optionalities)
-from decision/heuristic to deterministic.
+are the opposite — 0% type-derived, because the ontology has no attribute-`type` field to read.
+
+### The remediation is NOT one big Listen ask — it splits three ways
+
+It is tempting to say "213 assignments (178 attributes + 35 optionalities) need capturing." That
+conflates two very different costs. The honest split:
+
+- **~178 attribute types → a schema + generator-prompt fix. Gated, small. Not a Listen ask.** They
+  are untyped because there is *no field* for a type, not because nobody was asked. The generator
+  would emit `amount: monetary` today if there were somewhere to put it — the name carries the
+  signal. Stakeholders answer this *badly* anyway: nobody says "that attribute is of type monetary,"
+  they say "that's a dollar figure." So the generator proposes; a human confirms in passing.
+- **~35 optionalities → a genuine Listen ask.** Required-vs-optional is a business rule only a
+  domain owner can state — **one question per relation**, routed to the session that owns it, not a
+  bulk survey.
+- **Per-attribute standard alignment → mixed.** A generator can *propose* the FIBO/FHIR code; only
+  domain work *confirms* it.
+
+So the lever is **one gated schema change + one generator-prompt change + ~35 one-line Listen
+questions** — the difference between "we need a lot of stakeholder time" and "a schema fix plus one
+question per relation." Recorded as **F-D** in [`artifact-schema-findings.md`](./artifact-schema-findings.md).
 
 ## 4 · What the deriver looks like
 
@@ -171,4 +189,4 @@ rewriting only this column; the fabric and the roles do not change.
 - **Decision/model:** the low-confidence value roles, the title/description split, and required
   markers — until attribute types and optionality are captured, these need a human (in Listen) or a
   scoped model call. This is the same content-vs-structure line the fabric and seed-data specs draw;
-  no new gated surface, and it composes with **F-D**.
+  no new gated surface, and it composes with **F-E**.
