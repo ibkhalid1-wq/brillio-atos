@@ -83,10 +83,17 @@ they keep writing during warn mode and are retired only after enforce-flip with
    (`persistAgentArtifact` + `persistProgramData` + run-row `complete`) in ONE
    `SECURITY DEFINER` RPC **at that single call site only** — fixes the cross-table
    partial + `outputRepaired` truncation gap. Do not rewrite other call sites.
-3. **CI enumeration test (vitest, static).** Assert every `.from("<state table>")`
-   write is preceded by an intent publish; fail CI on a bare write. This is the
-   secondary guard; the trigger remains the completeness guarantee.
-4. **Watch `intent_missing`.** `select count(*) from audit_events where intent_missing`
+3. **Two helpers, two signatures (trust encoded in types, not discipline).** The
+   client intent helper takes **no `actor` parameter at all** — its signature makes
+   supplying one impossible (a client's actor is the JWT, server-derived). The edge
+   helper **requires** `actor` (service-role has no JWT). This mirrors the trigger's
+   actor rule; a client that somehow sends actor anyway is not trusted (JWT wins) and
+   the attempt is recorded in `actor_intent_mismatch`.
+4. **CI enumeration test (vitest, static).** Assert every `.from("<state table>")`
+   write is preceded by an intent publish; fail CI on a bare write. Additionally
+   assert **no client-side call site passes `actor`** and **every edge-side call site
+   does**. Secondary guard; the trigger remains the completeness guarantee.
+5. **Watch `intent_missing`.** `select count(*) from audit_events where intent_missing`
    must trend to 0. Then set `aura_audit_config.enforce = true` and, in a follow-up,
    retire `adam_audit_log` (rename + revoke insert; make `writeAuditLog` a shim that
    sets intent) and demote `flowAttestations` to a derived UX projection.

@@ -77,9 +77,9 @@ Expected:
   whole run-agent RPC design depends on. If it FAILS, stop; Step 1b's RPC changes.**
 - `C4a/b/c direct INSERT/UPDATE/DELETE denied: PASS` — trigger is the sole writer.
 - `C5 trigger writes under app-role caller: PASS`.
-- `C5b actor from JWT not client intent:` — **expected FAIL against the currently
-  committed trigger** (see "Trigger correction" below). This is a known, flagged
-  defect, not a kit error.
+- `C5b actor from JWT not client intent: PASS`.
+- `C5c spoofed actor recorded (not dropped): PASS` — the differing client claim is
+  kept in `actor_intent_mismatch` as evidence, not silently discarded.
 - `C6 owner-only read: PASS`.
 - `C1 client missing-intent recorded not raised: PASS`.
 - `C2 service missing-intent raises: PASS`.
@@ -109,25 +109,27 @@ exporting `audit_events` first.**
 
 ---
 
-## Trigger correction found during kit authoring (decide before Step 1b)
+## Trigger correction (APPLIED)
 
-While writing C5b I found a real Step-1 trigger-contract defect. The committed
-trigger resolves:
-```
-actor = coalesce(v_intent->>'actor', nullif(auth.uid()::text,''))
-```
-so a **client session can spoof `actor`** by putting one in intent — but the Step 1
-model is "client session: JWT supplies actor." Intent-actor should only win for
-service-role (where `auth.uid()` is null). Minimal correction:
-```
-actor = case when auth.uid() is not null then auth.uid()::text
-             else v_intent->>'actor' end
-```
-This is a one-line change to `aura_audit()` in `20260807_audit_events.sql`. It is
-NOT applied — it changes the trigger contract, so per the gate it is yours to
-confirm. Once confirmed, C5b flips to PASS. **Do not wire Step 1b intent helpers
-until this is settled**, because the helpers' `actor` handling depends on it
-(client helper should not bother sending actor; edge helper must).
+A real Step-1 trigger-contract defect was found and fixed. The trigger now resolves
+`actor` so that for a client session (JWT present) the **server-derived identity
+always wins**; a differing client-supplied `intent.actor` is a spoof attempt and is
+**recorded** in `actor_intent_mismatch` (kept as evidence, never silently dropped —
+same philosophy as `intent_missing`). Only service-role (no JWT) takes `actor` from
+intent. C5b/C5c assert this; both should read PASS.
+
+**Field-trust audit (done in the same pass):** `actor` was the ONLY intent-sourced
+field with a server-derived counterpart to defend. `action_type`, `affected_kind`,
+`affected_id`, `partial` have no server source of truth (the DB cannot know a write
+was "a rename" or that a run "truncated"), so they are legitimately app-asserted —
+trustworthy only as far as the app code is, never elevated to user assertion.
+`row_pk`, `program_id`, and the fingerprints/`changed_keys` are all server-derived
+from NEW/OLD and never take intent. No other client-over-server coalesce exists.
+
+**Binding requirement carried to Step 1b** (encode in types, not discipline): the
+client intent helper must have **no `actor` parameter at all** (its signature makes
+sending one impossible); the edge helper **requires** one. The enumeration test must
+assert no client-side call site passes `actor` and every edge-side call site does.
 
 ---
 
