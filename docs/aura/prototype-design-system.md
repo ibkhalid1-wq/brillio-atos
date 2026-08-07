@@ -44,7 +44,7 @@ component rule reads a `--m-*` var, so a re-skin is a variable swap.
 | `--m-surface-2` | `#faf9fc` | elevated / hover surface |
 | `--m-line` | `#e6e3ee` | borders / dividers |
 | `--m-positive` | `#177a2f` | success / good |
-| `--m-warn` | `#b26a12` | attention / pending |
+| `--m-warn` | `#9c5c0e` | attention / pending (AA on white 5.32:1) |
 | `--m-danger` | `#b3402a` | error / risk / destructive |
 
 Semantic colour (good/warn/risk) is separate from the brand accent and never doubles as it.
