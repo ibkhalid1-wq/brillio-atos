@@ -49,6 +49,7 @@ declare
   v_new_doc    jsonb := coalesce(v_new->'data', v_new->'content');
   v_old_doc    jsonb := coalesce(v_old->'data', v_old->'content');
   v_changed    text[] := null;
+  v_jwt        text; v_claimed text; v_actor text; v_mismatch text;
   v_missing    boolean := (v_intent_txt is null or v_intent_txt = '' or v_intent_txt = 'null');
 begin
   if TG_OP = 'UPDATE' and v_new_doc is not null then
@@ -59,12 +60,16 @@ begin
     ) keys where (v_new_doc -> k) is distinct from (v_old_doc -> k);
   end if;
   if not v_missing then begin v_intent := v_intent_txt::jsonb; exception when others then v_missing := true; end; end if;
-  insert into public.audit_events(table_name, op, row_pk, program_id, actor, action_type,
+  v_jwt := nullif(auth.uid()::text,''); v_claimed := v_intent->>'actor';
+  if v_jwt is not null then v_actor := v_jwt;
+    if v_claimed is not null and v_claimed <> v_jwt then v_mismatch := v_claimed; end if;
+  else v_actor := v_claimed; end if;
+  insert into public.audit_events(table_name, op, row_pk, program_id, actor, actor_intent_mismatch, action_type,
       affected_kind, affected_id, partial, intent_missing, before_fp, after_fp, changed_keys, intent)
   values(TG_TABLE_NAME, TG_OP, coalesce(v_new->>'id', v_old->>'id'),
       coalesce(v_new->>'program_id', v_old->>'program_id',
                case when TG_TABLE_NAME='adam_programs' then coalesce(v_new->>'id', v_old->>'id') end),
-      coalesce(v_intent->>'actor', nullif(auth.uid()::text,'')),
+      v_actor, v_mismatch,
       v_intent->>'action_type', v_intent->>'affected_kind', v_intent->>'affected_id',
       coalesce((v_intent->>'partial')::boolean,false), v_missing,
       null, null,                       -- << md5 fingerprints skipped

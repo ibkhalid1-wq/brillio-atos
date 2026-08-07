@@ -65,15 +65,16 @@ begin
   raise notice 'C5 trigger writes under app-role caller:%',
     case when r.id is not null then ' PASS' else ' FAIL (no row written)' end;
 
-  -- C5b ACTOR PROVENANCE (FLAGGED DEFECT). For a CLIENT session, actor must come
-  -- from the JWT (auth.uid), never from client-supplied intent, or a client can
-  -- spoof attribution. Step 1 Q1 model: "JWT supplies actor" for client sessions.
-  -- The CURRENTLY COMMITTED trigger does coalesce(intent.actor, auth.uid()), so
-  -- intent.actor wins and this FAILS until the trigger is corrected. See runbook
-  -- section "Trigger correction found during kit authoring".
+  -- C5b ACTOR PROVENANCE: for a CLIENT session, actor is the JWT (auth.uid), never
+  -- the client-supplied intent. Intent here claimed "spoofed"; JWT is owner_uuid.
   raise notice 'C5b actor from JWT not client intent:%',
     case when r.actor = '00000000-0000-0000-0000-000000000001' then ' PASS'
-         else ' FAIL (actor='||coalesce(r.actor,'null')||'; client intent overrode JWT — trigger fix needed)' end;
+         else ' FAIL (actor='||coalesce(r.actor,'null')||')' end;
+
+  -- C5c SPOOF RECORDED: the differing client claim is kept as evidence, not dropped.
+  raise notice 'C5c spoofed actor recorded (not dropped):%',
+    case when r.actor_intent_mismatch = 'spoofed' then ' PASS'
+         else ' FAIL (actor_intent_mismatch='||coalesce(r.actor_intent_mismatch,'null')||')' end;
 end $$;
 
 -- ── C6: owner-only RLS read — authenticated sees only its own program's audit rows.

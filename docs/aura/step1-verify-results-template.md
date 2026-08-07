@@ -21,10 +21,11 @@ Run by: __________   Date: __________   Step 1 migration commit: `ba0d961`
 | C4b direct UPDATE denied | ☐ PASS ☐ FAIL | |
 | C4c direct DELETE denied | ☐ PASS ☐ FAIL | |
 | C5 trigger writes under app-role caller | ☐ PASS ☐ FAIL | |
-| C5b actor from JWT not client intent | ☐ PASS ☐ FAIL(expected) | flagged trigger fix |
+| C5b actor from JWT not client intent | ☐ PASS ☐ FAIL | |
+| C5c spoofed actor recorded (not dropped) | ☐ PASS ☐ FAIL | `actor_intent_mismatch` |
 | C6 owner-only read | ☐ PASS ☐ FAIL | |
 
-Trigger-correction decision: ☐ apply the one-line `actor` fix ☐ keep as-is (why): __________
+Trigger correction (actor JWT-wins + `actor_intent_mismatch`): APPLIED in migration. Any concern? __________
 
 ## Gate item 3 — `adam_program_events` shape per environment (A1, prod read-only)
 | Env | PRESENT/ABSENT | Shape (613093000 / 20260714 / n-a) | row_count |

@@ -41,6 +41,12 @@
 --     not blocked.
 -- Flip to enforce ONLY after every write path sets intent and intent_missing=0.
 --
+-- ACTOR PROVENANCE: a client session's actor is ALWAYS the JWT (auth.uid), never
+-- the client-supplied intent.actor; a differing claim is recorded in
+-- actor_intent_mismatch (a spoof attempt kept as evidence, not dropped). Intent
+-- supplies actor only for service-role (no JWT). See the FIELD-TRUST AUDIT note at
+-- the insert: actor was the only intent field with a server-derived value to defend.
+--
 -- COST GUARD: no blob deep-diff. Floor = changed top-level doc keys + row
 -- fingerprints. affected_id stays a JSON-pointer path where no stable id exists
 -- yet (blob elements get ids only at steps 2-4); no synthetic id scheme.
@@ -69,8 +75,9 @@ create table if not exists public.audit_events (
   op             text        not null,                    -- INSERT | UPDATE | DELETE
   row_pk         text,                                    -- affected row id (text)
   program_id     text,                                    -- for owner-scoped RLS
-  actor          text,                                    -- intent.actor, else auth.uid()
-  action_type    text,                                    -- from intent
+  actor          text,                                    -- server-derived (JWT) for client; intent.actor for service-role
+  actor_intent_mismatch text,                              -- non-null = a client intent claimed a DIFFERENT actor than its JWT; holds the rejected claim
+  action_type    text,                                    -- from intent (app-asserted; no server truth to defend)
   affected_kind  text,                                    -- from intent
   affected_id    text,                                    -- from intent; JSON-pointer where no id
   partial        boolean     not null default false,      -- from intent
@@ -85,6 +92,8 @@ create index if not exists audit_events_program_ts
   on public.audit_events (program_id, ts desc);
 create index if not exists audit_events_intent_missing
   on public.audit_events (intent_missing) where intent_missing;
+create index if not exists audit_events_actor_mismatch
+  on public.audit_events (actor_intent_mismatch) where actor_intent_mismatch is not null;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 2. the sole writer: SECURITY DEFINER trigger function
@@ -106,6 +115,10 @@ declare
   v_program_id text    := coalesce(v_new->>'program_id', v_old->>'program_id',
                             case when TG_TABLE_NAME = 'adam_programs' then coalesce(v_new->>'id', v_old->>'id') end);
   v_changed    text[]  := null;
+  v_jwt        text;                                            -- server-derived identity (null under service-role)
+  v_claimed    text;                                            -- actor the intent asked for
+  v_actor      text;                                            -- resolved actor written to the event
+  v_mismatch   text;                                            -- non-null iff a client claimed a different actor
   v_missing    boolean := (v_intent_txt is null or v_intent_txt = '' or v_intent_txt = 'null');
 begin
   -- fail fast only in enforce mode and only for service-role writes
@@ -133,12 +146,35 @@ begin
     end;
   end if;
 
+  -- ACTOR PROVENANCE. For a client session (JWT present) the server-derived
+  -- identity ALWAYS wins; a differing client-supplied actor is a spoof attempt,
+  -- RECORDED (actor_intent_mismatch), never silently dropped — same philosophy as
+  -- intent_missing. Only service-role (auth.uid() null) takes actor from intent.
+  v_jwt := nullif(auth.uid()::text, '');
+  v_claimed := v_intent->>'actor';
+  if v_jwt is not null then
+    v_actor := v_jwt;
+    if v_claimed is not null and v_claimed <> v_jwt then
+      v_mismatch := v_claimed;
+    end if;
+  else
+    v_actor := v_claimed;
+  end if;
+
+  -- FIELD-TRUST AUDIT (one pass over every intent-sourced field): actor was the
+  -- ONLY field with a server-derived counterpart being overridden. action_type,
+  -- affected_kind, affected_id, partial have no server source of truth (the DB
+  -- cannot know "this was a rename" or "the run truncated"), so they are legitimately
+  -- app-asserted — trustworthy only to the extent the app code is, never elevated to
+  -- user assertion. row_pk, program_id, before/after_fp, changed_keys are all
+  -- server-derived from NEW/OLD and never take intent. No other coalesce-client-over-
+  -- server exists here.
   insert into public.audit_events(
-    table_name, op, row_pk, program_id, actor, action_type, affected_kind,
-    affected_id, partial, intent_missing, before_fp, after_fp, changed_keys, intent)
+    table_name, op, row_pk, program_id, actor, actor_intent_mismatch, action_type,
+    affected_kind, affected_id, partial, intent_missing, before_fp, after_fp, changed_keys, intent)
   values(
     TG_TABLE_NAME, TG_OP, v_row_pk, v_program_id,
-    coalesce(v_intent->>'actor', nullif(auth.uid()::text, '')),
+    v_actor, v_mismatch,
     v_intent->>'action_type', v_intent->>'affected_kind', v_intent->>'affected_id',
     coalesce((v_intent->>'partial')::boolean, false),
     v_missing,
