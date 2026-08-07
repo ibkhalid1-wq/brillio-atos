@@ -14,6 +14,8 @@ import {
 } from "../../src/v3/lib/claimsGuard";
 
 const force = process.argv.includes("--force");
+const reasonIdx = process.argv.indexOf("--reason");
+const reason = reasonIdx >= 0 && process.argv[reasonIdx + 1] ? process.argv[reasonIdx + 1] : null;
 const allowlistAbs = join(ROOT, ALLOWLIST_PATH);
 const curReg = registerHash();
 
@@ -32,8 +34,12 @@ if (prior && prior.registerHash === curReg && !force) {
   );
   process.exit(1);
 }
-if (force && prior && prior.registerHash === curReg) {
-  console.warn("\n⚠  claims:regen --force: regenerating WITHOUT a register change. Confirm no claim got worse.\n");
+// A force that actually overrode the register-unchanged block is the laundering-
+// relevant case — record it IN the allowlist so it shows up in the diff a reviewer
+// reads, not only in the terminal. A normal (unforced) regen clears the field.
+const didForce = force && !!prior && prior.registerHash === curReg;
+if (didForce) {
+  console.warn("\n⚠  claims:regen --force: regenerating WITHOUT a register change — recorded as forced in the allowlist. Confirm no claim got worse.\n");
 }
 
 const hashes: Record<string, string[]> = {};
@@ -57,10 +63,14 @@ const files = Object.keys(hashes).sort();
 const body = files
   .map((f) => `    ${JSON.stringify(f)}: [${hashes[f].map((h) => `"${h}"`).join(",")}]`)
   .join(",\n");
+const forcedLine = didForce
+  ? `  "forced": ${JSON.stringify({ at: new Date().toISOString(), reason })},\n`
+  : "";
 const out =
   "{\n" +
   `  "_doc": ${JSON.stringify(doc)},\n` +
   `  "registerHash": ${JSON.stringify(curReg)},\n` +
+  forcedLine +
   `  "surfaces": ${JSON.stringify(SURFACES)},\n` +
   `  "vocab": ${JSON.stringify(VOCAB)},\n` +
   `  "hashes": {\n${body}\n  }\n}\n`;
