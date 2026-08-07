@@ -16,6 +16,7 @@ import {
 import { workflowArea, GENERAL_AREA } from "@/v3/components/flow/flowAreas";
 import { listenCoverageAreas, canonicalFrameArea } from "@/v3/components/flow/listenCoverage";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
+import AtlasSeamView from "./AtlasSeamView";
 
 interface PainHit {
   severity: string;
@@ -387,6 +388,14 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program,
 
   return (
     <div className="v3fs-wf">
+      {/* ONE consolidated view: the multi-area seam overview (compare workflows
+          across the areas they cross), then the single-workflow editor below.
+          Picking a workflow in the overview opens it in the editor. */}
+      <CollapsibleCard label="Areas & seams — every workflow across the areas it crosses" defaultOpen>
+        <AtlasSeamView doc={doc} program={program} frameAreas={frameAreas} onOpenArtifact={onOpenArtifact}
+          onPickWorkflow={(i) => { setActive(i); setSelected(null); }} />
+      </CollapsibleCard>
+      <div className="v3fs-wf-editor-h">Edit a workflow</div>
       {/* Cascading filters: pick the AREA, then one of ITS workflows — the
           grouped pill strip outgrew the tab metaphor once every area mapped. */}
       <div className="v3fs-wf-filters">
