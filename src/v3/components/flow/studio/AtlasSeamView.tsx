@@ -227,6 +227,11 @@ export default function AtlasSeamView({ doc, program, frameAreas, onOpenArtifact
     if (typeof window !== "undefined" && !window.confirm("Delete this whole workflow from the atlas?")) return;
     writeWorkflows(workflows.filter((_, i) => i !== wfI));
   }, [workflows, writeWorkflows]);
+  const patchWorkflowAbs = useCallback((wfI: number, patch: Record<string, unknown>) => {
+    writeWorkflows(workflows.map((w, i) => (i === wfI ? { ...w, ...patch } : w)));
+  }, [workflows, writeWorkflows]);
+  // Which workflow's field panel (name/trigger/owner/area/hand-offs) is open.
+  const [wfEditKey, setWfEditKey] = useState<number | null>(null);
 
   // Workflows in scope: any that touch a selected area.
   const inScope = useMemo(() => wfData.filter((wf) =>
@@ -325,6 +330,9 @@ export default function AtlasSeamView({ doc, program, frameAreas, onOpenArtifact
                       ? <button type="button" className="v3fs-seam-wf-open" onClick={() => onPickWorkflow(wf.wfIndex)}
                           title="Open this workflow in the editor below">{wf.name}<span className="v3fs-seam-wf-open-i" aria-hidden="true">edit ↓</span></button>
                       : <h4>{wf.name}</h4>}
+                    {canEdit ? <button type="button" className="v3fs-seam-wf-editbtn" aria-pressed={wfEditKey === wf.wfIndex}
+                      title="Edit this workflow's facts inline"
+                      onClick={() => setWfEditKey((k) => (k === wf.wfIndex ? null : wf.wfIndex))}>{wfEditKey === wf.wfIndex ? "Close" : "Edit ✎"}</button> : null}
                     {canEdit ? <button type="button" className="v3fs-seam-wf-del" title="Delete this workflow"
                       onClick={() => deleteWorkflow(wf.wfIndex)}>✕</button> : null}
                     {/* Path only where it carries information — a multi-area seam.
@@ -341,6 +349,25 @@ export default function AtlasSeamView({ doc, program, frameAreas, onOpenArtifact
                     ) : null}
                   </div>
                 </header>
+                {canEdit && wfEditKey === wf.wfIndex ? (() => {
+                  const raw = asRecord(workflows[wf.wfIndex]);
+                  return (
+                    <div className="v3fs-seam-wfedit">
+                      <label><span>Name</span><input value={asText(raw.name)} onChange={(e) => patchWorkflowAbs(wf.wfIndex, { name: e.target.value })} /></label>
+                      <label><span>Trigger</span><input value={asText(raw.trigger)} placeholder="what starts it" onChange={(e) => patchWorkflowAbs(wf.wfIndex, { trigger: e.target.value })} /></label>
+                      <label><span>Owner</span><input value={asText(raw.owner)} onChange={(e) => patchWorkflowAbs(wf.wfIndex, { owner: e.target.value })} /></label>
+                      {frameAreas.length ? (
+                        <label><span>Area</span>
+                          <select value={asText(raw.area)} onChange={(e) => patchWorkflowAbs(wf.wfIndex, { area: e.target.value })}>
+                            <option value="">—</option>
+                            {frameAreas.map((a) => <option key={a} value={a}>{a}</option>)}
+                          </select></label>
+                      ) : null}
+                      <label className="wide"><span>Hand-offs</span><input value={asStrings(raw.handoffs).join(", ")} placeholder="comma-separated" onChange={(e) => patchWorkflowAbs(wf.wfIndex, { handoffs: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) })} /></label>
+                      <label className="wide"><span>Failure modes</span><input value={asStrings(raw.failureModes).join(", ")} placeholder="comma-separated" onChange={(e) => patchWorkflowAbs(wf.wfIndex, { failureModes: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) })} /></label>
+                    </div>
+                  );
+                })() : null}
                 <div className="v3fs-seam-scroll">
                   <div className="v3fs-seam-grid" style={{ gridTemplateColumns: cols, gridTemplateRows: `repeat(${rows.length}, minmax(72px, auto))` }}>
                     {/* lane stripes + labels */}
