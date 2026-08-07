@@ -59,15 +59,12 @@ many actions is flagged — that is a finding, not a name.
 | `update_metric_registry` | change a governed metric definition | metric | governed metrics (F-002) |
 | `record_ship_action` | record a Ship-phase action | program | flowShip |
 
-**Provenance UNCERTAIN — confirm before wiring (see finding F3):** the following
-belong to the `src/new/` chrome; whether that chrome is still reachable in the live
-app (v3 `AppShellV3`) or is a dormant predecessor could not be determined from the
-census. `useGateReview` *is* live (it is the gate writer above); the rest are
-unverified. Provisional names, do not wire until confirmed live:
-`update_milestones` (useMilestones), `update_budget` (useBudgetTracking),
-`edit_notes` (useProgramNotes), `update_phase_progress` (usePhaseProgress),
-`setup_program` (useProgramSetup), `record_closure` (useClosure),
-`resolve_inbox_decision` (useDecisionQueue). If dormant, they get **no** action_type.
+**Provenance RESOLVED — LIVE, wire (see F3):** the Step-1b topology check found all of
+these `src/new/lib/*` hooks imported by `AppShellV3` (the live v3 chrome), so they are
+live and get wired: `update_milestones` (useMilestones), `update_budget`
+(useBudgetTracking), `edit_notes` (useProgramNotes), `update_phase_progress`
+(usePhaseProgress), `setup_program` (useProgramSetup), `record_closure` (useClosure),
+`resolve_inbox_decision` (useDecisionQueue). (`useGateReview` was already confirmed live.)
 
 `save_program_state` — the generic whole-blob autosave/sync. **Not a real action.**
 It is the fallback the persistence layer uses; every write above ultimately lands
@@ -198,12 +195,17 @@ Seven values — the *type* of thing an action touches. The exact sub-element is
   shape that produces divergent names if left to wiring time. They get **one** name
   each here. Worth a separate look at whether the duplicate archive/complete/fail
   paths should be consolidated in code.
-- **F3 — `src/new/` provenance unknown.** Eight write paths live in `src/new/lib/`.
-  `useGateReview` is confirmed live (the gate writer); the other seven
-  (milestones/budget/notes/phase-progress/closure/setup/decision-queue) could not be
-  confirmed reachable from the v3 app. **If dormant, they get no action_type and want
-  deleting; if live, use the provisional names in §1.** Confirm before wiring — a name
-  assigned to a dead path looks correct forever.
+- **F3 — RESOLVED: `src/new/lib/*` hooks are LIVE.** The Step-1b topology check found
+  all eight (`useGateReview`, `useMilestones`, `useBudgetTracking`, `useProgramNotes`,
+  `usePhaseProgress`, `useClosure`, `useProgramSetup`, `useDecisionQueue`) imported by
+  `AppShellV3` (the live v3 chrome). **They are live → wire (names in §1), not delete.**
+- **F6 — no singular write funnel; `saveProgramToSupabase` is dead.** The Step-1b
+  topology check found `saveProgramToSupabase` (adamSync) — the presumed client funnel —
+  has **zero callers** (dead code → delete), and the live client writes `adam_programs`
+  from ~10 direct sites plus the seven hooks, with no convergence. So the enforcement
+  model cannot "check intent at the funnel" — there is none. It is redesigned around
+  *introducing* a `persistProgram` funnel; see `docs/aura/step1-audit-choke-point.md`
+  "Step 1b — the enforcement model (REVISED)".
 - **F4 — `writeQueue.ts` replays, it does not originate.** The offline write queue
   re-executes previously-queued writes; it must **carry the original action_type**, not
   stamp one of its own, or replayed events would all read as a queue-flush.
