@@ -195,8 +195,15 @@ function station(
  * AGENT_DEPENDENCIES intent at the grain the Line renders — it is why a
  * provisional Ontology and Atlas light up the moment the Discovery Kit lands,
  * without waiting for the Listen gate. Prototype has two possible ids
- * (build/pack); demo-scripts is satisfied by either. */
-const GENERATION_PREREQS: Record<string, string[][]> = {
+ * (build/pack); demo-scripts is satisfied by either.
+ *
+ * This is a CLIENT-grain gate (minimal inputs to OFFER Generate), which is a
+ * different relation than the edge's `UPSTREAM_ARTIFACT_DEPS` (which upstream
+ * BODIES to inject for grounding — a superset). The two cannot share a runtime
+ * module (Deno edge vs Vite client), so they are kept from drifting apart by
+ * `generationPrereqLockstep.test.ts`, which asserts this map is a subgraph of
+ * the edge's dependency DAG. Exported for that test. */
+export const GENERATION_PREREQS: Record<string, string[][]> = {
   "discovery-kit": [["charter"]],
   "domain-ontology": [["discovery-kit"]],
   "current-state-atlas": [["discovery-kit"]],
