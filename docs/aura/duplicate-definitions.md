@@ -72,7 +72,12 @@ Two copies, no test between them; when they diverge, nothing complains.
 - **Drift = SILENT.** Raise the client `maxLength` above the edge cap and the user types text
   the server silently truncates on submit — data loss, no notice. Lower the copilot budget on
   one side and advice truncates mid-sentence looking complete.
-- **Guard:** none. Same shape as S2 — a shared numeric contract with no shared source.
+- **Guard:** the **answer-char cap is now managed** — client `MAX_ANSWER_CHARS` (in `blobGuard.ts`,
+  used by `FlowRespond.tsx`) is pinned to the edge `flow-portal` `MAX_ANSWER_CHARS` by
+  `answerCapLockstep.test.ts` (a client that allows more than the edge now fails CI instead of
+  silently truncating a stakeholder's answer on submit). The `1200` copilot-token cap remains
+  **edge-internal** (`copilot-chat`/`run-agent` `maxTokens`); the client `flowWatchers.ts:468` `1200`
+  is a different concept (flattened-text threshold), not the same contract — no lockstep needed.
 
 ---
 
