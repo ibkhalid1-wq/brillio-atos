@@ -42,7 +42,17 @@ they keep writing during warn mode and are retired only after enforce-flip with
    The migration's retirement is **shape-agnostic** (a rename), so it is safe
    either way. **If the table holds rows, do NOT migrate them into `audit_events`**
    — that would contaminate a complete log with an incomplete one. Leave them in
-   the retired table.
+   the retired table. *(Three historical `CREATE TABLE IF NOT EXISTS` shapes exist,
+   not two: `20260613_missing_tables` and `20260613093000` both use
+   `event_type`/`payload`; `20260714` uses `kind`/`detail`. Whichever applied first
+   wins; the later ones no-op.)*
+   **S7 resolved (2026-08-07, commit 4e476b2):** the ONE live client writer to this
+   table — `logFlowEvent` (flowEvents.ts), called once from `usePrograms` on each
+   blob save — has been **removed**. It had no reader anywhere, was best-effort, and
+   was almost certainly already failing silently (it inserted the `kind`/`detail`
+   shape, which the deployed table likely lacks). So the rename **no longer breaks a
+   live write path**; this prerequisite is now pure data-inspection (are there rows
+   to preserve), not code-risk.
 2. **Confirm the three state-bearing tables are the complete set.** I verified
    these three carry mutable state; if a fourth table holds engagement state,
    the trigger must attach there too or completeness covers only part.
@@ -68,6 +78,42 @@ they keep writing during warn mode and are retired only after enforce-flip with
   `audit_events` (table owner, RLS not FORCEd) — so it can insert while all app
   roles have INSERT revoked. Confirm the migration runs as such an owner.
 - `adam_programs.id` is text in practice; `audit_events.program_id`/`row_pk` are text.
+
+### S8 — the `program_id` type divergence (declared vs reality), recorded
+**Reality: `adam_programs.id` is `text`.** Proof without DB access: three migrations
+declare `program_id text references adam_programs(id)`
+(`20260616_program_access_control:18`, `20260619_program_snapshots:17`,
+`20260715_program_texts:21`). Postgres rejects a `text → uuid` FK, so for those to
+apply, `adam_programs.id` must be `text` — the `uuid` DDL in `20260610_adam_backend:2`
+was a `CREATE TABLE IF NOT EXISTS` that no-op'd over a pre-existing text table (the
+"altered out of band" the scratch bootstrap notes). Program ids are human slugs
+("laila-crm"), not uuids — consistent with text.
+
+**Step 1 already uses the real type — verified by reading:**
+- `audit_events.program_id text`, `row_pk text` (migration :83–84).
+- The trigger reads both via JSONB `->>` (always yields text — column type is
+  irrelevant to it) and, for `adam_programs` rows (which have no `program_id`
+  column), falls back to the row's `id` (migration :121–123).
+- RLS casts `id::text` (`:225`) — a no-op if `id` is already text, safe if it were uuid.
+- The scratch bootstrap creates `adam_programs.id text` + text `program_id` FKs
+  (`scratch_01_bootstrap.sql:17–41`), with a comment stating this matches production
+  reality. So the trigger is verified against the real shape, not a fiction.
+- **No migration or bootstrap change is needed for Step 1.**
+
+**Divergence table — DDL vs reality (record only; do NOT fix beyond Step 1):**
+
+| Table | column | DDL says | reality (inferred) | note |
+|---|---|---|---|---|
+| `adam_programs` | `id` | `uuid` (20260610:2) | **text** | IF-NOT-EXISTS no-op'd over a text table |
+| `adam_agent_runs` | `program_id` | `uuid` (001:5) | text (FKs a text id) | trigger reads via `->>`, unaffected |
+| `adam_program_artifacts` | `program_id` | `uuid` (20260612_artifacts:3) | text (FKs a text id) | trigger reads via `->>`, unaffected |
+| `adam_agent_observations`,`adam_agent_schedules`,`adam_autonomy_*`,`adam_agent_events`,`adam_document_attachments`,`adam_artifact_validations`,`adam_pattern_library`,`20260613093000` events | `program_id uuid` | uuid-camp DDL | text in reality | not touched by Step 1 |
+| `adam_program_members`,`adam_program_snapshots`,`program_texts`,`20260613_missing_tables.*` | `program_id text` | text-camp DDL | text | already correct |
+
+The uuid-camp FK DDLs either did not apply as written or were reconciled out-of-band
+when `adam_programs.id` became text; determining each deployed column's actual type
+needs a DB introspection query (`information_schema.columns`) — added to the
+post-apply list. **Not a Step-1 blocker:** the trigger is type-agnostic (JSONB `->>`).
 
 ## Step 1b — the enforcement model (REVISED; supersedes "wire intent before each write")
 
@@ -239,10 +285,39 @@ that implied full coverage would be worse than none — these are the holes.
   is `deno check`-able / exercised, using the corrected inventory above. (`saveProgramToSupabase`
   delete and the vocabulary census enumeration, the two lower-risk pre-wiring items, ARE done.)
 
+## Post-apply items (need the Supabase CLI — cannot be done from this repo)
+Do these right after `supabase db push`, in order:
+1. **Regenerate Supabase types (L1).** `audit_events` is NOT in the generated
+   `src/integrations/supabase/types.ts` — it can't be, the migration hasn't applied.
+   Run `supabase gen types typescript --project-id <id> > src/integrations/supabase/types.ts`
+   so `audit_events` (and its `intent_missing`, `partial`, `program_id text` columns)
+   become typed. **Not blocking today:** no TS code reads or writes `audit_events` (the
+   trigger writes it in SQL; `intent_missing` is set by the trigger, not TS), so there
+   is no current type-safety gap — this is purely to type a *future* audit reader. Do
+   **not** hand-author the table into `types.ts`: it is codegen output and a hand-edit
+   would be clobbered on the next regen (and would be pretending a hand-authored type is
+   generated). If a reader is needed before regen, use a structural cast at the call
+   site (the pattern the now-deleted `flowEvents.ts` used).
+2. **Introspect the real `program_id` column types (S8 follow-through).** Confirm the
+   divergence table above against the live DB:
+   ```sql
+   select table_name, column_name, data_type from information_schema.columns
+    where table_schema='public' and column_name in ('id','program_id')
+      and table_name like 'adam_%' order by table_name, column_name;
+   ```
+   Reconcile any uuid-camp column that is actually uuid (would only matter to a future
+   FK/join, not to the trigger). Record, don't rush — it is not a Step-1 blocker.
+
 ## Definition-of-done status for Step 1
 - [x] Invariant designed and expressed as a migration + verify script.
+- [x] **Step-1 blockers cleared before first apply (2026-08-07):** S7 live writer to the
+  retired table removed (4e476b2); S8 type-reality confirmed — migration + scratch
+  bootstrap both use `text`, trigger is type-agnostic (no change needed); L1 typed-
+  `audit_events` scheduled as a post-apply item above.
 - [ ] Migration applied and reversible — **blocked on your environment** (author-side had no DB).
 - [ ] Real data run through it, numbers reported — **blocked**; verify script ready.
-- [x] Nothing downstream removed (retirement is additive rename; legacy trails still write).
+- [x] Nothing downstream removed. Retirement is an additive rename. The one client writer
+  to `adam_program_events` (`logFlowEvent`) is now deleted (S7) — it was dead and
+  silently failing; the separate legacy `adam_audit_log` trail is untouched.
 - [ ] Claims register updated — pending apply; on success, "auditable" moves from
   false to true (complete + affected_id), per the Step-6 claims register.
