@@ -47,6 +47,13 @@
 -- supplies actor only for service-role (no JWT). See the FIELD-TRUST AUDIT note at
 -- the insert: actor was the only intent field with a server-derived value to defend.
 --
+-- PARTIAL is 3-STATE: NULL=unknown (default; nobody asserted either way), true/false
+-- ONLY when a writer affirmatively claims. NEVER default false — intent_missing,
+-- unwired, and crashed paths land NULL. Defaulting false would assert a completeness
+-- the code never verified — the exact outputRepaired-under-status:complete defect
+-- class this build exists to remove. partial is asserted by the same code that would
+-- have produced the truncation, so silence must read as silence, not "complete".
+--
 -- COST GUARD: no blob deep-diff. Floor = changed top-level doc keys + row
 -- fingerprints. affected_id stays a JSON-pointer path where no stable id exists
 -- yet (blob elements get ids only at steps 2-4); no synthetic id scheme.
@@ -80,7 +87,7 @@ create table if not exists public.audit_events (
   action_type    text,                                    -- from intent (app-asserted; no server truth to defend)
   affected_kind  text,                                    -- from intent
   affected_id    text,                                    -- from intent; JSON-pointer where no id
-  partial        boolean     not null default false,      -- from intent
+  partial        boolean,                                 -- 3-STATE: NULL=unknown (DEFAULT; nobody asserted), true/false ONLY when a writer affirmatively claims. intent_missing/unwired/crashed => NULL, never false.
   intent_missing boolean     not null default false,      -- true when no intent published
   before_fp      text,                                    -- md5 fingerprint of OLD doc/row
   after_fp       text,                                    -- md5 fingerprint of NEW doc/row
@@ -176,7 +183,7 @@ begin
     TG_TABLE_NAME, TG_OP, v_row_pk, v_program_id,
     v_actor, v_mismatch,
     v_intent->>'action_type', v_intent->>'affected_kind', v_intent->>'affected_id',
-    coalesce((v_intent->>'partial')::boolean, false),
+    (v_intent->>'partial')::boolean,     -- NULL unless the writer asserted; NEVER coerced to false
     v_missing,
     md5(coalesce(v_old_doc::text, v_old::text, '')),
     md5(coalesce(v_new_doc::text, v_new::text, '')),

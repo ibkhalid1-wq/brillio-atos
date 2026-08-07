@@ -83,6 +83,9 @@ Expected:
 - `C6 owner-only read: PASS`.
 - `C1 client missing-intent recorded not raised: PASS`.
 - `C2 service missing-intent raises: PASS`.
+- `C7a/b/c partial three-state: PASS` — an intent_missing event has `partial` NULL,
+  an affirmative `partial=false` is recorded, and NULL (never asserted) is distinct
+  from false. `partial` is never defaulted to false.
 
 **B6. Trigger cost at blob size:**
 ```
