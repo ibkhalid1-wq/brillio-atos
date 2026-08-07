@@ -109,6 +109,15 @@
 .v3ln-rf.act:hover{background:color-mix(in srgb,var(--v3-accent-2) 10%,transparent)}
 .v3ln-rf.act:focus-visible{outline:2px solid var(--v3-accent-2);outline-offset:2px}
 .v3ln-rf.act.busy{cursor:default;opacity:.6}
+/* generatable: the artifact isn't on the record yet but its inputs are — the
+ * whole tile is the action. Keyed to the movement hue (not accent-2) so it
+ * reads as "ready to make", set apart from the quiet "needs refresh" chip. */
+.v3ln-stn.gen{border-style:dashed;border-color:color-mix(in srgb,var(--mv) 42%,var(--fs-line));
+  background:color-mix(in srgb,var(--mv) 4%,var(--fs-card))}
+.v3ln-stn.gen:hover:not(:disabled){border-style:solid}
+.v3ln-rf.gen{border-color:var(--mv);color:var(--mv);
+  background:color-mix(in srgb,var(--mv) 12%,transparent)}
+.v3ln-rf.gen.busy{opacity:.6}
 .v3ln-stn-sub{font-size:10.5px;color:var(--v3-text-muted);line-height:1.4}
 /* an artifact's own sections at a glance — visibility without opening it */
 .v3ln-stn-secs{display:flex;gap:5px;flex-wrap:wrap;margin-top:1px}

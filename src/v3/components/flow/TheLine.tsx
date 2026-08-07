@@ -139,24 +139,34 @@ function Segments({ station }: { station: LineStation }) {
   );
 }
 
-function Station({ station, onOpen, onRegen, regenerating }: {
+function Station({ station, onOpen, onRegen, onGenerate, regenerating, generating }: {
   station: LineStation;
   onOpen: (card: ArtifactCardModel, section?: string) => void;
   onRegen?: (card: ArtifactCardModel) => void;
+  onGenerate?: (card: ArtifactCardModel) => void;
   regenerating?: boolean;
+  generating?: boolean;
 }) {
-  const openable = !!station.card?.present;
+  const present = !!station.card?.present;
   const canRegen = !!(station.needsRefresh && station.card && onRegen);
+  // Not on the record yet, but its upstream inputs are — the whole tile
+  // becomes a Generate button (it has nothing to open).
+  const canGen = !present && !!station.canGenerate && !!station.card && !!onGenerate;
   return (
-    <button type="button" className="v3ln-stn" disabled={!openable}
-      title={openable ? `Open ${station.title}` : `${station.title} — not seeded yet`}
-      onClick={() => { if (station.card) onOpen(station.card); }}>
+    <button type="button" className={`v3ln-stn${canGen ? " gen" : ""}`} disabled={!present && !canGen}
+      title={present ? `Open ${station.title}`
+        : canGen ? `Generate ${station.title} — its inputs are ready`
+        : `${station.title} — not seeded yet`}
+      onClick={() => {
+        if (present && station.card) onOpen(station.card);
+        else if (canGen && !generating) onGenerate!(station.card!);
+      }}>
       <span className="v3ln-stn-h">
         {!station.perArea ? (
           <span className={`v3ln-g m${station.maturity}`} aria-hidden="true">{LINE_GLYPHS[station.maturity]}</span>
         ) : null}
         <span className="v3ln-stn-n">{station.title}</span>
-        {station.needsRefresh ? (
+        {present && station.needsRefresh ? (
           // The badge IS the action: clicking it regenerates from the
           // refreshed record instead of opening the stale document. A span
           // (not a nested button — invalid inside the station button) with
@@ -174,6 +184,13 @@ function Station({ station, onOpen, onRegen, regenerating }: {
               {regenerating ? "regenerating…" : "needs refresh ↻"}
             </span>
           ) : <span className="v3ln-rf">needs refresh ↻</span>
+        ) : canGen ? (
+          // Inputs are ready but nothing's been generated — a visual badge for
+          // the action the tile itself carries (aria-hidden: the tile's own
+          // title announces it, and a nested control would be redundant).
+          <span className={`v3ln-rf gen${generating ? " busy" : ""}`} aria-hidden="true">
+            {generating ? "generating…" : "generate ↧"}
+          </span>
         ) : null}
       </span>
       {station.subtitle ? <span className="v3ln-stn-sub">{station.subtitle}</span> : null}
@@ -563,6 +580,18 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
     window.setTimeout(() => setNote(null), 6000);
   };
 
+  // First generation of an artifact whose upstream inputs are ready. Same
+  // dispatch as regenerate; cleared implicitly when the document lands and the
+  // station stops being generatable.
+  const [genBusy, setGenBusy] = useState<Record<string, boolean>>({});
+  const generate = (card: ArtifactCardModel) => {
+    if (!onRunAgent) return;
+    onRunAgent(card.id, card.movementId);
+    setGenBusy((s) => ({ ...s, [card.id]: true }));
+    setNote(`Generating ${card.title} from the record — the station fills in when it lands.`);
+    window.setTimeout(() => setNote(null), 6000);
+  };
+
   // AUTO-ACCEPT heard voices — classic runs this on canvas mount; without it
   // a Line-only session never marks evidence-backed voices Heard. Identical
   // write, idempotent: attestHeardRoster returns null once settled.
@@ -750,7 +779,9 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                     {stns.map((s) => (
                       <Station key={s.id} station={s} onOpen={openStation}
                         onRegen={onRunAgent ? regenerate : undefined}
-                        regenerating={!!(s.card && regenBusy[s.card.id])} />
+                        onGenerate={onRunAgent ? generate : undefined}
+                        regenerating={!!(s.card && regenBusy[s.card.id])}
+                        generating={!!(s.card && genBusy[s.card.id])} />
                     ))}
                   </div>
                 </div>
@@ -774,7 +805,9 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
             {band.stations.map((s) => (
               <Station key={s.id} station={s} onOpen={openStation}
                 onRegen={onRunAgent ? regenerate : undefined}
-                regenerating={!!(s.card && regenBusy[s.card.id])} />
+                onGenerate={onRunAgent ? generate : undefined}
+                regenerating={!!(s.card && regenBusy[s.card.id])}
+                generating={!!(s.card && genBusy[s.card.id])} />
             ))}
           </div>
           )}
