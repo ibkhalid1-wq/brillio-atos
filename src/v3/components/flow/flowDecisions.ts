@@ -9,6 +9,7 @@
  * the caller persists via updateProgramData, the app's standard write path).
  */
 import type { ProgramSummary } from "@/new/types";
+import { FLOW_ATTESTATION_CAP } from "@/v3/lib/blobGuard";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
 import { readMovementInputs, parseGridRows } from "@/v3/components/flow/flowShellData";
 import { listFollowUps } from "@/v3/components/flow/flowMeetings";
@@ -452,7 +453,7 @@ export function resolveFlowDecision(
     action: `${resolution === "confirmed" ? "Confirmed" : "Declined"}: ${String(target.title ?? "decision")}`,
   };
   const log = Array.isArray(nextInner.flowAttestations) ? (nextInner.flowAttestations as unknown[]) : [];
-  nextInner = { ...nextInner, flowAttestations: [...log, attestation].slice(-200) };
+  nextInner = { ...nextInner, flowAttestations: [...log, attestation].slice(-FLOW_ATTESTATION_CAP) };
 
   return wrapProgramState(wrapper, nextInner, usesNestedData);
 }

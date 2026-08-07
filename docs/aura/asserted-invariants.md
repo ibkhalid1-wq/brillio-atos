@@ -92,10 +92,29 @@ resurrect a removal, or drop an addition" **[verified]**
 - `supabase/functions/_shared/flowAreas.ts` carried three "MUST stay in lockstep" / "Keep in
   lockstep" comments against `src/v3/components/flow/flowAreas.ts`, with **no test**. The
   `AREA_KEYWORDS` and `AREA_STOP_TOKENS` tables are byte-identical today.
-- **Now enforced:** `src/v3/__tests__/flowAreasLockstep.test.ts` (added here) text-parses both
-  and asserts the two tables match — a keyword added on one side only now fails CI instead of
-  silently splitting the Show demo by the wrong area. (Also the S1 finding in
-  `duplicate-definitions.md`; this closes it.)
+- **First pass** added `src/v3/__tests__/flowAreasLockstep.test.ts` pinning the two **tables**.
+- **This pass** closed the remaining half the comment claimed: the comment says core *logic*
+  must stay in lockstep, but only the tables were checked — the **consuming functions** were
+  copied with nothing enforcing them. Verified directly: `inferArea`, `labelTokens`,
+  `labelsOverlap` are byte-identical across client/edge and are **now asserted** by the same
+  test (function-body parity). But `stakeholderPrimaryArea` has already **diverged** — the
+  client layers an operator role→area override the edge omits — so a blanket "core logic in
+  lockstep" claim was false for it. The edge header comment is **narrowed** to name the shared
+  base (tables + three helpers) as what is locked, and to flag `stakeholderPrimaryArea` as
+  deliberately divergent (base pinned here; full behaviour pinned by `flowLibs.test.ts`). The
+  document-vs-enforcement gap this file is about is now closed for flowAreas: what the comment
+  claims is exactly what the test checks.
+
+### I7 · `AGENT_ID_ALIASES` — assumed duplicated, actually **divergent** *(finding, not fixed)*
+- The duplicate-definition audit flagged `AGENT_ID_ALIASES` as "duplicated client and edge with
+  no test," implying a lockstep pair. **It is not.** `src/v3/lib/agentMeta.ts` maps planner
+  id-variants of Operate deliverables (`risk-log`/`risk-register`→`risk`, `adoption-plan`→
+  `adoption`); `supabase/functions/run-agent/index.ts` maps generator agent aliases
+  (`executive-brief`→`daily-briefing`, `portfolio-intelligence`→`health-heatmap`,
+  `steerco-prep`→`steerco-agenda-builder`). **Zero key overlap** — two unrelated maps that
+  happen to share a name. A byte-identity lockstep test would be *wrong* and would fail on
+  correct code. No test added: the honest resolution is this record. If drift-protection is
+  wanted later, it should pin each side's contents independently, not assert equality.
 
 ---
 
@@ -134,9 +153,17 @@ a runtime guard. These are healthy — listed so the audit isn't read as "every 
 | I3 | operator overrides "never dropped" | **SILENT** | right | prompt only | flag (needs post-regen diff) |
 | I4 | approved artifact "never drifts" | SILENT? | right, narrow | partial | trace cross-phase before Step 5 |
 | I5 | confidenceHistory "append-only" | silent, harmless | imprecise | logic | flag wording |
-| I6 | flowAreas "MUST stay in lockstep" | was silent | right | **now a test** | ✅ enforced this pass |
+| I6 | flowAreas "MUST stay in lockstep" | was silent | right | **now a test (tables + 3 helpers)** | ✅ enforced + comment narrowed |
+| I7 | AGENT_ID_ALIASES "duplicated" | n/a | WRONG (not a dup) | n/a | finding — divergent maps, no lockstep possible |
 
 *Swept 2026-08-07, two lenses; load-bearing findings re-read and marked [verified], the rest
 [reported]. `flowShip` index ids were over-flagged by the sweep (no comment asserts stability
-there) and excluded. One test added (I6); the wrong-comment findings (I1, I2) are flagged, not
-rewritten — fixing them is a behaviour change with persisted-reference blast radius.*
+there) and excluded. The wrong-comment findings (I1, I2) are flagged, not rewritten — fixing
+them is a behaviour change with persisted-reference blast radius.*
+
+*Extended 2026-08-07 (autonomous pass): I6's function-body parity added (`inferArea`,
+`labelTokens`, `labelsOverlap`) and the edge comment narrowed to exclude the divergent
+`stakeholderPrimaryArea`; I7 recorded (AGENT_ID_ALIASES is not a duplicate — no lockstep test).
+Separately, the `flowAttestations` 200-cap literal (≈20 client sites) was extracted to a single
+`FLOW_ATTESTATION_CAP` in `blobGuard.ts` so one drifting writer can't silently move the bound;
+the edge does not cap this log.*

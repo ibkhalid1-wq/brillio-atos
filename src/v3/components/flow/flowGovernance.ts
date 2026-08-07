@@ -8,6 +8,7 @@
  * pure blob transforms; callers persist via updateProgramData.
  */
 import type { ProgramSummary } from "@/new/types";
+import { FLOW_ATTESTATION_CAP } from "@/v3/lib/blobGuard";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
 import type { GateCheckItem } from "@/v3/components/flow/flowShellData";
 
@@ -114,7 +115,7 @@ function mutateGovernance(
   return wrapProgramState(wrapper, {
     ...inner,
     flowGovernance: nextGovernance,
-    flowAttestations: [...log, entry].slice(-200),
+    flowAttestations: [...log, entry].slice(-FLOW_ATTESTATION_CAP),
   }, usesNestedData);
 }
 

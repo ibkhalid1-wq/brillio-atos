@@ -15,6 +15,7 @@
  * is never asked twice — a decline permanently retires that exact set.
  */
 import type { ProgramSummary } from "@/new/types";
+import { FLOW_ATTESTATION_CAP } from "@/v3/lib/blobGuard";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
 import { flowMovements, movementEvidence, parseGridRows, readMovementInputs, evidenceStamp } from "@/v3/components/flow/flowShellData";
 import { listFlowDecisions, handledContradictionStatements, isContradictionHandled } from "@/v3/components/flow/flowDecisions";
@@ -510,6 +511,6 @@ export function queueWatcherProposal(program: ProgramSummary, proposal: WatcherP
     flowAttestations: [...log, {
       ts: proposal.createdAt, agentId: proposal.agentId, phaseId: proposal.movementId, tier: 2,
       action: `Proposed: ${proposal.title}`, detail: proposal.summary.slice(0, 160),
-    }].slice(-200),
+    }].slice(-FLOW_ATTESTATION_CAP),
   }, usesNestedData);
 }

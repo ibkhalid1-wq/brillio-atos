@@ -18,6 +18,15 @@ import { z } from "zod";
 /** Bump when a migration in MIGRATIONS changes the blob's shape. */
 export const BLOB_VERSION = 2;
 
+/**
+ * The append-only attestation log is bounded to the most recent N entries at
+ * every writer. It was a bare `200` literal at ~20 call sites, so one writer
+ * drifting to a different number would silently widen or narrow the bound with
+ * nothing to catch it. This is the single source of truth — every writer slices
+ * to `-FLOW_ATTESTATION_CAP`. (Client-side only: the edge does not cap this log.)
+ */
+export const FLOW_ATTESTATION_CAP = 200;
+
 const record = z.record(z.string(), z.unknown());
 
 const decision = z.object({

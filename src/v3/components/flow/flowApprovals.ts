@@ -11,6 +11,7 @@
  * (this file, phases A/B) and the edge route (phase C).
  */
 import type { ProgramSummary } from "@/new/types";
+import { FLOW_ATTESTATION_CAP } from "@/v3/lib/blobGuard";
 import type { PhaseDefinition } from "@/v3/lib/methodology";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
 import {
@@ -347,7 +348,7 @@ export function mintApprovalRequest(
       ts: now, agentId: actor, phaseId: input.movementId, tier: 2,
       action: `Sent for approval — ${input.artifactTitle}`,
       detail: `Awaiting ${approver.name}${approver.role ? ` (${approver.role})` : ""}'s sign-off.`,
-    }].slice(-200),
+    }].slice(-FLOW_ATTESTATION_CAP),
   }, usesNestedData);
 }
 
@@ -415,7 +416,7 @@ export function ingestApprovalResponse(program: ProgramSummary, itemId: string, 
       ts: now, agentId: actor, phaseId: movementId, tier: 2,
       action: verdict === "approved" ? `Approved — ${artifactTitle}` : `Changes requested — ${artifactTitle}`,
       detail: `${approver.name}${approver.role ? ` (${approver.role})` : ""}${comment ? ` — “${comment.slice(0, 120)}”` : ""}`,
-    }].slice(-200),
+    }].slice(-FLOW_ATTESTATION_CAP),
   }, usesNestedData);
 }
 

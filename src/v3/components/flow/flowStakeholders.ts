@@ -8,6 +8,7 @@
  * collect via a link, then capture what came back.
  */
 import type { ProgramSummary } from "@/new/types";
+import { FLOW_ATTESTATION_CAP } from "@/v3/lib/blobGuard";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
 import { meetingKit, askableMovementGaps, sponsorLinkQuestions } from "@/v3/components/flow/flowMeetings";
 import { readContradictions, flowMovements, movementEvidence, readMovementInputs, parseGridRows, deferredAsks } from "@/v3/components/flow/flowShellData";
@@ -1096,7 +1097,7 @@ export function renamePersonInProgram(
       ts: new Date().toISOString(), agentId: actor, phaseId: "listen", tier: 2,
       action: `Person renamed — ${from} → ${to}`,
       detail: "roster, contact binding, links and approval packs updated; historical evidence keeps the original attribution",
-    }].slice(-200),
+    }].slice(-FLOW_ATTESTATION_CAP),
   }, usesNestedData);
 }
 
@@ -1220,6 +1221,6 @@ export function renameRoleInProgram(
       ts: new Date().toISOString(), agentId: actor, phaseId: "listen", tier: 2,
       action: `Role renamed — ${from} → ${to}`,
       detail: "kit roster, coverage lists, contact binding, directory and links updated",
-    }].slice(-200),
+    }].slice(-FLOW_ATTESTATION_CAP),
   }, usesNestedData);
 }

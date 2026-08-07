@@ -1,10 +1,14 @@
 /**
  * Deterministic business-AREA model for the edge — a faithful, dependency-free
- * port of the client model in `src/v3/components/flow/flowAreas.ts`. The two
- * MUST stay in lockstep: the generator tags experience-design flows and demo
- * scripts with the SAME area the client's `stakeholderPrimaryArea` would assign,
- * so the Show demo surface can default a recipient to their own area's flow and
- * name it — exactly as the Listen review surfaces already scope by area.
+ * port of the client model in `src/v3/components/flow/flowAreas.ts`. What must
+ * stay byte-identical is the shared BASE — the `AREA_KEYWORDS` / `AREA_STOP_TOKENS`
+ * tables and the pure helpers `inferArea` / `labelTokens` / `labelsOverlap` — so
+ * the generator tags experience-design flows and demo scripts with the SAME base
+ * area the client would, and the Show demo surface can default a recipient to
+ * their own area's flow and name it. That base is now enforced by
+ * `flowAreasLockstep.test.ts`. NOTE: `stakeholderPrimaryArea` itself deliberately
+ * diverges — the client layers an operator role→area override the edge omits — so
+ * it is NOT byte-locked; only its shared base is.
  *
  * Deno can't import the client module (it pulls React and `@/`-alias runtime
  * deps), so the keyword table and scoring are re-stated here. When you change

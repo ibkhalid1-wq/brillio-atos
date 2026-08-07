@@ -5,6 +5,7 @@
  * over the stored doc, stamped and attested like every other action.
  */
 import type { ProgramSummary } from "@/new/types";
+import { FLOW_ATTESTATION_CAP } from "@/v3/lib/blobGuard";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
 import { hasBlockingOntologyViolations } from "@/v3/components/flow/flowOntologyConstraints";
 import { overrideNotes, appendOperatorOverrides } from "@/v3/components/flow/flowOperatorOverrides";
@@ -106,7 +107,7 @@ export function applyArtifactEdit(
 
   return wrapProgramState(
     wrapper,
-    { ...inner, [input.fieldKey]: nextDoc, ...overrides, phaseInputs, ...phaseArtifactsPatch, flowAttestations: [...log, attestation].slice(-200) },
+    { ...inner, [input.fieldKey]: nextDoc, ...overrides, phaseInputs, ...phaseArtifactsPatch, flowAttestations: [...log, attestation].slice(-FLOW_ATTESTATION_CAP) },
     usesNestedData,
   );
 }
