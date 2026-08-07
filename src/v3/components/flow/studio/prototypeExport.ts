@@ -8,6 +8,7 @@
  * externally modifiable with normal tooling instead of a lone blob.
  */
 import JSZip from "jszip";
+import { resolveTheme, meridianStylesheet, type PrototypeTheme } from "@/v3/lib/prototypeDesignSystem";
 
 export interface PrototypeProjectInput {
   html: string;
@@ -76,9 +77,10 @@ function buildReadme(input: PrototypeProjectInput, has: { css: boolean; js: bool
     "## Files",
     "",
     "- `index.html` — the app markup and screens",
-    ...(has.css ? ["- `styles.css` — the design system + component styles"] : []),
+    ...(has.css ? ["- `styles.css` — this prototype's screen styles"] : []),
+    "- `meridian.css` — the Meridian design system (appearance layer: tokens + `.m-*` component patterns). Link it and use the `.m-*` classes to inherit the house look.",
     ...(has.js ? ["- `app.js` — in-page navigation and interactions"] : []),
-    ...(has.tokens ? ["- `design-tokens.json` — the governed theme (brand/accent/neutral, type, spacing, radius)"] : []),
+    ...(has.tokens ? ["- `design-tokens.json` — the governed theme (brand/ink/surface, semantics, type, spacing, radius) — the source to re-skin from"] : []),
     ...(has.fixtures ? ["- `fixtures.json` — the seed records the screens are populated with"] : []),
   ];
   if (screens.length) {
@@ -103,8 +105,14 @@ export function buildPrototypeProject(input: PrototypeProjectInput): Record<stri
   const files: Record<string, string> = { "index.html": indexHtml };
   if (css) files["styles.css"] = css;
   if (js) files["app.js"] = js;
-  const hasTokens = !!(input.theme && Object.keys(input.theme).length);
-  if (hasTokens) files["design-tokens.json"] = `${JSON.stringify(input.theme, null, 2)}\n`;
+  // Meridian — the governed design system — always travels with the export, and
+  // the exported tokens default to it (a sparse/absent theme still yields a
+  // complete, coherent set). `meridian.css` is the appearance layer a coding
+  // agent can apply to re-skin the prototype to the house system.
+  const tokens = resolveTheme(input.theme as Partial<PrototypeTheme> | null);
+  files["meridian.css"] = meridianStylesheet(tokens);
+  files["design-tokens.json"] = `${JSON.stringify(tokens, null, 2)}\n`;
+  const hasTokens = true;
   const fixtures = input.pack && Array.isArray(input.pack.fixtures) ? input.pack.fixtures : null;
   const hasFixtures = !!(fixtures && fixtures.length);
   if (hasFixtures) files["fixtures.json"] = `${JSON.stringify(fixtures, null, 2)}\n`;
