@@ -28,6 +28,51 @@ import {
 import { programAreas, areaProgress } from "@/v3/components/flow/flowAreas";
 import { loopState } from "@/v3/components/flow/flowLoop";
 import { artifactApprovalRollup } from "@/v3/components/flow/flowApprovals";
+import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
+import { FORMAL_ARTIFACT_FIELD_KEYS } from "@/v3/lib/formalArtifacts";
+
+/** The sections we preview on each Design-Loop station — a curated subset of
+ * the studio's docOrder, with human labels. A `count` section shows its list
+ * length ("6 screens"); a flag section just shows it's present ("theme"). */
+const STATION_SECTIONS: Record<string, Array<{ key: string; label: string; count?: boolean }>> = {
+  "architecture-strategy": [
+    { key: "candidates", label: "options", count: true }, { key: "recommendation", label: "choice" },
+  ],
+  "experience-design": [
+    { key: "designIntent", label: "intent" }, { key: "theme", label: "theme" },
+    { key: "screens", label: "screens", count: true }, { key: "flows", label: "flows", count: true },
+    { key: "workflowMachines", label: "state machines", count: true },
+  ],
+  "agentic-blueprint": [
+    { key: "agents", label: "agents", count: true }, { key: "journeys", label: "journeys", count: true },
+    { key: "orchestration", label: "orchestration" }, { key: "dataContracts", label: "data contracts", count: true },
+    { key: "hitlPoints", label: "HITL points", count: true }, { key: "evalPlan", label: "evals" },
+    { key: "buildSequence", label: "build order" },
+  ],
+  "prototype-build": [{ key: "screens", label: "screens", count: true }],
+};
+
+/** Present sections of an artifact, as compact preview strings — read from its
+ * stored document so the Work board shows what's inside without opening it. */
+function sectionPreview(program: ProgramSummary, artifactId: string): string[] | undefined {
+  const spec = STATION_SECTIONS[artifactId];
+  const fieldKey = FORMAL_ARTIFACT_FIELD_KEYS[artifactId];
+  if (!spec || !fieldKey) return undefined;
+  const doc = readArtifactDoc(program, fieldKey);
+  if (!doc) return undefined;
+  const out: string[] = [];
+  for (const section of spec) {
+    const value = doc[section.key];
+    if (value == null || (typeof value === "string" && !value.trim())) continue;
+    if (Array.isArray(value)) {
+      if (!value.length) continue;
+      out.push(section.count ? `${value.length} ${section.label}` : section.label);
+    } else {
+      out.push(section.label);
+    }
+  }
+  return out.length ? out : undefined;
+}
 
 export type LineMaturity = 0 | 1 | 2 | 3 | 4;
 export const LINE_GLYPHS: Record<LineMaturity, string> = { 0: "○", 1: "◔", 2: "◑", 3: "◕", 4: "●" };
@@ -43,6 +88,12 @@ export interface LineStation {
   maturity: LineMaturity;
   perArea: LineSegment[] | null;
   needsRefresh: boolean;
+  /** The artifact's own sections at a glance ("intent · theme · 6 screens"),
+   * drawn from its stored document — visibility without opening the studio. */
+  sections?: string[];
+  /** Which half of the Design Loop this station belongs to: designing the
+   * build (Envision) vs validating it with clients (Show). */
+  lane?: "design" | "validate";
 }
 
 export interface LineGateItem { label: string; done: boolean; advisory: boolean; why?: string }
@@ -237,14 +288,18 @@ export function buildLineModel(program: ProgramSummary): LineModel {
       gate: loopGate,
       note: "Clients aren't asked while the team designs — their verdicts land at Validation, the Show half of this loop.",
       stations: [
-        station(program, card("architecture-strategy"), envisionOk),
-        station(program, card("experience-design"), envisionOk),
-        station(program, card("agentic-blueprint"), envisionOk),
-        station(program, proto, envisionOk, { id: "prototype", title: "Prototype" }),
-        station(program, demoCard, showOk, {
+        // Design half (Envision) — a pipeline: choose the shape, design the
+        // experience, blueprint the agents, build. Each carries its section
+        // preview so the phase's structure reads without opening a studio.
+        { ...station(program, card("architecture-strategy"), envisionOk), lane: "design", sections: sectionPreview(program, "architecture-strategy") },
+        { ...station(program, card("experience-design"), envisionOk), lane: "design", sections: sectionPreview(program, "experience-design") },
+        { ...station(program, card("agentic-blueprint"), envisionOk), lane: "design", sections: sectionPreview(program, "agentic-blueprint") },
+        { ...station(program, proto, envisionOk, { id: "prototype", title: "Prototype" }), lane: "design", sections: sectionPreview(program, "prototype-build") },
+        // Validate half (Show) — clients meet the built prototype.
+        { ...station(program, demoCard, showOk, {
           id: "validation", title: "Validation", perArea: validationSegments(),
           subtitle: SUBTITLES["demo-scripts"],
-        }),
+        }), lane: "validate" },
       ],
     },
     {

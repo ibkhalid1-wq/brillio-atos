@@ -94,6 +94,16 @@
 .v3ln-rf.act:focus-visible{outline:2px solid var(--v3-accent-2);outline-offset:2px}
 .v3ln-rf.act.busy{cursor:default;opacity:.6}
 .v3ln-stn-sub{font-size:10.5px;color:var(--v3-text-muted);line-height:1.4}
+/* an artifact's own sections at a glance — visibility without opening it */
+.v3ln-stn-secs{display:flex;gap:5px;flex-wrap:wrap;margin-top:1px}
+.v3ln-stn-sec{font:600 9.5px/1.5 inherit;color:var(--v3-accent-2);
+  background:color-mix(in srgb,var(--v3-accent-2) 7%,transparent);
+  border-radius:3px;padding:1px 6px;white-space:nowrap}
+/* Design / Validate lanes inside the Design Loop band */
+.v3ln-lane + .v3ln-lane{border-top:1px solid var(--fs-line)}
+.v3ln-lane-h{font:700 10px/1.4 inherit;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--v3-text-muted);padding:8px 14px 6px;
+  background:color-mix(in srgb,var(--v3-accent-2) 3%,var(--fs-card))}
 
 /* many-area summary: one slim meter grouped by maturity + counts in words */
 .v3ln-seg-sum{display:flex;flex-direction:column;gap:5px}
