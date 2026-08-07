@@ -58,13 +58,24 @@ many actions is flagged — that is a finding, not a name.
 | `schedule_meeting` | schedule a stakeholder meeting | program | flowMeetings |
 | `update_metric_registry` | change a governed metric definition | metric | governed metrics (F-002) |
 | `record_ship_action` | record a Ship-phase action | program | flowShip |
+| `update_milestones` | edit programme milestones | program | useMilestones |
+| `update_budget` | update budget tracking | program | useBudgetTracking |
+| `edit_notes` | edit programme notes | program | useProgramNotes |
+| `update_phase_progress` | record phase progress | program | usePhaseProgress |
+| `setup_program` | set up / configure the engagement | program | useProgramSetup |
+| `record_closure` | record programme closure | program | useClosure |
+| `resolve_inbox_decision` | resolve an Inbox decision | decision | useDecisionQueue |
+| `create_snapshot` | save a recovery snapshot of the engagement (safety ring) | program | useProgramSnapshots |
 
-**Provenance RESOLVED — LIVE, wire (see F3):** the Step-1b topology check found all of
-these `src/new/lib/*` hooks imported by `AppShellV3` (the live v3 chrome), so they are
-live and get wired: `update_milestones` (useMilestones), `update_budget`
-(useBudgetTracking), `edit_notes` (useProgramNotes), `update_phase_progress`
-(usePhaseProgress), `setup_program` (useProgramSetup), `record_closure` (useClosure),
-`resolve_inbox_decision` (useDecisionQueue). (`useGateReview` was already confirmed live.)
+**Provenance RESOLVED — LIVE (see F3):** the Step-1b topology check found these
+`src/new/lib/*` hooks imported by `AppShellV3` (the live v3 chrome), so they are live.
+Now enumerated above in §1 and per-site in §4 (naming done): `update_milestones`
+(useMilestones), `update_budget` (useBudgetTracking), `edit_notes` (useProgramNotes),
+`update_phase_progress` (usePhaseProgress), `setup_program` (useProgramSetup),
+`record_closure` (useClosure), `resolve_inbox_decision` (useDecisionQueue), and
+`create_snapshot` (useProgramSnapshots, adam_program_snapshots — a table the first
+census sweep missed). (`useGateReview` was already confirmed live.) Naming and census
+only — the intent wiring itself is Step-1b work, behind the gate.
 
 `save_program_state` — the generic whole-blob autosave/sync. **Not a real action.**
 It is the fallback the persistence layer uses; every write above ultimately lands
@@ -129,7 +140,13 @@ Every double-quoted `.from("<table>")` **write** (verb confirmed). Reads exclude
 | run-agent:5274 / :5294 / :5326 | update | `system.generate_artifact` (blob write of the generated doc) |
 | restore-artifact:198 | update | `system.restore_artifact` |
 | resume-agent:373 | update | `system.resume_agent_run` (blob restore on resume) |
-| **src/new/lib/*** (useMilestones:57, useBudgetTracking:57, useProgramNotes:22, usePhaseProgress:26, useClosure:52, useProgramSetup:109/120, useDecisionQueue:37) | update/upsert | **UNCERTAIN (F3)** — provisional names in §1; confirm chrome is live first |
+| useMilestones.ts:57 | update | `update_milestones` |
+| useBudgetTracking.ts:57 | update | `update_budget` |
+| useProgramNotes.ts:22 | update | `edit_notes` |
+| usePhaseProgress.ts:26 | update | `update_phase_progress` |
+| useClosure.ts:52 | update | `record_closure` |
+| useProgramSetup.ts:109 / :120 | update / upsert | `setup_program` |
+| useDecisionQueue.ts:37 | update | `resolve_inbox_decision` |
 
 ### `adam_agent_runs`
 | site | verb | action_type |
@@ -151,6 +168,14 @@ Every double-quoted `.from("<table>")` **write** (verb confirmed). Reads exclude
 | run-agent:5043 | update(superseded_*) | `system.generate_artifact` (supersede prior version) |
 | restore-artifact:179 | (write) | `system.restore_artifact` |
 
+### `adam_program_snapshots`
+Missed by the first census sweep (a separate table from the three state-bearing
+ones); useProgramSnapshots is imported by `AppShellV3`, so it is live.
+| site | verb | action_type |
+|---|---|---|
+| useProgramSnapshots.ts:123 | insert | `create_snapshot` |
+| useProgramSnapshots.ts:134 | delete | `create_snapshot` *(ring prune — housekeeping in the same action: drops the oldest beyond the retention budget)* |
+
 ## §5 · `affected_kind` — the closed set
 
 Seven values — the *type* of thing an action touches. The exact sub-element is the
@@ -158,7 +183,7 @@ Seven values — the *type* of thing an action touches. The exact sub-element is
 
 | affected_kind | is | action_types that pair with it |
 |---|---|---|
-| `program` | the engagement row / whole blob | create/clone/rename/archive/migrate/save_program_state, tag_claim, comment_claim, mint_*, schedule_meeting, record_ship_action, system.record_link_engagement |
+| `program` | the engagement row / whole blob | create/clone/rename/archive/migrate/save_program_state, tag_claim, comment_claim, mint_*, schedule_meeting, record_ship_action, update_milestones, update_budget, edit_notes, update_phase_progress, setup_program, record_closure, create_snapshot, system.record_link_engagement |
 | `phase_inputs` | captured evidence/inputs within a movement | capture_evidence, rename_person, add_stakeholder, system.ingest_stakeholder_response |
 | `artifact` | a generated document (blob field and/or artifacts row) | edit_artifact, system.generate_artifact, system.restore_artifact |
 | `agent_run` | a run record | request/system.start/update/complete/pause/fail/resume_agent_run |
@@ -195,17 +220,23 @@ Seven values — the *type* of thing an action touches. The exact sub-element is
   shape that produces divergent names if left to wiring time. They get **one** name
   each here. Worth a separate look at whether the duplicate archive/complete/fail
   paths should be consolidated in code.
-- **F3 — RESOLVED: `src/new/lib/*` hooks are LIVE.** The Step-1b topology check found
-  all eight (`useGateReview`, `useMilestones`, `useBudgetTracking`, `useProgramNotes`,
-  `usePhaseProgress`, `useClosure`, `useProgramSetup`, `useDecisionQueue`) imported by
-  `AppShellV3` (the live v3 chrome). **They are live → wire (names in §1), not delete.**
-- **F6 — no singular write funnel; `saveProgramToSupabase` is dead.** The Step-1b
-  topology check found `saveProgramToSupabase` (adamSync) — the presumed client funnel —
-  has **zero callers** (dead code → delete), and the live client writes `adam_programs`
-  from ~10 direct sites plus the seven hooks, with no convergence. So the enforcement
-  model cannot "check intent at the funnel" — there is none. It is redesigned around
-  *introducing* a `persistProgram` funnel; see `docs/aura/step1-audit-choke-point.md`
-  "Step 1b — the enforcement model (REVISED)".
+- **F3 — RESOLVED + ENUMERATED: `src/new/lib/*` hooks are LIVE.** The Step-1b topology
+  check found all eight (`useGateReview`, `useMilestones`, `useBudgetTracking`,
+  `useProgramNotes`, `usePhaseProgress`, `useClosure`, `useProgramSetup`,
+  `useDecisionQueue`) imported by `AppShellV3` (the live v3 chrome). **They are live →
+  wire, not delete.** Their names are now in the §1 table and each has its own §4 census
+  row (the earlier lumped "UNCERTAIN" row is gone). This pass also caught a table the
+  first census sweep missed — `adam_program_snapshots` (useProgramSnapshots, likewise
+  live) — now a §4 section with `create_snapshot`. Naming + census only; intent wiring
+  is Step-1b, behind the gate.
+- **F6 — DONE (delete) + no singular write funnel.** `saveProgramToSupabase` (adamSync) —
+  the presumed client funnel — had **zero callers**; **now deleted** (commit in the
+  gate-independent backlog; confirmed dead by repo-wide + full-tree search before
+  removal). The live client writes `adam_programs` from ~10 direct sites plus the seven
+  hooks, with no convergence. So the enforcement model cannot "check intent at the
+  funnel" — there is none. It is redesigned around *introducing* a `persistProgram`
+  funnel; see `docs/aura/step1-audit-choke-point.md` "Step 1b — the enforcement model
+  (REVISED)".
 - **F4 — `writeQueue.ts` replays, it does not originate.** The offline write queue
   re-executes previously-queued writes; it must **carry the original action_type**, not
   stamp one of its own, or replayed events would all read as a queue-flush.
@@ -218,5 +249,7 @@ Seven values — the *type* of thing an action touches. The exact sub-element is
 
 ---
 
-*Census taken 2026-08-07 against the committed tree. Re-take when a state-bearing
-write path is added — and add its action_type here and to `ACTION_TYPES` first.*
+*Census taken 2026-08-07 against the committed tree; revisited same day to enumerate
+the confirmed-live `src/new/lib/*` hooks per-site and add the `adam_program_snapshots`
+table the first sweep missed. Re-take when a state-bearing write path is added — and
+add its action_type here and to `ACTION_TYPES` first.*
