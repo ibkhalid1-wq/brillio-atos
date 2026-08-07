@@ -393,6 +393,7 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program,
           Picking a workflow in the overview opens it in the editor. */}
       <CollapsibleCard label="Areas & seams — every workflow across the areas it crosses" defaultOpen>
         <AtlasSeamView doc={doc} program={program} frameAreas={frameAreas} onOpenArtifact={onOpenArtifact}
+          onChange={onChange} editable={!locked}
           onPickWorkflow={(i) => { setActive(i); setSelected(null); }} />
       </CollapsibleCard>
       <div className="v3fs-wf-editor-h">Edit a workflow</div>

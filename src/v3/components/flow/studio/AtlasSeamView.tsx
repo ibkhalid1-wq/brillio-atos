@@ -17,7 +17,7 @@
  * It also reports the data problems it finds (a crossing with no declared
  * handoff, a handoff with no crossing) rather than papering over them.
  */
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { asArray, asRecord, asText, asStrings } from "./StudioKit";
 import { canonicalFrameArea } from "@/v3/components/flow/listenCoverage";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
@@ -81,14 +81,19 @@ interface SeamWf {
   areas: string[]; crossings: SeamCrossing[]; undeclared: number; unseenHandoffs: number;
 }
 
-export default function AtlasSeamView({ doc, program, frameAreas, onOpenArtifact, onPickWorkflow }: {
+export default function AtlasSeamView({ doc, program, frameAreas, onOpenArtifact, onPickWorkflow, onChange, editable }: {
   doc: Record<string, unknown>;
   program?: ProgramSummary;
   frameAreas: string[];
   onOpenArtifact?: (id: string) => void;
   /** Open this workflow in the single-workflow editor below (consolidated view). */
   onPickWorkflow?: (wfIndex: number) => void;
+  /** Write the whole doc back (same setter the single-workflow editor uses). */
+  onChange?: (next: Record<string, unknown>) => void;
+  /** When true (studio not locked), tiles become inline-editable with CRUD. */
+  editable?: boolean;
 }) {
+  const canEdit = editable && !!onChange;
   const workflows = useMemo(() => asArray(doc.workflows).map(asRecord), [doc.workflows]);
 
   // The ontology's entity names (+ aliases), lowercased — the set a step's
@@ -145,52 +150,106 @@ export default function AtlasSeamView({ doc, program, frameAreas, onOpenArtifact
     return ordered;
   }, [wfData, frameAreas]);
 
-  const [selected, setSelected] = useState<Set<string>>(() => new Set(presentAreas));
+  // null = "all areas" (tracks the data as it loads); a Set is an explicit
+  // choice — an empty Set means the user cleared the selection.
+  const [selected, setSelected] = useState<Set<string> | null>(null);
   const [focusWf, setFocusWf] = useState<number | "all">("all");
+  const [findingFilter, setFindingFilter] = useState<"gap" | "cross" | "unseen" | null>(null);
   // Keep selection valid if the data changes underneath (area list shifts).
-  const sel = useMemo(() => new Set([...selected].filter((a) => presentAreas.includes(a))), [selected, presentAreas]);
-  const effSel = useMemo(() => (sel.size ? sel : new Set(presentAreas)), [sel, presentAreas]); // empty selection reads as all
+  const effSel = useMemo(() => (selected === null
+    ? new Set(presentAreas)
+    : new Set([...selected].filter((a) => presentAreas.includes(a)))), [selected, presentAreas]);
 
   const toggleArea = (a: string) => setSelected((prev) => {
-    const next = new Set(prev.size ? prev : presentAreas);
+    const next = new Set(prev === null ? presentAreas : prev);
     if (next.has(a)) next.delete(a); else next.add(a);
     return next;
   });
 
+  // Position the (fixed) detail popover next to its tile so it escapes the
+  // card's overflow-hidden and the lane's horizontal scroll — never clipped.
+  const placePop = useCallback((e: React.SyntheticEvent<HTMLDivElement>) => {
+    const host = e.currentTarget;
+    const pop = host.querySelector<HTMLElement>(".v3fs-seam-pop");
+    if (!pop) return;
+    const r = host.getBoundingClientRect();
+    const pw = pop.offsetWidth || 288, ph = pop.offsetHeight || 200;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    let left = r.left;
+    if (left + pw > vw - 8) left = Math.max(8, vw - 8 - pw);
+    let top = r.bottom + 7;
+    if (top + ph > vh - 8) top = Math.max(8, r.top - 7 - ph); // flip above if it would overflow the viewport
+    pop.style.left = `${left}px`;
+    pop.style.top = `${top}px`;
+  }, []);
+
+  // Inline CRUD — a clicked tile pins its detail popover open; when editable
+  // the popover carries inputs that write straight back to the doc. Key is the
+  // stable workflow+step identity, never a render position.
+  const [pinned, setPinned] = useState<string | null>(null);
+  useEffect(() => {
+    if (!pinned) return;
+    const onDown = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement)?.closest?.(".v3fs-seam-pop, .v3fs-seam-tile")) setPinned(null);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setPinned(null); };
+    document.addEventListener("mousedown", onDown, true);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("mousedown", onDown, true); document.removeEventListener("keydown", onKey); };
+  }, [pinned]);
+
+  const writeWorkflows = useCallback((next: Array<Record<string, unknown>>) => {
+    onChange?.({ ...doc, workflows: next });
+  }, [doc, onChange]);
+  const patchStepAbs = useCallback((wfI: number, stepI: number, patch: Record<string, unknown>) => {
+    writeWorkflows(workflows.map((w, i) => (i !== wfI ? w
+      : { ...w, steps: asArray(w.steps).map(asRecord).map((s, j) => (j === stepI ? { ...s, ...patch } : s)) })));
+  }, [workflows, writeWorkflows]);
+  const addStepAfter = useCallback((wfI: number, stepI: number, area: string) => {
+    const actor = area && area !== OTHER && area !== EXTERNAL ? area : "";
+    writeWorkflows(workflows.map((w, i) => {
+      if (i !== wfI) return w;
+      const steps = asArray(w.steps).map(asRecord);
+      steps.splice(stepI + 1, 0, { actor, action: "New step", system: "", entities: [] });
+      return { ...w, steps };
+    }));
+  }, [workflows, writeWorkflows]);
+  const deleteStepAbs = useCallback((wfI: number, stepI: number) => {
+    writeWorkflows(workflows.map((w, i) => (i !== wfI ? w
+      : { ...w, steps: asArray(w.steps).map(asRecord).filter((_, j) => j !== stepI) })));
+    setPinned(null);
+  }, [workflows, writeWorkflows]);
+  const addWorkflow = useCallback(() => {
+    writeWorkflows([...workflows, { name: "New workflow", area: "", trigger: "",
+      steps: [{ actor: "", action: "First step", system: "", entities: [] }], handoffs: [], failureModes: [] }]);
+  }, [workflows, writeWorkflows]);
+  const deleteWorkflow = useCallback((wfI: number) => {
+    if (typeof window !== "undefined" && !window.confirm("Delete this whole workflow from the atlas?")) return;
+    writeWorkflows(workflows.filter((_, i) => i !== wfI));
+  }, [workflows, writeWorkflows]);
+
   // Workflows in scope: any that touch a selected area.
-  const scope = useMemo(() => wfData.filter((wf) =>
+  const inScope = useMemo(() => wfData.filter((wf) =>
     (focusWf === "all" || focusWf === wf.wfIndex)
     && wf.areas.some((a) => effSel.has(a)),
   ), [wfData, focusWf, effSel]);
 
-  // Interdependencies (crossings, shared entities, cross-area findings) only
-  // mean something once MORE THAN ONE area is in view — surface them then.
+  // Interdependencies (crossings, cross-area findings) only mean something once
+  // MORE THAN ONE area is in view — surface them then.
   const showInterdeps = effSel.size > 1;
 
-  // Shared entities: an ontology entity touched by steps in ≥2 SELECTED areas
-  // (across the in-scope workflows) — a cross-area dependency, visible or not.
-  const sharedEntities = useMemo(() => {
-    const map = new Map<string, { areas: Set<string>; gap: boolean }>();
-    scope.forEach((wf) => wf.steps.forEach((s) => {
-      if (!effSel.has(s.area)) return;
-      s.entities.forEach((e) => {
-        const rec = map.get(e) ?? { areas: new Set<string>(), gap: !ontoSet.has(e.trim().toLowerCase()) };
-        rec.areas.add(s.area);
-        map.set(e, rec);
-      });
-    }));
-    return [...map.entries()]
-      .filter(([, v]) => v.areas.size >= 2)
-      .map(([entity, v]) => ({ entity, areas: [...v.areas], gap: v.gap }))
-      .sort((a, b) => b.areas.length - a.areas.length || a.entity.localeCompare(b.entity));
-  }, [scope, effSel, ontoSet]);
-
   const findings = useMemo(() => {
-    const undeclared = scope.reduce((n, wf) => n + wf.undeclared, 0);
-    const unseen = scope.reduce((n, wf) => n + wf.unseenHandoffs, 0);
-    const gapSteps = scope.reduce((n, wf) => n + wf.steps.filter((s) => s.missing.length).length, 0);
+    const undeclared = inScope.reduce((n, wf) => n + wf.undeclared, 0);
+    const unseen = inScope.reduce((n, wf) => n + wf.unseenHandoffs, 0);
+    const gapSteps = inScope.reduce((n, wf) => n + wf.steps.filter((s) => s.missing.length).length, 0);
     return { undeclared, unseen, gapSteps };
-  }, [scope]);
+  }, [inScope]);
+
+  // Blocks shown: in-scope, optionally narrowed to a clicked finding.
+  const visibleScope = useMemo(() => (findingFilter === null ? inScope : inScope.filter((wf) =>
+    (findingFilter === "gap" && wf.steps.some((s) => s.missing.length))
+    || (findingFilter === "cross" && wf.undeclared > 0)
+    || (findingFilter === "unseen" && wf.unseenHandoffs > 0))), [inScope, findingFilter]);
 
   const laneStyle = (area: string): React.CSSProperties => ({ ["--area" as string]: `hsl(${areaHue(area)} 46% 52%)` });
   const rowOrderFor = useCallback((wf: SeamWf): string[] => {
@@ -207,73 +266,53 @@ export default function AtlasSeamView({ doc, program, frameAreas, onOpenArtifact
 
   return (
     <div className="v3fs-seam">
-      {/* AREA MULTI-SELECT — quick to change; a comparison tool, not a form. */}
-      <div className="v3fs-seam-pick" role="group" aria-label="Areas to compare">
-        <span className="v3fs-seam-pick-l">Areas</span>
-        {presentAreas.map((area) => {
-          const on = effSel.has(area);
-          return (
-            <button key={area} type="button" aria-pressed={on} style={laneStyle(area)}
-              className={`v3fs-seam-chip${on ? " on" : ""}`} onClick={() => toggleArea(area)}>
-              <span className="v3fs-seam-chip-dot" aria-hidden="true" />{area}
-            </button>
-          );
-        })}
-        <span className="v3fs-seam-pick-acts">
-          <button type="button" className="v3fs-a" onClick={() => setSelected(new Set(presentAreas))}>All</button>
-          <button type="button" className="v3fs-a" onClick={() => setSelected(new Set())}>None</button>
-        </span>
-      </div>
-      <div className="v3fs-seam-controls">
-        {showInterdeps
-          ? <span className="v3fs-seam-hint" aria-hidden="true" />
-          : <span className="v3fs-seam-hint">Select more than one area to reveal the crossings and shared entities between them.</span>}
+      {/* Workflow picker first, then the AREA multi-select. */}
+      <div className="v3fs-seam-top">
         <label className="v3fs-seam-wfsel">
           <span>Workflow</span>
           <select value={String(focusWf)} onChange={(e) => setFocusWf(e.target.value === "all" ? "all" : Number(e.target.value))}>
-            <option value="all">All in scope ({scope.length})</option>
+            <option value="all">All in scope ({inScope.length})</option>
             {wfData.map((wf) => <option key={wf.wfIndex} value={String(wf.wfIndex)}>{wf.name}</option>)}
           </select>
         </label>
+        {!showInterdeps ? <span className="v3fs-seam-hint">Select more than one area to reveal the crossings between them.</span> : null}
+      </div>
+      {/* AREA multi-select — a refined chip group; a comparison tool, not a form. */}
+      <div className="v3fs-seam-pick" role="group" aria-label="Areas to compare">
+        <span className="v3fs-seam-pick-l">Areas</span>
+        <span className="v3fs-seam-chips">
+          {presentAreas.map((area) => {
+            const on = effSel.has(area);
+            return (
+              <button key={area} type="button" aria-pressed={on} style={laneStyle(area)}
+                className={`v3fs-seam-chip${on ? " on" : ""}`} onClick={() => toggleArea(area)}>
+                <span className="v3fs-seam-chip-dot" aria-hidden="true" />{area}
+              </button>
+            );
+          })}
+        </span>
+        <span className="v3fs-seam-pick-acts">
+          <button type="button" className="v3fs-a" onClick={() => setSelected(null)}>All</button>
+          <button type="button" className="v3fs-a" onClick={() => setSelected(new Set())}>Clear</button>
+        </span>
       </div>
 
-      {/* Coherence + data-problem summary — the findings, not hidden in a doc. */}
+      {/* Findings — click one to filter the workflows below to just that issue. */}
       {(findings.gapSteps || findings.undeclared || findings.unseen) ? (
-        <div className="v3fs-seam-findings" role="status">
-          {findings.gapSteps ? <span className="fnd gap">⚠ {findings.gapSteps} step{findings.gapSteps === 1 ? "" : "s"} reference an entity the ontology doesn’t hold</span> : null}
-          {findings.undeclared ? <span className="fnd cross">◇ {findings.undeclared} crossing{findings.undeclared === 1 ? "" : "s"} with no declared hand-off</span> : null}
-          {findings.unseen ? <span className="fnd unseen">↯ {findings.unseen} declared hand-off{findings.unseen === 1 ? "" : "s"} with no crossing in the steps</span> : null}
+        <div className="v3fs-seam-findings" role="group" aria-label="Filter workflows by finding">
+          {findings.gapSteps ? <button type="button" aria-pressed={findingFilter === "gap"} className={`fnd gap${findingFilter === "gap" ? " on" : ""}`} onClick={() => setFindingFilter((f) => (f === "gap" ? null : "gap"))}>⚠ {findings.gapSteps} step{findings.gapSteps === 1 ? "" : "s"} reference an entity the ontology doesn’t hold</button> : null}
+          {findings.undeclared ? <button type="button" aria-pressed={findingFilter === "cross"} className={`fnd cross${findingFilter === "cross" ? " on" : ""}`} onClick={() => setFindingFilter((f) => (f === "cross" ? null : "cross"))}>◇ {findings.undeclared} crossing{findings.undeclared === 1 ? "" : "s"} with no declared hand-off</button> : null}
+          {findings.unseen ? <button type="button" aria-pressed={findingFilter === "unseen"} className={`fnd unseen${findingFilter === "unseen" ? " on" : ""}`} onClick={() => setFindingFilter((f) => (f === "unseen" ? null : "unseen"))}>↯ {findings.unseen} declared hand-off{findings.unseen === 1 ? "" : "s"} with no crossing in the steps</button> : null}
+          {findingFilter ? <button type="button" className="v3fs-a v3fs-seam-fnd-clear" onClick={() => setFindingFilter(null)}>show all</button> : null}
         </div>
       ) : null}
 
-      {/* SHARED ENTITIES — dependencies between areas that no hand-off shows.
-          Only meaningful with more than one area in view. */}
-      {showInterdeps && sharedEntities.length ? (
-        <div className="v3fs-seam-shared">
-          <div className="v3fs-seam-shared-h">Shared entities <em>across selected areas — a dependency even without a hand-off</em></div>
-          <div className="v3fs-seam-shared-list">
-            {sharedEntities.map(({ entity, areas, gap }) => (
-              <span key={entity} className={`v3fs-seam-shent${gap ? " gap" : ""}`}
-                title={gap ? `${entity} — not defined in the ontology (coherence gap)` : `${entity} — touched by ${areas.join(", ")}`}
-                role={onOpenArtifact ? "link" : undefined} tabIndex={onOpenArtifact ? 0 : undefined}
-                onClick={() => { if (!gap) onOpenArtifact?.("domain-ontology"); }}
-                onKeyDown={(e) => { if (e.key === "Enter" && !gap) onOpenArtifact?.("domain-ontology"); }}>
-                {gap ? "⚠ " : ""}{entity}
-                <span className="v3fs-seam-shent-areas">
-                  {areas.map((a) => <i key={a} style={laneStyle(a)} aria-hidden="true" />)}
-                  <em>{areas.length} areas</em>
-                </span>
-              </span>
-            ))}
-          </div>
-        </div>
-      ) : null}
 
-      {scope.length === 0 ? (
+      {visibleScope.length === 0 ? (
         <div className="v3fs-stu-empty">No workflows touch the selected areas. Widen the selection.</div>
       ) : (
         <div className="v3fs-seam-blocks">
-          {scope.map((wf) => {
+          {visibleScope.map((wf) => {
             const rows = rowOrderFor(wf);
             const rowOf = (area: string) => { const i = rows.indexOf(effSel.has(area) ? area : OTHER); return i < 0 ? rows.length - 1 : i; };
             const cols = `118px ${wf.steps.map(() => "minmax(108px,150px) 14px").join(" ")}`;
@@ -286,26 +325,21 @@ export default function AtlasSeamView({ doc, program, frameAreas, onOpenArtifact
                       ? <button type="button" className="v3fs-seam-wf-open" onClick={() => onPickWorkflow(wf.wfIndex)}
                           title="Open this workflow in the editor below">{wf.name}<span className="v3fs-seam-wf-open-i" aria-hidden="true">edit ↓</span></button>
                       : <h4>{wf.name}</h4>}
-                    <div className="v3fs-seam-wf-path" aria-label="area path">
-                      {areaPath.map((a, i) => (
-                        <React.Fragment key={a + i}>
-                          {i ? <span className="v3fs-seam-arr" aria-hidden="true">→</span> : null}
-                          <span className="v3fs-seam-path-a" style={laneStyle(a)}>{a}</span>
-                        </React.Fragment>
-                      ))}
-                      {areaPath.length > 1
-                        ? <span className="v3fs-seam-seambadge">seam</span>
-                        : wf.handoffs.length
-                          ? <span className="v3fs-seam-seambadge hoff" title="A seam declared only in the hand-off field — the steps don’t cross areas">seam · hand-off only</span>
-                          : <span className="v3fs-seam-onebadge">single area</span>}
-                    </div>
+                    {canEdit ? <button type="button" className="v3fs-seam-wf-del" title="Delete this workflow"
+                      onClick={() => deleteWorkflow(wf.wfIndex)}>✕</button> : null}
+                    {/* Path only where it carries information — a multi-area seam.
+                        For a single-area workflow the lane label already says it. */}
+                    {areaPath.length > 1 ? (
+                      <div className="v3fs-seam-wf-path" aria-label="area path">
+                        {areaPath.map((a, i) => (
+                          <React.Fragment key={a + i}>
+                            {i ? <span className="v3fs-seam-arr" aria-hidden="true">→</span> : null}
+                            <span className="v3fs-seam-path-a" style={laneStyle(a)}>{a}</span>
+                          </React.Fragment>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
-                  {wf.handoffs.length ? (
-                    <div className="v3fs-seam-wf-hoffs" aria-label="declared hand-offs">
-                      <span className="v3fs-seam-hoffs-l">hand-offs</span>
-                      {wf.handoffs.map((h, i) => <span key={i} className="v3fs-seam-hoff">{h}</span>)}
-                    </div>
-                  ) : null}
                 </header>
                 <div className="v3fs-seam-scroll">
                   <div className="v3fs-seam-grid" style={{ gridTemplateColumns: cols, gridTemplateRows: `repeat(${rows.length}, minmax(72px, auto))` }}>
@@ -322,31 +356,75 @@ export default function AtlasSeamView({ doc, program, frameAreas, onOpenArtifact
                     {wf.steps.map((s) => {
                       const r = rowOf(s.area);
                       const out = !effSel.has(s.area);
+                      const stepKey = `${wf.wfIndex}:${s.index}`;
+                      const isPinned = pinned === stepKey;
                       return (
                         <div key={`st-${s.index}`} className={`v3fs-seam-cell${out ? " out" : ""}`}
                           style={{ gridColumn: 2 + s.index * 2, gridRow: r + 1 }}>
-                          <div className={`v3fs-seam-tile${s.missing.length ? " has-gap" : ""}`} style={laneStyle(s.area)}
-                            tabIndex={0} title={s.evidence || undefined}>
+                          <div className={`v3fs-seam-tile${s.missing.length ? " has-gap" : ""}${isPinned ? " pinned" : ""}`} style={laneStyle(s.area)}
+                            tabIndex={0} aria-label={`Step ${s.index + 1}: ${s.action || "—"} — ${s.actor}`}
+                            onMouseEnter={placePop} onFocus={placePop}
+                            onClick={(e) => { placePop(e); setPinned(isPinned ? null : stepKey); }}>
+                            {/* Compact face: number + a one-line action. Everything else is on hover/focus. */}
                             <span className="v3fs-seam-tile-n" aria-hidden="true">{s.index + 1}</span>
                             <span className="v3fs-seam-tile-act">{s.action || "—"}</span>
-                            <span className="v3fs-seam-tile-actor">{s.actor}</span>
-                            {(s.system || s.entities.length) ? (
-                              <span className="v3fs-seam-tile-meta">
-                                {s.system ? <span className="v3fs-seam-sys">{s.system}</span> : null}
-                                {s.entities.map((e) => {
-                                  const gap = s.missing.includes(e);
-                                  return (
-                                    <span key={e} className={`v3fs-seam-ent${gap ? " gap" : ""}`}
-                                      title={gap ? `${e} — not in the ontology (coherence gap)` : `${e} — in the ontology`}
-                                      role={onOpenArtifact && !gap ? "link" : undefined} tabIndex={onOpenArtifact && !gap ? 0 : undefined}
-                                      onClick={() => { if (!gap) onOpenArtifact?.("domain-ontology"); }}
-                                      onKeyDown={(ev) => { if (ev.key === "Enter" && !gap) onOpenArtifact?.("domain-ontology"); }}>
-                                      {gap ? "⚠ " : ""}{e}
-                                    </span>
-                                  );
-                                })}
-                              </span>
-                            ) : null}
+                            {s.missing.length ? <span className="v3fs-seam-tile-flag" aria-hidden="true" title="references an entity the ontology doesn’t hold">⚠</span> : null}
+                            {/* Detail popover — hover to preview, click to pin; when editable, its fields write straight back. */}
+                            <div className={`v3fs-seam-pop${isPinned ? " pinned" : ""}${canEdit ? " edit" : ""}`} role="group" aria-label={`Step ${s.index + 1} detail`}
+                              onClick={(e) => e.stopPropagation()}>
+                              <div className="v3fs-seam-pop-h">
+                                <span className="v3fs-seam-pop-n">Step {s.index + 1}</span>
+                                <span className="v3fs-seam-pop-area" style={laneStyle(s.area)}>{s.area}</span>
+                              </div>
+                              {canEdit ? (
+                                <div className="v3fs-seam-edit">
+                                  <label><span>Action</span>
+                                    <textarea rows={2} value={s.action} placeholder="what happens in this step"
+                                      onChange={(ev) => patchStepAbs(wf.wfIndex, s.index, { action: ev.target.value })} /></label>
+                                  <label><span>Actor / lane</span>
+                                    <input value={s.actor} placeholder="who performs it"
+                                      onChange={(ev) => patchStepAbs(wf.wfIndex, s.index, { actor: ev.target.value })} /></label>
+                                  <label><span>System</span>
+                                    <input value={s.system} placeholder="system of record"
+                                      onChange={(ev) => patchStepAbs(wf.wfIndex, s.index, { system: ev.target.value })} /></label>
+                                  <label><span>Entities</span>
+                                    <input value={s.entities.join(", ")} placeholder="comma-separated"
+                                      onChange={(ev) => patchStepAbs(wf.wfIndex, s.index, { entities: ev.target.value.split(",").map((x) => x.trim()).filter(Boolean) })} /></label>
+                                  <label><span>Evidence</span>
+                                    <textarea rows={2} value={s.evidence} placeholder="the quote this step rests on"
+                                      onChange={(ev) => patchStepAbs(wf.wfIndex, s.index, { evidence: ev.target.value })} /></label>
+                                  <div className="v3fs-seam-edit-acts">
+                                    <button type="button" className="v3fs-a" onClick={() => addStepAfter(wf.wfIndex, s.index, s.area)}>＋ Step after</button>
+                                    <button type="button" className="v3fs-seam-del" onClick={() => deleteStepAbs(wf.wfIndex, s.index)}>Delete step</button>
+                                    <button type="button" className="v3fs-a" onClick={() => setPinned(null)}>Done</button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <>
+                                  <div className="v3fs-seam-pop-act">{s.action || "—"}</div>
+                                  <dl className="v3fs-seam-pop-dl">
+                                    <div><dt>Actor</dt><dd>{s.actor}</dd></div>
+                                    {s.system ? <div><dt>System</dt><dd>{s.system}</dd></div> : null}
+                                    {s.entities.length ? (
+                                      <div><dt>Entities</dt><dd className="ents">
+                                        {s.entities.map((e) => {
+                                          const gap = s.missing.includes(e);
+                                          return (
+                                            <button key={e} type="button" className={`v3fs-seam-ent${gap ? " gap" : ""}`}
+                                              disabled={gap || !onOpenArtifact}
+                                              title={gap ? `${e} — not in the ontology (coherence gap)` : (onOpenArtifact ? `${e} — open the ontology` : `${e} — in the ontology`)}
+                                              onClick={() => { if (!gap) onOpenArtifact?.("domain-ontology"); }}>
+                                              {gap ? "⚠ " : ""}{e}
+                                            </button>
+                                          );
+                                        })}
+                                      </dd></div>
+                                    ) : null}
+                                    {s.evidence ? <div><dt>Evidence</dt><dd className="ev">“{s.evidence}”</dd></div> : null}
+                                  </dl>
+                                </>
+                              )}
+                            </div>
                           </div>
                         </div>
                       );
@@ -376,6 +454,9 @@ export default function AtlasSeamView({ doc, program, frameAreas, onOpenArtifact
               </section>
             );
           })}
+          {canEdit ? (
+            <button type="button" className="v3fs-seam-addwf" onClick={addWorkflow}>＋ Add workflow</button>
+          ) : null}
         </div>
       )}
 
@@ -384,7 +465,6 @@ export default function AtlasSeamView({ doc, program, frameAreas, onOpenArtifact
         <span><i className="lg-cross" />hand-off crossing</span>
         <span><i className="lg-undeclared" />crossing, no declared hand-off</span>
         <span><i className="lg-gap" />entity not in the ontology</span>
-        <span><i className="lg-shared" />shared across areas</span>
       </div>
     </div>
   );
