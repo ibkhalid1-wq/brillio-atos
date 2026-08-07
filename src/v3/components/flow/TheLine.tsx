@@ -177,6 +177,11 @@ function Station({ station, onOpen, onRegen, regenerating }: {
         ) : null}
       </span>
       {station.subtitle ? <span className="v3ln-stn-sub">{station.subtitle}</span> : null}
+      {station.sections?.length ? (
+        <span className="v3ln-stn-secs">
+          {station.sections.map((s, i) => <span key={i} className="v3ln-stn-sec">{s}</span>)}
+        </span>
+      ) : null}
       <Segments station={station} />
     </button>
   );
@@ -715,6 +720,28 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
               ) : null}
             </div>
           ) : null}
+          {band.id === "loop" && band.stations.some((s) => s.lane) ? (
+            // The Design Loop is a pipeline, not a bag of cards: design the
+            // build (Envision), then validate it with clients (Show). The lanes
+            // make that structure legible; each design station previews its
+            // own sections so the phase reads without opening a studio.
+            (["design", "validate"] as const).map((lane) => {
+              const stns = band.stations.filter((s) => s.lane === lane);
+              if (!stns.length) return null;
+              return (
+                <div key={lane} className="v3ln-lane">
+                  <div className="v3ln-lane-h">{lane === "design" ? "Design — the team builds it" : "Validate — clients sign off"}</div>
+                  <div className={`v3ln-stns n${stns.length}`}>
+                    {stns.map((s) => (
+                      <Station key={s.id} station={s} onOpen={setDocFor}
+                        onRegen={onRunAgent ? regenerate : undefined}
+                        regenerating={!!(s.card && regenBusy[s.card.id])} />
+                    ))}
+                  </div>
+                </div>
+              );
+            })
+          ) : (
           <div className={`v3ln-stns n${band.stations.length + (band.id === "frame" && onSaveInputs ? 1 : 0)}`}>
             {/* The Company Brief leads Frame: who the client IS comes before
               * why we're doing this. An input station, not a generated one —
@@ -735,6 +762,7 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                 regenerating={!!(s.card && regenBusy[s.card.id])} />
             ))}
           </div>
+          )}
         </section>
         </div>
       ))}</div> : null}
