@@ -27,29 +27,39 @@
 .v3ln-sp,.v3ln-band-sp{flex:1}
 .v3ln-ro{font-size:10.5px;color:var(--v3-text-muted);border:1px dashed var(--fs-line);border-radius:4px;padding:3px 8px}
 
-.v3ln-band{border:1px solid var(--fs-line);border-radius:6px;overflow:hidden;background:var(--fs-card);margin:0 0 12px}
-.v3ln-band.loop{border-left:3px solid var(--v3-accent-2)}
+.v3ln-band{position:relative;border:1px solid var(--fs-line);border-top:3px solid var(--mv);
+  border-radius:10px;overflow:hidden;background:var(--fs-card);
+  box-shadow:0 1px 2px rgba(23,21,31,.04),0 6px 18px -12px rgba(23,21,31,.20)}
 .v3ln-band-h{display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--fs-line);flex-wrap:wrap}
 .v3ln-band-n{font-weight:750;font-size:14px;color:var(--v3-text-primary)}
 /* spine headers — the movements are the backbone of the board, so their signage
  * reads a register louder than everything inside the band */
-.v3ln-band-h.spine{padding:11px 14px;
-  background:color-mix(in srgb,var(--v3-accent-2) 5%,var(--fs-card));
-  border-bottom:2px solid color-mix(in srgb,var(--v3-accent-2) 30%,var(--fs-line))}
+.v3ln-band-h.spine{padding:12px 16px;
+  background:linear-gradient(color-mix(in srgb,var(--mv) 8%,var(--fs-card)),var(--fs-card));
+  border-bottom:1px solid color-mix(in srgb,var(--mv) 22%,var(--fs-line))}
 /* the spine — one numbered rail, five movements: the whole methodology on one line */
-.v3ln-spine-row{position:relative;display:grid;grid-template-columns:40px minmax(0,1fr);align-items:start}
-.v3ln-spine-row::before{content:"";position:absolute;left:19px;top:0;bottom:0;width:2px;
-  background:color-mix(in srgb,var(--v3-accent-2) 28%,var(--fs-line))}
-.v3ln-spine-row:first-child::before{top:8px}
+/* one movement hue per band — the rail node, the band's top rule and its title
+ * share it, so the eye separates Frame/Listen/Loop/Ship/Evolve while the brand
+ * accent stays reserved for things you click */
+.v3ln-spine-row{position:relative;display:grid;grid-template-columns:44px minmax(0,1fr);align-items:start;
+  padding-bottom:16px;--mv:var(--v3-accent-2)}
+.v3ln-spine-row[data-mv="listen"]{--mv:#2C8C7C}
+.v3ln-spine-row[data-mv="loop"]{--mv:#6C5FAE}
+.v3ln-spine-row[data-mv="ship"]{--mv:#2E9A72}
+.v3ln-spine-row[data-mv="evolve"]{--mv:#B0842B}
+.v3ln-spine-row::before{content:"";position:absolute;left:21px;top:0;bottom:0;width:2px;
+  background:linear-gradient(var(--fs-line),color-mix(in srgb,var(--v3-accent-2) 20%,var(--fs-line)))}
+.v3ln-spine-row:first-child::before{top:10px}
 .v3ln-spine-row:last-child::before{bottom:auto;height:34px}
-.v3ln-rail-n{position:relative;z-index:1;justify-self:center;margin-top:7px;
-  width:26px;height:26px;display:grid;place-items:center;
-  font:800 10.5px/1 var(--mono,ui-monospace);letter-spacing:.04em;color:#fff;
-  background:var(--v3-accent-2);border-radius:50%;font-variant-numeric:tabular-nums}
-@media(max-width:680px){.v3ln-spine-row{grid-template-columns:30px minmax(0,1fr)}
-  .v3ln-spine-row::before{left:14px}}
-.v3ln-band-h.spine .v3ln-band-n{font-size:15.5px;font-weight:800;letter-spacing:.10em;
-  text-transform:uppercase}
+.v3ln-rail-n{position:relative;z-index:1;justify-self:center;margin-top:6px;
+  width:30px;height:30px;display:grid;place-items:center;
+  font:800 11px/1 var(--mono,ui-monospace);letter-spacing:.03em;color:#fff;
+  background:var(--mv);border-radius:50%;font-variant-numeric:tabular-nums;
+  box-shadow:0 0 0 4px var(--fs-card),0 2px 6px -1px color-mix(in srgb,var(--mv) 55%,transparent)}
+@media(max-width:680px){.v3ln-spine-row{grid-template-columns:34px minmax(0,1fr)}
+  .v3ln-spine-row::before{left:16px}}
+.v3ln-band-h.spine .v3ln-band-n{font-size:15px;font-weight:800;letter-spacing:.11em;
+  text-transform:uppercase;color:color-mix(in srgb,var(--mv) 70%,var(--v3-text-primary))}
 .v3ln-half,.v3ln-scope{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--v3-text-muted)}
 /* gate chips — quiet pills in sentence case; tone carries the state, the
  * chevron whispers "openable" */
@@ -70,21 +80,27 @@
 .v3ln-intake>span:first-child{font-size:10px;letter-spacing:.1em;text-transform:uppercase;flex:none}
 .v3ln-note{padding:7px 14px;border-top:1px dashed var(--fs-line);font-size:10.5px;line-height:1.5;color:var(--v3-text-muted)}
 
-.v3ln-stns{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--fs-line)}
-.v3ln-stns.n3{grid-template-columns:1fr 1fr 1fr}
-.v3ln-stns.n5 .v3ln-stn:last-child{grid-column:1/-1}
+/* artifacts as tiles — a responsive card grid inside each movement, not a table */
+.v3ln-stns{display:grid;grid-template-columns:repeat(auto-fill,minmax(212px,1fr));
+  gap:10px;padding:13px 14px;background:transparent}
+.v3ln-stns.n3{grid-template-columns:repeat(auto-fill,minmax(212px,1fr))}
+.v3ln-stns.n5 .v3ln-stn:last-child{grid-column:auto}
 @media(max-width:680px){.v3ln-stns,.v3ln-stns.n3{grid-template-columns:1fr}}
-.v3ln-stn{display:flex;flex-direction:column;gap:6px;justify-content:center;align-items:stretch;
-  background:var(--fs-card);border:0;padding:10px 13px;min-height:60px;text-align:left;
-  font:inherit;color:inherit;cursor:pointer}
-.v3ln-stn:hover:not(:disabled){background:color-mix(in srgb,var(--v3-accent-2) 4%,var(--fs-card))}
-.v3ln-stn:disabled{cursor:default;opacity:.72}
-.v3ln-stn:focus-visible{outline:2px solid var(--v3-accent-2);outline-offset:-2px}
+.v3ln-stn{display:flex;flex-direction:column;gap:7px;align-items:stretch;
+  background:var(--fs-card);border:1px solid var(--fs-line);border-radius:9px;
+  padding:12px 13px;min-height:78px;text-align:left;font:inherit;color:inherit;cursor:pointer;
+  box-shadow:0 1px 1px rgba(23,21,31,.03);
+  transition:border-color .14s ease,box-shadow .14s ease,transform .14s ease}
+.v3ln-stn:hover:not(:disabled){border-color:color-mix(in srgb,var(--mv) 55%,var(--fs-line));
+  box-shadow:0 2px 4px rgba(23,21,31,.05),0 10px 22px -14px color-mix(in srgb,var(--mv) 60%,transparent);
+  transform:translateY(-1px)}
+.v3ln-stn:disabled{cursor:default;opacity:.66;box-shadow:none}
+.v3ln-stn:focus-visible{outline:2px solid var(--mv);outline-offset:2px}
 .v3ln-stn-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .v3ln-g{font-size:15px;line-height:1;flex:none}
 .v3ln-g.m0{color:var(--v3-text-muted)} .v3ln-g.m1{color:var(--ln-m1)}
 .v3ln-g.m2{color:var(--ln-m2)} .v3ln-g.m3{color:#0E6E8C} .v3ln-g.m4{color:var(--ln-m4)}
-.v3ln-stn-n{font-weight:650;font-size:12.5px;color:var(--v3-text-primary)}
+.v3ln-stn-n{font-weight:680;font-size:13px;color:var(--v3-text-primary);line-height:1.3}
 .v3ln-rf{margin-left:auto;font-size:10px;letter-spacing:.05em;text-transform:uppercase;
   border:1px solid var(--v3-accent-2);color:var(--v3-accent-2);border-radius:3px;padding:2px 6px;white-space:nowrap}
 /* actionable: same quiet outline look, but clicking regenerates instead of
@@ -125,7 +141,7 @@
 
 /* ── the legend: colors + harvey balls, at the foot of the board ── */
 .v3ln-legend{display:flex;gap:16px;align-items:center;flex-wrap:wrap;
-  margin-left:40px;padding:10px 2px 0;font-size:11px;color:var(--v3-text-muted)}
+  margin-left:44px;padding:10px 2px 0;font-size:11px;color:var(--v3-text-muted)}
 .v3ln-legend .v3ln-sl{display:inline;margin:0}
 
 /* gate record/reopen — armed two-step confirm */
@@ -143,7 +159,7 @@
 .v3ln-lg-sw.m3{background:#2E93B5}
 .v3ln-lg-sw.m4{background:var(--ln-m4)}
 .v3ln-lg .v3ln-g{font-size:13px}
-@media(max-width:680px){.v3ln-legend{margin-left:30px}}
+@media(max-width:680px){.v3ln-legend{margin-left:34px}}
 
 /* ── the record: who said what, when — grouped by area ── */
 .v3ln-rec-grp{border-bottom:1px solid var(--fs-line)}
