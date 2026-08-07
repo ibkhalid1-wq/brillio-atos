@@ -135,7 +135,7 @@ export default function FlowGrounding({ program, onSaveInputs }: {
       <div className="v3fs-panel">
         <div className="v3fs-ph">
           <h3>Grounding</h3>
-          <span>the facts the Domain Ontology is generated against — every entity must trace to these packs or the sponsor&rsquo;s own words</span>
+          <span>the facts the Domain Ontology is generated against — every entity is generated from these packs or the sponsor&rsquo;s own words</span>
         </div>
         {loadError ? (
           <div className="v3fs-empty">{loadError} <button type="button" className="v3fs-btn" onClick={() => void load()}>Retry</button></div>

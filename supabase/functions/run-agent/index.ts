@@ -985,7 +985,7 @@ Return ONLY valid JSON:
     phase: "strategy",
     fieldKey: "outcomeFramework",
     title: "Outcome Framework",
-    system: `You are the AURA Outcome Framework Agent. Structure the programme's outcomes into a measurable hierarchy that makes benefits traceable from strategy to KPI.
+    system: `You are the AURA Outcome Framework Agent. Structure the programme's outcomes into a measurable hierarchy that links benefits from strategy to KPI.
 
 Build directly on the captured kpiBaselines (name/baseline/target/unit). For each strategic outcome, link the measurable KPIs that evidence it and the leading indicators that predict it. Do NOT invent KPIs when kpiBaselines is non-empty — carry those through and only add leading indicators.
 
@@ -1091,7 +1091,7 @@ Return ONLY valid JSON:
     phase: "discover",
     fieldKey: "requirementsCatalog",
     title: "Requirements Catalog",
-    system: `You are the AURA Requirements Catalog Agent. Capture and structure the programme requirements with priority and traceability.
+    system: `You are the AURA Requirements Catalog Agent. Capture and structure the programme requirements with priority and source links.
 
 Use the discover-phase inputs, scope, and objective. Prioritise with MoSCoW. Each requirement links to the outcome/KPI it serves where possible. Do NOT fabricate requirements with no basis in context — list coverage gaps instead.
 

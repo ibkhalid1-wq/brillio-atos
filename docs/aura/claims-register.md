@@ -28,11 +28,11 @@ FULLY TRUE**.
 
 | # | Claim (as worded) | Status | Remediation |
 |---|---|---|---|
-| 1 | "generated, traceable to evidence" | NOT YET TRUE | **Fix copy now** |
-| 2 | "generates artifacts traceable back to that evidence" | NOT YET TRUE | **Fix copy now** |
-| 3 | ontology: "every entity must trace to these packs or the sponsor's own words" | PARTIALLY TRUE | **Fix copy now** (soften) |
-| 4 | Outcome agent: "makes benefits traceable from strategy to KPI" | PARTIALLY TRUE | **Fix copy now** (model-facing) |
-| 5 | Requirements agent: "with priority and traceability" | PARTIALLY TRUE | **Fix copy now** (model-facing) |
+| 1 | now: "generated from your evidence" | **TRUE** | ✅ Applied 2026-08-07 |
+| 2 | now: "generates artifacts from that evidence" | **TRUE** | ✅ Applied 2026-08-07 |
+| 3 | ontology, now: "every entity is generated from these packs or the sponsor's own words" | **TRUE** | ✅ Applied 2026-08-07 |
+| 4 | Outcome agent, now: "links benefits from strategy to KPI" | **TRUE** | ✅ Applied 2026-08-07 |
+| 5 | Requirements agent, now: "with priority and source links" | **TRUE** | ✅ Applied 2026-08-07 |
 | 6 | Company Brief: "each traceable to a page you actually read" | PARTIALLY TRUE | Verify display, then keep |
 | 7 | maturity stage named "grounded" | PARTIALLY TRUE | Fix at Step 5 (tie to metric) |
 | 8 | "N governed — each defined once, verifiable" (metrics) | **TRUE** | None — keep |
@@ -42,49 +42,45 @@ FULLY TRUE**.
 | 12 | a computed **grounding** figure | NOT YET TRUE + ceiling | Fix at Step 5; state the ceiling |
 | 13 | **reproducible / deterministic** (not asserted anywhere) | WILL NEVER BE FULLY TRUE | Never claim "deterministic"; guard |
 
-**Change today (copy is wrong and the honest version costs nothing):** rows
-**1, 2, 3, 4, 5**. This register records the decision only — no copy is edited in
-this unit (per the unit's rule).
+**Applied 2026-08-07** — rows **1–5** edited to the phrasing below and re-statused
+**TRUE** (see each row for file, before→after). No surface in the repo now asserts
+something this register marks NOT YET TRUE. Rows **7** (grounding maturity label →
+Step 5) and **11** (platform auditability → Step 1) remain **scheduled**, written
+into those steps' definitions of done — not touched here.
 
 ---
 
 ## The rows, in detail
 
-### 1 · "generated, traceable to evidence" — the founding claim
-- **Where:** `src/v3/components/flow/FlowShell.tsx:2985` (Artifacts strip subtitle, shown when no artifact is stale).
-- **True today?** No. There is no id-lineage from an artifact element to the evidence that produced it; the measured walk is **0 hops** (verification pass, Q59/empirical walks). Coupling is name-string; nothing is computed.
-- **What would make it true:** Step 4 (binder + LineageEdge: element→entity by id) and Step 5 (a computed grounding figure). Only then does "traceable" reflect a resolvable path.
-- **Status:** NOT YET TRUE.
-- **Honest phrasing now:** *"generated from your evidence"* (drop "traceable" until Step 4).
-- **Remediation:** **Fix copy now.** This is the exact string that started the build; the honest version is free.
+### 1 · "generated from your evidence" — the founding claim, corrected
+- **Where:** `src/v3/components/flow/FlowShell.tsx:2985` (Artifacts strip subtitle).
+- **Applied 2026-08-07:** `"generated, traceable to evidence"` → **`"generated from your evidence"`**.
+- **True today?** Yes, as reworded. Artifacts *are* generated from the captured evidence; the claim no longer asserts a resolvable path (walk = 0 hops) it cannot back.
+- **What would let "traceable" return:** Step 4 (binder + LineageEdge) + Step 5 (computed grounding). At that point copy may say "traceable — X% by reference."
+- **Status:** **TRUE** (as reworded). Was NOT YET TRUE.
 
-### 2 · "generates artifacts traceable back to that evidence"
+### 2 · "generates artifacts from that evidence"
 - **Where:** `src/v3/components/flow/FlowShell.tsx:352` (Help → "One live programme, six movements").
-- **True today?** No — same basis as #1.
-- **Status:** NOT YET TRUE. → Step 4/5.
-- **Honest phrasing now:** *"generates artifacts from that evidence."*
-- **Remediation:** **Fix copy now.**
+- **Applied 2026-08-07:** `"generates artifacts traceable back to that evidence"` → **`"generates artifacts from that evidence"`**.
+- **Status:** **TRUE** (as reworded). Was NOT YET TRUE. → "traceable" returns at Step 4/5.
 
-### 3 · "every entity must trace to these packs or the sponsor's own words"
+### 3 · "every entity is generated from these packs or the sponsor's own words"
 - **Where:** `src/v3/components/flow/FlowGrounding.tsx:138` (Grounding surface subtitle).
-- **True today?** Partially. This states a *generation instruction* (the ontology agent is told to draw entities from the packs), not a *verified property* of output. Nothing checks that every entity actually traces; the unresolved residue is ~85% ontology-gap on real data. So "must trace" overstates — it is an intent, not a guarantee.
-- **Status:** PARTIALLY TRUE.
-- **Honest phrasing now:** *"every entity is generated from these packs or the sponsor's own words"* (intent, not guarantee).
-- **Remediation:** **Fix copy now** (soften "must trace" → "is generated from"); re-strengthen with a number at Step 5.
+- **Applied 2026-08-07:** `"every entity must trace to these packs…"` → **`"every entity is generated from these packs or the sponsor's own words"`**.
+- **True today?** Yes — this now describes the generation input (what the ontology agent is fed) rather than asserting a verified output property. "must trace" (a guarantee nothing checks) is gone.
+- **Status:** **TRUE** (as reworded). Was PARTIALLY TRUE. → re-strengthen to a measured claim at Step 5.
 
-### 4 · Outcome Framework Agent: "makes benefits traceable from strategy to KPI"
+### 4 · Outcome Framework Agent: "links benefits from strategy to KPI"
 - **Where:** `supabase/functions/run-agent/index.ts:988` (system prompt — **model-facing**).
-- **True today?** Partially. The outcome hierarchy links objective→measure structurally (a `measured-by` chain within one artifact) — real within-artifact linkage, but not id-lineage to evidence.
-- **Status:** PARTIALLY TRUE. **High leverage:** a model told the platform is "traceable" repeats that to users in its own words at scale.
-- **Honest phrasing now:** *"links benefits from strategy to KPI in a measured-by hierarchy."*
-- **Remediation:** **Fix copy now** (reword the prompt). Model-facing claims are the loudest.
+- **Applied 2026-08-07:** `"…measurable hierarchy that makes benefits traceable from strategy to KPI"` → **`"…measurable hierarchy that links benefits from strategy to KPI"`**.
+- **Register-variant, recorded:** the register's defensible phrasing was *"links benefits from strategy to KPI in a measured-by hierarchy"*; the sentence already contained "measurable hierarchy", so "in a measured-by hierarchy" was redundant and dropped. Accurate: the schema links the KPIs that evidence each outcome — real within-artifact linkage.
+- **Status:** **TRUE** (as reworded). Was PARTIALLY TRUE. High leverage — a model no longer tells every user the output is "traceable."
 
-### 5 · Requirements Catalog Agent: "with priority and traceability"
+### 5 · Requirements Catalog Agent: "with priority and source links"
 - **Where:** `supabase/functions/run-agent/index.ts:1094` (system prompt — **model-facing**).
-- **True today?** Partially — requirement→source is name-string linkage, not id-lineage.
-- **Status:** PARTIALLY TRUE.
-- **Honest phrasing now:** *"with priority and source links."*
-- **Remediation:** **Fix copy now** (reword the prompt).
+- **Applied 2026-08-07:** `"…with priority and traceability"` → **`"…with priority and source links"`**.
+- **Accuracy check:** the requirements JSON schema carries `"source": "where it came from"` and `"linkedOutcome"` per requirement, so "source links" is *true*, not merely smaller.
+- **Status:** **TRUE** (as reworded). Was PARTIALLY TRUE.
 
 ### 6 · Company Brief: "each traceable to a page you actually read"
 - **Where:** `supabase/functions/company-brief/index.ts:102` (system prompt — model-facing).
@@ -153,7 +149,7 @@ this unit (per the unit's rule).
 
 Three mechanisms, most-mechanical first:
 
-1. **A CI lint that fails when claim vocabulary appears in a copy surface not accounted for here.** `src/v3/__tests__/claimsRegister.test.ts` scans the claim-surface files (UI components, edge prompts, agent meta, the user guide) for the claim vocabulary and compares occurrence counts against `docs/aura/claims-allowlist.json`. It **fails** when a file's count rises above its allowed number (a new claim was added) or a new surface file introduces the vocabulary. Benign edits pass; a new claim cannot land without updating the allowlist — which forces a look at this register. Calibrate the counts once on first CI run (the test prints actual vs allowed).
+1. **A CI lint that fails when a claim is added _or reworded_ in a surface this register doesn't account for.** `src/v3/__tests__/claimsRegister.test.ts` scans the claim-surface files (UI components, edge prompts, agent meta, the user guide), **normalizes each claim-bearing line** (strip whitespace + case-fold, so reindent/reflow is silent), **hashes it**, and checks every hash against the hash set in `docs/aura/claims-allowlist.json`. It **fails** when a claim line's content changes (a reworded claim → new hash → not allowlisted) or a new surface file introduces the vocabulary. This closes the count-based hole: rewording *"grounded in the evidence"* → *"fully traceable to source"* trips it even though the line count is unchanged. The failure message names the file and states the remedy: **re-status the register row, then update the allowlist**.
 2. **Definition-of-done line, already in every step:** *"the claims register is updated to state what the platform may now truthfully assert about itself."* That line is the gate — a step is not done until the rows it changes are re-statused here and any "Fix at Step N" copy change is made.
 3. **Discoverability:** this file lives at `docs/aura/claims-register.md`. Anyone writing user copy or an agent prompt should find it before shipping the claim, not after. Recommended (not done in this unit): a one-line pointer comment at the top of `FlowShell.tsx` and the edge prompt files — *"self-claims about Aura are governed by docs/aura/claims-register.md."*
 
