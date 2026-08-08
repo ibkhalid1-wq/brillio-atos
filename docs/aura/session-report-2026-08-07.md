@@ -317,3 +317,15 @@ is the gated Step-1 work. But the **static half** is real and safe, and is now c
   the `∈ ACTION_TYPES` emit check and the per-emit no-`actor`-key check — the header says so.
 
 Author-only: no intent wiring, no payload change, no Step-1 gate touched.
+
+## K · Terminal state — the capstone list
+
+Everything that could be done without a database is done. The complete list of what remains, why each
+is gated, and the single unblock for each, is in **`docs/aura/terminal-state-2026-08-07.md`**. In
+short: (A) three fleet-READ measurements (1c exposure, 6c fleet proportion, 6b rename frequency) — the
+mechanism is proven, each needs one authenticated read-only query; (B) the gap-disposition WRITE
+surface (item 4) — its read-only list/count already exists, only the write is DB-gated; (C) the live
+generator's delta→region resolution and Step-1b runtime intent — edge/Deno + Step-1 gate; (D) a
+Design-Loop conflict queue keyed to ontology ids — the name-join stop, needs the binder; (E) auto-merge
+and heuristic rename inference, deliberately refused as guesses. The deterministic Architect data half —
+fabric, roles, seed, assembly, delta, reconciliation — is complete and tested (1156 tests, 77 files).
