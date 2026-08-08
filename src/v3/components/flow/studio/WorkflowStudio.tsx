@@ -18,6 +18,7 @@ import { listenCoverageAreas, canonicalFrameArea } from "@/v3/components/flow/li
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
 import AtlasSeamView from "./AtlasSeamView";
 import AtlasLifecycleGrid from "./AtlasLifecycleGrid";
+import LedgerLensPanel from "./LedgerLensPanel";
 
 interface PainHit {
   severity: string;
@@ -400,6 +401,9 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program,
       <CollapsibleCard label="Lifecycle × area — the derived second axis (area across, phase down)" defaultOpen={false}>
         <AtlasLifecycleGrid doc={doc} program={program} frameAreas={frameAreas}
           onPickWorkflow={(i) => { setActive(i); setSelected(null); }} />
+      </CollapsibleCard>
+      <CollapsibleCard label="Ledger lens — one claims ledger, migrated from these artifacts (read-only)" defaultOpen={false}>
+        <LedgerLensPanel program={program} />
       </CollapsibleCard>
       <div className="v3fs-wf-editor-h">Edit a workflow</div>
       {/* Cascading filters: pick the AREA, then one of ITS workflows — the
