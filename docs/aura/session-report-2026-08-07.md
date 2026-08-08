@@ -140,20 +140,21 @@ Read across **all 120 programs** via the app's authenticated session (owner-scop
 
 ## A · Cross-engagement ontology gap census
 
-- **49 distinct** unresolved-reference names (atlas step entities not in the ontology) across
-  engagements; **17 recur in ≥2 engagements (35%)**. Top recurring:
-  `OnboardingRequest`×6, `FNOL`×5, `Reporting`×5, `SAP`×5, `Physician`×4, `Document`×4, `Inquiry`×4,
-  `Service`×4, `ComplianceCheck`×3, `Candidate`×3, then `Company`/`RiskScore`/`RetentionOffer`/`User`/
-  `Persona`×2.
-- **Answer the data supports: partially reducible — the build plan's fully-per-engagement assumption
-  is too pessimistic for ~a third of the residue.** The *most*-recurring names split into two fixable
-  buckets: (1) **generic infrastructure/cross-cutting concepts the generator systematically omits** —
-  `Document`, `Reporting`, `Service`, `User`, `Persona`, `Company`, `SAP` (a system, not an entity) —
-  captured by **one generator-scoping change**, applied once; (2) **domain-standard concepts within a
-  vertical** — `FNOL` (insurance), `Physician` (healthcare), `Candidate` (recruitment),
-  `RetentionOffer` (telecom) — captured by a **per-vertical standard vocabulary**. The long tail (32
-  names appearing once) is irreducibly per-engagement curation. So the standing cost is *real but
-  smaller than assumed*: generator scoping + per-vertical vocab removes the top recurring third.
+> **CORRECTED — see `ontology-gap-census.md`.** My first pass here said "17 recur (35%)" and called
+> the build plan too pessimistic. **That was a miscount** — it counted per-*step occurrence*, not
+> per-*engagement*. Corrected below.
+
+- **49 distinct** unresolved-reference names. Counting **distinct engagements**: **exactly 1
+  (`Document`) recurs across 2 engagements; the other 48 appear in one engagement each.** The residue
+  is **almost entirely per-engagement**, which *upholds* the build plan's assumption.
+- **Classification (namespace question):** 0 are systems-slot errors, 1 is a persona-slot error
+  (`Talent`); 32 are mentioned-in-the-atlas-text-but-unmodelled genuine domain gaps, 17 are
+  referenced-only-in-the-entity-slot. The namespace-error hypothesis (SAP is a system in the wrong
+  slot) is **refuted** — SAP is absent from the systems inventory too. A related defect: only
+  **41%** of step `system` values resolve to the systems inventory (39/94).
+- **A universal baseline vocabulary** binds ~6 of 49 residue names cleanly (~12%); the residue's
+  near-zero recurrence means it saves the curator trivia, not domain work. Built + tested client-side
+  (`baselineVocabulary.ts`); generator consumption is gated (F-D related).
 
 ## B · Does the semantic derivation generalise? — **yes, universally**
 

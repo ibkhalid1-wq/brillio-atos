@@ -195,6 +195,25 @@ and composes with the `deriveRoles()` contract in `semantic-roles.md`.
 
 ---
 
+### F-D related · Baseline vocabulary seeding *(client floor built; generator consumption gated)*
+
+The unresolved-reference census (`ontology-gap-census.md`) refutes the "recurring residue" cost
+model — of 49 distinct residue names, **1 recurs across engagements** and **0 are systems-slot
+errors**. So the residue is per-engagement domain work, *except* a small generic-noun slice. A
+precise **baseline vocabulary** (`src/v3/lib/baselineVocabulary.ts` — Document, User, Task, Note,
+Report, Organization, Person, Notification, AuditEvent, Role, Team, Address, Tag, with definitions)
+is built and tested client-side; it binds ~6 of 49 residue names cleanly (~12%) and deliberately does
+**not** over-bind domain composites (exact/alias match only).
+
+**Proposed generator change (gated — specify, do not make):** the `domain-ontology` prompt in
+`supabase/functions/run-agent/index.ts` should be seeded with these baseline concepts as
+"include if the domain uses them" candidates (not forced), so a generic `Document`/`User`/`Report`
+referenced by a step resolves instead of becoming residue. **Cost:** prompt-only, no schema field;
+gated (no Deno verification). **Do NOT** add per-vertical terms (FNOL, Physician, Candidate) — those
+are real domain gaps for Listen, not a universal baseline.
+
+---
+
 ## F-E · The prototype generator doesn't emit the house design system
 
 **Defect.** Generated prototypes have no governed appearance. The Prototype Build is one
