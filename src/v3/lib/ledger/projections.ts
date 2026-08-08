@@ -123,6 +123,37 @@ export function buildKitView(store: LedgerStore): KitView {
   return { bands, burnDown: { total: closed + open, closed, open, pctClosed: closed + open ? +(100 * closed / (closed + open)).toFixed(1) : 0 } };
 }
 
+// ── 3.3 · confirm-or-deviate session agenda ───────────────────────────────────
+// Each open unknown is rendered against its STRONGEST existing claim on the same
+// locus (any world), so the question is "keep / trim / restage this?" not open
+// recall. An as-is claim (an import) frames as "this is what you're leaving —
+// keep or change?"; deviation is the expected answer.
+export interface AgendaItem {
+  about: string;
+  owner: string;
+  prompt: string;
+  framing: "confirm-or-deviate" | "open-recall";
+  against?: { value: string; source: string; world: string };
+}
+const strengthRank: Record<string, number> = { regulation: 8, asserted: 7, dispositioned: 6, document: 5, "external-standard": 4, "code-derived": 3, precedent: 2, generated: 1 };
+
+export function buildSessionAgenda(store: LedgerStore): AgendaItem[] {
+  const open = store.claims().filter((c) => isLive(c) && c.status === "open");
+  return open.map((c) => {
+    const siblings = store.liveClaimsAbout(c.about)
+      .filter((x) => x.id !== c.id && (x.value.kind === "scalar" || x.value.kind === "ref" || x.value.kind === "ref-list"))
+      .sort((a, b) => (strengthRank[b.source] ?? 0) - (strengthRank[a.source] ?? 0));
+    const against = siblings[0];
+    if (!against) return { about: c.about, owner: ownerLabel(c.ownerWhileOpen), framing: "open-recall" as const, prompt: `${slotOf(c.about)}: no prior claim — what is it?` };
+    const leaving = against.world === "as-is";
+    const val = valueStr(against);
+    const prompt = leaving
+      ? `${slotOf(c.about)}: today it's "${val}" (${against.source}, as-is) — this is what you're leaving. Keep or change?`
+      : `${slotOf(c.about)}: the draft says "${val}" (${against.source}) — confirm, trim, or restage?`;
+    return { about: c.about, owner: ownerLabel(c.ownerWhileOpen), framing: "confirm-or-deviate" as const, prompt, against: { value: val, source: against.source, world: against.world } };
+  });
+}
+
 // ── 2.5 · deviation register (as-is vs to-be on one locus) ─────────────────────
 export type DeviationClass = "document-backed" | "unbacked";
 export interface Deviation { about: string; asIs: string; toBe: string; classification: DeviationClass; stillReferenced: boolean; }
