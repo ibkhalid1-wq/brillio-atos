@@ -77,9 +77,11 @@ export interface Ledger {
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
-export const aboutOf = (elementId: string, slot: string): string => `${elementId}.${slot}`;
-export const elementIdOf = (about: string): string => about.slice(0, about.lastIndexOf("."));
-export const slotOf = (about: string): string => about.slice(about.lastIndexOf(".") + 1);
+// `about` = `<elementId>#<slot>`. `#` separates because BOTH element ids
+// (el:attr:opportunity.stage) and slots (touches.user, stage.valueSet) contain dots.
+export const aboutOf = (elementId: string, slot: string): string => `${elementId}#${slot}`;
+export const elementIdOf = (about: string): string => (about.includes("#") ? about.slice(0, about.indexOf("#")) : about);
+export const slotOf = (about: string): string => (about.includes("#") ? about.slice(about.indexOf("#") + 1) : about);
 
 /** Deterministic id (djb2 hex) — no positional ids anywhere (A6). */
 export function contentId(prefix: string, ...parts: unknown[]): string {
