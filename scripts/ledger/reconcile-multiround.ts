@@ -23,7 +23,6 @@ const ok = (b: boolean) => (b ? "PASS" : "**FAIL**");
 
 const gen = (store: LedgerStore): AssertInput[] => store.claims().filter((c) => c.world === "to-be" && !c.supersededBy && c.source === "generated")
   .map((c) => ({ about: c.about, value: c.value, world: c.world, layer: c.layer, source: c.source, ownerWhileOpen: c.ownerWhileOpen, status: c.status }));
-const elemIds = (store: LedgerStore) => new Set(store.elements().map((e) => e.id));
 const G = (v: string): AssertInput => ({ about: "el:track:defn#definition", value: { kind: "scalar", value: v }, world: "to-be", layer: "domain", source: "generated", ownerWhileOpen: { kind: "role", role: "R" }, status: "weak" });
 
 // changed blob for R3: drop Account, add NewThingZZ
@@ -44,6 +43,7 @@ async function main() {
   await pool.query("delete from audit_events where program_id=$1", [P]);
 
   const otherBefore = (await pool.query("select md5(coalesce(string_agg(id||program_id||coalesce(superseded_by,''), '|' order by program_id,id),'')) h, count(*)::int n from ledger_claims where program_id not like 'mr-%'")).rows[0];
+  const otherElsBefore = (await pool.query("select md5(coalesce(string_agg(id||program_id||dropped::text, '|' order by program_id,id),'')) h from ledger_elements where program_id not like 'mr-%'")).rows[0];
 
   const led = new PgLedger(pool, P, "mr-svc");
   const counts = async () => (await pool.query("select count(*)::int total, count(*) filter (where superseded_by is null)::int live, count(*) filter (where superseded_by is not null)::int sup, count(*) filter (where superseded_by is null and source='generated')::int livegen from ledger_claims where program_id=$1", [P])).rows[0];
@@ -64,13 +64,13 @@ async function main() {
 
   // ── R2: stakeholder closures on grounded+ungrounded, then same-blob regen ──
   for (const c of CLOSURES.filter((x) => x.round === 2)) await led.assert({ about: c.about, value: c.val, world: "to-be", layer: "domain", source: "asserted", ownerWhileOpen: { kind: "role", role: "R" }, status: "closed", closedBy: { method: "assertion", by: c.by, verbatim: "stakeholder said so" } });
-  const r2 = await led.reconcile([...gen(migrate(S)), G("gen-v1")], new Set([...elemIds(migrate(S)), "el:track:defn"]));
+  const r2 = await led.reconcile([...gen(migrate(S)), G("gen-v1")], migrate(S).elements());
   oq = (await led.orphanedClosures()).length;
   rounds.push({ label: "R2 assert+regen (same blob)", c: await counts(), oReport: r2.orphanedClosures.length, oQuery: oq, ins: await auditIns() });
   const g2 = await gLocus();
 
   // ── R3: changed blob (drop Account, add NewThingZZ), G value changes ──
-  const r3 = await led.reconcile([...gen(migrate(R3blob)), G("gen-v2")], new Set([...elemIds(migrate(R3blob)), "el:track:defn"]));
+  const r3 = await led.reconcile([...gen(migrate(R3blob)), G("gen-v2")], migrate(R3blob).elements());
   oq = (await led.orphanedClosures()).length;
   rounds.push({ label: "R3 regen (changed blob)", c: await counts(), oReport: r3.orphanedClosures.length, oQuery: oq, ins: await auditIns() });
   const g3 = await gLocus();
@@ -79,10 +79,10 @@ async function main() {
 
   // ── R4: close on the R3-added element, regen back to original blob; identical no-op probe ──
   for (const c of CLOSURES.filter((x) => x.round === 4)) await led.assert({ about: c.about, value: c.val, world: "to-be", layer: "domain", source: "asserted", ownerWhileOpen: { kind: "role", role: "R" }, status: "closed", closedBy: { method: "assertion", by: c.by, verbatim: "stakeholder said so" } });
-  const r4batch = [...gen(migrate(S)), G("gen-v2")]; const r4set = new Set([...elemIds(migrate(S)), "el:track:defn"]);
-  const r4 = await led.reconcile(r4batch, r4set);
+  const r4batch = [...gen(migrate(S)), G("gen-v2")]; const r4els = migrate(S).elements();
+  const r4 = await led.reconcile(r4batch, r4els);
   const beforeNoop = await counts(), beforeNoopIns = await auditIns();
-  await led.reconcile(r4batch, r4set); // identical → must be a real no-op
+  await led.reconcile(r4batch, r4els); // identical → must be a real no-op
   const afterNoop = await counts(), afterNoopIns = await auditIns();
   oq = (await led.orphanedClosures()).length;
   rounds.push({ label: "R4 assert+regen (back to orig)", c: afterNoop, oReport: r4.orphanedClosures.length, oQuery: oq, ins: afterNoopIns });
@@ -103,19 +103,19 @@ async function main() {
   for (const r of rounds) console.log(`  ${r.label.padEnd(30)} liveGen ${r.c.livegen} / total ${r.c.total}`);
   console.log(`  R2 vs R4 total delta on same-blob rounds: ${rounds[3].c.total - rounds[1].c.total} (should be small; only genuine new content — G's v2 + C4 + NewThingZZ, not a full re-batch)`);
 
-  console.log("\n## Invariant 3 — orphans across rounds (report Set vs orphanedClosures() table query)");
-  console.log(`  C2 (Account) dropped in R3: report flagged ${rounds[2].oReport} orphan(s); orphanedClosures() query saw ${rounds[2].oQuery}`);
+  console.log("\n## Invariant 3 / Finding B — orphanedClosures() query vs reconcile report, per round");
+  for (const r of rounds.filter((x) => x.label.includes("regen"))) console.log(`  ${r.label.padEnd(30)} report ${r.oReport} · query ${r.oQuery} · agree ${ok(r.oReport === r.oQuery)}`);
   const c2 = await closureState("el:entity:account#definition", "cro");
-  console.log(`  C2 still live after R3+R4: ${!!c2?.live} (preserved, never deleted)`);
-  console.log(`  divergence: element table is frozen at bootstrap (reconcile never writes ledger_elements) — see findings`);
+  console.log(`  C2 (Account) still live after R3+R4: ${!!c2?.live} (preserved, never deleted — dropped means marked, not removed)`);
 
   console.log("\n## Invariant 4 — precedence stable under repetition");
   console.log(`  C1 (vp-sales) live after every regeneration: ${!!(await closureState("el:attr:opportunity.stage#valueSet", "vp-sales"))?.live}`);
   console.log(`  G resolves deterministically (below)`);
 
-  console.log("\n## Invariant 5 — audit grows by exactly the writes (INSERT rows == stored claims)");
+  console.log("\n## Invariant 5 — audit grows by exactly the writes (INSERT rows == stored claims + elements)");
   const finalTotal = rounds[3].c.total, finalIns = rounds[3].ins;
-  console.log(`  ledger_claims total ${finalTotal} · audit INSERT rows ${finalIns}: ${ok(finalTotal === finalIns)} (one INSERT audit per stored claim; no double, no skip)`);
+  const finalEls = (await pool.query("select count(*)::int n from ledger_elements where program_id=$1", [P])).rows[0].n;
+  console.log(`  ledger_claims ${finalTotal} + ledger_elements ${finalEls} = ${finalTotal + finalEls} · audit INSERT rows ${finalIns}: ${ok(finalTotal + finalEls === finalIns)} (one INSERT audit per stored row incl. elements; no double, no skip)`);
 
   console.log("\n## Recency verdict (the suspect)");
   console.log(`  G after R2 (value gen-v1): ${JSON.stringify(g2)}`);
@@ -129,16 +129,21 @@ async function main() {
   console.log(`  C2 orphan-flagged (report) by round: R2=${rounds[1].oReport>0} R3=${rounds[2].oReport} R4=${rounds[3].oReport}`);
   console.log(`  C2 element id unchanged on R4 re-add (Account back in blob) → report un-flags; closure was never detached → REATTACH (no duplicate, no loss)`);
 
-  console.log("\n## Element-table staleness (root of the orphan divergence)");
-  console.log(`  after R3: el:entity:account (dropped) still in read-model elements: ${elsAfterR3.has("el:entity:account")} (stale)`);
-  console.log(`  after R3: el:entity:newthingzz (added) present in read-model elements: ${elsAfterR3.has("el:entity:newthingzz")} (missing — claims exist, element row never written)`);
+  console.log("\n## Finding A — element-driven projection matches the claims after R3 (not round-1 photo)");
+  const accountDropped = !elsAfterR3.has("el:entity:account");
+  const newThingPresent = elsAfterR3.has("el:entity:newthingzz");
+  console.log(`  after R3: Account (dropped by regen) ABSENT from live element view: ${ok(accountDropped)}`);
+  console.log(`  after R3: NewThingZZ (added by regen) PRESENT in live element view: ${ok(newThingPresent)}`);
   const newThingClaims = (await pool.query("select count(*)::int n from ledger_claims where program_id=$1 and about like 'el:entity:newthingzz#%'", [P])).rows[0].n;
   const ontHasNew = buildOntologyView(rmAfterR3).some((e) => e.id === "el:entity:newthingzz");
-  console.log(`  el:entity:newthingzz stored claims: ${newThingClaims}; ontology projection includes it: ${ontHasNew} (claims stored but invisible to element-driven projection)`);
+  const ontHasAccount = buildOntologyView(rmAfterR3).some((e) => e.id === "el:entity:account");
+  console.log(`  NewThingZZ stored claims ${newThingClaims}; ontology projection includes it: ${ok(ontHasNew)}; still shows dropped Account: ${ok(!ontHasAccount)}`);
 
-  console.log("\n## Laila / other programs untouched");
+  console.log("\n## Laila / other programs untouched (claims + elements)");
   const otherAfter = (await pool.query("select md5(coalesce(string_agg(id||program_id||coalesce(superseded_by,''), '|' order by program_id,id),'')) h, count(*)::int n from ledger_claims where program_id not like 'mr-%'")).rows[0];
-  console.log(`  non-test programs: ${otherBefore.n} rows before / ${otherAfter.n} after; checksum identical: ${ok(otherBefore.h === otherAfter.h)}`);
+  const otherElsAfter = (await pool.query("select md5(coalesce(string_agg(id||program_id||dropped::text, '|' order by program_id,id),'')) h from ledger_elements where program_id not like 'mr-%'")).rows[0];
+  console.log(`  non-test claims: ${otherBefore.n} before / ${otherAfter.n} after; claim checksum identical: ${ok(otherBefore.h === otherAfter.h)}`);
+  console.log(`  non-test element checksum identical: ${ok(otherElsBefore.h === otherElsAfter.h)}`);
 
   // cleanup
   for (const t of ["ledger_claims", "ledger_elements", "ledger_rename_intents"]) await pool.query(`delete from ${t} where program_id=$1`, [P]);

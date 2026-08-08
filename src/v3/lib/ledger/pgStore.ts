@@ -101,8 +101,38 @@ export class PgLedger {
     });
   }
 
-  /** Reconcile a regeneration batch into the stored ledger (recency + orphan flag). */
-  async reconcile(incoming: AssertInput[], incomingElementIds: Set<string>): Promise<MergeReport> {
+  /**
+   * Maintain ledger_elements to match what the regeneration produces — the claim path
+   * already does this; this makes the element table catch up. Elements in the batch are
+   * upserted (added if new, updated if changed, un-dropped if they returned); elements the
+   * batch no longer produces are MARKED dropped, never deleted (their closures may still
+   * point at them — that is the orphan case orphanedClosures() must find). Program-scoped,
+   * one transaction, `aura.intent` set so the writes are audited like any other.
+   */
+  private async maintainElements(els: LedgerElement[]): Promise<void> {
+    const c = await this.pool.connect();
+    try {
+      await c.query("begin");
+      await c.query("select set_config('aura.intent', $1, true)", [JSON.stringify({ action_type: "ledger.elements", affected_kind: "element", actor: this.actor })]);
+      for (const e of els) {
+        await c.query(
+          `insert into ledger_elements (id,program_id,kind,name,of,refs,dropped) values ($1,$2,$3,$4,$5,$6,false)
+           on conflict (program_id,id) do update set kind=excluded.kind, name=excluded.name, of=excluded.of, refs=excluded.refs, dropped=false
+           where ledger_elements.kind is distinct from excluded.kind or ledger_elements.name is distinct from excluded.name
+              or ledger_elements.of is distinct from excluded.of or ledger_elements.refs is distinct from excluded.refs
+              or ledger_elements.dropped is distinct from false`,
+          [e.id, this.programId, e.kind, e.name, e.of ?? null, JSON.stringify(e.refs ?? {})]);
+      }
+      // mark dropped: stored, not-yet-dropped elements the batch no longer produces (row STAYS)
+      await c.query("update ledger_elements set dropped=true where program_id=$1 and not dropped and not (id = any($2::text[]))", [this.programId, els.map((e) => e.id)]);
+      await c.query("commit");
+    } catch (e) { await c.query("rollback").catch(() => {}); throw e; } finally { c.release(); }
+  }
+
+  /** Reconcile a regeneration batch into the stored ledger (recency + orphan flag); the
+   *  element table is maintained to match the batch (added/changed upserted, dropped marked). */
+  async reconcile(incoming: AssertInput[], incomingElements: LedgerElement[]): Promise<MergeReport> {
+    const incomingElementIds = new Set(incomingElements.map((e) => e.id));
     const rep: MergeReport = { applied: 0, preservedClosures: 0, supersededGenerated: 0, filledUnknowns: 0, newClaims: 0, orphanedClosures: [] };
     for (const input of incoming) {
       await this.withLockedTxn(input.about, async (c) => {
@@ -119,6 +149,7 @@ export class PgLedger {
       await this.assert(input); // precedence guarantees a generated claim cannot supersede an attributed closure
       rep.applied += 1;
     }
+    await this.maintainElements(incomingElements); // element table catches up to what the claim path already did
     // orphans: attributed closures about elements the regeneration no longer produces
     const { rows } = await this.pool.query("select about, closed_by, source, status from ledger_claims where program_id=$1 and superseded_by is null", [this.programId]);
     for (const r of rows) {
@@ -139,7 +170,7 @@ export class PgLedger {
   async orphanedClosures(): Promise<Array<{ about: string; by: string }>> {
     const { rows } = await this.pool.query(
       `select about, closed_by from ledger_claims where program_id=$1 and superseded_by is null and source = any($2)
-       and status in ('closed','weak') and split_part(about,'#',1) not in (select id from ledger_elements where program_id=$1)`,
+       and status in ('closed','weak') and split_part(about,'#',1) not in (select id from ledger_elements where program_id=$1 and not dropped)`,
       [this.programId, [...ATTRIBUTED]]);
     return rows.map((r) => ({ about: r.about as string, by: (r.closed_by as { by?: string } | null)?.by ?? "?" }));
   }
@@ -149,9 +180,10 @@ export class PgLedger {
     const c = await this.pool.connect();
     try {
       await c.query("begin");
-      for (const e of mem.elements()) await c.query("insert into ledger_elements (id,program_id,kind,name,of,refs) values ($1,$2,$3,$4,$5,$6) on conflict (program_id,id) do nothing", [e.id, this.programId, e.kind, e.name, e.of ?? null, JSON.stringify(e.refs ?? {})]);
-      // insert claims WITHOUT re-running precedence (the mem store already resolved it); set intent once
+      // set intent first so BOTH the element and claim bootstrap inserts are audited
       await c.query("select set_config('aura.intent', $1, true)", [JSON.stringify({ action_type: "ledger.bootstrap", affected_kind: "claim", actor: this.actor })]);
+      for (const e of mem.elements()) await c.query("insert into ledger_elements (id,program_id,kind,name,of,refs) values ($1,$2,$3,$4,$5,$6) on conflict (program_id,id) do nothing", [e.id, this.programId, e.kind, e.name, e.of ?? null, JSON.stringify(e.refs ?? {})]);
+      // insert claims WITHOUT re-running precedence (the mem store already resolved it)
       for (const cl of mem.claims()) {
         await c.query(
           `insert into ledger_claims (id,program_id,about,world,source,status,layer,value,owner,superseded_by,closed_by,contradicts,escalate_to,blocked_reason)
@@ -166,7 +198,7 @@ export class PgLedger {
 
   /** Load the stored ledger into a read model the existing sync projections consume. */
   async loadReadModel(): Promise<LedgerStore> {
-    const els = (await this.pool.query("select * from ledger_elements where program_id=$1", [this.programId])).rows
+    const els = (await this.pool.query("select * from ledger_elements where program_id=$1 and not dropped", [this.programId])).rows
       .map((e) => ({ id: e.id, kind: e.kind, name: e.name, of: e.of ?? undefined, refs: e.refs } as LedgerElement));
     const cls = (await this.pool.query("select * from ledger_claims where program_id=$1", [this.programId])).rows.map(rowToClaim);
     return buildReadModel(els, cls);

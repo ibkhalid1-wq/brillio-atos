@@ -20,11 +20,15 @@ const A = "audit-A", B = "audit-B";
 const ok = (b: boolean) => (b ? "PASS" : "FAIL");
 
 async function checksum(pool: Pool, prog: string): Promise<string> {
-  // deterministic content fingerprint of a program's entire ledger (order-independent)
+  // deterministic content fingerprint of a program's entire ledger — claims AND elements
+  // (order-independent), so the reconcile-isolation test also covers the element writes.
   const r = await pool.query(
-    `select md5(string_agg(t.line, '|' order by t.line)) h from (
+    `select md5(coalesce(string_agg(t.line, '|' order by t.line), '')) h from (
        select id||':'||about||':'||world||':'||source||':'||status||':'||coalesce(superseded_by,'')||':'||value::text||':'||owner::text line
-       from ledger_claims where program_id=$1) t`, [prog]);
+       from ledger_claims where program_id=$1
+       union all
+       select 'E:'||id||':'||kind||':'||name||':'||coalesce(of,'')||':'||dropped::text||':'||refs::text
+       from ledger_elements where program_id=$1) t`, [prog]);
   return r.rows[0].h ?? "(empty)";
 }
 
@@ -80,7 +84,7 @@ async function main() {
   const fresh = migrate(S);
   const incoming: AssertInput[] = fresh.claims().filter((x) => x.world === "to-be" && !x.supersededBy && x.source === "generated")
     .map((x) => ({ about: x.about, value: x.value, world: x.world, layer: x.layer, source: x.source, ownerWhileOpen: x.ownerWhileOpen, status: x.status }));
-  const rep = await ledA.reconcile(incoming, new Set(fresh.elements().map((e) => e.id)));
+  const rep = await ledA.reconcile(incoming, fresh.elements());
   const bAfter = await checksum(pool, B);
   console.log(`  reconcile(A) applied ${rep.applied}; B checksum before===after: ${ok(bBefore === bAfter)}`);
   console.log(`    B ${bBefore.slice(0, 12)} → ${bAfter.slice(0, 12)}`);
