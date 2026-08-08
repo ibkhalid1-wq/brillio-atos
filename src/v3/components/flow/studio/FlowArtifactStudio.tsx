@@ -15,6 +15,7 @@ import { groundingFor, citationGraph, resourceUri, artifactFabioType, SEMANTIC_C
 import { readRoleBindings, readOperatorAsks, operatorAsksFor, resolveMovementStakeholders, readDirectoryPeople, validateProgramRole, readGapRoutes, gapRouteKey } from "@/v3/components/flow/flowStakeholders";
 import { artifactApprovalState } from "@/v3/components/flow/flowApprovals";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
+import { operatorOverrideCount } from "@/v3/components/flow/flowOperatorOverrides";
 import { partitionOntologyViolations } from "@/v3/components/flow/flowOntologyConstraints";
 import { listOpenFlowDecisions, listFlowAttestations, docSectionDiff } from "@/v3/components/flow/flowDecisions";
 import { buildPrototypePrompt } from "@/v3/components/flow/flowBuildPrompt";
@@ -86,6 +87,16 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
   // Approval is SENT from the artifact card in Flow (part of the process), not
   // from here — the studio just reflects the resulting state.
   const approval = useMemo(() => artifactApprovalState(program, artifact.movementId, artifact.id), [program, artifact.movementId, artifact.id]);
+  // Hand corrections this document carries (operator overrides + curation-log
+  // dismissals). Regeneration REPLACES the document, so each is a stakeholder
+  // correction about to be discarded — warn before regenerating, with the count.
+  const overrideCount = useMemo(() => (entry ? operatorOverrideCount(program, entry.fieldKey) : 0), [program, entry]);
+  const guardedRegenerate = React.useCallback(() => {
+    if (!onRegenerate) return;
+    if (overrideCount > 0 && typeof window !== "undefined"
+      && !window.confirm(`This ${artifact.title} carries ${overrideCount} hand correction${overrideCount === 1 ? "" : "s"} from stakeholder meetings. Regenerating REPLACES the document — those corrections are not merged, and there is no saved version to roll back to. Regenerate anyway?`)) return;
+    onRegenerate();
+  }, [onRegenerate, overrideCount, artifact.title]);
 
   const dialogRef = React.useRef<HTMLDivElement | null>(null);
   useFocusTrap(embedded ? { current: null } : dialogRef);
@@ -530,7 +541,7 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
                 ungenerated one offers Generate. */}
             {onRegenerate && (!artifact.present || artifact.stale || regenerating) ? (
               <button type="button" className="v3fs-btn v3fs-btn-regen" disabled={!!regenerating}
-                onClick={() => { onRegenerate(); if (!embedded) onClose(); }}
+                onClick={() => { guardedRegenerate(); if (!embedded) onClose(); }}
                 title={artifact.present ? "Resynthesize this document from the latest evidence" : "Generate this document from the evidence on record"}>
                 {regenerating ? "Generating…" : artifact.present ? "↻ Regenerate" : "✦ Generate"}
               </button>
@@ -544,7 +555,7 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
                     <div className="v3fs-dv-menu-backdrop" onClick={() => setMenuOpen(false)} aria-hidden="true" />
                     <div className="v3fs-dv-menu" role="menu">
                       {onRegenerate && !artifact.stale ? (
-                        <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); onRegenerate(); onClose(); }}>
+                        <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); guardedRegenerate(); onClose(); }}>
                           Regenerate
                         </button>
                       ) : null}
@@ -589,9 +600,11 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
 
         {artifact.stale ? (
           <div className="v3fs-dv-band amber">
-            <span>Evidence changed since this document was generated.</span>
+            <span>Evidence changed since this document was generated.{overrideCount > 0
+              ? ` ⚠ ${overrideCount} stakeholder correction${overrideCount === 1 ? "" : "s"} on this document will be replaced — regeneration does not merge them.`
+              : ""}</span>
             {onRegenerate ? (
-              <button type="button" className="v3fs-btn" onClick={() => { onRegenerate(); onClose(); }}>Regenerate</button>
+              <button type="button" className="v3fs-btn" onClick={() => { guardedRegenerate(); onClose(); }}>Regenerate</button>
             ) : null}
           </div>
         ) : null}

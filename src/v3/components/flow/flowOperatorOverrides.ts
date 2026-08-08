@@ -145,6 +145,19 @@ export function appendOperatorOverrides(
   return [...log, ...notes.map((note) => ({ ts, by, fieldKey, note }))].slice(-FLOW_ATTESTATION_CAP);
 }
 
+/** How many hand corrections a document carries — stored operator overrides for
+ * its `fieldKey` plus the doc's own curation-log dismissals. This is the number
+ * a Regenerate warning shows: regeneration replaces the document, so each of
+ * these is a stakeholder correction about to be discarded. */
+export function operatorOverrideCount(program: ProgramSummary, fieldKey: string): number {
+  const { inner } = getProgramState((program.rawData ?? {}) as Record<string, unknown>);
+  const stored = (Array.isArray(inner.flowOperatorOverrides) ? inner.flowOperatorOverrides.filter(isRecord) : [])
+    .filter((row) => text(row.fieldKey) === fieldKey).length;
+  const doc = isRecord(inner[fieldKey]) ? (inner[fieldKey] as Record<string, unknown>) : {};
+  const dismissals = Array.isArray(doc._curationLog) ? doc._curationLog.filter(isRecord).length : 0;
+  return stored + dismissals;
+}
+
 /** The regeneration guidance block for one document: the operator's stored
  * overrides plus the current doc's dismissal log — regeneration must
  * preserve these, not re-derive around them. Null when there's nothing. */
