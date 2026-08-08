@@ -62,6 +62,12 @@ const jointOrOwner = (areaA: string, areaB: string, fallback: string): Owner => 
 
 export interface Snapshot { ontology: Record<string, unknown>; atlas: Record<string, unknown>; overrides: Array<Record<string, unknown>>; }
 
+/**
+ * @deprecated Option A replaces this. Change now flows through the generator + override
+ * adapter → reconcile (`supabase/functions/_shared/optionA.ts` → `PgLedger.reconcile`),
+ * proven to reproduce this function's output (see docs/aura/option-a-report.md). migrate()
+ * is retained only as a bootstrap/equivalence baseline — route nothing new through it.
+ */
 export function migrate(snap: Snapshot): LedgerStore {
   const store = createLedgerStore();
   const entities = (Array.isArray(snap.ontology.entities) ? snap.ontology.entities : []) as Array<Record<string, unknown>>;
