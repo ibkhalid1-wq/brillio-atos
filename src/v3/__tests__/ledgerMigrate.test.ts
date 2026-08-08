@@ -29,8 +29,8 @@ describe("ledger migration on Laila", () => {
   });
 
   it("splits a removed entity across worlds (User existed as-is, removed in to-be)", () => {
-    const asIs = store.liveClaimsAbout("el:removed:user.exists").filter((c) => c.world === "as-is");
-    const toBe = store.liveClaimsAbout("el:removed:user.exists").filter((c) => c.world === "to-be");
+    const asIs = store.liveClaimsAbout("el:removed:user#exists").filter((c) => c.world === "as-is");
+    const toBe = store.liveClaimsAbout("el:removed:user#exists").filter((c) => c.world === "to-be");
     expect(asIs.length).toBe(1); expect(asIs[0].value).toEqual({ kind: "scalar", value: true });
     expect(toBe.length).toBe(1); expect(toBe[0].value).toEqual({ kind: "scalar", value: false });
   });
