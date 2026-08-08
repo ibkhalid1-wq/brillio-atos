@@ -326,14 +326,11 @@ export function buildLineModel(program: ProgramSummary): LineModel {
     },
     {
       id: "loop", name: "Design Loop", half: "Envision ▸ Show", scope: "per area",
-      chip: {
-        // The round number lives in the stats strip — the chip carries only
-        // the loop's own arithmetic.
-        text: loop.converged
-          ? "Converged"
-          : `${loop.areasConverged} of ${loop.areasTotal || areas.length} converged`,
-        tone: loop.converged ? "green" : "accent",
-      },
+      // The chip is the GATE fraction, like every other band — the real convergence
+      // (burn-down closures) is the zone header inside the loop, so a second
+      // "N of M converged" number here would contradict it. Demo-verdict sign-off
+      // stays available on the gate criteria (this chip opens them).
+      chip: gateChip(loopGate, envisionOk && showOk),
       gate: loopGate,
       note: "Clients aren't asked while the team designs — their verdicts land at Validation, the Show half of this loop.",
       stations: [

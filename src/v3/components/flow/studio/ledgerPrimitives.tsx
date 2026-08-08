@@ -134,14 +134,13 @@ export function HeardReadout({ heard, perAreaProvisional = true }: { heard: Hear
 // ── the ONE convergence readout: real ledger closures (burn-down), not demo-verdict
 //    area sign-offs. Per-area convergence needs the write path → provisional. ──
 export function ConvergenceReadout({ burnDown, perAreaProvisional = true }: { burnDown: KitView["burnDown"]; perAreaProvisional?: boolean }) {
+  // Density: the headline is the %; the exact closed/open split is detail on hover.
   return (
-    <span className="v3lc-conv">
-      <span className="v3lc-conv-bar" role="img" aria-label={`${burnDown.pctClosed}% of claims closed or weak`}>
+    <span className="v3lc-conv" title={`${burnDown.closed} closed/weak · ${burnDown.open} open of ${burnDown.total}`}>
+      <span className="v3lc-conv-bar" role="img" aria-label={`${burnDown.pctClosed}% of claims closed or weak (${burnDown.closed} of ${burnDown.total})`}>
         <span style={{ width: `${burnDown.pctClosed}%` }} />
       </span>
-      <span className="v3lc-conv-l">
-        <b>{burnDown.pctClosed}%</b> <span className="v3lc-conv-sub">{burnDown.closed} closed/weak · {burnDown.open} open</span>
-      </span>
+      <span className="v3lc-conv-l"><b>{burnDown.pctClosed}%</b> <span className="v3lc-conv-sub">closed/weak</span></span>
       {perAreaProvisional ? <ProvisionalMark what="per-area convergence is demo-verdict sign-off, gated on the stakeholder write path" /> : null}
     </span>
   );
@@ -167,13 +166,16 @@ export function UnownedSeamStrip({ unownedBands, seamBands, openTotal }: { unown
         </span>
       ) : null}
       {seamBands.length ? (
-        <span className="v3lc-uss-seams">
+        // Density: show the count + the top few seams; the full list is on hover and is
+        // actionable in the Discover inbox (this header strip is a summary, not the queue).
+        <span className="v3lc-uss-seams" title={seamBands.map((b) => `${b.label} · ${b.open}`).join("  ·  ")}>
           <span className="v3lc-uss-seams-l">{seamBands.length} seam{seamBands.length === 1 ? "" : "s"} — joint sessions to book</span>
-          {seamBands.map((b) => (
+          {seamBands.slice(0, 3).map((b) => (
             <span key={b.key} className="v3lc-uss-seam" title={`${b.label} — ${b.open} open, jointly owned (a meeting to book, not a gap)`}>
               <span aria-hidden="true">⋈</span> {b.label}<span className="v3lc-uss-seam-n">{b.open}</span>
             </span>
           ))}
+          {seamBands.length > 3 ? <span className="v3lc-uss-more">+{seamBands.length - 3} more</span> : null}
         </span>
       ) : null}
     </div>

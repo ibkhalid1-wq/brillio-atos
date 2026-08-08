@@ -8111,6 +8111,7 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3lc-uss-seams-l{font-size:10px;font-weight:750;letter-spacing:.05em;text-transform:uppercase;color:var(--v3-text-muted)}
 .v3lc-uss-seam{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:600;color:var(--mv);background:color-mix(in srgb,var(--mv) 9%,transparent);border:1px solid color-mix(in srgb,var(--mv) 35%,var(--fs-line));border-left:3px double var(--mv);border-radius:6px;padding:1px 7px}
 .v3lc-uss-seam-n{font-weight:800;margin-left:3px;font-variant-numeric:tabular-nums}
+.v3lc-uss-more{font-size:10.5px;font-weight:650;color:var(--v3-text-muted);cursor:default}
 .v3fs-wf-editor-h {margin:22px 0 12px;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--v3-text-muted);border-top:1px solid var(--fs-line);padding-top:15px}
 /* Business-event chips — the ontology's events referenced on a step or a
    trigger; amber to read as "something happens", vs the indigo entity nouns. */
