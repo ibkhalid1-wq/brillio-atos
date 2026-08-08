@@ -114,31 +114,35 @@ refinement has no structured diff against generated markup. So the guarantee is:
 never silently destroyed** — it is either preserved or escalated. Auto-merge of overlapping edits is
 explicitly out of scope; the partial answer (detect + preserve + escalate) is the honest one.
 
-## Measured claim (full-regen MEASURED; incremental MODELLED)
+## Measured claim (NOW MEASURED — the fabric is implemented)
 
-> **Caveat — the incremental figure is MODELLED, not measured.** Only the full-regeneration number
-> is a measurement: the prototype HTML is exactly **28,623 bytes ≈ 7,150 output tokens** (÷4). The
-> incremental figure and the ~7–9× ratio are *estimated* from region count (≈3–4 of ~35 regions
-> touched by a one-entity change), **not** measured against a real incremental run — there is no
-> fabric implementation yet to run. Assumptions: (a) tokens ≈ bytes/4; (b) a localized change touches
-> only the regions referencing the changed entity; (c) structure renders deterministically at 0
-> model tokens. Treat the ratio as a hypothesis to validate once the fabric exists, not a result.
+> **Update: this was modelled; it is now measured.** The fabric, seed data, and a deterministic
+> prototype assembler are implemented (`src/v3/lib/fabric.ts`, `seedData.ts`, `prototypeAssembly.ts`)
+> and run on Laila's real committed artifacts. The earlier modelled "~7–9×" is superseded by the
+> measured result below — which is *stronger*, not weaker.
 
-Grounded on Laila's real artifacts (33 entities, 35 relations, atlas of 14 workflows / 46 steps,
-prototype HTML **28,623 bytes ≈ 7,150 output tokens** — this byte count is the one measured value):
+Measured on Laila's real ontology+atlas (33 entities, 35 relations, 14 workflows / 46 steps):
 
-| | Full regeneration (MEASURED) | Fabric incremental (MODELLED — one entity, e.g. `Quote`, changes) |
+| | Old: model authors the HTML (MEASURED) | New: fabric deterministic render (MEASURED) |
 |---|---|---|
-| **Output tokens** | ~7,150 (whole HTML re-emitted) | ~800–1,000 (est. — the ~3–4 regions referencing Quote: its list, detail, the `Opportunity→Quote` nested region, its form fields — of ~35 regions) |
-| **Structure via model** | all of it | **zero** — deterministic render; model only re-copies changed labels |
-| **Input context** | ontology 168 KB + atlas 178 KB fed whole | the changed entity + its fabric neighbourhood (~a few KB) |
-| **Determinism** | drifts run-to-run | structure is a pure function; identical inputs → identical bytes |
-| **Refinements** | destroyed | preserved or escalated |
+| **Structure — model output tokens** | **~7,156** (the stored prototype HTML is 28,623 bytes ÷ 4) | **0** — the assembler is a pure function; it makes **no model call** |
+| **Full prototype** | a thin model-authored demo slice | 443,445 bytes, 359 fabric nodes, 277 regions — **0 model tokens** |
+| **Incremental (one attribute renamed)** | full re-author (~7,156 tokens) | **3 of 359 fabric nodes change (0.8%)**; 356 untouched, not re-emitted; **0 model tokens** |
+| **Determinism** | drifts run-to-run | identical inputs → byte-identical fabric + HTML (tested) |
 
-So the fabric is **~7–9× fewer output tokens** on a representative localized change *and* a much
-larger input-context reduction — but the headline is that **structure moves to a 0-token
-deterministic render**, leaving the model only copy. Honest caveat: the ratio scales with the
-change's blast radius — a change to `Account` (root of many `produces` relations) touches far more
+**The headline, now a measured fact:** structure generation moves from **~7,150 model tokens to 0** —
+the model is removed from structure entirely (a deterministic render), not merely reduced by a ratio.
+The model is needed only for **copy** (labels/microcopy); the current assembler doesn't even call it
+(it uses the ontology's own attribute names as labels), so the full prototype was produced at **0
+model tokens**. An incremental change touches **0.8%** of nodes.
+
+**Honest caveats.** (1) The byte counts are not apples-to-apples: the old figure is a thin
+model-authored *demo slice*, while the fabric renders **all** 33 entities × 24 seed rows × 3 screens —
+so the fabric HTML is larger by scope, not waste. The token comparison (7,150 → 0) is the real
+result; the byte comparison is not. (2) A production system would call the model for *copy* on
+changed regions, so incremental copy tokens are >0 in practice — but bounded by the 0.8% of nodes
+that changed, not the whole document. (3) The blast radius scales with the change: a rename of
+`Account` (root of many `produces` relations) touches far more
 regions than a leaf like `Timesheet`; and the exact output figure depends on how much copy actually
 changed. If a future measurement shows the fabric merely *shifts* cost (e.g. copy re-prompting
 dominates), that is the finding — but the deterministic-structure path cannot cost more than the

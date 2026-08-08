@@ -221,6 +221,41 @@ bound the two `FlowRespond` answer fields to it, and added `answerCapLockstep.te
 the edge `flow-portal` literal (text-parse, the edgeLockstep idiom). The `1200` copilot-token cap
 stays edge-internal (the client `1200` is a different concept — not the same contract).
 
+## H · Architect's data half — built, and the token claim now MEASURED
+
+Built the deterministic client-buildable half end-to-end against Laila's real committed snapshot and
+replaced the modelled token figure with a measurement (the directive: *"run a real full generation
+and a real incremental update, report actual counts, and replace the modelled figure everywhere"*).
+
+- **Modules (all pure, all tested):** `fabric.ts` (`deriveFabric` → 359 nodes, slug/name ids, djb2
+  idempotency), `semanticRoles.ts` (`deriveRoles` — the bridge; **relation roles 100% derived from
+  cardinality, value roles 0% type-derived → name heuristic**, the F-D split made concrete),
+  `seedData.ts` (`generateSeed` — topological FK order, mulberry32, every row `_synthetic` +
+  `SYNTHETIC-SEED`, planted extremes, assumptions emitted as Listen questions), `prototypeAssembly.ts`
+  (`assemblePrototype` — the one place fabric+roles+Meridian+seed meet; every region `data-fabric-id`
+  tagged). Tests: `fabric.test.ts`, `seedData.test.ts`, `prototypeAssembly.test.ts` — all green.
+- **MEASURED (supersedes the modelled ~7–9×, and is stronger):**
+  - Old model-authored prototype = 28,623 bytes ≈ **7,156 output tokens** for structure.
+  - Fabric deterministic render = 443,445 bytes, 359 nodes, 277 regions — **0 model tokens**. The
+    assembler makes **no model call**; structure is a pure function.
+  - Incremental (one attribute renamed) = **3 of 359 nodes change (0.8%)**; 356 untouched, not
+    re-emitted; **0 model tokens**.
+  - **Headline:** structure generation moves from ~7,150 model tokens **to 0** — the model is removed
+    from structure, not reduced by a ratio. It is needed only for *copy*; this assembler doesn't even
+    call it (uses ontology attribute names as labels).
+- **Honest caveats (in `fabric.md`):** the byte counts are not apples-to-apples — the old figure is a
+  thin demo *slice*, the fabric renders all 33 entities × 24 seed rows × 3 screens, so it is larger by
+  **scope**, not waste; the token comparison (7,150 → 0) is the real result. A production system would
+  re-prompt *copy* on changed regions, so incremental copy tokens are >0 — but bounded by the 0.8% of
+  nodes that changed, never the whole document.
+- **The prototype as an instrument:** rendered in preview, the detail view visibly exposed the
+  heuristic misclassifications the role-deriver can't avoid without types — `stage` rendered as the
+  record title ("first attribute = title"), `type` as a code, `account`/`owner` as free-text chips.
+  That is F-D made *visible on a populated screen* — exactly what seed data is for.
+- **Propagation:** the modelled figure in `fabric.md` ("## Measured claim — full-regen MEASURED;
+  incremental MODELLED") was replaced in place with the measured result; this report carries the same
+  numbers. No other document cited the old ratio (grep-checked).
+
 ## G · Step 1b static test — **deferred (not started)**
 
 Lowest-priority "if time remains" item, and Step-1-adjacent (action_type / affected_kind are the
