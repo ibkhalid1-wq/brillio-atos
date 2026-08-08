@@ -114,14 +114,22 @@ refinement has no structured diff against generated markup. So the guarantee is:
 never silently destroyed** — it is either preserved or escalated. Auto-merge of overlapping edits is
 explicitly out of scope; the partial answer (detect + preserve + escalate) is the honest one.
 
-## Measured claim
+## Measured claim (full-regen MEASURED; incremental MODELLED)
+
+> **Caveat — the incremental figure is MODELLED, not measured.** Only the full-regeneration number
+> is a measurement: the prototype HTML is exactly **28,623 bytes ≈ 7,150 output tokens** (÷4). The
+> incremental figure and the ~7–9× ratio are *estimated* from region count (≈3–4 of ~35 regions
+> touched by a one-entity change), **not** measured against a real incremental run — there is no
+> fabric implementation yet to run. Assumptions: (a) tokens ≈ bytes/4; (b) a localized change touches
+> only the regions referencing the changed entity; (c) structure renders deterministically at 0
+> model tokens. Treat the ratio as a hypothesis to validate once the fabric exists, not a result.
 
 Grounded on Laila's real artifacts (33 entities, 35 relations, atlas of 14 workflows / 46 steps,
-prototype HTML **28,623 bytes ≈ 7,150 output tokens**):
+prototype HTML **28,623 bytes ≈ 7,150 output tokens** — this byte count is the one measured value):
 
-| | Full regeneration (today) | Fabric incremental (one entity, e.g. `Quote`, changes) |
+| | Full regeneration (MEASURED) | Fabric incremental (MODELLED — one entity, e.g. `Quote`, changes) |
 |---|---|---|
-| **Output tokens** | ~7,150 (whole HTML re-emitted) | ~800–1,000 (the ~3–4 regions referencing Quote: its list, detail, the `Opportunity→Quote` nested region, its form fields — of ~35 regions) |
+| **Output tokens** | ~7,150 (whole HTML re-emitted) | ~800–1,000 (est. — the ~3–4 regions referencing Quote: its list, detail, the `Opportunity→Quote` nested region, its form fields — of ~35 regions) |
 | **Structure via model** | all of it | **zero** — deterministic render; model only re-copies changed labels |
 | **Input context** | ontology 168 KB + atlas 178 KB fed whole | the changed entity + its fabric neighbourhood (~a few KB) |
 | **Determinism** | drifts run-to-run | structure is a pure function; identical inputs → identical bytes |
