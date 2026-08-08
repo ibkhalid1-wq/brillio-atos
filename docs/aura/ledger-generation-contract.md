@@ -1,4 +1,10 @@
-# Aura — Generation contract, in ledger terms (gated)
+# Aura — Generation contract, in ledger terms
+
+> **SUPERSEDED (2026-08-08) — this contract is now BUILT and live, not gated.** Deno is installed and the
+> claims-emitting generator exists (`supabase/functions/_shared/ledgerGenerator.ts`), validated and proven
+> against the live DB. See `generator-report.md`, `generator-fixes-report.md`, and `option-a-report.md`.
+> The "no Deno / implemented nowhere / gated edge change" language below is historical — the output schema
+> and validation it specifies are what the generator now emits. `migrate()` is retired (Option A is live).
 
 The generator's output stops being three separate documents and becomes **claims-with-unknowns**
 against the shape modules. This is the **gated edge change** — specified completely here, implemented
