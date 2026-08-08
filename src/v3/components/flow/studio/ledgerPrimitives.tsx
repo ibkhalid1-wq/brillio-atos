@@ -150,20 +150,27 @@ export function ConvergenceReadout({ burnDown, perAreaProvisional = true }: { bu
 // ── the loud signals: unowned pinned first, then seams (joint-owned) as their own
 //    rows. A surface that shows tidy area tabs and no unowned reproduces the "0
 //    unowned" fabrication — this strip exists so they can't. ──
-export function UnownedSeamStrip({ unownedBands, seamBands }: { unownedBands: KitView["bands"]; seamBands: KitView["bands"] }) {
+export function UnownedSeamStrip({ unownedBands, seamBands, openTotal }: { unownedBands: KitView["bands"]; seamBands: KitView["bands"]; openTotal?: number }) {
   const unownedOpen = unownedBands.reduce((n, b) => n + b.open, 0);
   if (!unownedBands.length && !seamBands.length) return null;
+  // A denominator so a small orphan reads small: "5 of 600 unowned" is not the same
+  // crisis as "5 of 8". Unowned is a calm orphan chip, not a red alarm; seams are a
+  // to-do (a meeting to book), styled apart from unowned.
   return (
     <div className="v3lc-uss" aria-label="unowned and seam ownership">
-      <span className="v3lc-uss-lead">
-        <BandTag kind="unowned" label="UNOWNED" />
-        <span className="v3lc-uss-n">{unownedOpen} open, nobody owns them</span>
-      </span>
+      {unownedOpen > 0 ? (
+        <span className="v3lc-uss-lead">
+          <BandTag kind="unowned" label="UNOWNED" />
+          <span className="v3lc-uss-n">
+            <b>{unownedOpen}</b>{openTotal ? <> of {openTotal}</> : null} open unknowns nobody owns
+          </span>
+        </span>
+      ) : null}
       {seamBands.length ? (
         <span className="v3lc-uss-seams">
-          <span className="v3lc-uss-seams-l">{seamBands.length} seam{seamBands.length === 1 ? "" : "s"}</span>
+          <span className="v3lc-uss-seams-l">{seamBands.length} seam{seamBands.length === 1 ? "" : "s"} — joint sessions to book</span>
           {seamBands.map((b) => (
-            <span key={b.key} className="v3lc-uss-seam" title={`${b.label} — ${b.open} open, jointly owned`}>
+            <span key={b.key} className="v3lc-uss-seam" title={`${b.label} — ${b.open} open, jointly owned (a meeting to book, not a gap)`}>
               <span aria-hidden="true">⋈</span> {b.label}<span className="v3lc-uss-seam-n">{b.open}</span>
             </span>
           ))}

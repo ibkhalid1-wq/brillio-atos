@@ -34,6 +34,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useProgramLedger } from "@/v3/lib/ledger/useProgramLedger";
 import { HeardReadout, ConvergenceReadout, UnownedSeamStrip, ProvisionalMark, ClaimStatus, SourceTag } from "@/v3/components/flow/studio/ledgerPrimitives";
 import DesignLoopZones from "@/v3/components/flow/DesignLoopZones";
+import OperatorInbox from "@/v3/components/flow/OperatorInbox";
+import { serializeOperatorActions, OPERATOR_ACTIONS_FIELD, type OperatorAction } from "@/v3/lib/ledger/operatorActions";
 import "./theLine.css";
 
 const FlowArtifactStudio = lazy(() => import("./studio/FlowArtifactStudio"));
@@ -716,6 +718,31 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
     window.setTimeout(() => setNote(null), 6000);
   };
 
+  // ── operator verbs (Assign / Schedule / Respond): append an action through the
+  // fingerprint-safe Listen field; useProgramLedger re-derives ownership on the next
+  // render. Candidate owners are the people the kit already knows.
+  const verbCandidates = useMemo(() => {
+    const seen = new Set<string>();
+    const out: Array<{ label: string; role: string }> = [];
+    for (const r of cast) { if (seen.has(r.label)) continue; seen.add(r.label); out.push({ label: r.label, role: r.role }); }
+    return out;
+  }, [cast]);
+  const commitOperatorAction = async (action: OperatorAction | OperatorAction[]) => {
+    if (!onSaveInputs) { setNote("No write handler available in this view."); window.setTimeout(() => setNote(null), 5000); return; }
+    const added = Array.isArray(action) ? action : [action];
+    const next = [...ledger.actions, ...added];
+    await onSaveInputs("listen", { [OPERATOR_ACTIONS_FIELD]: serializeOperatorActions(next) }, { silent: true });
+    const a = added[0];
+    setNote(Array.isArray(action) ? `Assigned ${added.length} question${added.length === 1 ? "" : "s"} — owned-and-open now (not counted as heard).`
+      : a.kind === "assign" ? `Assigned to ${a.owner.label} — owned-and-open now (not closed, not counted as heard).`
+      : a.kind === "schedule" ? `Marked for a joint session — ${a.pair} (${a.abouts.length} question${a.abouts.length === 1 ? "" : "s"}). No date yet — scheduling is gated.`
+      : a.kind === "decide-fate" ? `Recorded — ${a.decision === "escalate" ? "escalated" : "out-of-scope"} (not an answer, not counted as heard).`
+      : a.kind === "unassign" ? `Returned to unowned — ${a.reason === "release" ? "released by the holder" : "you unassigned it"} (not counted as heard).`
+      : a.kind === "redirect" ? `Referral recorded — confirm it to reassign (not counted as heard).`
+      : `Captured via the team — recorded, provisional, not counted as heard.`);
+    window.setTimeout(() => setNote(null), 6000);
+  };
+
   return (
     <div className="v3ln">
       <div className="v3ln-tabs" role="tablist" aria-label="Line projections">
@@ -747,7 +774,7 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
             <ConvergenceReadout burnDown={ledger.kit.burnDown} />
           </div>
         </div>
-        <UnownedSeamStrip unownedBands={ledger.unownedBands} seamBands={ledger.seamBands} />
+        <UnownedSeamStrip unownedBands={ledger.unownedBands} seamBands={ledger.seamBands} openTotal={ledger.queue.counts.total} />
         </>
       ) : null}
 
@@ -848,20 +875,27 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                 </select>
               </label>
             ) : null}
-            <span className="v3ln-scope">{filteredCast.filter((r) => r.heard).length} of {filteredCast.length} linked / responded{areaFilter && castAreas.includes(areaFilter) ? ` in ${areaFilter}` : ""}</span>
+            {/* Demoted from "N of N linked/responded" (a completion-looking roster
+                count over a ledger with 0 real closures) to a plain reachable count. */}
+            <span className="v3ln-scope">{filteredCast.length} on the roster{areaFilter && castAreas.includes(areaFilter) ? ` in ${areaFilter}` : ""}</span>
             {onSaveInputs ? (
               <button type="button" className="v3ln-a" onClick={() => openCapture()}>＋ add to the record</button>
             ) : null}
           </header>
-          {/* Ledger-honest heard: the roster count above is who has a link out or
-              replied; the AUTHORITATIVE heard-count is attributed ledger closures
-              (a person closed a slot) — one figure, shared with the Work header. */}
-          <div className="v3ln-ledgerstrip">
-            <span className="v3ln-ledgerstrip-l">On the ledger</span>
-            <HeardReadout heard={ledger.heard} />
-            <span className="v3ln-ledgerstrip-sep" aria-hidden="true">·</span>
-            <UnownedSeamStrip unownedBands={ledger.unownedBands} seamBands={ledger.seamBands} />
+          {/* One denominator, one goal: the burn-down is the headline; the inbox below
+              is the small operator-action subset. No two numbers that contradict. */}
+          <div className="v3ln-goal">
+            <span className="v3ln-goal-lead">The goal — close the burn-down</span>
+            <span className="v3ln-goal-stats">
+              <b>{ledger.kit.burnDown.open}</b> open unknowns · <b>{ledger.heard.total}</b> answered
+              {" "}· <b>{ledger.queue.counts.unowned}</b> unowned · <b>{ledger.seamBands.length}</b> seam{ledger.seamBands.length === 1 ? "" : "s"}
+            </span>
+            <ConvergenceReadout burnDown={ledger.kit.burnDown} />
+            <span className="v3ln-goal-heard"><HeardReadout heard={ledger.heard} /></span>
           </div>
+          {/* The operator inbox: the actionable subset — assign / decide-fate / schedule /
+              adjudicate, reassignment, and the stakeholder exits (interim). */}
+          <OperatorInbox ledger={ledger} candidates={verbCandidates} by="operator" onCommit={commitOperatorAction} />
           <div className="v3ln-cast">
             {filteredCast.map((row) => (
               <div key={row.label} className="v3ln-cr"
