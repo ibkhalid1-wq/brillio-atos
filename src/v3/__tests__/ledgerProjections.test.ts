@@ -26,7 +26,6 @@ describe("2.3 unknown queue", () => {
       const last = q.byOwner[q.byOwner.length - 1].items.filter((i) => i.routing === "blocking").length;
       expect(first).toBeGreaterThanOrEqual(last);
     }
-    // eslint-disable-next-line no-console
     console.log("QUEUE COUNTS", JSON.stringify(q.counts));
   });
 });
