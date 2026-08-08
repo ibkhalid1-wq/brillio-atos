@@ -8,6 +8,14 @@
 >
 > **ASSERTED is deliberately 0.** No element in either artifact carries a captured, attributed stakeholder statement. Marking any element ASSERTED on this evidence would be the error the scoping was built to avoid.
 
+> **Superseded in part by the claims ledger (2026-08-08).** The estimates in this list are now
+> **measured**: the ledger migration of this snapshot (`ledger-implementation-report.md`) yields **395
+> open unknowns**, **26 operator corrections** carried as `weak`, closed-without-verbatim (the "30
+> OVERRIDE-CORRECTED" below — the figures count slightly different units; the ledger's is the measured
+> one), and **13 unresolved references**. "Still-open until re-attributed" is now the ledger's `open`/
+> `weak` status; the override log's *touched, not confirmed* becomes a `weak` closure attributed to the
+> operator. This list's session plan and question content stand; its counts defer to the migration.
+
 ## The honest headline
 
 **Not one element in either artifact rests on a captured stakeholder assertion.** Every entity's `evidence` cites *"Laila Prototype – CRM Domain Ontology (dev demo extract)"* or the *"Brillio Agentic CRM (Workflow Design)"* design doc; every step cites the same. The only stakeholder fingerprints are **49 operator-overrides + 6 curation-log entries** that record *that* an element was changed — never *why*. Real named voices exist (Prakash T M, Brinditha Rai, Vimal Pandey in `systemsInventory`) but they are bound to **systems and pain**, not to entities or steps. So the artifacts are a **reverse-engineered prototype, lightly corrected, with the corrections' reasons lost.**
