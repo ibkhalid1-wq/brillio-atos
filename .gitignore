@@ -46,3 +46,5 @@ lerna-debug.log*
 # project's node_modules and music bed — none of which belong in git.
 video-laila/
 video/public/laila/
+
+.proof.cjs
