@@ -39,7 +39,15 @@ export interface GeneratedBatch { elements: GeneratedElement[]; claims: Generate
 export const slug = (s: unknown): string =>
   String(s ?? "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "x";
 export function contentId(prefix: string, ...parts: unknown[]): string {
-  const input = parts.map((p) => (typeof p === "object" ? JSON.stringify(p) : String(p))).join("");
+  // CRITICAL: separator MUST be "\x01" (SOH) to match the store's contentId in
+  // src/v3/lib/ledger/types.ts byte-for-byte. Written as an escape (not the raw
+  // invisible control char) so it can't silently diverge again — that "" vs "\x01"
+  // drift once broke every step id. This is a COPY, not an import, because the edge
+  // (supabase/functions) is self-contained: NO edge file imports src/ (Supabase
+  // deploys the functions dir; the repo's pattern is copy-into-_shared, e.g.
+  // flowAreas.ts). The lockstep is ENFORCED by scripts/ledger/contentid-parity.ts,
+  // which fails on any drift (function-level + step-id parity vs the store).
+  const input = parts.map((p) => (typeof p === "object" ? JSON.stringify(p) : String(p))).join("\x01");
   let h = 5381;
   for (let i = 0; i < input.length; i += 1) h = ((h << 5) + h + input.charCodeAt(i)) >>> 0;
   return `${prefix}:${h.toString(16).padStart(8, "0")}`;
@@ -77,7 +85,7 @@ export const REQUIRED_SLOTS: Record<string, string[]> = {
   entity: ["exists", "definition", "systemOfRecord"],
   attribute: ["exists", "dataType", "optionality", "valueSet"],
   relation: ["cardinality", "optionality", "semantics"],
-  workflow: ["name", "area", "phase"],
+  workflow: ["name", "area", "owner", "trigger", "phase"],
   step: ["action", "automationDisposition", "actorRole"],
 };
 const DECISION_RE = /approv|review|decide|gate|threshold/i;
@@ -96,7 +104,8 @@ export function generateClaimsBatch(source: GenSource): GeneratedBatch {
   const claims: GeneratedClaim[] = [];
   const idByName = new Map<string, string>();
   const areaByName = new Map<string, string>();
-  for (const e of entities) { const n = String(e.name ?? ""); if (n) { idByName.set(n, `el:entity:${slug(n)}`); areaByName.set(n, String(e.area ?? "")); } }
+  const nameByLower = new Map<string, string>(); // for alias collision detection (mirrors migrate.ts)
+  for (const e of entities) { const n = String(e.name ?? ""); if (n) { idByName.set(n, `el:entity:${slug(n)}`); areaByName.set(n, String(e.area ?? "")); nameByLower.set(n.toLowerCase(), n); } }
 
   const sc = (v: string | number | boolean): ClaimValue => ({ kind: "scalar", value: v });
   const UNK: ClaimValue = { kind: "unknown" };
@@ -115,6 +124,13 @@ export function generateClaimsBatch(source: GenSource): GeneratedBatch {
     emit(aboutOf(eid, "exists"), sc(true), "domain", owner);
     emit(aboutOf(eid, "definition"), e.definition ? sc(String(e.definition)) : UNK, "domain", owner);
     emit(aboutOf(eid, "systemOfRecord"), e.systemOfRecord ? sc(String(e.systemOfRecord)) : UNK, "configuration", owner);
+    for (const alias of (Array.isArray(e.aliases) ? e.aliases : []) as unknown[]) { // mirrors migrate.ts
+      const an = String(alias);
+      const collides = nameByLower.has(an.toLowerCase()) && an.toLowerCase() !== name.toLowerCase();
+      emit(aboutOf(eid, `alias.${slug(an)}`),
+        collides ? { kind: "unresolved-ref", name: an, why: "alias collides with a distinct element name (A2)" } : sc(an),
+        "domain", owner);
+    }
     for (const a of (Array.isArray(e.attributes) ? e.attributes : []) as unknown[]) {
       const an = typeof a === "string" ? a : String((a as { name?: unknown })?.name ?? ""); if (!an) continue;
       const aid = `el:attr:${slug(name)}.${slug(an)}`;
@@ -146,6 +162,8 @@ export function generateClaimsBatch(source: GenSource): GeneratedBatch {
     elements.push({ id: wid, kind: "workflow", name: wn });
     emit(aboutOf(wid, "name"), sc(wn), "domain", owner);
     emit(aboutOf(wid, "area"), w.area ? sc(String(w.area)) : UNK, "configuration", owner);
+    emit(aboutOf(wid, "owner"), w.owner ? sc(String(w.owner)) : UNK, "configuration", owner);   // ALWAYS emit; ?unknown when absent, never omitted (the anti-omission discipline)
+    emit(aboutOf(wid, "trigger"), w.trigger ? sc(String(w.trigger)) : UNK, "domain", owner);     // ALWAYS emit; ?unknown when absent
     emit(aboutOf(wid, "phase"), UNK, "domain", owner);                 // F-G — the grid derives until asserted
     for (const st of (Array.isArray(w.steps) ? w.steps : []) as Array<Record<string, unknown>>) {
       const action = String(st.action ?? "");
