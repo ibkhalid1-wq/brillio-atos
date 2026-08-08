@@ -1,0 +1,888 @@
+{
+  "gaps": [
+    "Ask Raj Mamodia: Does 'Account' in Brillio's context always mean the client organization, or can it refer to a partner?",
+    "Ask Sales Leaders - Markets: Can a single Account have multiple active Opportunities at the same time?",
+    "Ask Delivery Lead: Is Engagement always a post-sale delivery program, or can it refer to pre-sale activities?",
+    "Ask Legal: Which system of record is used for contract and compliance review — is it integrated with the CRM?",
+    "Ask Talent Acquisition: How is talent allocation tracked for new engagements — is it managed in the CRM or a separate system?",
+    "Ask Finance: Is the Invoice generated from the CRM, the finance system, or both?",
+    "Ask Marketing: Where are thought leadership articles and analyst relationships tracked — is there a system of record?",
+    "Ask Alliances: How is alliance funding and co-sell opportunity data captured and accessed?",
+    "Ask Delivery: Is the delivery team's resource allocation and project status tracked in the CRM, a project management tool, or both?",
+    "Ask Bench Management: Is there a dedicated system for tracking bench resources and their skills, or is it managed in HRIS?"
+  ],
+  "title": "Domain Ontology — Laila CRM",
+  "summary": "This ontology reflects the full set of actors, core business objects, and backbone relationships in Brillio's sales and delivery process, as surfaced in the Laila CRM prototype and discovery interviews, and aligned to schema.org. Key system-of-records and several definitions remain to be confirmed by stakeholders.",
+  "entities": [
+    {
+      "area": "Sales",
+      "name": "Account",
+      "aliases": [
+        "Customer",
+        "Client"
+      ],
+      "evidence": "Laila Prototype - CRM Domain Ontology (dev demo extract), Accounts entity; Brillio Agentic CRM - Domain Ontology (Workflow Design); schema.org/Organization",
+      "attributes": [
+        "category",
+        "tier",
+        "region",
+        "industry",
+        "type",
+        "segment",
+        "annualRevenue",
+        "owner"
+      ],
+      "definition": "A client or partner organization that engages Brillio for professional services and is the hub for all CRM activity.",
+      "systemOfRecord": "CRM"
+    },
+    {
+      "area": "Sales",
+      "name": "Contact",
+      "aliases": [],
+      "evidence": "Laila Prototype - CRM Domain Ontology (dev demo extract), Contacts entity; Brillio Agentic CRM - Domain Ontology (Workflow Design); schema.org/Person",
+      "attributes": [
+        "buyingRole",
+        "title",
+        "account",
+        "owner"
+      ],
+      "definition": "An individual at a client or partner organization who is a point of interaction for sales, delivery, or marketing.",
+      "systemOfRecord": "CRM"
+    },
+    {
+      "area": "Alliances",
+      "name": "Partner",
+      "aliases": [
+        "Alliance Partner"
+      ],
+      "evidence": "Laila Prototype - CRM Domain Ontology (dev demo extract), Partners entity; Brillio Agentic CRM - Domain Ontology (Workflow Design)",
+      "attributes": [
+        "partner_name",
+        "partner_type",
+        "alliance_tier",
+        "account"
+      ],
+      "definition": "A technology or business partner organization (e.g., AWS, Azure, Databricks, Snowflake) that collaborates with Brillio on deals, funding, and co-sell opportunities.",
+      "systemOfRecord": "CRM"
+    },
+    {
+      "area": "Marketing",
+      "name": "Lead",
+      "aliases": [],
+      "evidence": "Laila Prototype - CRM Domain Ontology (dev demo extract), Leads entity; Brillio Agentic CRM - Domain Ontology (Workflow Design)",
+      "attributes": [
+        "status",
+        "leadSource",
+        "campaign",
+        "convertedAccount",
+        "convertedOpportunity",
+        "owner"
+      ],
+      "definition": "A potential client or opportunity identified for qualification and conversion into an account or opportunity.",
+      "systemOfRecord": "CRM"
+    },
+    {
+      "area": "Marketing",
+      "name": "Lead Score",
+      "aliases": [],
+      "evidence": "Laila Prototype - CRM Domain Ontology (dev demo extract), Lead Score entity",
+      "attributes": [
+        "icp_score",
+        "intent_score",
+        "stage",
+        "model_version",
+        "lead"
+      ],
+      "definition": "A scoring record attached to a lead, indicating fit and intent based on ICP and behavioral signals.",
+      "systemOfRecord": "CRM"
+    },
+    {
+      "area": "Marketing",
+      "name": "Campaign",
+      "aliases": [],
+      "evidence": "Laila Prototype - CRM Domain Ontology (dev demo extract), Campaigns entity; Brillio Agentic CRM - Domain Ontology (Workflow Design)",
+      "attributes": [
+        "campaign_name",
+        "campaign_type",
+        "channel",
+        "start_date",
+        "end_date",
+        "owner"
+      ],
+      "definition": "A marketing initiative targeting leads or contacts, tracked for performance and attribution.",
+      "systemOfRecord": "CRM"
+    },
+    {
+      "area": "Marketing",
+      "name": "Campaign Member",
+      "aliases": [],
+      "evidence": "Laila Prototype - CRM Domain Ontology (dev demo extract), Campaign Member entity",
+      "attributes": [
+        "status",
+        "response_date",
+        "campaign",
+        "lead",
+        "contact"
+      ],
+      "definition": "A record linking a lead or contact to a campaign, tracking their engagement and response.",
+      "systemOfRecord": "CRM"
+    },
+    {
+      "area": "Marketing",
+      "name": "Event",
+      "aliases": [],
+      "evidence": "Laila Prototype - CRM Domain Ontology (dev demo extract), Events entity; Brillio Agentic CRM - Domain Ontology (Workflow Design)",
+      "attributes": [
+        "event_name",
+        "event_type",
+        "event_date",
+        "location",
+        "campaign"
+      ],
+      "definition": "A conference, webinar, or industry event where Brillio participates, sponsors, or presents.",
+      "systemOfRecord": "CRM"
+    },
+    {
+      "area": "Sales / Practices / Delivery / Marketing / Legal / Finance / Sales Ops / Talent Acquisition / Alliances",
+      "name": "Opportunity",
+      "aliases": [
+        "Sales Opportunity",
+        "Deal",
+        "Engagement"
+      ],
+      "evidence": "Laila Prototype - CRM Domain Ontology (dev demo extract), Opportunities entity; Brillio Agentic CRM - Domain Ontology (Workflow Design)",
+      "attributes": [
+        "stage",
+        "type",
+        "amount",
+        "closeDate",
+        "account",
+        "owner",
+        "key_decision_maker"
+      ],
+      "definition": "A potential deal or engagement tracked from signal detection through to close and delivery.",
+      "systemOfRecord": "CRM"
+    },
+    {
+      "area": "Sales / Practices",
+      "name": "Opportunity Line Item",
+      "aliases": [
+        "Opp Line Item"
+      ],
+      "evidence": "Laila Prototype - CRM Domain Ontology (dev demo extract), Opp Line Item entity",
+      "attributes": [
+        "service_name",
+        "quantity",
+        "unit_price",
+        "total_price",
+        "opportunity"
+      ],
+      "definition": "A product or service line quoted as part of an opportunity.",
+      "systemOfRecord": "CRM"
+    },
+    {
+      "area": "Sales",
+      "name": "Buying Committee",
+      "aliases": [
+        "opportunity_contact_roles"
+      ],
+      "evidence": "Laila Prototype - CRM Domain Ontology (dev demo extract), Buying Committee entity",
+      "attributes": [
+        "role",
+        "isPrimary",
+        "opportunity",
+        "contact"
+      ],
+      "definition": "A group of contacts involved in the decision process for an opportunity.",
+      "systemOfRecord": "CRM"
+    },
+    {
+      "area": "Sales / Practices / Sales Ops",
+      "name": "Practice Forecast Split",
+      "aliases": [],
+      "evidence": "Laila Prototype - CRM Domain Ontology (dev demo extract), Practice Forecast Split entity",
+      "attributes": [
+        "practice_name",
+        "split_amount",
+        "split_percent",
+        "forecast_category",
+        "opportunity"
+      ],
+      "definition": "A record of forecast allocation by practice for an opportunity.",
+      "systemOfRecord": "CRM"
+    },
+    {
+      "area": "Sales / Practices / Sales Ops",
+      "name": "Practice Contribution",
+      "aliases": [],
+      "evidence": "Laila Prototype - CRM Domain Ontology (dev demo extract), Practice Contribution entity",
+      "attributes": [
+        "practice_name",
+        "contribution_percent",
+        "opportunity"
+      ],
+      "definition": "A record of practice-level contribution to an opportunity.",
+      "systemOfRecord": "CRM"
+    },
+    {
+      "area": "Sales / Sales Ops / Practices",
+      "name": "Forecast Snapshot",
+      "aliases": [],
+      "evidence": "Laila Prototype - CRM Domain Ontology (dev demo extract), Forecast Snapshots entity",
+      "attributes": [
+        "snapshot_date",
+        "forecast_category",
+        "amount",
+        "projection_status",
+        "confidence",
+        "opportunity"
+      ],
+      "definition": "A point-in-time record of forecasted revenue and status for an opportunity.",
+      "systemOfRecord": "CRM"
+    },
+    {
+      "area": "Sales",
+      "name": "Competitor",
+      "aliases": [],
+      "evidence": "Laila Prototype - CRM Domain Ontology (dev demo extract), Competitors entity",
+      "attributes": [
+        "competitor_name",
+        "threat_level",
+        "opportunity"
+      ],
+      "definition": "A competitor organization tracked against an opportunity.",
+      "systemOfRecord": "CRM"
+    },
+    {
+      "area": "Sales / Finance / Practices",
+      "name": "Quote",
+      "aliases": [],
+      "evidence": "Laila Prototype - CRM Domain Ontology (dev demo extract), Quotes entity; Brillio Agentic CRM - Domain Ontology (Workflow Design)",
+      "attributes": [
+        "quote_number",
+        "status",
+        "total_price",
+        "version",
+        "valid_until",
+        "opportunity"
+      ],
+      "definition": "A commercial offer for products or services, linked to an opportunity.",
+      "systemOfRecord": "CRM"
+    },
+    {
+      "area": "Sales / Practices / Finance / Delivery / Alliances / Talent Acquisition / Marketing / Legal",
+      "name": "Proposal",
+      "aliases": [],
+      "evidence": "Laila Prototype - CRM Domain Ontology (dev demo extract), Proposals entity",
+      "attributes": [
+        "title",
+        "status",
+        "submitted_date",
+        "document_s3_key",
+        "opportunity"
+      ],
+      "definition": "A formal document submitted to a client as part of an opportunity.",
+      "systemOfRecord": "CRM"
+    },
+    {
+      "area": "Legal",
+      "name": "Contract",
+      "aliases": [
+        "MSA",
+        "SOW"
+      ],
+      "evidence": "Laila Prototype - CRM Domain Ontology (dev demo extract), Contracts entity; Brillio Agentic CRM - Domain Ontology (Workflow Design)",
+      "attributes": [
+        "contractType",
+        "status",
+        "account",
+        "opportunity"
+      ],
+      "definition": "A legal agreement between Brillio and a customer or partner, governing the delivery of services.",
+      "systemOfRecord": "Contract Management System"
+    },
+    {
+      "area": "Sales / Practices / Delivery",
+      "name": "SOW",
+      "aliases": [],
+      "evidence": "Laila Prototype - CRM Domain Ontology (dev demo extract), SOW entity",
+      "attributes": [
+        "scope_summary",
+        "start_date",
+        "end_date",
+        "value",
+        "delivery_model",
+        "contract",
+        "opportunity"
+      ],
+      "definition": "A statement of work defining scope, timeline, and value for a contracted engagement.",
+      "systemOfRecord": "Contract Management System"
+    },
+    {
+      "area": "Delivery",
+      "name": "Engagement",
+      "aliases": [],
+      "evidence": "Laila Prototype - CRM Domain Ontology (dev demo extract), Engagements entity",
+      "attributes": [
+        "status",
+        "healthRag",
+        "deliveryModel",
+        "account",
+        "opportunity",
+        "sow",
+        "delivery_lead"
+      ],
+      "definition": "A delivery program or project for a client, initiated after deal closure.",
+      "systemOfRecord": "Project Management System"
+    },
+    {
+      "area": "Delivery / Talent Acquisition",
+      "name": "Staffing",
+      "aliases": [
+        "staffing_allocations"
+      ],
+      "evidence": "Laila Prototype - CRM Domain Ontology (dev demo extract), Staffing entity",
+      "attributes": [
+        "role",
+        "allocation_percent",
+        "start_date",
+        "end_date",
+        "engagement",
+        "user"
+      ],
+      "definition": "A record of resource allocation to an engagement, including role and allocation percent.",
+      "systemOfRecord": "Project Management System"
+    },
+    {
+      "area": "Delivery",
+      "name": "Timesheet",
+      "aliases": [],
+      "evidence": "Laila Prototype - CRM Domain Ontology (dev demo extract), Timesheets entity",
+      "attributes": [
+        "week_ending",
+        "hours_billed",
+        "hours_non_billed",
+        "engagement",
+        "user"
+      ],
+      "definition": "A record of hours billed and non-billed by a user on an engagement.",
+      "systemOfRecord": "Project Management System"
+    },
+    {
+      "area": "Delivery",
+      "name": "Milestone",
+      "aliases": [],
+      "evidence": "Laila Prototype - CRM Domain Ontology (dev demo extract), Milestones entity",
+      "attributes": [
+        "name",
+        "due_date",
+        "status",
+        "completed_date",
+        "engagement"
+      ],
+      "definition": "A key delivery checkpoint within an engagement, with due and completion dates.",
+      "systemOfRecord": "Project Management System"
+    },
+    {
+      "area": "Delivery",
+      "name": "Delivery Health",
+      "aliases": [],
+      "evidence": "Laila Prototype - CRM Domain Ontology (dev demo extract), Delivery Health entity",
+      "attributes": [
+        "snapshot_date",
+        "rag",
+        "margin_variance",
+        "csat",
+        "engagement"
+      ],
+      "definition": "A periodic snapshot of engagement health, including RAG status, margin variance, and CSAT.",
+      "systemOfRecord": "Project Management System"
+    },
+    {
+      "area": "Finance",
+      "name": "Invoice",
+      "aliases": [],
+      "evidence": "Laila Prototype - CRM Domain Ontology (dev demo extract), Invoices entity; Brillio Agentic CRM - Domain Ontology (Workflow Design)",
+      "attributes": [
+        "invoice_number",
+        "amount",
+        "issue_date",
+        "due_date",
+        "status",
+        "account",
+        "engagement",
+        "contract"
+      ],
+      "definition": "A bill issued to the customer for professional services delivered.",
+      "systemOfRecord": "Finance System"
+    },
+    {
+      "area": "Finance",
+      "name": "Billing Schedule",
+      "aliases": [],
+      "evidence": "Laila Prototype - CRM Domain Ontology (dev demo extract), Billing Schedules entity",
+      "attributes": [
+        "period_start",
+        "period_end",
+        "scheduled_amount",
+        "billing_type",
+        "contract",
+        "engagement"
+      ],
+      "definition": "A schedule of planned billing periods and amounts for a contract or engagement.",
+      "systemOfRecord": "Finance System"
+    },
+    {
+      "area": "Finance",
+      "name": "Revenue Recognition",
+      "aliases": [],
+      "evidence": "Laila Prototype - CRM Domain Ontology (dev demo extract), Revenue Recognition entity",
+      "attributes": [
+        "period",
+        "recognized_amount",
+        "method",
+        "engagement"
+      ],
+      "definition": "A record of revenue recognized for an engagement in a given period.",
+      "systemOfRecord": "Finance System"
+    },
+    {
+      "area": "Finance / Sales / Practices / Sales Ops",
+      "name": "Revenue Projection",
+      "aliases": [],
+      "evidence": "Laila Prototype - CRM Domain Ontology (dev demo extract), Revenue Projections entity",
+      "attributes": [
+        "projection_month",
+        "projection_year",
+        "projection_amount",
+        "weighted_amount",
+        "booked",
+        "opportunity"
+      ],
+      "definition": "A forecast of projected revenue for an opportunity by month and year.",
+      "systemOfRecord": "Finance System"
+    },
+    {
+      "area": "Customer Success",
+      "name": "Escalation",
+      "aliases": [],
+      "evidence": "Laila Prototype - CRM Domain Ontology (dev demo extract), Escalations entity",
+      "attributes": [
+        "severity",
+        "status",
+        "account",
+        "opportunity",
+        "owner"
+      ],
+      "definition": "A support issue or risk raised on an account or opportunity, tracked for resolution.",
+      "systemOfRecord": "CRM"
+    },
+    {
+      "area": "Sales / Alliances / Customer Success / Delivery / Finance / Legal / Marketing / Practices / Talent Acquisition / Sales Ops",
+      "name": "Signal",
+      "aliases": [
+        "scribe_events"
+      ],
+      "evidence": "Laila Prototype - CRM Domain Ontology (dev demo extract), Signal entity",
+      "attributes": [
+        "channel",
+        "from_addr",
+        "subject",
+        "body",
+        "target_type",
+        "assigned_to"
+      ],
+      "definition": "An agentic event or alert (e.g., deal slipping, account health, stakeholder gap) tracked for SLA and escalation.",
+      "systemOfRecord": "CRM"
+    },
+    {
+      "area": "Sales / Alliances / Delivery / Marketing / Legal / Practices / Talent Acquisition / Finance / Customer Success / Sales Ops",
+      "name": "Signal Action",
+      "aliases": [],
+      "evidence": "Laila Prototype - CRM Domain Ontology (dev demo extract), Signal Action entity",
+      "attributes": [
+        "kind",
+        "title",
+        "detail",
+        "due_date",
+        "status",
+        "signal",
+        "owner"
+      ],
+      "definition": "A task or action item generated in response to a signal, assigned to a user.",
+      "systemOfRecord": "CRM"
+    },
+    {
+      "area": "Sales / Alliances / Delivery / Marketing / Legal / Practices / Talent Acquisition / Finance / Customer Success",
+      "name": "Interaction",
+      "aliases": [],
+      "evidence": "Laila Prototype - CRM Domain Ontology (dev demo extract), Interactions entity",
+      "attributes": [
+        "entity_type",
+        "channel",
+        "direction",
+        "participants",
+        "subject"
+      ],
+      "definition": "A record of communication or meeting involving Brillio and external parties.",
+      "systemOfRecord": "CRM"
+    },
+    {
+      "area": "Sales",
+      "name": "Document",
+      "aliases": [],
+      "evidence": "Laila Prototype - CRM Domain Ontology (dev demo extract), Documents entity",
+      "attributes": [
+        "entity_type",
+        "doc_type",
+        "title",
+        "s3_key",
+        "mime_type"
+      ],
+      "definition": "A file or artifact (proposal, contract, SOW, etc) associated with a CRM entity.",
+      "systemOfRecord": "Content Management System"
+    }
+  ],
+  "relations": [
+    {
+      "to": "Opportunity",
+      "from": "Account",
+      "relation": "produces",
+      "cardinality": "1:N"
+    },
+    {
+      "to": "Engagement",
+      "from": "Account",
+      "relation": "produces",
+      "cardinality": "1:N"
+    },
+    {
+      "to": "Invoice",
+      "from": "Account",
+      "relation": "produces",
+      "cardinality": "1:N"
+    },
+    {
+      "to": "Escalation",
+      "from": "Account",
+      "relation": "produces",
+      "cardinality": "1:N"
+    },
+    {
+      "to": "Account",
+      "from": "Contact",
+      "relation": "is part of",
+      "cardinality": "N:1"
+    },
+    {
+      "to": "Quote",
+      "from": "Opportunity",
+      "relation": "produces",
+      "cardinality": "1:N"
+    },
+    {
+      "to": "Proposal",
+      "from": "Opportunity",
+      "relation": "produces",
+      "cardinality": "1:N"
+    },
+    {
+      "to": "Contract",
+      "from": "Opportunity",
+      "relation": "produces",
+      "cardinality": "1:N"
+    },
+    {
+      "to": "Engagement",
+      "from": "Opportunity",
+      "relation": "produces",
+      "cardinality": "1:N"
+    },
+    {
+      "to": "Revenue Projection",
+      "from": "Opportunity",
+      "relation": "produces",
+      "cardinality": "1:N"
+    },
+    {
+      "to": "Escalation",
+      "from": "Opportunity",
+      "relation": "produces",
+      "cardinality": "1:N"
+    },
+    {
+      "to": "Competitor",
+      "from": "Opportunity",
+      "relation": "produces",
+      "cardinality": "1:N"
+    },
+    {
+      "to": "Buying Committee",
+      "from": "Opportunity",
+      "relation": "produces",
+      "cardinality": "1:N"
+    },
+    {
+      "to": "Practice Forecast Split",
+      "from": "Opportunity",
+      "relation": "produces",
+      "cardinality": "1:N"
+    },
+    {
+      "to": "Practice Contribution",
+      "from": "Opportunity",
+      "relation": "produces",
+      "cardinality": "1:N"
+    },
+    {
+      "to": "Forecast Snapshot",
+      "from": "Opportunity",
+      "relation": "produces",
+      "cardinality": "1:N"
+    },
+    {
+      "to": "Opportunity Line Item",
+      "from": "Opportunity",
+      "relation": "produces",
+      "cardinality": "1:N"
+    },
+    {
+      "to": "SOW",
+      "from": "Opportunity",
+      "relation": "produces",
+      "cardinality": "1:N"
+    },
+    {
+      "to": "Staffing",
+      "from": "Engagement",
+      "relation": "produces",
+      "cardinality": "1:N"
+    },
+    {
+      "to": "Timesheet",
+      "from": "Engagement",
+      "relation": "produces",
+      "cardinality": "1:N"
+    },
+    {
+      "to": "Milestone",
+      "from": "Engagement",
+      "relation": "produces",
+      "cardinality": "1:N"
+    },
+    {
+      "to": "Delivery Health",
+      "from": "Engagement",
+      "relation": "produces",
+      "cardinality": "1:N"
+    },
+    {
+      "to": "Invoice",
+      "from": "Engagement",
+      "relation": "produces",
+      "cardinality": "1:N"
+    },
+    {
+      "to": "Billing Schedule",
+      "from": "Engagement",
+      "relation": "produces",
+      "cardinality": "1:N"
+    },
+    {
+      "to": "Revenue Recognition",
+      "from": "Engagement",
+      "relation": "produces",
+      "cardinality": "1:N"
+    },
+    {
+      "to": "Escalation",
+      "from": "Engagement",
+      "relation": "produces",
+      "cardinality": "1:N"
+    },
+    {
+      "to": "SOW",
+      "from": "Contract",
+      "relation": "produces",
+      "cardinality": "1:N"
+    },
+    {
+      "to": "Invoice",
+      "from": "Contract",
+      "relation": "produces",
+      "cardinality": "1:N"
+    },
+    {
+      "to": "Billing Schedule",
+      "from": "Contract",
+      "relation": "produces",
+      "cardinality": "1:N"
+    },
+    {
+      "to": "Opportunity",
+      "from": "Lead",
+      "relation": "produces",
+      "cardinality": "1:N"
+    },
+    {
+      "to": "Lead Score",
+      "from": "Lead",
+      "relation": "produces",
+      "cardinality": "1:1"
+    },
+    {
+      "to": "Lead",
+      "from": "Campaign",
+      "relation": "produces",
+      "cardinality": "1:N"
+    },
+    {
+      "to": "Event",
+      "from": "Campaign",
+      "relation": "produces",
+      "cardinality": "1:N"
+    },
+    {
+      "to": "Campaign Member",
+      "from": "Campaign",
+      "relation": "produces",
+      "cardinality": "1:N"
+    },
+    {
+      "to": "Account",
+      "from": "Partner",
+      "relation": "produces",
+      "cardinality": "1:N"
+    }
+  ],
+  "confidence": 0.97,
+  "ambiguities": [
+    {
+      "term": "Account",
+      "resolution": "To confirm if 'Account' always refers to the client or can also mean a partner.",
+      "conflictingMeanings": [
+        "Client organization (the customer)",
+        "Partner organization (alliance partner)"
+      ]
+    },
+    {
+      "term": "Engagement",
+      "resolution": "To confirm if 'Engagement' is always post-sale delivery or can mean a pre-sale opportunity.",
+      "conflictingMeanings": [
+        "A delivery program/project",
+        "A sales opportunity (pre-close)"
+      ]
+    }
+  ],
+  "generatedAt": "2026-07-28T06:52:20.305Z",
+  "standardAlignment": [
+    {
+      "entity": "Account",
+      "relation": "skos:closeMatch",
+      "standard": "https://schema.org/Organization",
+      "confidence": 0.95,
+      "vocabulary": "schema.org"
+    },
+    {
+      "entity": "Contact",
+      "relation": "skos:closeMatch",
+      "standard": "https://schema.org/Person",
+      "confidence": 0.95,
+      "vocabulary": "schema.org"
+    },
+    {
+      "entity": "Partner",
+      "relation": "skos:closeMatch",
+      "standard": "https://schema.org/Organization",
+      "confidence": 0.9,
+      "vocabulary": "schema.org"
+    },
+    {
+      "entity": "Lead",
+      "relation": "skos:closeMatch",
+      "standard": "https://schema.org/Person",
+      "confidence": 0.9,
+      "vocabulary": "schema.org"
+    },
+    {
+      "entity": "Campaign",
+      "relation": "skos:closeMatch",
+      "standard": "https://schema.org/Event",
+      "confidence": 0.9,
+      "vocabulary": "schema.org"
+    },
+    {
+      "entity": "Event",
+      "relation": "skos:closeMatch",
+      "standard": "https://schema.org/Event",
+      "confidence": 0.9,
+      "vocabulary": "schema.org"
+    },
+    {
+      "entity": "Opportunity",
+      "relation": "skos:closeMatch",
+      "standard": "https://schema.org/Service",
+      "confidence": 0.9,
+      "vocabulary": "schema.org"
+    },
+    {
+      "entity": "Quote",
+      "relation": "skos:closeMatch",
+      "standard": "https://schema.org/Offer",
+      "confidence": 0.9,
+      "vocabulary": "schema.org"
+    },
+    {
+      "entity": "Contract",
+      "relation": "skos:closeMatch",
+      "standard": "https://schema.org/Service",
+      "confidence": 0.9,
+      "vocabulary": "schema.org"
+    },
+    {
+      "entity": "Invoice",
+      "relation": "skos:closeMatch",
+      "standard": "https://schema.org/Invoice",
+      "confidence": 0.95,
+      "vocabulary": "schema.org"
+    }
+  ],
+  "_generationMetadata": {
+    "runMode": "manual_regeneration",
+    "generatedAt": "2026-07-28T06:52:20.304Z",
+    "changedInputs": [
+      "listen._savedAt",
+      "listen._directoryPeople"
+    ],
+    "inputCoverage": {
+      "outputRepaired": false,
+      "carryForwardDocuments": 0,
+      "conversationRecordChars": 143796
+    },
+    "inputSnapshot": {
+      "listen.planRev": "faba4555",
+      "listen._savedAt": "2026-07-28T06:51:19.661Z",
+      "listen._gapRoutes": "{\"can a single account have multiple active opportunities at the same time?\":\"Sales Leaders - Markets\"}",
+      "listen.ontologyRev": "2026-07-27T03:52:03.652Z",
+      "listen._roleAliases": "{\"gtm sales\":{\"from\":\"GTM Sales\",\"rename\":\"GTM Sales\"},\"sales\":{\"from\":\"Sales\",\"rename\":\"Vertical Sales Manager\"}}",
+      "listen._roleBindings": "{}",
+      "listen.interviewRoster": "[{\"name\":\"Leader - Marketing\",\"role\":\"Leader - Marketing\",\"status\":\"Heard\"},{\"name\":\"Sales Leaders - Markets\",\"role\":\"Sales Leaders - Markets\",\"status\":\"Heard\"},{\"name\":\"Sales reps - Markets\",\"role\":\"Sales reps - Markets\",\"status\":\"Heard\"},{\"name\":\"GTM Leaders - Practices\",\"role\":\"GTM Leaders - Practices\",\"status\":\"Heard\"},{\"name\":\"GTM - Practices\",\"role\":\"GTM - Practices\",\"status\":\"Heard\"},{\"name\":\"Leader - Sales Operations\",\"role\":\"Leader - Sales Operations\",\"status\":\"Heard\"},{\"name\":\"Sales Operations\",\"role\":\"Sales Operations\",\"status\":\"Heard\"},{\"name\":\"Leader - Alliances\",\"role\":\"Leader - Alliances\",\"status\":\"Heard\"},{\"name\":\"Leader - Delivery\",\"role\":\"Leader - Delivery\",\"status\":\"Heard\"},{\"name\":\"Leader - Legal\",\"role\":\"Leader - Legal\",\"status\":\"Heard\"},{\"name\":\"Leader - TA\",\"role\":\"Leader - TA\",\"status\":\"Heard\"},{\"name\":\"HR\",\"role\":\"HR\",\"status\":\"Heard\"},{\"name\":\"Finance\",\"role\":\"Finance\",\"status\":\"Heard\"},{\"name\":\"Talent Acquisition\",\"role\":\"Talent Acquisition\",\"status\":\"Heard\"},{\"name\":\"Executive Leadership\",\"role\":\"Executive Leadership\",\"status\":\"Heard\"},{\"name\":\"Sales - Markets\",\"role\":\"Sales reps - Markets\",\"status\":\"Heard\"}]",
+      "listen._directoryPeople": "[{\"id\":\"dp-mrqk8dia-prakasht\",\"name\":\"Prakash T M\",\"role\":\"GTM Sales\",\"movementId\":\"frame\",\"roleResolved\":true},{\"id\":\"dp-ms2ec2m6-executiv\",\"name\":\"Executive Leadership\",\"role\":\"Executive Leadership\",\"movementId\":\"listen\",\"roleResolved\":true},{\"id\":\"dp-ms2ecqtb-salesrep\",\"name\":\"Ibrahim Khalid\",\"role\":\"Sales reps - Markets\",\"movementId\":\"listen\",\"roleResolved\":true},{\"id\":\"dp-ms2ed18j-saleslea\",\"name\":\"Avantika Sharma\",\"role\":\"Sales Leaders - Markets\",\"movementId\":\"listen\",\"roleResolved\":true},{\"id\":\"dp-ms2ed8my-gtmpract\",\"name\":\"Prakash TM\",\"role\":\"GTM - Practices\",\"movementId\":\"listen\",\"roleResolved\":true},{\"id\":\"dp-ms2edie5-gtmleade\",\"name\":\"GTM Leaders - Practices\",\"role\":\"GTM Leaders - Practices\",\"movementId\":\"listen\",\"roleResolved\":true},{\"id\":\"dp-ms2edvbv-salesope\",\"name\":\"Sales Operations\",\"role\":\"Sales Operations\",\"movementId\":\"listen\",\"roleResolved\":true},{\"id\":\"dp-ms2ee1sf-leadersa\",\"name\":\"Leader - Sales Operations\",\"role\":\"Leader - Sales Operations\",\"movementId\":\"listen\",\"roleResolved\":true},{\"id\":\"dp-ms2ee5a3-finance\",\"name\":\"Vimal Pandey\",\"role\":\"Finance\",\"movementId\":\"listen\",\"roleResolved\":true},{\"id\":\"dp-ms2eepaw-leaderfi\",\"name\":\"Leader - Finance\",\"role\":\"Leader - Finance\",\"movementId\":\"listen\",\"roleResolved\":true},{\"id\":\"dp-ms2ef5tg-marketin\",\"name\":\"Marketing\",\"role\":\"Marketing\",\"movementId\":\"listen\",\"roleResolved\":true},{\"id\":\"dp-ms2efd2s-leaderma\",\"name\":\"Leader - Marketing\",\"role\":\"Leader - Marketing\",\"movementId\":\"listen\",\"roleResolved\":true},{\"id\":\"dp-ms2efoqg-legal\",\"name\":\"Legal\",\"role\":\"Legal\",\"movementId\":\"listen\",\"roleResolved\":true},{\"id\":\"dp-ms2eftia-leaderle\",\"name\":\"Leader - Legal\",\"role\":\"Leader - Legal\",\"movementId\":\"listen\",\"roleResolved\":true},{\"id\":\"dp-ms2f4cx4-delivery\",\"name\":\"Delivery\",\"role\":\"Delivery\",\"movementId\":\"listen\",\"roleResolved\":true},{\"id\":\"dp-ms2f4k0o-leaderde\",\"name\":\"Leader - Delivery\",\"role\":\"Leader - Delivery\",\"movementId\":\"listen\",\"roleResolved\":true},{\"id\":\"dp-ms2f7min-leaderal\",\"name\":\"Leader - Alliances\",\"role\":\"Leader - Alliances\",\"movementId\":\"listen\",\"roleResolved\":true},{\"id\":\"dp-ms2f7q0k-alliance\",\"name\":\"Alliances\",\"role\":\"Alliances\",\"movementId\":\"listen\",\"roleResolved\":true},{\"id\":\"dp-ms2f81ha-leaderta\",\"name\":\"Leader - TA\",\"role\":\"Leader - TA\",\"movementId\":\"listen\",\"roleResolved\":true},{\"id\":\"dp-ms2f86ca-talentac\",\"name\":\"Talent Acquisition\",\"role\":\"Talent Acquisition\",\"movementId\":\"listen\",\"roleResolved\":true},{\"id\":\"dp-ms2fo113-hr\",\"name\":\"HR\",\"role\":\"HR\",\"movementId\":\"listen\",\"roleResolved\":true}]",
+      "listen.contradictionLog": "[]",
+      "listen.interviewTranscripts": "— Document: Laila Prototype - CRM Domain Ontology (dev demo), provided by the programme team, 2026-07-18 23:46 —\n[source: 3acf97de-fadd-48e1-99a7-15b80ef87cf7/0420e81a-34ec-418a-9d52-0f47bc71e31d-Laila Prototype - CRM Domain Ontology _dev demo_.txt]\nLaila Prototype — CRM Domain Ontology (dev demo extract)\n\nSource: https://laila-dev.eastus.cloudapp.azure.com/ontology (admin view), API /api/ontology/graph, captured 18 Jul 2026.\nThe prototype's CRM entity graph is derived live from its database schema: 45 entities, 56 foreign-key relationships, grouped into 11 domains. 8 entities are live natural-language-queryable (Accounts, Contacts, Leads, Opportunities, Buying Committee, Engagements, Contracts, Escalations). Accounts is the hub entity.\n\nDOMAIN: Account / Master Data\n- Accounts (HUB, queryable): category, tier, region, industry, type, segment, annualRevenue. Owned by a User (owner_id).\n- Contacts (queryable): buyingRole, title. Belongs to Account; owned by User.\n- Partners: partner_name, partner_type, alliance_tier. Belongs to Account.\n\nDOMAIN: People\n- User: full_name, email, role, practice, is_active.\n\nDOMAIN: Demand\n- Leads (queryable): status, leadSource. Links to Campaign, converted Account, converted Opportunity, owner User.\n- Lead Score: icp_score, intent_score, stage, model_version. Belongs to Lead.\n- Campaigns: campaign_name, campaign_type, channel, start_date, end_date. Owned by User.\n- Campaign Member: status, response_date. Joins Campaign to Lead or Contact.\n- Events: event_name, event_type, event_date, location. Belongs to Campaign.\n\nDOMAIN: Sales / Pipeline\n- Opportunities (queryable): stage, type, amount, closeDate. Belongs to Account; owned by User; key decision maker is a Contact.\n- Opp Line Item: service_name, quantity, unit_price, total_price. Belongs to Opportunity.\n- Buying Committee (opportunity_contact_roles, queryable): role, isPrimary. Joins Opportunity to Contact.\n- Practice Forecast Split: practice_name, split_amount, split_percent, forecast_category. Belongs to Opportunity.\n- Practice Contribution: practice_name, contribution_percent. Belongs to Opportunity.\n- Forecast Snapshots: snapshot_date, forecast_category, amount, projection_status, confidence. Belongs to Opportunity.\n- Competitors: competitor_name, threat_level. Belongs to Opportunity.\n\nDOMAIN: Commercial\n- Quotes: quote_number, status, total_price, version, valid_until. Belongs to Opportunity.\n- Pricing Items: description, cost, margin_percent, discount_percent. Belongs to Quote.\n- Proposals: title, status, submitted_date, document_s3_key. Belongs to Opportunity.\n- Contracts (queryable): contractType, status. Belongs to Account and Opportunity.\n- SOW: scope_summary, start_date, end_date, value, delivery_model. Belongs to Contract and Opportunity.\n\nDOMAIN: Delivery\n- Engagements (queryable): status, healthRag, deliveryModel. Belongs to Account, Opportunity, SOW; delivery lead is a User.\n- Staffing (staffing_allocations): role, allocation_percent, start_date, end_date. Joins Engagement to User.\n- Timesheets: week_ending, hours_billed, hours_non_billed. Joins Engagement to User.\n- Milestones: name, due_date, status, completed_date. Belongs to Engagement.\n- Delivery Health: snapshot_date, rag, margin_variance, csat. Belongs to Engagement.\n\nDOMAIN: Finance\n- Invoices: invoice_number, amount, issue_date, due_date, status. Belongs to Account, Engagement, Contract.\n- Billing Schedules: period_start, period_end, scheduled_amount, billing_type. Belongs to Contract and Engagement.\n- Revenue Recognition: period, recognized_amount, method. Belongs to Engagement.\n- Revenue Projections: projection_month, projection_year, projection_amount, weighted_amount, booked. Belongs to Opportunity.\n\nDOMAIN: Support\n- Escalations (queryable): severity, status. Belongs to Account or Opportunity; owned by User.\n\nDOMAIN: Signals / Scribe (the agentic layer)\n- Signal (scribe_events): channel, from_addr, subject, body, target_type. Assigned to a User. Signal types observed in the app: Deal slipping, Account health, Stakeholder gap — each with SLA windows, recurrence tracking and supervisor escalation.\n- Signal Action: kind, title, detail, due_date, status. Belongs to Signal; owned by User.\n\nDOMAIN: Memory / System (agentic memory)\n- Interactions: entity_type, channel, direction, participants, subject.\n- Entity Profiles: entity_type, profile_summary, key_facts.\n- Documents: entity_type, doc_type, title, s3_key, mime_type.\n- Agent Usage: agent_code, action, entity_type, provider, model_name.\n- Agent Decisions: agent_code, entity_type, action, rationale, input_signal_ids; human approval recorded (human_approved_by_id → User).\n\nDOMAIN: Config / Reference\n- Opportunity Stages: stage_key, label, probability, kind, sort_order.\n- Picklist Values: object_name, field_name, value, sort_order, active.\n- Validation Rules: object_name, rule_name, active, enforced, error_message.\n- Solution Archetypes: name, active, sort_order.\n- Scribe Intent: intent_key, label, description, target_type, capability.\n- Intents: intent_key, description, sample_utterances.\n- Access Grants: scope_type, scope_value, source (per User).\n\nRELATIONSHIPS (all 56 foreign keys)\ntimesheets→engagements (engagement_id); timesheets→users (user_id); staffing_allocations→engagements (engagement_id); staffing_allocations→users (user_id); sows→contracts (contract_id); sows→opportunities (opportunity_id); signal_actions→scribe_events (signal_event_id); signal_actions→users (owner_id); scribe_events→users (assigned_to); revenue_recognition→engagements (engagement_id); revenue_projections→opportunities (opportunity_id); quotes→opportunities (opportunity_id); proposals→opportunities (opportunity_id); pricing_items→quotes (quote_id); practice_forecast_splits→opportunities (opportunity_id); practice_contributions→opportunities (opportunity_id); partners→accounts (account_id); opportunity_line_items→opportunities (opportunity_id); opportunity_contact_roles→opportunities (opportunity_id); opportunity_contact_roles→contacts (contact_id); opportunities→accounts (account_id); opportunities→users (owner_id); opportunities→contacts (key_decision_maker_c); milestones→engagements (engagement_id); leads→campaigns (campaign_id); leads→accounts (converted_account_id); leads→opportunities (converted_opportunity_id); leads→users (owner_id); lead_scores→leads (lead_id); invoices→accounts (account_id); invoices→engagements (engagement_id); invoices→contracts (contract_id); forecast_snapshots→opportunities (opportunity_id); events→campaigns (campaign_id); escalations→accounts (account_id); escalations→opportunities (opportunity_id); escalations→users (owner_id); engagements→accounts (account_id); engagements→opportunities (opportunity_id); engagements→sows (sow_id); engagements→users (delivery_lead_id); delivery_health→engagements (engagement_id); contracts→accounts (account_id); contracts→opportunities (opportunity_id); contacts→accounts (account_id); contacts→users (owner_id); competitors→opportunities (opportunity_id); campaigns→users (owner_id); campaign_members→campaigns (campaign_id); campaign_members→leads (lead_id); campaign_members→contacts (contact_id); billing_schedules→contracts (contract_id); billing_schedules→engagements (engagement_id); agent_decisions→users (human_approved_by_id); accounts→users (owner_id); access_grants→users (user_id).\n\nAPPLICATION MODULES (admin navigation): Today (morning briefing + Ask Laila), Accounts, Relationships, Leads, Opportunities, Campaigns, Archetypes, Programs (delivery), Contracts, Talent demand (talent-requests), Talent, Revenue, Alliances, Funnel (dashboard), Forecast, Escalations, Scribe, Ontology.\n\n— Document: Brillio Agentic CRM - Domain Ontology (Workflow Design), provided by the programme team, 2026-07-19 00:21 —\n[source: 3acf97de-fadd-48e1-99a7-15b80ef87cf7/32de38a5-e5c7-4c60-8936-3c122d7d5273-Brillio Agentic CRM - Domain Ontology _Workflow Design_.txt]\nBrillio Agentic CRM — Domain Ontology (from Workflow Design document)\n\nSource: attached 'Brillio Agentic CRM · Workflow Design' HTML, ingested as prototype/design evidence. The model spans 4 business areas, 9 pursuit-to-delivery stages, 13 object lifecycles, ~230 distinct CRM objects, 20 owner roles, and a 28-agent agentic layer.\n\nBUSINESS AREAS (4)\n- Sales: Marketing, Sales, GTM, Sales Ops, Alliances — demand, deals, renewals\n- Delivery: Delivery + Talent — projects, staffing, quality, time-to-value\n- Operations: Finance, Legal, Data Governance — money, contracts, controls\n- Leadership: Managers and executives — inspection, governance, escalations\n\nPROCESS STAGES (9, the pursuit-to-delivery spine)\n- 1. Opportunity Signal Generation (70 workflows): Surface and capture every signal that could turn into a future deal — inbound web leads, event scans, partner referrals, ABM target accounts, campaign engagement, and email/meeting signals from existing accounts. Purpose: never miss a potential opportunity and route each signal to the right Markets / Practice / Marketing owner with the right context.\n- 2. Opportunity Qualification (27 workflows): Convert raw signals into qualified opportunities by validating budget, authority, need, and timing, and by tagging the motion (new business, renewal, expansion, or re-compete). Purpose: focus pursuit effort on deals that have a real chance of closing and lock in the right playbook before any solutioning starts.\n- 3. Solution Strategy (13 workflows): Translate the customer need into a Brillio offering — pick the right archetype (custom build, accelerator, partnered, platform-led), choose the lead Practice, align Markets context, and decide whether partners are needed. Purpose: give the pursuit team a clear technical and commercial direction before estimating, so every downstream artifact rolls up to one story.\n- 4. Deal Shaping (32 workflows): Build the proposal artifacts: estimate effort and team mix, draft the Statement of Work, structure the FRF (Field Resource Forecast) demand with location-of-work requirements, line up partner contributions, and define the win plan. Purpose: produce a defensible, deliverable offer that survives internal pricing review and earns customer sign-off.\n- 5. Commercial Structuring (22 workflows): Negotiate price, terms, MSA/SOW language, payment milestones, IP ownership, and risk allocation; route through Legal, Finance, and Compliance for sign-off. Purpose: land a contract that protects margin, manages risk, and clears every required gate before signature.\n- 6. Pipeline & Forecast (25 workflows): Roll qualified opportunities into a forecasted pipeline (best case / committed / closed), continuously update probability, expected close date, and bookings split (new vs. renewal vs. expansion), and govern the renewal calendar. Purpose: give leadership a credible view of revenue trajectory and focus sales hygiene on the deals that actually move the number.\n- 7. Sales-to-Delivery Handoff (21 workflows): Transition signed work from sales to delivery — confirm SOW, resource the FRF, schedule kickoff, set governance cadence, open the risk register, and restate customer expectations to the delivery team. Purpose: start delivery with zero ambiguity and prevent the post-close \"black hole\" between contract signature and project kickoff.\n- 8. Delivery Validation (39 workflows): Watch the project's first 30 / 60 / 90 days for health signals: staffing fit, scope creep, customer NPS, milestone burn-down, and margin variance against the sold model. Purpose: catch trouble early — before it shows up in financials — and confirm that the delivery team can keep the promise sales made.\n- 9. Account Expansion (27 workflows): Mine the live account for renewal, cross-sell, upsell, and platform-extension moves; surface white space, map new buying centers, and trigger the right renewal workflows on the right calendar. Purpose: grow customer lifetime value by treating delivery itself as the next sales motion, not a separate disconnected phase.\n\nOBJECT LIFECYCLES (13 — the core entity families)\n- Events [sales] (9 workflows): Industry / customer event calendar, speaker & abstract management, pre / at / post-event nurture.\n- Campaigns [sales] (16 workflows): Target account list governance, ABM / campaign design, execution, attribution and ROI.\n- Solutions [sales] (19 workflows): Solution catalog, archetype playbooks, battle-cards, value-prop, win-rate / margin tracking.\n- Leads [sales] (14 workflows): ICP, lead capture, MQL → SAL → SQL hand-off, scoring, nurture, recycling, SLA governance.\n- Accounts [sales] (36 workflows): Tiering, plan, whitespace, account health, dedup, plus data governance and inbound signals on accounts.\n- Contacts [sales] (8 workflows): Stakeholder & exec-sponsor maps, contact hygiene, buying-committee roles, refresh / departure tracking.\n- Opportunities [sales] (36 workflows): Creation, MEDDPICC qualification, stage advancement, competitor capture, deal review, win / loss.\n- Contracts [sales] (24 workflows): MSA / SOW / amendment / change order, T&C deviation, e-signature, repository, partner agreements.\n- Partners [sales] (20 workflows): Partner coverage, deal registration, joint pipeline, partner-sourced revenue, MDF, alliance scorecard.\n- Forecasts [sales] (19 workflows): Forecast categories, weekly snapshots, coverage ratio, accuracy, hygiene, deal inspection.\n- Projects [delivery] (23 workflows): Charter, baseline, kickoff, RAG, milestones, WSR, steerco, EAC / ETC, change orders, closeout.\n- Talent [delivery] (34 workflows): FRF, bench, ramp, skill-gap / certification, attrition risk, utilization, staffing.\n- Revenue & Billing [delivery] (18 workflows): Revenue recognition (ASC 606), bookings vs billings, gross margin, leakage, AR aging, monthly close.\n\nCRM OBJECTS / ENTITIES (distinct objects the workflows act on)\n- Opportunity (12 workflows)\n- Activity (10 workflows)\n- Account (5 workflows)\n- Approval (5 workflows)\n- Lead (5 workflows)\n- Marketing Request (4 workflows)\n- Project / Engagement (4 workflows)\n- Campaign / ABM Motion (Execution) (3 workflows)\n- Campaign / ABM ROI (Governance) (3 workflows)\n- Project Financials (3 workflows)\n- Account Plan (2 workflows)\n- Contact (2 workflows)\n- Content (2 workflows)\n- Contract (2 workflows)\n- Contract (MSA) (2 workflows)\n- FRF (2 workflows)\n- Forecast (2 workflows)\n- Governance Forum (2 workflows)\n- Lead Nurture (2 workflows)\n- Opportunity (Custom Fields) (2 workflows)\n- Opportunity Competitor (2 workflows)\n- Opportunity Team Member (2 workflows)\n- Quote / Pricing (2 workflows)\n- Solution Catalog Entry (2 workflows)\n- AR Aging\n- AR Escalation\n- Access Policy\n- Account (Dedup Match)\n- Account (Merge)\n- Account (Split / Re-parent)\n- Account Competitor View\n- Account Practice Coverage\n- Account Signal\n- Account Stakeholder Map\n- Activity (Deal Review)\n- Activity (Exec Briefing)\n- Activity (Large Deal Review)\n- Advocacy Record\n- Alliance Scorecard\n- Approval (Event Slate)\n- Approval (Large)\n- Approval (MSA — Routing)\n- Approval (MSA)\n- Approval (SOW)\n- Approval (Solution Catalog)\n- Approval (Stage Gate)\n- Approval (TAL)\n- Archetype Playbook\n- Attrition Risk\n- Bench Pipeline Outcomes\n- Bench-Led Opportunity (Push)\n- Bookings (Motion Split)\n- CAB Session\n- Campaign / ABM Attribution\n- Campaign / ABM Motion (Approval)\n- Campaign / ABM Motion (Design)\n- Candidate ↔ FRF Match\n- Case Study (Approved)\n- Case Study Candidate\n- Case Study Consent (Signed)\n- Case Study Narrative\n- Case Study Outcome Metrics\n- Change Order\n- Compliance Check\n- Contact (Dedup Match)\n- Contact (Departure)\n- Contact (Refresh)\n- Contract (MSA Amendment)\n- Contract (Renewal)\n- Contract (Signed)\n- Contract (SimplyContract)\n- Contract (Type Classification)\n- Contract Obligation\n- Contract Repository\n- Customer Credit Check\n- Customer Event\n- Customer Onboarding\n- Customer Success Plan\n- DQ Audit\n- Data Quality Policy\n- Deal Signal\n- Dedup Policy\n- EAC / ETC Variance Review\n- Email Signal\n- Escalation Register\n- Event Calendar\n- Event Engagement\n- Event Post-Nurture\n- Event Pre-Outreach\n- Event Submission\n- Exec Sponsor Map\n- FRF (Capacity + Skill + Location Requirement)\n- FRF (Dedup Match)\n- FRF (Location Risk)\n- FRF Queue\n- FRF Reconciliation\n- Forecast (Book)\n- Forecast (Commit)\n- Forecast (Stretch)\n- Forecast Accuracy Audit\n- Forecast Methodology\n- Forecast Reconciliation\n- Forecast Signal\n- Forecast Signal (Predictive)\n- Forecast Snapshot\n- Fulfillment Connect\n- Fulfillment Report\n- Handoff SLA (Project + Rev-Rec)\n- ICP / Lead-Scoring Model\n- Invoice\n- Invoice (FP-Milestone)\n- Joint Pipeline Review\n- Lead (Dedup Match)\n- Lead (Stage Advance)\n- Lead (Stage Decision)\n- Lead SLA / Recycle Policy\n- Lead → Contact + Opportunity\n- Lead ↔ Account Link\n- Lever Job Requisition\n- Lever ↔ FRF Sync\n- MDF Request\n- Master Data Policy\n- Meeting Signal\n- Motion Playbook (Governance)\n- Notification (Size Tier)\n- Offer-to-Start Tracking\n- Opportunity (Auto-Update)\n- Opportunity (Contact Enforcement)\n- Opportunity (Dedup Match)\n- Opportunity (Expansion)\n- Opportunity (MEDDPICC)\n- Opportunity (New Business)\n- Opportunity (Partner-Funded Dual)\n- Opportunity (Renewal)\n- Opportunity (Size Tier)\n- Opportunity (Type Tag)\n- Opportunity (Win/Loss)\n- Opportunity Activity Link\n- Opportunity Archetype\n- Opportunity Contact Role\n- Opportunity Partner\n- Opportunity Pull-in Request\n- Opportunity Recycle\n- Opportunity Reference\n- Opportunity Risk\n- Opportunity Solution\n- Opportunity Win Plan\n- PO\n- PO (Exhaustion Flag)\n- PO Request\n- Partner AE Coverage\n- Partner Agreement\n- Partner Attribution\n- Partner Co-Sell Play\n- Partner Deal Registration\n- Partner Designation Register\n- Partner Enablement\n- Partner Event\n- Partner Influence Map (Active)\n- Partner KPI (Consumption / Spend)\n- Partner Profile\n- Partner Profile (Master)\n- Partner QBR\n- Partner Stakeholder Cadence\n- Partner Training / Cert Coverage\n- Partner Whitespace (Influence Target)\n- Pipeline Coverage\n- Pricing Worksheet\n- Privacy / Retention Policy\n- Proactive Bench Pipeline\n- Project (Type Setup)\n- Project Baseline\n- Project Charter\n- Project Closeout\n- Project Milestone\n- Project Resource\n- Project Resource Allocation\n- Project Team Member\n- Proposal\n- QBR Insight (Talent)\n- Reference Catalog\n- Reference Catalog Entry\n- Reference Reuse Match\n- Renewal Alert\n- Renewal Calendar\n- Resource Bench\n- Resource Demand Plan\n- Resource Match\n- Resource Match (Location)\n- Resource Profile\n- Resource Profile (Location)\n- Resource Profile (Relocation)\n- Resource Ramp\n- Revenue Close\n- Revenue Leakage Register\n- Revenue Recognition\n- Revenue Recognition (Outcome)\n- Revenue Recognition (Straight-Line)\n- Revenue Reconciliation\n- Risk / Issue (Auto-Logged)\n- Risk / Issue / Action\n- SOW\n- SOW Template\n- Scope Creep (Detection)\n- Signal Monitoring Policy\n- Skill / Certification Plan\n- Solution Performance\n- Survey Response\n- T&C Deviation (Routing)\n- T&C Deviation Register\n- Talent Data Quality (Location)\n- Talent Onboarding (from Lever)\n- Talent Risk\n- Target Account List\n- Utilization\n- VoC Theme\n- WSR\n- Workflow / Tasks\n\nOWNER ROLES (20 — who acts, by area)\n- Markets [sales] (106 touchpoints): Hunters and farmers in vertical markets — own named accounts, opportunities, and renewals.\n- Delivery [delivery] (55 touchpoints): Project execution — staffing, RAG, milestones, EVM, change.\n- Practices [sales] (48 touchpoints): Solution and capability owners — playbooks, pricing, RFPs, deal support.\n- Manager Markets [leadership] (37 touchpoints): Inspects pipeline, deal reviews, and forecast roll-up for the markets org.\n- Marketing [sales] (36 touchpoints): Demand gen, campaigns, events, content, and brand.\n- Finance [operations] (32 touchpoints): Pricing, margin, billing, revenue recognition, forecast accuracy.\n- Sales Ops [sales] (25 touchpoints): CRM hygiene, forecast cadence, deal desk, territory, and comp.\n- Alliances [sales] (21 touchpoints): Partner and ecosystem motions — co-sell, co-deliver, registrations.\n- Talent [delivery] (20 touchpoints): FRF, bench, ramp, certifications, location strategy.\n- Legal [operations] (18 touchpoints): MSA, SOW, change orders, vendor risk, compliance.\n- Manager Sales Ops [leadership] (17 touchpoints): Sets cadence, runs the deal desk, drives forecast quality.\n- Manager Talent [leadership] (16 touchpoints): Bench health, hiring plan, location strategy, certifications.\n- Manager Marketing [leadership] (12 touchpoints): Owns MQL targets, campaign performance, marketing-sourced pipeline.\n- Manager Delivery [leadership] (9 touchpoints): Portfolio health, escalations, margin, and staffing across projects.\n- Manager Finance [leadership] (8 touchpoints): P&L, revenue close, forecast accuracy, controls.\n- Manager Practices [leadership] (7 touchpoints): Capacity, capability, and solution governance across the practice.\n- Manager Alliances [leadership] (6 touchpoints): Partner P&L, joint pipeline, MDF and registration governance.\n- Manager Legal [leadership] (4 touchpoints): Contracts playbook, deviation governance, compliance posture.\n- Executive Leadership [leadership] (2 touchpoints): C-suite governance and inspection across every lifecycle.\n- All sales personas [sales] (1 touchpoints): Cross-cutting touchpoints every revenue role uses.\n\nAGENTIC LAYER (28 agents watching the record)\n- BEACON [sales] — Account scout — briefs you with what changed before you walk into the room: Eyes up — new intel on the field.. Watches: 10-K filings, executive moves, news streams, prior briefs\n- CONDUIT [sales] — Pull-in alert — connects the right players to the right deal at the right moment: Linking forces — Practices inbound.. Watches: Opportunity notes, solution catalog, prior similar deals\n- SENTINEL [delivery] — Risk and issue watch — escalates project, FRF, and timeline drift before it burns: Smoke detected — moving on signal.. Watches: Project health, FRF aging, timeline slip, RAG flags\n- HELM [delivery] — Delivery health — cross-tower visibility, recovery plans, and exec routing: Steady on — I have the wheel.. Watches: Project status across towers, RAG flags, FRF aging, milestone slip\n- COMPASS [finance] — Plan and forecast guardian — catches plan-vs-actual drift early: True north shifted — adjusting heading.. Watches: Account plan vs actuals, KPI variance, commit accuracy, milestone trend\n- VAULT [finance] — Pricing-risk watcher — guards margin and routes commercial governance: Margin breach — calling deal-desk.. Watches: Pricing scenarios, margin variance, T&C deviations, deal-desk queue\n- WAYFINDER [marketing] — Open-signal lead sourcing across web, events, syndication, social: Path found — lead inbound.. Watches: Web traffic, event scans, syndication feeds, social, intent data\n- WEAVER [sales] — Buying-committee mapper — builds and refreshes stakeholder dossiers: Threads tied — committee mapped.. Watches: Public org data, meeting attendees, email threads, LinkedIn\n- ECHO [finance] — Commit-history baseline — grounds every forecast in analog accuracy: I remember every commit you made.. Watches: Forecast history, commit changes, win-loss outcomes, slip rate\n- VANGUARD [delivery] — Capacity and ramp scout — predicts staffing gaps before they slip a deal: Bench scanned — gap incoming.. Watches: Fuel bench, RMG pipeline, FRF queue, talent supply, ramp time\n- LEDGER [finance] — Cash-flow watcher — keeps invoicing on track and PO balances healthy: Cash drift — moving on it.. Watches: Invoice cadence, PO balance, billing milestones, contract terms\n- ATLAS [sales] — Cross-tower visibility courier — routes opportunities to the right practice: Cargo arriving — practice up.. Watches: Cross-tower pipeline, solution attach signals, partner pipeline\n- RELAY [sales] — Sales-to-delivery handoff coach — auto-assembles handoff and surfaces open questions: Baton up — passing clean.. Watches: Post-signature comms, handoff SLA, open delivery questions, deal artifacts\n- SCOUT [sales] — Pilot prospector — finds champions and early-pilot opportunities: Pilot light spotted.. Watches: Emerging signals, open opportunities, pilot programs, prior engagement\n- FORGE [delivery] — Scope and FRF shaper — drafts SOWs, FRFs, and right-start setup at deal-shape: Scope forged — ready to ship.. Watches: Opportunity scope, resource model, accelerators catalog, templates\n- PRISM [sales] — Win-loss optic — refreshes battle cards and surfaces patterns from history: Patterns refracted — see the play.. Watches: Closed-won and closed-lost deals, competitor signals, win themes\n- EMBER [marketing] — Re-engagement spark — wakes dormant accounts with timely outreach: Ember lit — account warm.. Watches: Account dormancy, recent triggers, prior relationships\n- MERIDIAN [finance] — Cross-quarter planner — aligns commits across periods and balances capacity: Lines drawn across quarters.. Watches: Forecast across quarters, commit pipeline, slip rates\n- TIDE [delivery] — Burn-rate herald — calls cost spikes early in delivery: Tide rising — costs spiking.. Watches: Project actuals vs plan, hours, cost drivers\n- WARDEN [legal] — Compliance hawk — guards contracts, amendments, and audit readiness: Audit-clean — paper in line.. Watches: SimplyContract intake, MSA/SOW/DPA, amendments, T&C deviations\n- PULSE [marketing] — Campaign metronome — paces outreach across towers and partners: Beat set — keep time.. Watches: Campaign calendar, solution launches, event schedule\n- AURORA [sales] — Champion finder — names the right human in the room and aligns the dossier: Champion spotted — go to them.. Watches: Meeting attendees, intent signals, engagement depth, role data\n- CHRONO [delivery] — Time-to-value tracker — measures delivered value against committed outcomes: Clock running — value compounding.. Watches: Project milestones, delivered outcomes, committed KPIs\n- HALO [delivery] — Quality and methodology spotter — catches drift in tickets and adherence: Halo clear — quality holds.. Watches: Ticket quality, methodology adherence, delivery artifacts\n- BULWARK [legal] — Vendor-risk auditor — keeps third-party engagements clean: Wall up — vendor verified.. Watches: Vendor contracts, partner risk, third-party dependencies\n- ORBIT [sales] — Account-360 weaver — keeps account, stakeholder, and competitive picture current: Picture's in orbit — current.. Watches: Account footprint, stakeholders, competitive activity, delivered value\n- FLINT [sales] — Discovery starter — auto-scores MEDDPICC and drafts first-call agendas: Spark struck — discovery on.. Watches: CRM notes, call transcripts, emails, account brief\n- SCRIBE [sales] — Email + Teams meeting transcript listener — extracts leads, opportunity updates, requests, SOW/MSA references, escalations, delivery risks, and routes to the right agent: Heard it — routing now.. Watches: Inbound + outbound email threads, Teams / Zoom / Webex meeting transcripts, calendar invites, voice-call notes\n\nGLOSSARY / ABBREVIATIONS\n- MQL: Marketing Qualified Lead\n- SAL: Sales Accepted Lead\n- SQL: Sales Qualified Lead\n- ICP: Ideal Customer Profile\n- ABM: Account-Based Marketing\n- TAL: Target Account List\n- MDF: Market Development Funds\n- MEDDPICC: Metrics, Economic buyer, Decision criteria, Decision process, Paper process, Identify pain, Champion, Competition\n- POV: Proof of Value\n- GTM: Go-to-Market\n- RFP: Request for Proposal\n- RFI: Request for Information\n- QBR: Quarterly Business Review\n- FRF: Forecast Resource Request\n- TA: Talent Acquisition\n- RMG: Resource Management Group\n- MSA: Master Service Agreement\n- SOW: Statement of Work\n- T&C: Terms & Conditions\n- T&Cs: Terms & Conditions\n- WSR: Weekly Status Report\n- RAG: Red / Amber / Green\n- PIR: Post-Implementation Review\n- EAC: Estimate-at-Complete\n- ETC: Estimate-to-Complete\n- PO: Purchase Order\n- POs: Purchase Orders\n- WIP: Work in Progress\n- AR: Accounts Receivable\n- P&L: Profit & Loss\n- ASC 606: Accounting Standards Codification 606\n- CSAT: Customer Satisfaction\n- NPS: Net Promoter Score\n- VoC: Voice of Customer\n- CAB: Customer Advisory Board\n- PII: Personally Identifiable Information\n- GDPR: General Data Protection Regulation\n- CCPA: California Consumer Privacy Act\n- RBAC: Role-Based Access Control\n- DQ: Data Quality\n- SLA: Service Level Agreement\n- SLAs: Service Level Agreements\n- KPI: Key Performance Indicator\n- KPIs: Key Performance Indicators\n- BU: Business Unit\n- BUs: Business Units\n- IP: Intellectual Property\n- CRM: Customer Relationship Management\n- SME: Subject Matter Expert\n- SMEs: Subject Matter Experts\n\n— Document: Brillio Agentic CRM - Current-State Workflow Atlas (Workflow Design), provided by the programme team, 2026-07-19 00:21 —\n[source: 3acf97de-fadd-48e1-99a7-15b80ef87cf7/84744cdd-d550-4192-b479-f35485cece7f-Brillio Agentic CRM - Current-State Workflow Atlas _Workflow Design_.txt]\nBrillio Agentic CRM — Current-State Workflow Atlas (from Workflow Design document)\n\nSource: attached 'Brillio Agentic CRM · Workflow Design' HTML. 276 workflows across the pursuit-to-delivery lifecycle, organized by business area -> stage -> object lifecycle. Each entry: object, trigger, owner role(s), watching agent(s), step kind.\n\n## AREA: Delivery\n### Stage 1: Opportunity Signal Generation\n- [Talent] Maintain resource skill profile — object: Resource Profile; trigger: New hire; certification; project completion; owners: Talent; agents: VANGUARD; kind: action\n  Capture and refresh resource skills, certifications, and experience tags in Talent system\n- [Talent] Capture talent location and work-mode profile — object: Resource Profile (Location); trigger: New hire; location change; annual refresh; owners: Talent; agents: VANGUARD, TIDE; kind: trigger\n  Capture and refresh each resource's primary location (city, country, region, timezone), reporting / home office, and work-mode preference (remote / hybrid / on-site); used to match talent to FRF demand and to compute travel + bill-to implications\n- [Talent] Capture willingness-to-relocate profile — object: Resource Profile (Relocation); trigger: Annual refresh; resource-initiated update; owners: Talent; agents: VANGUARD, TIDE; kind: trigger\n  Capture each resource's willingness-to-relocate — eligible destinations (country / city list), duration tolerance (short-term, long-term, permanent), conditions (family, dependents, schooling), visa / work-authorization constraints, and earliest available date; refresh annually and on life-event triggers\n- [Talent] Govern talent location and mobility data quality — object: Talent Data Quality (Location); trigger: Monthly DQ inspection; quarterly mobility review; owners: Manager Talent; agents: VANGUARD, TIDE, ECHO; kind: governance\n  Govern completeness and freshness of location + relocation fields on the talent profile; inspect coverage by BU, geo, and band; chase stale or missing entries; surface mobility supply heatmap\n- [Talent] Govern master-data domains and source-of-truth — object: Master Data Policy; trigger: Annual policy refresh; new system in scope; owners: Manager Sales Ops; agents: ORBIT, ATLAS; kind: governance\n  Govern domain owners and golden-record definitions for Account, Contact, Lead, Opportunity, Project, FRF, Solution, Contract; publish source-of-truth matrix and update rules\n### Stage 2: Opportunity Qualification\n- [Projects] Run customer credit-risk check — object: Customer Credit Check; trigger: Net-new customer at qualification; expansion above credit threshold; owners: Finance, Manager Finance; agents: LEDGER, BULWARK, WARDEN; kind: decision\n  Finance runs credit / financial-health check on prospective customer — D&B / credit-bureau pull, payment history on existing engagements, sanctions / OFAC screen; surface credit risk score and payment-term guardrails to deal-shape and commercial-structuring teams\n### Stage 3: Solution Strategy\n- [Revenue & Billing] Track solution win-rate / pipeline / margin — object: Solution Performance; trigger: Monthly portfolio review; owners: Manager Practices; agents: CONDUIT, PRISM, ECHO; kind: action\n  Inspect each solution / archetype on pipeline contribution, win rate, average deal size, delivery margin, and competitive posture; rebalance solution investment\n### Stage 4: Deal Shaping\n- [Talent] Submit FRF (Forecast Resource Request) — object: FRF; trigger: Deal-shaping team finalized; owners: Markets, Practices, Delivery; agents: FORGE, VANGUARD; kind: trigger\n  Submit resource request to TA / RMG with role, skill, ramp date, bill-rate band, and full location-of-work block (city, country, timezone, on-site / hybrid / remote, travel %, bill-to country, visa / work-permit requirement) — created by Markets, Practices, or Delivery during shape\n- [Talent] Capture capacity, skill and location requirements on FRF — object: FRF (Capacity + Skill + Location Requirement); trigger: FRF creation; scope, ramp, or client-site change; owners: Markets, Practices, Delivery; agents: FORGE, VANGUARD, TIDE; kind: trigger\n  Capture client-mandated demand for each resource line — capacity (headcount, FTE / allocation %, ramp-up curve, peak vs steady-state, start date, duration, end date, billable hours per week, shift coverage); skill (role / level / years of experience, primary technical skill stack, must-have certifications, domain or industry experience, language proficiency, security clearance); and location (onsite city / country, allowed remote / hybrid mix, mandatory travel days, time-zone overlap window, bill-to country, visa / work-authorization requirements, client-site security or badging constraints)\n- [Talent] Dedupe FRF on submission — object: FRF (Dedup Match); trigger: FRF submit event; owners: Markets, Practices, Delivery, Talent; agents: VANGUARD, FORGE; kind: decision\n  Match new FRF against open / recent FRFs on same opportunity + account by role family, skill stack, location-of-work, and ramp window; block exact duplicates, flag overlapping demand for consolidation, and link related FRFs into a single demand bundle for the Talent queue\n- [Talent] Match resources to opportunity by skill — object: Resource Match; trigger: FRF submitted; owners: Talent; agents: VANGUARD; kind: decision\n  System matches available resources to opportunity skill requirements; surfaces best-fit candidates\n- [Talent] Match FRF demand to talent supply by location — object: Resource Match (Location); trigger: FRF queued for fulfillment; owners: Talent, Manager Talent; agents: VANGUARD, TIDE; kind: decision\n  Match FRF location-of-work requirement against talent supply — local-bench resources first, then willing-to-relocate resources scored against destination eligibility, visa fit, family / dependent constraints, and earliest available date; surface gap heatmap and short-term travel-from-home options\n- [Talent] Flag location-gap risk and propose mitigations — object: FRF (Location Risk); trigger: Location gap detected on FRF; owners: Manager Talent, Practices, Delivery; agents: VANGUARD, TIDE, SENTINEL, FORGE; kind: decision\n  Flag FRFs where local supply is insufficient and propose mitigations — relocate willing resource, sub-contract local talent, hire-to-fill, nearshore / offshore split, client-approved remote ratio, or rebadge — with cost and timeline impact for deal-shape review\n- [Talent] Acknowledge talent demand / FRF intake — object: FRF; trigger: FRF submitted; owners: Talent; agents: VANGUARD; kind: trigger\n  Talent team receives notification of talent demand from deal-shape FRF; ack and queue\n- [Talent] Inspect FRF queue and manage resourcing risks — object: FRF Queue; trigger: Daily FRF queue review; owners: Manager Talent; agents: VANGUARD; kind: action\n  Manager Talent reviews open FRFs, prioritizes against capacity, and flags resourcing risk\n- [Revenue & Billing] Draft pricing and margin sheets — object: Pricing Worksheet; trigger: Scope and effort baseline ready; owners: Markets, Practices; agents: VAULT; kind: action\n  Create deal-shape pricing model and margin worksheets; align with effort and risk inputs\n- [Projects] Update risk register — object: Opportunity Risk; trigger: Risk surfaced during shape; owners: Markets, Practices, Delivery; agents: SENTINEL, BULWARK; kind: governance\n  Log technical, commercial, delivery, legal risks with severity, owner, mitigation\n- [Talent] Forecast resource demand by skill / role / geo — object: Resource Demand Plan; trigger: Weekly demand-supply cycle; owners: Manager Talent; agents: VANGUARD, FORGE, COMPASS; kind: action\n  Project resource demand from active + shape-stage pipeline against named skills, levels, and geos; produce a rolling 90-day demand plan vs. available supply\n- [Talent] Track bench and resource availability — object: Resource Bench; trigger: Allocation event; weekly review; owners: Talent; agents: VANGUARD; kind: action\n  Maintain real-time bench view (role, skill, level, geo, availability date, allocation %), aging on bench, and ramp-ready status\n- [Talent] Reconcile FRF demand vs. available supply — object: FRF Reconciliation; trigger: Daily / weekly FRF queue review; owners: Manager Talent; agents: VANGUARD, FORGE; kind: decision\n  Match FRF queue to bench + hire plan; surface gaps (skill, geo, level, ramp window); recommend backfill, hire, partner, or scope-shape options\n- [Talent] Run skill-gap and certification plan — object: Skill / Certification Plan; trigger: Quarterly capability review; emerging-skill signal; owners: Manager Talent; agents: VANGUARD, CONDUIT; kind: action\n  Inspect aggregate skill / certification gaps from FRF demand and solution roadmap; build training + certification plan to close gaps\n- [Talent] Flag attrition / retention risk on deal team — object: Attrition Risk; trigger: Large deal staffing; flight-risk signal; owners: Manager Talent; agents: VANGUARD, AURORA; kind: decision\n  Surface attrition signals on key deal-team members (tenure, engagement, prior-role exits); recommend retention actions or backup-staffing before deal commits to those resources\n- [Talent] Open Lever job requisition from unfilled FRF — object: Lever Job Requisition; trigger: FRF unfilled past internal-supply SLA; owners: Talent, Manager Talent; agents: VANGUARD, FORGE, CONDUIT; kind: action\n  When an FRF cannot be filled from bench or near-bench within the SLA window, automatically draft a Lever job requisition with role, skill, geo, level, start date, and FRF ID; route to recruiter and Manager Talent for approval; publish to Lever once approved and link the posting back to the originating FRF\n- [Talent] Sync Lever applicant pipeline with FRF demand — object: Lever ↔ FRF Sync; trigger: Daily sync; FRF state change; owners: Talent, Manager Delivery; agents: VANGUARD, CONDUIT, ECHO; kind: action\n  Pull active Lever applicant pipeline (postings, candidates, stages) on a daily cadence; reconcile against open FRFs by role / skill / geo / start date; surface a unified internal-plus-external supply view to Manager Talent and Manager Delivery so staffing decisions see both bench and recruiting funnel in one place\n- [Talent] Match Lever candidates to active FRFs by skill, level, and geo — object: Candidate ↔ FRF Match; trigger: New candidate in Lever; new FRF; daily refresh; owners: Talent, Manager Talent; agents: VANGUARD, WEAVER, FORGE; kind: decision\n  Score each active Lever candidate against open FRFs using skill overlap, level fit, geo match, willingness-to-relocate, and start-date alignment; recommend top-N candidate / FRF pairs to recruiters and staffing managers; capture accept / reject feedback to retrain match scoring\n### Stage 5: Commercial Structuring\n- [Revenue & Billing] Run margin / discount scenarios — object: Quote / Pricing; trigger: Pricing decision pending; owners: Finance; agents: VAULT; kind: action\n  Simulate alternative pricing structures and margin outcomes\n### Stage 6: Pipeline & Forecast\n- [Revenue & Billing] Track bookings vs. billings vs. revenue — object: Revenue Reconciliation; trigger: Monthly / quarterly close; owners: Manager Finance; agents: LEDGER, ECHO; kind: action\n  Reconcile bookings (signed TCV), billings (invoiced), and revenue (recognized) by period and account; flag drift\n### Stage 7: Sales-to-Delivery Handoff\n- [Projects] Create project / engagement record — object: Project / Engagement; trigger: Closed-Won; owners: Delivery, Sales Ops; agents: FORGE, RELAY; kind: trigger\n  Open project record from opportunity with scope, financials, team, milestones\n- [Projects] Transfer ownership sales → delivery — object: Project / Engagement; trigger: Project record created; owners: Markets, Delivery; agents: RELAY; kind: action\n  Reassign primary record owner from sales to delivery lead; retain sales liaison\n- [Projects] Trigger handoff workflow — object: Workflow / Tasks; trigger: Closed-Won + project created; owners: Markets; agents: RELAY, VANGUARD, LEDGER; kind: handoff\n  Open handoff tasks for PMO, Finance, TA, Legal with SLA timers\n- [Projects] Run kickoff meeting — object: Activity; trigger: Project mobilization; owners: Delivery; agents: FORGE; kind: handoff\n  Hold internal + client kickoff; capture attendees, decisions, action items\n- [Projects] Set up project financials — object: Project Financials; trigger: Project created; owners: Finance, Delivery; agents: LEDGER, FORGE; kind: action\n  Configure budget, cost codes, billing milestones, rev-rec rules\n- [Projects] Confirm scope, commercial terms, success criteria — object: Project / Engagement; trigger: Handoff in progress; owners: Markets, Delivery, Practices; agents: RELAY; kind: action\n  Validate handoff package against signed contract; close any open questions\n- [Talent] Onboard delivery team — object: Project Team Member; trigger: Team assigned; owners: Delivery, Talent; agents: VANGUARD, RELAY; kind: handoff\n  Add team members, set roles and access, complete onboarding checklist\n- [Projects] Create project charter — object: Project Charter; trigger: Project mobilization kickoff; owners: Delivery, Manager Delivery; agents: FORGE, RELAY; kind: trigger\n  Author charter — objectives, scope, deliverables, success criteria, stakeholders, governance model, risks, assumptions; align to signed SOW\n- [Projects] Baseline scope / budget / schedule — object: Project Baseline; trigger: Charter approved; owners: Manager Delivery, Finance; agents: FORGE, HELM, LEDGER; kind: action\n  Set scope baseline (WBS, milestones), budget baseline (hours, cost, margin target), and schedule baseline; version on approved change orders\n- [Projects] Allocate resources to project — object: Project Resource Allocation; trigger: Project created; FRF closed; owners: Talent, Delivery; agents: VANGUARD, RELAY; kind: action\n  Hard-allocate FRF-approved resources to project from bench / hire; set start dates, allocation %, role on team\n- [Talent] Track resource ramp — object: Resource Ramp; trigger: Resource allocated; owners: Talent, Delivery; agents: VANGUARD, CHRONO; kind: action\n  Track each allocated resource through onboarding, access provisioning, training, and ramp-to-productive milestones\n- [Projects] Onboard customer post-sale — object: Customer Onboarding; trigger: Closed-Won + project mobilization; owners: Delivery, Markets; agents: RELAY, EMBER; kind: handoff\n  Execute customer onboarding plan — welcome, tools / access setup, stakeholder intros, success-plan handshake, governance cadence kickoff\n- [Projects] Set customer success plan — object: Customer Success Plan; trigger: Onboarding kickoff; owners: Delivery, Markets; agents: RELAY, EMBER, BEACON; kind: action\n  Draft 30/60/90 + first-year success plan — value milestones, KPIs, target outcomes, governance forum, exec sponsors; align with client\n- [Projects] Determine project type between Closed-Won and project creation — object: Project (Type Setup); trigger: Opportunity Closed-Won; project record creation; owners: Sales Ops, Finance, Delivery; agents: RELAY, LEDGER, FORGE; kind: action\n  Bridge the gap between Closed-Won and project creation — confirm project type (T&M / FP-Milestone / FP-Others / Outcome-driven) inherited from contract classification, set up corresponding billing flag, PO consumption tracker, and rev-rec rule template before project goes live; SalesOps holds the SLA-tracked checklist so projects don't slip into delivery without the right financial scaffolding\n- [Revenue & Billing] SalesOps follow-up on project creation + rev-rec activation — object: Handoff SLA (Project + Rev-Rec); trigger: Closed-Won + N days elapsed without project / billing live; owners: Sales Ops, Manager Sales Ops, Finance; agents: RELAY, LEDGER, ECHO; kind: action\n  Sales Ops actively chases the project creation, financial setup, and revenue-recognition activation post-handoff — closes today's gap where deals close in SFDC but project / billing / rev-rec scaffolding lags; tracks SLA from Closed-Won to first invoice / first recognized revenue and escalates breaches\n- [Talent] Run weekly fulfillment connect (RMG + TA + Delivery) — object: Fulfillment Connect; trigger: Weekly cadence; owners: Manager Talent, Manager Delivery, Sales Ops; agents: VANGUARD, FORGE, RELAY, ECHO; kind: action\n  Run weekly cross-functional fulfillment connect with RMG (resource management), TA (talent acquisition), and Delivery to reconcile open FRFs, ramp-status, hire-pipeline, bench reallocation, and at-risk staffing across active handoffs; capture decisions, owners, and SLA breaches in a shared weekly fulfillment report\n- [Talent] Publish weekly fulfillment report — object: Fulfillment Report; trigger: Weekly fulfillment connect close; owners: Manager Talent, Manager Sales Ops; agents: VANGUARD, FORGE, ECHO, MERIDIAN; kind: action\n  Publish weekly fulfillment report — open FRFs by age / role / geo, fulfillment rate vs target, ramp-status by project, hire-vs-bench mix, location-gap risks, and exception list — to Markets / Practices / Delivery / Finance leadership\n- [Talent] Track Lever offer-to-start conversion against FRF closure — object: Offer-to-Start Tracking; trigger: Lever offer extended; daily until start date; owners: Manager Talent, Manager Delivery; agents: VANGUARD, COMPASS, ECHO; kind: action\n  Track Lever offer lifecycle (extended → signed → started) against the originating FRF; flag offer drop-outs, start-date slips, and counter-offers; raise risk alerts to Manager Talent and Manager Delivery when an FRF is at risk of slipping due to candidate fall-out so the team can re-route to bench or re-open recruiting early\n- [Talent] Onboard signed Lever candidate as Talent resource — object: Talent Onboarding (from Lever); trigger: Lever offer signed; owners: Talent, Manager Talent; agents: VANGUARD, FORGE, ORBIT; kind: handoff\n  On Lever offer-signed event, create or upsert the Talent resource record (skills, level, geo, practice, start date); link the new resource to the originating FRF and project; trigger ramp / certification plan; close the FRF and refresh bench and proactive-pipeline pockets so future demand sees the new supply\n### Stage 8: Delivery Validation\n- [Projects] Update project RAG status — object: Project / Engagement; trigger: WSR cycle; risk event; owners: Delivery; agents: HELM, SENTINEL; kind: action\n  Set red / amber / green status with reason and recovery action if not green\n- [Projects] Update milestone progress — object: Project Milestone; trigger: Milestone event; owners: Delivery; agents: HELM, CHRONO; kind: action\n  Capture milestone completion or slip with date and reason\n- [Talent] Update resource utilization — object: Project Resource; trigger: Timesheet cycle; owners: Delivery; agents: TIDE, VANGUARD; kind: action\n  Capture team hours, utilization, role-level burn\n- [Projects] Log risk / issue / action item — object: Risk / Issue / Action; trigger: Risk surfaced; owners: Delivery, Practices; agents: SENTINEL; kind: governance\n  Create record in Codex with type, severity, owner, due date, mitigation\n- [Projects] Submit / approve weekly status report — object: WSR; trigger: Weekly cycle; owners: Delivery; agents: SENTINEL, HELM; kind: decision\n  Capture status, RAG, progress, risks, asks for the week\n- [Revenue & Billing] Process invoice — object: Invoice; trigger: Billing milestone hit; owners: Finance, Delivery; agents: LEDGER; kind: action\n  Validate invoice against milestones / PO; approve for finance to send\n- [Revenue & Billing] Track PO balance — object: PO; trigger: PO balance check; owners: Finance, Delivery; agents: LEDGER; kind: action\n  Monitor remaining PO balance; trigger renewal request when below threshold\n- [Revenue & Billing] Track T&M PO exhaustion and trigger billing flag — object: PO (Exhaustion Flag); trigger: Daily PO burn-rate recompute on T&M projects; owners: Finance, Delivery, Markets; agents: LEDGER, SCRIBE, SENTINEL; kind: decision\n  On T&M contracts, continuously project PO consumption (billed hours × rate) against PO ceiling; when projected exhaustion crosses threshold (e.g., 80% / 90% / 100%) before SOW end, auto-raise billing flag — pause billing until new PO secured, request new PO from customer, and notify rep / Manager Delivery / Finance; closes today's leak where T&M work continues past PO without flag\n- [Revenue & Billing] Request new PO from customer — object: PO Request; trigger: PO ≥80% consumed; SOW remaining scope > zero; owners: Finance, Delivery, Markets; agents: LEDGER, FORGE, BEACON; kind: action\n  When existing PO is exhausted or near-exhausted, raise structured new-PO request to customer — captures remaining scope, projected effort, rate card, total ask, and target effective date; routes to customer PM + procurement; tracks SLA\n- [Revenue & Billing] Invoice FP-Milestone on milestone due date — object: Invoice (FP-Milestone); trigger: Milestone due date reached; owners: Finance, Delivery; agents: LEDGER, CHRONO, FORGE; kind: action\n  On FP-Milestone contracts, auto-trigger invoice generation on each milestone due date — pulls milestone amount from contract, validates milestone completion or eligibility, attaches evidence, routes to Delivery for sign-off and Finance for issue; no manual trigger needed once milestone date hits\n- [Revenue & Billing] Recognize revenue straight-line on FP-Others — object: Revenue Recognition (Straight-Line); trigger: Monthly close on active FP-Others engagement; owners: Finance; agents: LEDGER, RELAY; kind: action\n  For FP-Others contracts using straight-line method (e.g., outcome-driven / managed-service), spread contract value evenly across the engagement period and post recognized revenue per month regardless of invoicing cadence; reconcile to ASC 606\n- [Revenue & Billing] Recognize revenue on outcome / KPI achievement — object: Revenue Recognition (Outcome); trigger: Outcome / KPI evidence captured + validated; owners: Finance, Delivery; agents: LEDGER, HALO, CHRONO; kind: action\n  For outcome-driven FP-Others contracts, recognize revenue on KPI / outcome achievement events per contract — recognize tranche when measurable outcome is hit, validated, and customer-accepted; defer until evidence captured\n- [Projects] Run Finance EAC / ETC variance review — object: EAC / ETC Variance Review; trigger: Monthly close; mid-month if material variance; owners: Finance, Manager Finance, Manager Delivery; agents: LEDGER, HELM, ECHO; kind: decision\n  Finance reviews Estimate-at-Complete and Estimate-to-Complete variance against approved baseline each month — surfaces drift in cost, margin, and revenue projection; classifies cause (scope, rate, mix, utilization, hire ramp), agrees recovery / re-baseline action with Manager Delivery, and locks revised numbers for the close cycle\n- [Revenue & Billing] Track AR aging and trigger collection follow-up — object: AR Aging; trigger: Invoice age threshold crossed; weekly AR review; owners: Finance, Markets, Sales Ops; agents: LEDGER, BEACON, SCRIBE; kind: action\n  Track accounts-receivable aging buckets (current / 30 / 60 / 90 / 120+ days); auto-trigger structured follow-up cadence with customer accounts payable + project sponsor; escalate aged AR (>60 days) to Markets and Manager Finance; closes today's gap where AR delay isn't actively pursued until cash crunch\n- [Revenue & Billing] Escalate AR delay to leadership — object: AR Escalation; trigger: AR aging crosses leadership-escalation threshold; owners: Manager Finance, Manager Markets; agents: LEDGER, BEACON, AURORA; kind: action\n  Escalate AR aged beyond threshold (e.g., 90+ days) to Manager Finance + Manager Markets + executive sponsor; package payment history, customer contact log, and projected cash impact; coordinate joint customer escalation\n- [Projects] Capture CSAT / NPS survey — object: Survey Response; trigger: Survey cycle; milestone; owners: Delivery, Markets; agents: CHRONO; kind: trigger\n  Send and record CSAT / NPS at quarterly cadence and at milestones\n- [Revenue & Billing] Track gross margin — object: Project Financials; trigger: Monthly close; owners: Finance, Delivery; agents: LEDGER, HELM; kind: action\n  Track project gross margin vs plan; flag margin slip with cause (rate, mix, utilization, scope)\n- [Revenue & Billing] Recognize revenue per milestone / ASC 606 — object: Revenue Recognition; trigger: Milestone hit; close cycle; owners: Finance; agents: LEDGER, RELAY; kind: action\n  Recognize revenue per ASC 606 — milestone, % complete, or time-and-material — with audit trail\n- [Revenue & Billing] Detect and remediate revenue leakage — object: Revenue Leakage Register; trigger: Continuous; monthly leakage sweep; owners: Finance, Delivery; agents: LEDGER, SCRIBE; kind: trigger\n  Detect unbilled time, missed milestones, expired POs, and unapproved scope changes; route for recovery\n- [Revenue & Billing] Run revenue close — object: Revenue Close; trigger: Monthly / quarterly cadence; owners: Manager Finance; agents: LEDGER, RELAY; kind: action\n  Run monthly / quarterly revenue close — recognized vs invoiced vs collected reconciliation; sign-off\n- [Projects] Run steering committee review — object: Governance Forum; trigger: Cadence (monthly / quarterly); owners: Markets, Delivery; agents: HELM, BEACON, CHRONO; kind: decision\n  Run client steering committee — status, risks, decisions, asks; record minutes and action items\n- [Projects] Run project closeout / PIR — object: Project Closeout; trigger: Project end; phase end; owners: Delivery, Practices; agents: HELM, BEACON, SCRIBE; kind: action\n  Run project closeout and post-implementation review — outcomes vs baseline, lessons learned, reference / case-study capture\n- [Talent] Track project utilization — object: Utilization; trigger: Weekly cycle; owners: Talent, Delivery; agents: TIDE, VANGUARD; kind: action\n  Track billable / non-billable utilization at role and team level; flag under- / over-utilization with action\n- [Talent] Flag attrition risk on project — object: Talent Risk; trigger: Attrition signal; sentiment cue; owners: Talent, Manager Delivery; agents: TIDE, SCOUT, SCRIBE; kind: decision\n  Detect attrition-risk signals at role / project level; create retention action plan with backfill plan\n- [Projects] Govern escalation handling — object: Escalation Register; trigger: Escalation raised; owners: Manager Delivery, Manager Markets; agents: SENTINEL, BULWARK, BEACON; kind: governance\n  Govern escalation intake, severity classification, owner assignment, response SLA, and resolution sign-off\n### Stage 9: Account Expansion\n- [Talent] Interpret QBR (Quarterly Business Review) data into talent-supply narrative — object: QBR Insight (Talent); trigger: Quarterly QBR (Quarterly Business Review) cycle; monthly mini-readout; owners: Manager Talent; agents: VANGUARD, ECHO, COMPASS; kind: decision\n  Translate Talent QBR (Quarterly Business Review) data — utilization, bench aging, ramp readiness, attrition, certification coverage by practice and geo — into a decision-ready narrative; replace raw Excel data dumps with a curated brief that names the available-supply pockets, the at-risk pockets, and the recommended next steps for Markets and Practices\n- [Talent] Curate proactive bench pipeline by practice, skill, and geo — object: Proactive Bench Pipeline; trigger: Weekly bench review; QBR (Quarterly Business Review) cycle; bench-aging trigger; owners: Talent; agents: VANGUARD, FORGE, ORBIT; kind: action\n  Group available and near-bench resources into sellable supply pockets — for example, 5 Salesforce, 5 full-stack, 5 data-science roles in the US — sized by head-count, available date, billing window, and ramp readiness; tag each pocket with target client / industry profile and price band\n- [Talent] Push proactive bench pockets to Client Partner / Markets — object: Bench-Led Opportunity (Push); trigger: Curated bench pocket ready; account-fit match; owners: Talent, Markets; agents: VANGUARD, ORBIT, WEAVER; kind: action\n  Route curated bench pockets to the right Client Partner / Markets owner with account-fit recommendations — surface 'we have N resources in skill X available in geo Y, here are the accounts in your portfolio where they fit'; create a tracked sell-into-account task with an SLA on Markets follow-up and a feedback loop on accepted / passed pockets\n- [Talent] Track bench-pocket-to-account conversion outcomes — object: Bench Pipeline Outcomes; trigger: Monthly conversion review; QBR (Quarterly Business Review) cycle; owners: Manager Talent; agents: VANGUARD, ECHO, COMPASS; kind: action\n  Measure conversion of proactive bench pockets — pocket size, accounts pitched, opportunities created, win-rate, hours billed, time-to-bill; surface lift vs. baseline staffing motion and feed insights back into QBR (Quarterly Business Review) narrative and curation rules\n\n## AREA: Sales\n### Stage 1: Opportunity Signal Generation\n- [Leads] Capture inbound lead — object: Lead; trigger: Inbound action (form fill, event scan, referral); owners: Marketing, Alliances; agents: WAYFINDER, SCOUT; kind: trigger\n  Create lead record from web form, event scan, partner referral, or campaign engagement; tag source\n- [Leads] Create lead manually — object: Lead; trigger: Manual entry; owners: Marketing, Alliances; agents: ; kind: trigger\n  Add lead from offline source (executive intro, partner intro, social touch, conference card)\n- [Leads] Dedupe lead on creation — object: Lead (Dedup Match); trigger: Lead create / capture event; owners: Marketing, Alliances; agents: WAYFINDER, WEAVER; kind: decision\n  On lead create / capture, run fuzzy match against existing leads, contacts, and accounts (name, email domain, phone, company) and surface candidate matches with confidence score; auto-merge above high-confidence threshold, queue for steward review otherwise\n- [Leads] Enrich lead with firmographic data — object: Lead; trigger: Lead created; owners: Marketing; agents: WAYFINDER, WEAVER; kind: trigger\n  Auto-append company size, industry, revenue, geography, technographic data\n- [Leads] Score lead against ICP — object: Lead; trigger: Lead created / enriched; owners: Marketing; agents: FLINT, WAYFINDER; kind: decision\n  Compute fit score and intent score; route hot leads for SLA follow-up\n- [Leads] Convert lead to contact + opportunity — object: Lead → Contact + Opportunity; trigger: Lead reaches MQL threshold; owners: Markets; agents: FLINT, WEAVER; kind: action\n  Promote qualified lead into contact (linked to account) and create downstream opportunity\n- [Leads] Disqualify lead — object: Lead; trigger: Rep / agent disqualification; owners: Marketing; agents: FLINT; kind: action\n  Mark lead disqualified with reason code (out-of-ICP, no budget, no intent)\n- [Accounts] Create account record — object: Account; trigger: Net-new account identified; owners: Sales Ops; agents: BEACON; kind: trigger\n  Create net-new account with name, industry, geography, hierarchy parent\n- [Accounts] Dedupe account on creation — object: Account (Dedup Match); trigger: Account create event; quarterly hygiene sweep; owners: Sales Ops; agents: ORBIT, BEACON; kind: decision\n  Run fuzzy match across legal name, DBA, website domain, tax ID, parent hierarchy, and address against existing accounts; auto-block exact duplicates, surface candidate matches with confidence score, queue ambiguous matches for steward; merge approved duplicates into surviving golden record\n- [Accounts] Govern dedup match thresholds and merge policy — object: Dedup Policy; trigger: Quarterly governance review; exception spike; owners: Manager Sales Ops; agents: ORBIT, ATLAS; kind: decision\n  Set and review match-confidence thresholds, survivorship rules, and merge-approval policy across leads, contacts, accounts, opportunities, and FRFs; audit exceptions\n- [Accounts] Update account hierarchy — object: Account; trigger: M&A event, structural change; owners: Sales Ops; agents: ; kind: action\n  Set parent / child relationships, BU structure, account family\n- [Accounts] Assign account owner and coverage team — object: Account; trigger: Account creation; territory rebalance; owners: Sales Ops, Manager Markets; agents: ; kind: action\n  Set primary owner, named account team, partner BU coverage\n- [Accounts] Assign practices coverage to account — object: Account Practice Coverage; trigger: Account creation / refresh; owners: Manager Practices; agents: ATLAS, CONDUIT; kind: action\n  Assign practice owners / SMEs to accounts for solution coverage\n- [Contacts] Create contact / stakeholder — object: Contact; trigger: New stakeholder identified; owners: Markets, Practices; agents: WEAVER; kind: trigger\n  Add named contact, link to account, capture role and persona\n- [Contacts] Dedupe contact on creation — object: Contact (Dedup Match); trigger: Contact create event; bulk import; owners: Markets, Practices; agents: WEAVER, ORBIT; kind: decision\n  Match on email, normalized name, mobile, LinkedIn handle, and linked account; auto-merge exact matches into one contact, queue near-matches for owner review; preserve activity, roles, and committee mappings from all duplicates onto surviving record\n- [Contacts] Map contact to buying-committee role — object: Contact; trigger: Contact identified in opportunity context; owners: Markets; agents: WEAVER, AURORA; kind: action\n  Tag champion, decision maker, economic buyer, influencer, blocker\n- [Accounts] Log inbound activity — object: Activity; trigger: Touchpoint occurs; owners: All sales personas; agents: ; kind: action\n  Record email, call, meeting, social touch, web visit against account or contact\n- [Partners] Monitor inbound / outbound email for sales signals — object: Email Signal; trigger: Email landed or sent on monitored mailbox; owners: Marketing, Markets, Practices, Alliances; agents: SCRIBE, BEACON, WAYFINDER, WEAVER; kind: trigger\n  Auto-scan email threads (with consent + retention policy) for new-lead intent, account triggers, exec-move language, net-new contacts, partner introductions, and competitive mentions; classify and route to BEACON / WAYFINDER / WEAVER for downstream action\n- [Accounts] Monitor Teams / Zoom meeting transcripts for sales signals — object: Meeting Signal; trigger: Meeting transcript available; owners: Markets, Practices, Delivery; agents: SCRIBE, WEAVER, FLINT, AURORA; kind: trigger\n  Auto-process meeting transcripts to extract net-new contacts, attendee changes, buying-committee shifts, intent / champion language, competitive mentions, and follow-up commitments; route signals to FLINT / WEAVER / AURORA / PRISM\n- [Accounts] Govern email / meeting-signal monitoring policy — object: Signal Monitoring Policy; trigger: Quarterly governance review; consent or retention change; owners: Manager Sales Ops, Legal; agents: SCRIBE, WARDEN; kind: governance\n  Govern privacy, consent, retention, PII handling, and routing rules for email and meeting-transcript monitoring; audit exception handling and access\n- [Accounts] Schedule outbound activity — object: Activity; trigger: Cadence step due; rep planning; owners: Markets; agents: BEACON; kind: action\n  Set up call, meeting, email sequence; link to account and contact\n- [Accounts] Tag account with priority tier — object: Account; trigger: Annual planning; signal density change; owners: Manager Markets; agents: BEACON, ORBIT; kind: trigger\n  Mark account tier-1 / tier-2 / tier-3 based on strategy and signal density\n- [Events] Request marketing coverage for industry event — object: Marketing Request; trigger: Event identified; owners: Manager Markets, Manager Practices; agents: PULSE; kind: action\n  Submit request to Marketing for event presence, speaker slot, or sponsorship\n- [Campaigns] Request ABM on priority account — object: Marketing Request; trigger: Priority account identified; signal density; owners: Markets; agents: ORBIT, WEAVER; kind: action\n  Submit request to Marketing for account-based marketing motion on a priority / tier-1 account ahead of opportunity creation\n- [Campaigns] Request campaign on solution / archetype — object: Marketing Request; trigger: New solution / POV ready; owners: Practices; agents: PULSE; kind: action\n  Submit request for Marketing to run a solution-led or archetype-led campaign\n- [Campaigns] Design campaign / ABM motion — object: Campaign / ABM Motion (Design); trigger: New solution, archetype, or priority account request; quarterly plan refresh; owners: Marketing; agents: PULSE, WAYFINDER, WEAVER, PRISM; kind: action\n  Define audience (ICP / tier / persona), message, channels, offer, cadence, and success metrics for a campaign or ABM motion; build creative, landing pages, and play-cards; align to Markets / Practices request where applicable\n- [Campaigns] Approve campaign / ABM motion design — object: Campaign / ABM Motion (Approval); trigger: Campaign / ABM design submitted; owners: Manager Marketing; agents: PULSE, ECHO; kind: decision\n  Review campaign / ABM design against strategy, budget, ICP, and ROI thresholds before launch; approve or send back with rework notes\n- [Campaigns] Run campaign / ABM motion — object: Campaign / ABM Motion (Execution); trigger: Approved campaign / ABM motion; scheduled launch; owners: Marketing; agents: PULSE, WAYFINDER; kind: action\n  Execute campaign / ABM motion on PULSE's calendar — demand-gen plays, events, field marketing, ABM bursts on Markets-requested priority accounts; manage budget, channels, and creative rotation in flight\n- [Campaigns] Track campaign / ABM attribution and ROI metrics — object: Campaign / ABM Attribution; trigger: Campaign in flight; weekly + close cycle; owners: Marketing; agents: PULSE, WAYFINDER, ECHO; kind: action\n  Track attribution from touch to lead to opportunity; capture MQL→SQL, pipeline contribution, cost-per-opportunity, win-rate lift, and influenced revenue by motion and tier\n- [Campaigns] Inspect and govern campaign / ABM ROI — object: Campaign / ABM ROI (Governance); trigger: Monthly ROI review; quarterly investment rebalance; owners: Manager Marketing; agents: PULSE, ECHO, ORBIT; kind: governance\n  Inspect ROI across campaigns / ABM motions — pipeline contribution, MQL→SQL, cost-per-opp, win rate by motion / tier; govern attribution model, ROI thresholds, and kill / scale criteria; rebalance budget across tiers and channels\n- [Solutions] Submit POV / thought leadership for review — object: Content; trigger: POV / TL drafted; owners: Markets, Practices; agents: PRISM; kind: decision\n  Draft point-of-view or thought-leadership content; route to Marketing for approval\n- [Solutions] Approve and publish POV / thought leadership — object: Content; trigger: POV / TL submitted for review; owners: Marketing; agents: PRISM, PULSE; kind: decision\n  Review, approve, and publish POV / thought-leadership content through Marketing channels\n- [Leads] Maintain ICP and lead-scoring model — object: ICP / Lead-Scoring Model; trigger: Quarterly ICP review; major market shift; owners: Manager Marketing, Manager Markets; agents: WAYFINDER, FLINT; kind: action\n  Define and refresh ideal-customer profile (ICP), persona definitions, intent signals, and lead-scoring rules with weights and thresholds; align Marketing + Markets on MQL / SAL / SQL definitions and gates\n- [Leads] Promote lead MQL → SAL — object: Lead (Stage Advance); trigger: MQL threshold reached; sales-acceptance SLA started; owners: Marketing; agents: WAYFINDER, FLINT; kind: action\n  Promote lead from MQL to SAL on score + intent + activity threshold; assign to Markets owner with SLA timer and routing rules\n- [Leads] Accept / reject SAL — object: Lead (Stage Decision); trigger: SAL assigned; owners: Markets; agents: FLINT; kind: action\n  Markets owner accepts or rejects the SAL within SLA; rejection sends lead back to Marketing with reason code (out-of-ICP, no intent, bad data, timing, duplicate)\n- [Leads] Govern lead-acceptance SLA and recycle policy — object: Lead SLA / Recycle Policy; trigger: Monthly SLA review; rejection-rate spike; owners: Manager Marketing, Manager Markets; agents: FLINT, ECHO; kind: governance\n  Set lead-acceptance SLA (e.g., 24h tier-1, 72h tier-2/3), reject-reason taxonomy, and recycle workflow; inspect SLA compliance and rejection-mix; rebalance routing\n- [Leads] Nurture not-yet-ready lead — object: Lead Nurture; trigger: Lead below SAL threshold but in-ICP; owners: Marketing; agents: PULSE, FLINT; kind: action\n  Place not-yet-ready lead into nurture cadence (content series, retargeting, lifecycle email) with re-scoring on engagement\n- [Leads] Recycle disqualified or returned lead — object: Lead Nurture; trigger: Lead disqualified or SAL rejected; owners: Marketing; agents: PULSE, EMBER, FLINT; kind: action\n  Re-route disqualified or SAL-returned leads into reactivation campaign with reason-informed messaging; re-score and route on re-engagement\n- [Leads] Match lead to account — object: Lead ↔ Account Link; trigger: Lead create event; owners: Sales Ops, Marketing; agents: WAYFINDER, ORBIT; kind: decision\n  Auto-associate lead to a known account on creation (domain, firmographic, manual override) so lead signals roll up to account-level scoring and ABM context\n- [Campaigns] Maintain target-account list (TAL) and ABM tiers — object: Target Account List; trigger: Quarterly TAL refresh; tier-change trigger; owners: Marketing, Manager Markets; agents: ORBIT, WAYFINDER; kind: action\n  Maintain TAL with assigned ABM tier (1:1, 1:few, 1:many) based on ICP, signal density, whitespace, and strategic fit; refresh on quarterly cadence\n- [Campaigns] Approve TAL and ABM tier assignments — object: Approval (TAL); trigger: Quarterly TAL refresh; owners: Manager Marketing, Manager Markets; agents: ORBIT, ECHO; kind: decision\n  Joint review and approval of TAL composition and 1:1 / 1:few / 1:many tier assignments; align ABM investment with coverage strategy\n- [Events] Plan annual / quarterly event calendar — object: Event Calendar; trigger: Annual planning; quarterly refresh; owners: Marketing; agents: PULSE, ORBIT; kind: action\n  Build event slate — industry conferences, sponsorships, owned events, customer events, advisory boards — by audience, budget, strategic theme, and target outcomes\n- [Events] Approve event slate and budget — object: Approval (Event Slate); trigger: Event calendar proposal; owners: Manager Marketing; agents: PULSE, ECHO; kind: decision\n  Approve event mix, sponsorship levels, speaker commitments, and budget envelope against pipeline and brand goals\n- [Events] Submit speaker / abstract / sponsorship — object: Event Submission; trigger: Event CFP open; sponsorship deadline; owners: Practices, Marketing; agents: PRISM, PULSE; kind: trigger\n  Submit speaker bios, session abstracts, sponsorship asks, and analyst-track participation against CFP and sponsorship deadlines\n- [Events] Run pre-event outreach and ABM — object: Event Pre-Outreach; trigger: Event ~ 6-8 weeks out; owners: Marketing, Markets; agents: PULSE, ORBIT, WEAVER; kind: action\n  Pre-event outreach to TAL contacts attending the event — meeting-booking, exec dinner invites, hosted-suite RSVPs, and ABM surround on the attendee list\n- [Events] Run at-event engagement — object: Event Engagement; trigger: Event live; owners: Marketing, Markets, Practices; agents: PULSE, WAYFINDER, WEAVER; kind: action\n  On-site activation — booth scans, demo bookings, exec meetings, hosted-suite engagements, content capture for replay\n- [Events] Run post-event nurture — object: Event Post-Nurture; trigger: Event ends + 1 day; owners: Marketing; agents: PULSE, FLINT, EMBER; kind: action\n  Post-event handoff — scanned-lead routing, follow-up cadence (meeting requests + content), demo recordings, deal-team retros, recycled-lead nurture, ROI calc\n- [Events] Run customer event / advisory board — object: Customer Event; trigger: Quarterly / annual cadence; owners: Manager Marketing, Manager Markets; agents: PULSE, EMBER, BEACON; kind: action\n  Run customer-only events (executive roundtables, advisory boards, customer summits) for retention, advocacy, and roadmap feedback\n- [Accounts] Merge accounts (M&A or duplicate cleanup) — object: Account (Merge); trigger: M&A close; steward escalation; owners: Manager Sales Ops; agents: ORBIT, BEACON, WARDEN; kind: action\n  Merge two accounts into a surviving golden record on M&A close or steward review of duplicate; carry forward open opps, contacts, contracts, activities; honor survivorship rules and log audit trail\n- [Accounts] Split / re-parent account — object: Account (Split / Re-parent); trigger: Divestiture; reorg event; owners: Manager Sales Ops; agents: ORBIT; kind: action\n  Split an account into multiple legal entities (divestiture) or re-parent in hierarchy; carry forward relationships and history with audit log\n- [Contacts] Refresh / verify contact (anti-stale) — object: Contact (Refresh); trigger: Quarterly hygiene; bounce / role-change signal; owners: Sales Ops, Markets; agents: WEAVER, ORBIT; kind: decision\n  Periodically verify contact email, role, and active employment; deactivate contacts who left the company; suggest replacements from new-hire signals\n- [Contacts] Mark contact left company — object: Contact (Departure); trigger: Departure signal (LinkedIn, bounce, news); owners: Markets, Sales Ops; agents: WEAVER, BEACON; kind: action\n  Flag contact as departed; capture LinkedIn / news evidence; pause cadences; trigger replacement-stakeholder lookup\n- [Accounts] Govern data-quality rules and stewardship — object: Data Quality Policy; trigger: Quarterly DQ review; KPI drift; owners: Manager Sales Ops; agents: ORBIT; kind: governance\n  Set validation rules (required fields, format, picklists), data-quality KPIs (completeness, uniqueness, accuracy, timeliness), and steward workflows for exception handling\n- [Accounts] Govern PII, consent, and data retention — object: Privacy / Retention Policy; trigger: Annual privacy review; regulation change; owners: Manager Legal, Manager Sales Ops; agents: WARDEN, ORBIT; kind: governance\n  Govern PII tagging, consent capture (cookie, email, telephone), data residency, retention periods, right-to-erasure workflow, and breach response per applicable regulation (GDPR / CCPA / regional)\n- [Accounts] Govern data-access roles and permissions — object: Access Policy; trigger: Quarterly access review; role change; owners: Manager Sales Ops, Manager Legal; agents: WARDEN, ORBIT; kind: governance\n  Define role-based access (RBAC) and field-level security across CRM, marketing, contract, talent, and project systems; review on joiner / mover / leaver events\n- [Accounts] Audit data-quality KPIs and exceptions — object: DQ Audit; trigger: Monthly DQ review; owners: Manager Sales Ops; agents: ORBIT, ECHO; kind: governance\n  Inspect DQ KPI dashboard (completeness, dedup rate, stale-record %, SLA breaches), steward exception queue, and audit-trail health; rebalance steward capacity\n- [Partners] Maintain partner profile (master record) — object: Partner Profile (Master); trigger: Partner onboarded; quarterly review; stakeholder change; owners: Alliances, Manager Alliances; agents: ATLAS, BULWARK; kind: action\n  Maintain master record for each named partner (Microsoft, AWS, GCP, Databricks, Snowflake, …) — partner identity, Brillio-side partner director / equal-and-delivery owner, signed agreements, program tier, key dates, joint-GTM theses, and the alliance lead's one-on-one stakeholders on the partner side\n- [Partners] Maintain partner-stakeholder cadence (1:1 hygiene) — object: Partner Stakeholder Cadence; trigger: Weekly / bi-weekly cadence; ad-hoc ask; owners: Alliances; agents: ATLAS, SCRIBE, BEACON; kind: action\n  Alliance lead runs one-on-one cadence with partner-side counterparts (partner alliance manager, partner-program manager, partner-side AE leadership); track meetings, asks, follow-ups, and relationship-health signal\n- [Partners] Register partner competencies and solution designations — object: Partner Designation Register; trigger: Designation earned / renewed; annual partner program review; owners: Alliances, Practices; agents: ATLAS, MERIDIAN, FORGE; kind: action\n  Track competencies and solution designations Brillio holds with each partner (e.g., AWS Premier Tier, Microsoft Solutions Partner designations, GCP specializations, Databricks Elite); capture requirements, evidence, renewal dates, and gaps to next tier\n- [Partners] Track partner trainings and certification coverage — object: Partner Training / Cert Coverage; trigger: Certification cycle; quarterly capability review; owners: Alliances, Talent; agents: ATLAS, MERIDIAN, VANGUARD; kind: action\n  Track partner-led trainings and certifications across Brillio practices — coverage % by role / skill, gap to next-tier requirement, upcoming expirations; align with Talent's certification plan\n- [Events] Maintain partner-events calendar — object: Partner Event; trigger: Partner event published; sponsorship decision; owners: Alliances, Marketing; agents: ATLAS, PULSE, WAYFINDER; kind: action\n  Maintain partner-events calendar (Microsoft Ignite, AWS re:Invent, Google Next, Databricks Summit, partner roadshows) plus Brillio sponsorship / speaking / booth presence; map targeted customers and pre-event outreach\n- [Partners] Map customers I'm influencing (per partner) — object: Partner Influence Map (Active); trigger: Opportunity tagged with partner motion; weekly refresh; owners: Alliances; agents: ATLAS, ORBIT, BEACON; kind: action\n  For each named partner, surface the Brillio customers the alliance lead is actively co-engaging — joint plays, co-sell opportunities, named accounts; lets the alliance lead see their live influence footprint\n- [Accounts] Identify whitespace influence targets (could-be-influencing) — object: Partner Whitespace (Influence Target); trigger: Quarterly whitespace pass; partner-shop intent signal; owners: Alliances, Markets; agents: ATLAS, ORBIT, BEACON, EMBER; kind: action\n  For each partner, identify Brillio customers that run the partner's platform (e.g., Microsoft shops, AWS shops, GCP shops) but aren't currently in a joint play — surface as expansion / co-sell whitespace for the alliance lead\n- [Partners] Map partner-side AE coverage on Brillio accounts — object: Partner AE Coverage; trigger: Account onboarded; partner-side ownership change; owners: Alliances, Markets; agents: ATLAS, ORBIT, BEACON; kind: action\n  For each Brillio named account, map the partner-side AE / CSM / partner-program manager who covers it (which MS seller covers Acme? which AWS partner manager? GCP CSM?); align rhythms and joint-account plans\n- [Partners] Track partner-platform KPIs (e.g., Azure consumption) — object: Partner KPI (Consumption / Spend); trigger: Monthly partner KPI refresh; QBR cycle; owners: Alliances, Finance; agents: ATLAS, MERIDIAN, LEDGER; kind: action\n  Track per-partner KPIs that matter to that partner — Azure consumption / ACR for Microsoft, AWS spend, GCP commit utilization, Databricks DBU run-rate, Snowflake credit usage — by Brillio-influenced customer; reconcile against partner-side scorecard\n### Stage 2: Opportunity Qualification\n- [Opportunities] Create opportunity — object: Opportunity; trigger: Lead converted; rep / practice / delivery identifies new opportunity; owners: Markets, Practices, Delivery; agents: FLINT; kind: trigger\n  Create opportunity record linked to account and primary contact; initial stage = Qualification\n- [Accounts] Dedupe opportunity on creation — object: Opportunity (Dedup Match); trigger: Opportunity create event; owners: Markets, Practices, Delivery; agents: ATLAS, CONDUIT; kind: decision\n  Match against open / recently-closed opportunities on the same account by solution, scope keywords, buying-committee overlap, and close-date window; surface candidate duplicates with confidence score; require owner reconciliation before activation (merge, link as related, or override with justification)\n- [Opportunities] Set opportunity stage, close date, amount, currency — object: Opportunity; trigger: Opportunity created or updated; owners: Markets; agents: COMPASS; kind: action\n  Capture stage, expected close, expected amount, currency, and probability\n- [Opportunities] Tag opportunity type — new business / renewal / expansion / re-compete — object: Opportunity (Type Tag); trigger: Opportunity created or type changed; owners: Markets; agents: WAYFINDER, BEACON, EMBER, ORBIT; kind: trigger\n  Tag every opportunity by type — New Business (new logo), Renewal (extension of existing contract), Expansion (cross-sell / upsell in existing account), Re-compete (incumbent defending against RFP / RFI) — to drive lifecycle, qualification, approval, and reporting differences\n- [Opportunities] Run new-business qualification motion — object: Opportunity (New Business); trigger: Opportunity tagged New Business; qualification entry; owners: Markets, Manager Markets; agents: WEAVER, CONDUIT, FLINT, BEACON; kind: action\n  Run new-logo or new-buying-center qualification — Champion build, decision process, MEDDPICC depth, competitive displacement, paper-process unknowns; SLA cycle = standard\n- [Opportunities] Run renewal-specific qualification motion — object: Opportunity (Renewal); trigger: Renewal opportunity entered qualification (auto-created at T-180); owners: Markets, Manager Markets; agents: EMBER, WARDEN, BEACON, ECHO; kind: action\n  Run renewal-focused qualification — incumbency strength, value delivered to date, change drivers, sponsor continuity, competitive risk, uplift / downsell exposure, renewal paper readiness; SLA cycle = compressed (start at T-180 to contract end)\n- [Accounts] Run expansion / cross-sell qualification motion — object: Opportunity (Expansion); trigger: Opportunity tagged Expansion; qualification entry; owners: Markets, Practices; agents: ORBIT, PRISM, BEACON; kind: expand\n  Run expansion qualification on installed accounts — whitespace map, sponsor strength, success-story leverage, attach to existing SOW vs new SOW path, partner-influence option\n- [Opportunities] Govern motion playbooks — new business vs renewal vs expansion — object: Motion Playbook (Governance); trigger: Quarterly motion review; policy change; owners: Manager Markets, Manager Sales Ops; agents: WARDEN, BULWARK, BEACON; kind: governance\n  Govern playbook, stage-gate exit criteria, approval routing, deal-review cadence, and forecast-category rules that differ between New Business, Renewal, Expansion, and Re-compete motions\n- [Opportunities] Set opportunity size tier and deal-team roster — object: Opportunity; trigger: Qualification kickoff; owners: Markets; agents: ; kind: action\n  Tier the opportunity (Large / Mid / Standard, per Brillio's size taxonomy) and assign sponsors, owners, deal team\n- [Opportunities] Classify deal by size (Large / Mid / Standard) — object: Opportunity (Size Tier); trigger: Opportunity created or amount changed; owners: Markets, Sales Ops; agents: BEACON, FLINT, COMPASS; kind: action\n  Auto-classify opportunity by TCV — Large ($10M+), Mid ($2M-$10M), Standard (<$2M) — per Brillio's deal-size taxonomy; size drives notification routing, approval depth, deal-review cadence, and exec-engagement model; reclassify on amount change\n- [Opportunities] Route size-based notifications to leadership — object: Notification (Size Tier); trigger: Deal size classified or upgraded; owners: Sales Ops, Manager Markets; agents: BEACON, FLINT, AURORA; kind: action\n  On deal size classification, fan out notifications and engagement triggers — Large deals (CEO / president visibility + executive sponsor assignment), Mid deals (Manager Markets + Practice lead engagement), Standard deals (rep + manager only); refresh routing when tier flips\n- [Contacts] Enforce primary contact / sponsor on opportunity — object: Opportunity (Contact Enforcement); trigger: Stage advance attempt; nightly DQ sweep; owners: Markets, Sales Ops; agents: WEAVER, FLINT, ORBIT; kind: governance\n  Block opportunity from advancing past Qualification stage until at least one named contact / sponsor is linked with role (Champion / Economic Buyer / Decision Maker); auto-prompt rep if missing; surface as data-quality exception to Sales Ops if forced through\n- [Opportunities] Link Teams / Zoom / email conversations to opportunity — object: Opportunity Activity Link; trigger: Meeting held; email landed on monitored mailbox; owners: Markets, Practices, Sales Ops; agents: SCRIBE, WEAVER, FLINT; kind: action\n  Auto-link client conversations (Teams meetings, Zoom calls, email threads) to the relevant opportunity record using attendee match, sponsor email, and subject pattern; close the SFDC-vs-conversation visibility gap so deal context (commitments, blockers, sentiment) is captured against the opp without rep re-entry\n- [Opportunities] Add buying-committee members — object: Opportunity Contact Role; trigger: Discovery meeting; org research; owners: Markets; agents: WEAVER, AURORA; kind: action\n  Link multiple contacts as committee with role, influence, intent\n- [Opportunities] Request pull-in on opportunity — object: Opportunity Pull-in Request; trigger: Solution-fit signal; owners: Practices, Manager Practices; agents: CONDUIT; kind: action\n  Practice solution lead requests pull-in to an active opportunity to add solution coverage\n- [Opportunities] Pull in practices to opportunity — object: Opportunity Team Member; trigger: Solution coverage needed; practice pull-in approved; owners: Markets, Manager Markets; agents: CONDUIT, ATLAS; kind: action\n  Add practice / solution team to opportunity; assign solution owner\n- [Campaigns] Request ABM on opportunity — object: Marketing Request; trigger: Active opportunity; tier-1 account; owners: Markets; agents: ORBIT, WEAVER; kind: action\n  Submit request to Marketing for account-based marketing motion on the opportunity\n- [Campaigns] Run on-opportunity ABM motion — object: Campaign / ABM Motion (Execution); trigger: Approved on-opportunity ABM request; owners: Marketing; agents: PULSE, WEAVER, ORBIT; kind: action\n  Execute on-opportunity ABM motion against the buying committee — targeted content, exec engagement, paid surround, and orchestrated outreach in support of an active opportunity\n- [Campaigns] Inspect and govern on-opportunity ABM ROI — object: Campaign / ABM ROI (Governance); trigger: Weekly on-opportunity ABM review; opportunity stage change; owners: Manager Marketing; agents: PULSE, ECHO, ORBIT; kind: governance\n  Inspect on-opportunity ABM ROI — pipeline acceleration, win-rate lift, committee-coverage gain — and govern continuation, scale, or kill criteria per motion\n- [Opportunities] Log discovery meeting — object: Activity; trigger: Discovery meeting held; owners: Markets, Practices; agents: FLINT; kind: action\n  Record attendees, agenda, notes, next steps; link to opportunity\n- [Opportunities] Submit go / no-go decision — object: Opportunity; trigger: Qualification SLA reached; owners: Markets; agents: FLINT, AURORA; kind: trigger\n  Mark opportunity qualified / disqualified with reason; trigger downstream stage\n- [Accounts] Auto-update qualification from email + meeting signals — object: Opportunity (Auto-Update); trigger: Email / transcript signal classified as qualification update; owners: Markets, Practices; agents: SCRIBE, FLINT, WEAVER, AURORA; kind: action\n  SCRIBE extracts MEDDPICC inputs, decision-process notes, buying-committee changes, and competitive intel from email + meeting transcripts; auto-updates opportunity fields and routes net-new contact / stakeholder changes to WEAVER\n- [Opportunities] Capture MEDDPICC qualifier fields — object: Opportunity (MEDDPICC); trigger: Qualification kickoff; stage advance; owners: Markets, Practices; agents: FLINT, AURORA; kind: trigger\n  Capture Metrics, Economic Buyer, Decision Criteria, Decision Process, Paper Process, Identified Pain, Champion, and Competition on the opportunity record; refresh at every stage gate\n- [Opportunities] Update competitor on opportunity — object: Opportunity Competitor; trigger: Competitive intel update; owners: Markets, Practices; agents: PRISM, AURORA; kind: action\n  Refresh named competitor(s), their position, last move, and counter-strategy on the opportunity record\n- [Opportunities] Approve stage advancement (Large) — object: Approval (Stage Gate); trigger: Large opportunity ready to advance; owners: Manager Markets; agents: FLINT, AURORA; kind: decision\n  Manager approves opportunity advancement past Qualification on Large deals; enforces stage-gate exit criteria\n- [Opportunities] Run deal review (Large / Mid) — object: Activity (Deal Review); trigger: Weekly Large-deal cadence; on-demand for Mid; owners: Manager Markets; agents: FLINT, AURORA, COMPASS; kind: decision\n  Conduct deal review with deal team — MEDDPICC gaps, decision-process risks, win plan, next actions; capture commitments and follow-ups\n### Stage 3: Solution Strategy\n- [Solutions] Link solution(s) to opportunity — object: Opportunity Solution; trigger: Solution-strategy stage entry; owners: Practices, Manager Practices; agents: CONDUIT; kind: action\n  Attach one or more solutions / offerings from catalog with attach percentage (optional — opportunity can progress without solution attached)\n- [Solutions] Capture value proposition — object: Opportunity (Custom Fields); trigger: Solution-strategy review; owners: Practices, Markets; agents: CONDUIT, PRISM; kind: trigger\n  Record measurable client outcome, value hypothesis, success criteria\n- [Opportunities] Attach competitive intelligence — object: Opportunity Competitor; trigger: Solution-strategy kickoff; owners: Marketing; agents: PRISM; kind: action\n  Add incumbent, likely challengers, prior pitch / pricing posture, displacement story\n- [Opportunities] Attach proof-point references — object: Opportunity Reference; trigger: Solution-strategy review; owners: Practices, Marketing; agents: PRISM, BEACON; kind: action\n  Link past case studies, references, analog wins to the opportunity\n- [Solutions] Schedule client strategy review — object: Activity; trigger: Solution-strategy lock approaching; owners: Markets, Practices; agents: ; kind: decision\n  Set up workshop with client champion + economic buyer to validate solution direction\n- [Solutions] Set solution-fit validation score — object: Opportunity (Custom Fields); trigger: Strategy review outcome; owners: Practices; agents: CONDUIT; kind: decision\n  Record client-validated solution-fit score; flag gaps for follow-up\n- [Solutions] Define / version solution in catalog — object: Solution Catalog Entry; trigger: New solution authored; capability change; owners: Practices; agents: CONDUIT, PRISM; kind: action\n  Author a solution or archetype in the catalog with capabilities, value drivers, ICP, pricing band, delivery model, KPIs, and reference architecture; version on material change\n- [Solutions] Approve solution catalog entry — object: Approval (Solution Catalog); trigger: Solution submitted for catalog; owners: Manager Practices; agents: CONDUIT, PRISM; kind: decision\n  Review and approve new or versioned solution / archetype against portfolio strategy, margin band, and reuse readiness; publish to catalog on approval\n- [Solutions] Maintain archetype playbook library — object: Archetype Playbook; trigger: Quarterly playbook refresh; post-mortem insight; owners: Practices; agents: CONDUIT, PRISM, EMBER; kind: governance\n  Maintain archetype-led playbooks (sales pitch, qualification questions, proof-points, pricing, delivery shape) for top archetypes; refresh on win-loss insights\n- [Solutions] Sunset / retire solution — object: Solution Catalog Entry; trigger: Strategy decision to sunset; market shift; owners: Manager Practices; agents: CONDUIT, EMBER; kind: action\n  Mark solution as deprecated; close new-opportunity attach; manage active opportunities through closure; capture lessons into adjacent solutions\n- [Solutions] Tag opportunity to solution archetype — object: Opportunity Archetype; trigger: Solution-strategy review; owners: Practices; agents: CONDUIT, PRISM; kind: trigger\n  Associate opportunity to one or more archetype patterns from the library; surfaces analog wins, scope shortcuts, and risk patterns to the deal team\n- [Solutions] Surface case study in pursuit, RFP, and proposal — object: Reference Reuse Match; trigger: Opportunity created; RFP received; proposal cycle; owners: Markets, Practices, Marketing; agents: PRISM, BEACON, EMBER; kind: trigger\n  AI-match active opportunities (industry, archetype, deal size, buyer outcome) to the reference catalog and surface the strongest case studies into discovery briefs, proposals, RFP responses, and battle-cards; track which references are used per deal and feed win / loss back into the catalog\n### Stage 4: Deal Shaping\n- [Partners] Add cross-tower deal team — object: Opportunity Team Member; trigger: Deal-shaping stage entry; owners: Markets; agents: CONDUIT; kind: action\n  Add solution lead, delivery lead, partner lead, alliance manager to deal team\n- [Opportunities] Create / version proposal — object: Proposal; trigger: Deal-shaping milestone; owners: Markets, Practices; agents: FORGE; kind: trigger\n  Draft and version proposal document; track revisions\n- [Contracts] Draft and attach SOW — object: SOW; trigger: Proposal accepted by client; owners: Practices, Delivery; agents: FORGE; kind: action\n  Generate SOW from template; capture scope, deliverables, schedule, assumptions\n- [Contracts] Attach customer SOW template to account / opportunity — object: SOW Template; trigger: Customer paper provided; owners: Markets; agents: WARDEN; kind: action\n  Upload customer-paper SOW template and link to account and opportunity for reuse\n- [Contracts] Initiate MSA for new account — object: Contract (MSA); trigger: New-account deal shape kickoff; owners: Markets, Manager Markets; agents: WARDEN; kind: action\n  Start MSA workflow for net-new account; route initial draft to Legal for review\n- [Contracts] Facilitate MSA execution — object: Contract (MSA); trigger: MSA in negotiation; owners: Markets, Manager Markets; agents: WARDEN; kind: action\n  Coordinate redlines, approvals, and signatures across Markets, Legal, Finance, and the client\n- [Opportunities] Brief executive leadership on Large deal — object: Activity (Exec Briefing); trigger: Large deal approaching commercial structuring; owners: Markets, Practices; agents: BEACON, AURORA; kind: handoff\n  Prepare and deliver exec briefing on Large deal scope, risk, commercials, and ask\n- [Opportunities] Approve deal shape — object: Approval; trigger: Deal shape lock; owners: Delivery; agents: VANGUARD, SENTINEL; kind: decision\n  Delivery signs off on shape feasibility (team, timeline, risk) before commercial structuring\n- [Opportunities] Log deal-shaping workshop — object: Activity; trigger: Workshop held; owners: Markets; agents: ; kind: action\n  Record client workshop with attendees, scope decisions, action items\n- [Forecasts] Update win plan — object: Opportunity Win Plan; trigger: Deal-shaping or commit review; owners: Markets; agents: AURORA, CONDUIT; kind: action\n  Capture win themes, key actions, owners, dates; track to closure\n- [Partners] Identify partner attachment — object: Opportunity Partner; trigger: Partner contribution identified; owners: Alliances; agents: ATLAS, BULWARK; kind: action\n  Tag opportunity with attached alliance partner(s) and motion (co-sell, resell, influence)\n- [Accounts] Detect SOW / MSA / FRF references in email + meetings — object: Deal Signal; trigger: Email / transcript classified as SOW / MSA / pricing / FRF reference; owners: Markets, Practices, Delivery, Legal, Finance; agents: SCRIBE, WARDEN, VAULT, FORGE, VANGUARD; kind: trigger\n  SCRIBE surfaces mentions of SOW scope, MSA terms, redlines, pricing references, T&C deviations, and resource-request asks in client correspondence and meeting transcripts; routes to deal-team + Legal / Finance / Talent for action\n- [Partners] Register deal with partner — object: Partner Deal Registration; trigger: Partner-attached opportunity confirmed; owners: Alliances; agents: ATLAS, BULWARK; kind: action\n  Submit deal registration to the partner program with deal owner, sourcing path, motion, expected close, and partner contact\n- [Partners] Track partner certifications and tier — object: Partner Profile; trigger: Certification update; tier change; owners: Manager Alliances; agents: ATLAS; kind: action\n  Maintain partner certifications, competency tier, and incentives eligibility on each named partner\n### Stage 5: Commercial Structuring\n- [Opportunities] Create pricing scenario — object: Quote / Pricing; trigger: Deal ready for pricing; owners: Finance, Markets; agents: VAULT; kind: trigger\n  Build pricing model with margin, discount, structure, payment terms\n- [Opportunities] Submit deal-desk approval — object: Approval; trigger: Pricing finalized; owners: Markets, Finance; agents: VAULT; kind: trigger\n  Route opportunity for deal-desk review (margin, terms, governance)\n- [Contracts] Submit MSA / SOW / DPA to legal — object: Contract (SimplyContract); trigger: Deal ready for paper; owners: Legal; agents: WARDEN; kind: trigger\n  Route contract artifacts to SimplyContract for legal review\n- [Contracts] Approve MSA redlines — object: Approval (MSA); trigger: MSA redlines returned from client; owners: Legal, Finance, Markets; agents: WARDEN; kind: decision\n  Review and approve customer MSA redlines from a cross-functional lens\n- [Contracts] Split MSA approvals — commercial vs legal — object: Approval (MSA — Routing); trigger: MSA redlines returned; deviation flagged; owners: Manager Legal, Manager Finance; agents: WARDEN, VAULT, LEDGER; kind: action\n  Route MSA redlines on parallel paths — commercial clauses (pricing, payment terms, billing milestones, escalation, rate cards, indexation, taxes / withholding) flow to Manager Finance for approval; legal clauses (liability cap, indemnity, IP, data protection, term / termination, governing law, dispute resolution) flow to Manager Legal; rejoin on signed redline package before customer return\n- [Contracts] Route T&C deviation by clause type — object: T&C Deviation (Routing); trigger: Deviation requested on standard T&Cs; owners: Legal, Finance, Sales Ops; agents: WARDEN, VAULT, BULWARK; kind: action\n  Auto-route T&C deviation requests by clause type — liability / IP / indemnity → Manager Legal (senior Legal sign-off, e.g., Raj); payment terms beyond standard (90 / 120 days) → Manager Finance; pricing / discount → Deal Desk + Finance; commercial scope / SLA → Practices / Delivery; capture decision SLA and exception with risk classification\n- [Contracts] Validate SOW against MSA compliance — object: Compliance Check; trigger: SOW drafted or amended; owners: Legal; agents: WARDEN; kind: decision\n  System validates SOW clauses against governing MSA; surfaces deviations for Legal review\n- [Contracts] Approve SOW for Large deal — object: Approval (SOW); trigger: Large SOW ready for execution; owners: Legal; agents: WARDEN; kind: decision\n  Legal sign-off on SOW for Large pursuits before customer signature\n- [Contracts] Approve commercial structure — object: Approval; trigger: Commercial construct ready; owners: Delivery; agents: VAULT, VANGUARD; kind: decision\n  Delivery signs off on commercial structure (rate card, milestones, T&Cs) for operational viability\n- [Opportunities] Approve Large deal — object: Approval (Large); trigger: Large deal approaching signature; exec briefing complete; owners: Executive Leadership; agents: VAULT, BEACON; kind: decision\n  Executive Leadership approves Large deals based on Markets / Practices briefing\n- [Opportunities] Capture pricing approvals — object: Approval; trigger: Approval received; owners: Finance; agents: VAULT; kind: trigger\n  Record commercial approvals with approver, date, conditions\n- [Contracts] Capture T&C deviation approvals — object: Approval; trigger: Deviation requested; owners: Legal, Finance; agents: VAULT, WARDEN, BULWARK; kind: trigger\n  Log approved deviations from standard terms with risk classification\n- [Contracts] Generate / version contract document — object: Contract; trigger: Approvals received; owners: Legal; agents: WARDEN; kind: trigger\n  Draft contract from template; track redlines and versions\n- [Contracts] Mark contract executed — object: Contract; trigger: Both parties sign; owners: Markets, Legal; agents: WARDEN; kind: action\n  Record signature, attach signed PDF, set contract effective date\n- [Contracts] Initiate MSA amendment / addendum — object: Contract (MSA Amendment); trigger: Scope / coverage gap detected on growth or renewal; owners: Markets, Legal; agents: WARDEN, EMBER; kind: action\n  Start MSA amendment workflow when expansion scope, new BU, or term-change exceeds governing MSA coverage; route to Legal for negotiation\n- [Contracts] Govern T&C deviation register — object: T&C Deviation Register; trigger: Quarterly governance review; owners: Manager Legal; agents: WARDEN, BULWARK; kind: governance\n  Maintain register of approved T&C deviations with classification, risk score, business justification, and expiry; inspect deviation mix and rebalance standard terms when patterns emerge\n- [Contracts] Maintain contract repository and metadata — object: Contract Repository; trigger: Contract executed; amendment; renewal; owners: Legal, Sales Ops; agents: WARDEN; kind: action\n  Maintain centralized contract repository with metadata (parties, effective / expiry dates, governing MSA, SOWs, amendments, obligations, renewal terms, e-signature status); ensure searchability and version integrity\n- [Contracts] Capture e-signature and store in repository — object: Contract (Signed); trigger: Signature ceremony; owners: Legal, Sales Ops; agents: WARDEN; kind: trigger\n  Coordinate e-signature workflow, capture signed PDF with audit trail, store in repository, link to opportunity / project / partner record\n- [Partners] Manage partner agreement / addendum — object: Partner Agreement; trigger: Partner program change; tier change; owners: Manager Alliances, Legal; agents: ATLAS, WARDEN; kind: action\n  Maintain partner master agreement and addenda (joint-GTM, co-sell, resell, MDF); review on partner-tier or program change\n- [Contracts] Classify contract type (T&M / FP-Milestone / FP-Others) — object: Contract (Type Classification); trigger: Contract drafted; commercial structure locked; owners: Finance, Practices, Delivery; agents: LEDGER, FORGE, VAULT; kind: action\n  Classify the executed contract by commercial type — T&M (time-and-material, billed against PO consumption); FP-Milestone (fixed price billed at milestone due dates); FP-Others (fixed price recognized straight-line or outcome-driven); classification drives downstream invoicing cadence, rev-rec rule, and PO / billing-flag setup\n- [Partners] Create partner-funded dual-opportunity structure — object: Opportunity (Partner-Funded Dual); trigger: Partner-funded deal identified (e.g., MS-funded POC + customer-paid expansion); owners: Alliances, Markets, Finance; agents: ATLAS, MERIDIAN, LEDGER, BEACON; kind: trigger\n  When a partner (e.g., Microsoft) funds part of the engagement and the customer funds the rest, create dual linked opportunities — one against the partner-funded portion (against a Customer-via-Partner account) and one against the customer-funded portion (against the direct Customer account); link both to the same engagement / project for delivery and rev-rec consolidation; capture funding split, partner program code, and joint-paper references\n### Stage 6: Pipeline & Forecast\n- [Opportunities] Update opportunity stage — object: Opportunity; trigger: Stage gate met; owners: Markets; agents: COMPASS; kind: action\n  Move opportunity across stages with timestamp and reason\n- [Opportunities] Update close date — object: Opportunity; trigger: Customer feedback / progress change; owners: Markets; agents: COMPASS, ECHO; kind: action\n  Push or pull close date with reason; flag slip if >30 days\n- [Opportunities] Update amount — object: Opportunity; trigger: Scope change; owners: Markets; agents: COMPASS; kind: action\n  Revise expected amount with reason; trigger commit recheck\n- [Opportunities] Update commit category — object: Opportunity; trigger: Forecast cycle; owners: Markets; agents: COMPASS, ECHO; kind: action\n  Set Commit / Best Case / Pipeline / Closed-Won / Closed-Lost on the opportunity; aligns with Brillio's Commit (locked quarterly goal) vs Forecast (most-likely book number) vs Stretch (~40% above forecast) cadence\n- [Forecasts] Lock quarterly Commit number — object: Forecast (Commit); trigger: Quarter start; commit governance change; owners: Manager Markets, Manager Sales Ops, Manager Finance; agents: COMPASS, ECHO, MERIDIAN; kind: action\n  At quarter start, lock the Commit — the quarterly goal the account / market commits to the business — at account, market, geo, and BU rollup; treated as a binding number for the quarter and not editable mid-quarter without governance approval\n- [Forecasts] Submit weekly Forecast (book number) — object: Forecast (Book); trigger: Weekly forecast cycle; owners: Markets; agents: COMPASS, MERIDIAN, ECHO; kind: trigger\n  Submit the weekly Forecast — the most-likely number based on current pipeline, late-stage conversion, and rep judgment; refreshed each week and reconciled to Commit\n- [Forecasts] Submit Stretch number — object: Forecast (Stretch); trigger: Weekly forecast cycle; owners: Markets, Manager Markets; agents: COMPASS, ECHO; kind: trigger\n  Submit Stretch — typically ~40% above Forecast — that captures upside if at-risk / longshot deals land; tracked separately from Commit and Forecast and used for upside planning\n- [Forecasts] Reconcile Forecast vs Commit — risk vs gap — object: Forecast Reconciliation; trigger: Weekly forecast cycle; owners: Manager Markets, Sales Ops; agents: COMPASS, ECHO, SENTINEL; kind: decision\n  Reconcile Forecast against locked Commit each week; when Forecast > Commit, overlay risk view (which Forecast deals could slip and erode Commit); when Forecast < Commit, run gap analysis (which Pipeline / Best Case deals can be accelerated to close the gap); publish recovery plan to Manager Markets\n- [Forecasts] Submit rep-level forecast — object: Forecast; trigger: Forecast cycle deadline; owners: Markets; agents: COMPASS, MERIDIAN; kind: trigger\n  Submit weekly / monthly forecast with commit confidence\n- [Forecasts] Submit manager-level forecast roll-up — object: Forecast; trigger: Forecast cycle deadline; owners: Markets, Sales Ops; agents: COMPASS, MERIDIAN, ECHO; kind: trigger\n  Consolidate team forecast with overrides; submit to leadership\n- [Forecasts] Run deal inspection — object: Activity; trigger: Deal review meeting; owners: Markets, Sales Ops; agents: COMPASS; kind: action\n  Review committed deals in deal review meeting; verify next actions\n- [Forecasts] Capture forecast call notes — object: Activity; trigger: Forecast call held; owners: Markets; agents: COMPASS; kind: trigger\n  Record overrides, pushes, commit changes, recovery actions\n- [Opportunities] Mark stalled deals — object: Opportunity; trigger: Activity gap detected; owners: Markets; agents: COMPASS, SENTINEL; kind: action\n  Flag deals with no activity for 14+ days; require recovery action\n- [Accounts] Detect slip / commit-risk cues from email + meetings — object: Forecast Signal; trigger: Email / transcript classified as slip or commit-risk cue; owners: Markets, Manager Markets, Sales Ops; agents: SCRIBE, COMPASS, ECHO; kind: governance\n  SCRIBE flags slip-risk language, commit-waiver hints, and stalled-deal cues in rep + client communications; routes to COMPASS / ECHO for forecast recheck\n- [Forecasts] Predict deal slip before forecast cycle — object: Forecast Signal (Predictive); trigger: Daily slip-risk score recompute; owners: Markets, Manager Markets, Sales Ops; agents: COMPASS, SCRIBE, SENTINEL, ECHO; kind: action\n  Predictive slip detection — score every Commit / Best Case opportunity each day on slip-risk using activity gaps, sponsor silence, sentiment shifts, MEDDPICC gaps, contract / legal delays, and historical pattern; surface high-risk deals to rep + Manager Markets 2-3 weeks ahead of forecast cycle so corrective action can run before the slip is reactive; closes today's gap where slip is only caught after the customer says no or pushes\n- [Forecasts] Govern forecast categories and commit definitions — object: Forecast Methodology; trigger: Annual methodology refresh; mid-year change; owners: Manager Markets, Manager Sales Ops; agents: COMPASS, ECHO; kind: governance\n  Set and govern Commit / Best Case / Pipeline / Omitted definitions, commit-rules per stage, and override authority; publish forecast methodology\n- [Forecasts] Lock weekly forecast snapshot — object: Forecast Snapshot; trigger: Weekly forecast cycle close; owners: Sales Ops, Manager Markets; agents: COMPASS, MERIDIAN, ECHO; kind: action\n  Capture point-in-time forecast snapshot at week-close; freeze rep-level and manager-level numbers for variance analysis vs. actuals\n- [Forecasts] Maintain pipeline coverage ratio — object: Pipeline Coverage; trigger: Weekly review; territory rebalance; owners: Manager Markets, Manager Sales Ops; agents: COMPASS, ECHO; kind: action\n  Track pipeline coverage by quarter, segment, solution, and tier vs. target multiple (e.g., 3x); surface coverage gaps for sales action\n- [Forecasts] Track bookings split — new business vs renewal vs expansion — object: Bookings (Motion Split); trigger: Weekly forecast cycle; monthly / quarterly close; owners: Manager Finance, Manager Markets, Manager Sales Ops; agents: LEDGER, COMPASS, ECHO, BEACON; kind: action\n  Report and reconcile bookings split by motion type — New Business (new logo), Renewal, Expansion (cross-sell / upsell), Re-compete — against plan and forecast categories; track renewal rate, gross / net retention, and expansion attach; surface motion-mix drift to Manager Markets and Finance\n- [Forecasts] Govern renewal calendar and at-risk renewal queue — object: Renewal Calendar; trigger: Renewal auto-trigger; weekly at-risk review; owners: Manager Markets; agents: EMBER, COMPASS, BEACON, WARDEN; kind: governance\n  Maintain renewal calendar with auto-created renewal opportunities at T-180, T-90, T-30; surface at-risk renewals (low health score, sponsor change, escalations, low usage) for executive intervention; track renewal-on-time vs late vs lost\n- [Forecasts] Audit forecast accuracy — object: Forecast Accuracy Audit; trigger: Quarterly accuracy review; owners: Manager Markets, Manager Sales Ops; agents: COMPASS, ECHO; kind: governance\n  Compare forecast snapshots to actuals at close; compute accuracy by rep, manager, segment, and stage; surface systemic bias\n- [Forecasts] Log win / loss reason on close — object: Opportunity (Win/Loss); trigger: Opportunity moves to Closed; owners: Markets; agents: FLINT, PRISM, AURORA; kind: action\n  Capture structured win / loss reason on Closed-Won / Closed-Lost (decision driver, competitor, gap, recoverable / not); feed into solution + competitive intel\n- [Opportunities] Recycle lost opportunity — object: Opportunity Recycle; trigger: Closed-Lost with recoverable flag; owners: Markets, Marketing; agents: EMBER, PULSE, FLINT; kind: action\n  Route Closed-Lost opportunities into reactivation cadence on recoverable-loss flags (timing, budget, no-decision); re-engage via nurture or new motion\n- [Forecasts] Run Large deal review (Manager Markets + Exec) — object: Activity (Large Deal Review); trigger: Large deal in Commit; weekly cadence; owners: Manager Markets, Executive Leadership; agents: COMPASS, FLINT, AURORA; kind: decision\n  Hold deal review with Manager Markets + Executive Leadership for Large commits — MEDDPICC, win plan, risks, asks; capture decisions\n### Stage 7: Sales-to-Delivery Handoff\n- [Opportunities] Mark opportunity Closed-Won — object: Opportunity; trigger: Contract executed; owners: Markets; agents: ; kind: action\n  Set final stage, capture won amount, won date, contract terms\n- [Contacts] Maintain executive-sponsor map — object: Exec Sponsor Map; trigger: Project kickoff; sponsor change; owners: Markets, Manager Markets; agents: BEACON, AURORA; kind: action\n  Maintain mapping of internal executive sponsors → client executive sponsors with engagement cadence and touchpoint log\n### Stage 8: Delivery Validation\n- [Contracts] Detect scope creep — use cases accepted without change request — object: Scope Creep (Detection); trigger: Continuous scan; weekly retro; owners: Delivery, Practices, Markets, Finance; agents: SCRIBE, SENTINEL, WARDEN, FORGE; kind: trigger\n  Continuously scan accepted scope vs baseline SOW — new use cases, expanded data sources, additional integrations, or stretched acceptance criteria that came in via meetings / email but were never converted into a change request; flag delivery team for retro change-order, route to Markets + Finance for commercial recovery\n- [Contracts] Submit change order / amendment — object: Change Order; trigger: Scope / commercial change agreed; owners: Delivery, Legal; agents: WARDEN, FORGE; kind: trigger\n  Capture scope or commercial change; route to legal + finance for execution\n- [Solutions] Identify case study candidate from delivery wins — object: Case Study Candidate; trigger: Milestone hit; CSAT / NPS spike; renewal signed; outcome KPI achieved; owners: Delivery, Markets, Marketing; agents: HALO, CHRONO, BEACON; kind: action\n  Scan delivery health, CSAT / NPS scores, milestone outcomes, and EVM variance to surface engagements that hit measurable client outcomes — score against case-study criteria (industry, archetype, scale, exec sponsor willingness, brand strength) and propose top candidates to Markets + Marketing for nomination\n- [Solutions] Capture baseline-vs-result KPIs for case study — object: Case Study Outcome Metrics; trigger: Candidate accepted; milestone with measurable KPI; owners: Delivery, Markets, Finance; agents: HALO, COMPASS, ORBIT; kind: trigger\n  Capture quantified business outcomes for the case study — baseline metrics at project start vs realized metrics at milestone / close (revenue lift, cost reduction, cycle-time improvement, NPS / CSAT delta, adoption %, time-to-value); attach source-of-truth evidence and reconcile with Finance\n- [Solutions] Capture customer quotes and story narrative for case study — object: Case Study Narrative; trigger: Outcome metrics validated; sponsor quote secured; owners: Markets, Delivery, Marketing; agents: SCRIBE, ORBIT, EMBER; kind: trigger\n  Collect executive sponsor and end-user quotes, the business problem, the solution approach, why Brillio was chosen, lessons learned, and ‘what’s next’ — extracted from QBR transcripts, NPS verbatims, and exec interviews; structure into a story arc ready for Marketing review\n- [Solutions] Secure customer consent for case study publication — object: Case Study Consent (Signed); trigger: Draft narrative ready; awaiting customer approval; owners: Markets, Legal, Marketing; agents: WARDEN, SCRIBE, EMBER; kind: action\n  Route case study draft for customer-side legal / brand approval — consent scope (logo use, named vs anonymized, distribution channels, embargo / expiry date), redline coordination, signed approval letter, and audit trail; pause publication until signed consent on file\n- [Solutions] Draft and approve case study with marketing review — object: Case Study (Approved); trigger: Customer consent signed; marketing review cycle; owners: Marketing, Practices, Delivery, Markets; agents: EMBER, PULSE, HALO; kind: decision\n  Marketing authors the case study (long-form PDF, short web variant, sales 1-pager) using captured outcomes, narrative, and customer quotes; route for practice technical review, brand QA, and executive sign-off; lock approved version into the reference catalog\n- [Accounts] Log executive touchpoint — object: Activity; trigger: Exec meeting held; owners: Markets, Delivery; agents: BEACON; kind: action\n  Record exec-level meeting with attendees, talking points, decisions\n- [Accounts] Detect delivery risks / issues / escalations from email + meetings — object: Risk / Issue (Auto-Logged); trigger: Email / transcript classified as risk / escalation; owners: Delivery, Practices, Markets; agents: SCRIBE, SENTINEL, HELM, BULWARK; kind: trigger\n  SCRIBE auto-flags escalation language, blocker mentions, RAG triggers, scope-creep cues, attrition risk, and client-dissatisfaction signals in client + internal correspondence and meeting transcripts; auto-creates risk records and routes to SENTINEL / HELM / BULWARK\n- [Forecasts] Maintain EAC / ETC forecast — object: Project Financials; trigger: Monthly close; scope / resource change; owners: Delivery, Finance; agents: LEDGER, HELM; kind: action\n  Refresh Estimate-at-Complete and Estimate-to-Complete; reconcile to baseline; flag variance and recovery actions\n- [Contracts] Track contract obligations and commitments — object: Contract Obligation; trigger: Obligation cadence; SLA event; owners: Legal, Delivery; agents: WARDEN, SENTINEL; kind: action\n  Track contractual obligations, SLAs, deliverables, and commitments; flag at-risk obligations with mitigation\n- [Accounts] Capture voice of customer — object: VoC Theme; trigger: Continuous; quarterly VoC sweep; owners: Markets, Delivery; agents: SCRIBE, ECHO, BEACON; kind: trigger\n  Capture VoC themes from surveys, steering minutes, escalations, and correspondence; route to account plan and offering teams\n- [Accounts] Run customer governance forum — object: Governance Forum; trigger: Governance cadence; owners: Manager Markets, Manager Delivery; agents: BEACON, HELM, CHRONO; kind: action\n  Run scheduled customer governance / operating reviews — agenda, decisions, owners, follow-ups\n- [Partners] Run partner enablement / training — object: Partner Enablement; trigger: Joint engagement; certification cycle; owners: Alliances, Practices; agents: MERIDIAN, FORGE; kind: action\n  Run partner enablement, certification, and joint-delivery training; track completion and skill coverage\n### Stage 9: Account Expansion\n- [Solutions] Publish case study and refresh reference catalog — object: Reference Catalog Entry; trigger: Case study approved; quarterly catalog refresh; owners: Marketing, Manager Marketing, Alliances; agents: PULSE, WAYFINDER, EMBER; kind: action\n  Publish approved case study across channels — website, sales enablement library, analyst submissions, partner co-marketing, social — and refresh the reference catalog with industry / archetype / outcome tags, refreshable contact list, and use-rights window; expire stale entries\n- [Accounts] Refresh account plan — object: Account Plan; trigger: Annual refresh; trigger event; owners: Markets; agents: BEACON, ORBIT, ECHO; kind: action\n  Update account strategy, growth targets, whitespace plays, multi-year view\n- [Contacts] Refresh stakeholder map — object: Account Stakeholder Map; trigger: Stakeholder change; org event; owners: Markets, Marketing; agents: ORBIT, WEAVER; kind: action\n  Update buying centers, key contacts, influence, intent across BUs and geos\n- [Accounts] Refresh competitive landscape on account — object: Account Competitor View; trigger: Competitive movement detected; owners: Marketing; agents: PRISM, ORBIT; kind: action\n  Update incumbents, displacement risks, competitive plays in account\n- [Accounts] Create renewal opportunity — object: Opportunity; trigger: Contract end within 6-9 months; owners: Markets; agents: WARDEN, EMBER; kind: trigger\n  Auto-generate renewal opportunity ahead of contract end with target uplift\n- [Accounts] Create expansion / cross-sell opportunity — object: Opportunity; trigger: Expansion trigger detected; owners: Markets, Practices; agents: ORBIT, PRISM, EMBER; kind: expand\n  Open new opportunity for additional offering, BU, or geo within account\n- [Accounts] Log QBR (quarterly business review) — object: Activity; trigger: Quarterly cadence; owners: Markets, Delivery; agents: BEACON, CHRONO; kind: decision\n  Record attendees, decisions, value delivered, next-quarter plan\n- [Accounts] Update account health — object: Account; trigger: Health-signal change; owners: Markets, Delivery; agents: BEACON, HELM, SENTINEL; kind: action\n  Set health rating (at-risk / healthy / growing) with reason and recovery action\n- [Accounts] Mark whitespace plays — object: Account Plan; trigger: Account plan refresh; owners: Markets, Practices; agents: ORBIT, PRISM; kind: action\n  Tag specific cross-sell / upsell plays against the whitespace map\n- [Accounts] Detect expansion / renewal / dormancy signals from email + meetings — object: Account Signal; trigger: Email / transcript classified as expansion / renewal / dormancy cue; owners: Markets, Practices; agents: SCRIBE, ORBIT, EMBER, BEACON; kind: trigger\n  SCRIBE surfaces whitespace mentions, renewal triggers, churn risk, and dormancy cues in client correspondence and steering / QBR transcripts; routes to ORBIT / EMBER / BEACON for account-plan refresh\n- [Campaigns] Run expansion / re-engagement ABM motion — object: Campaign / ABM Motion (Execution); trigger: Approved expansion / dormant-account ABM request; owners: Marketing; agents: PULSE, ORBIT, EMBER; kind: action\n  Execute expansion or dormant-account ABM motion — whitespace-led, persona-targeted plays in support of growth and renewal accounts\n- [Campaigns] Inspect and govern expansion-ABM ROI — object: Campaign / ABM ROI (Governance); trigger: Monthly expansion-ABM review; QBR cycle; owners: Manager Marketing; agents: PULSE, ECHO, ORBIT, EMBER; kind: governance\n  Inspect ROI on expansion / re-engagement ABM — pipeline contribution to expansion / renewal, dormant-account wake rate, cost-per-expansion-opp — and govern continuation, scale, or kill criteria\n- [Contracts] Renew / extend contract — object: Contract (Renewal); trigger: Contract end within renewal window; owners: Markets, Legal; agents: WARDEN, EMBER, FORGE; kind: expand\n  Drive renewal / extension cycle — uplift target, paper, redlines, sign-off; capture won / lost reason on renewal\n- [Contracts] Log contract expiration alert — object: Renewal Alert; trigger: Contract expiration window; owners: Markets, Manager Markets; agents: WARDEN, EMBER, CHRONO; kind: action\n  Auto-fire renewal alert at T-180 / T-90 / T-30 with owner, value at risk, and renewal play\n- [Partners] Activate partner whitespace into co-sell play — object: Partner Co-Sell Play; trigger: Whitespace target prioritized; partner agrees to engage; owners: Alliances, Markets; agents: ATLAS, ORBIT, BEACON, AURORA; kind: action\n  Convert identified partner whitespace (Brillio customers running the partner's platform but with no joint play) into a co-sell motion — pre-meeting brief, partner-side intro, joint outreach, opportunity creation tagged with partner motion\n- [Partners] Run partner QBR (Quarterly Business Review) — object: Partner QBR; trigger: Quarterly cadence; owners: Manager Alliances; agents: ATLAS, MERIDIAN, ECHO; kind: decision\n  Run quarterly business review with the partner — sourced / influenced pipeline, sourced / influenced revenue, certifications and designations, joint wins, MDF utilization, next-quarter joint plays; capture asks and commitments\n- [Partners] Track partner-influenced vs partner-sourced revenue — object: Partner Attribution; trigger: Opportunity / revenue event; owners: Alliances, Finance; agents: MERIDIAN, LEDGER, ECHO; kind: action\n  Tag opportunities and revenue as partner-sourced, partner-influenced, or partner-delivered; reconcile to alliance scorecard\n- [Partners] Run joint pipeline review with partner — object: Joint Pipeline Review; trigger: Cadence (monthly / quarterly); owners: Alliances, Manager Markets; agents: MERIDIAN, ATLAS, ECHO; kind: decision\n  Run joint pipeline review with alliance partner — co-sell opps, stage / value, asks, blockers\n- [Partners] Maintain alliance scorecard — object: Alliance Scorecard; trigger: Quarterly cadence; owners: Manager Alliances; agents: MERIDIAN, LEDGER, ECHO; kind: action\n  Maintain per-partner scorecard — sourced / influenced pipeline, sourced / influenced revenue, certifications, joint wins\n- [Campaigns] Govern partner MDF / incentives — object: MDF Request; trigger: Joint motion approved; quarterly cycle; owners: Manager Alliances; agents: MERIDIAN, LEDGER, BULWARK; kind: governance\n  Govern Market Development Funds and partner incentives — request, approval, utilization, ROI, audit trail\n- [Accounts] Run customer advisory board — object: CAB Session; trigger: CAB cadence; owners: Manager Markets, Manager Marketing; agents: BEACON, ECHO, SCRIBE; kind: action\n  Run CAB — agenda, attendees, themes, decisions, follow-ups; tag insights to roadmap and account plans\n- [Campaigns] Govern customer advocacy program — object: Advocacy Record; trigger: Advocacy ask; quarterly review; owners: Manager Marketing, Manager Markets; agents: BEACON, ECHO, ORBIT; kind: governance\n  Govern referenceability, advocacy tiering, rewards, opt-in / opt-out, and reuse audit trail\n- [Solutions] Maintain customer reference catalog — object: Reference Catalog; trigger: Reference captured; reuse request; owners: Marketing; agents: BEACON, ORBIT, PRISM; kind: action\n  Maintain searchable reference catalog — by industry, outcome, archetype, persona; track use frequency and recency\n\n— Leader - Marketing, Leader - Marketing, 2026-07-27 00:43 —\nOur funnel starts with Campaigns — field events, webinars, partner co-marketing. Every Campaign Member who engages gets a Lead created in the CRM, and our scoring model stamps a Lead Score within the hour. Every qualified lead is scored and routed to the market team within a business day — that part works. What doesn't work is visibility after the handoff: once a Lead converts to an Opportunity I lose the thread. I can't tell which Campaigns actually produced revenue, so I'm defending marketing spend with first-touch guesses. I want closed-loop attribution from Campaign to Account to closed-won. The other pain is duplicate Leads — the same Contact from two events becomes two records, and dedupe is manual. We keep our own spreadsheet on the side to track event pipeline because the CRM reports don't slice by Campaign type.\n\n— Sales Leaders - Markets, Sales Leaders - Markets, 2026-07-27 00:43 —\nMy pipeline reviews run off Forecast Snapshots every Monday, but the underlying Opportunity data is stale — reps update stages the night before the call, so the snapshot reflects theater, not reality. On leads: honestly, leads reach us unscored, often a week old, and my team requalifies from scratch. Whatever scoring Marketing says they do, it isn't visible on the record we receive. For large pursuits the Buying Committee lives in someone's notebook — we don't systematically map who the economic buyer is, who's the champion, who's blocking. Competitor intel is tribal. When a deal slips, the Forecast Snapshot doesn't tell me why — I need slippage reasons on the Opportunity, not in a side deck. And hand-offs to Delivery after closed-won are where we look most amateur to the client: the Engagement kickoff repeats discovery the account team already did.\n\n— Sales reps - Markets, Sales reps - Markets, 2026-07-27 00:44 —\nDay to day I live in the CRM but I sell in email and calls, so half my activity never lands on the Opportunity. Logging is a tax — every field mandatory, none of it helps me sell. Getting a price approved is the worst part: pricing approval takes two weeks end to end — it goes rep, to my manager, to practice GTM for solution sign-off, then Sales Ops, then finance review if the discount is deep. By the time the Quote is back the client has cooled. I also can't see Delivery health on my own Accounts — I've walked into renewal conversations not knowing there was an open Escalation. Give me one screen: my Opportunities, the next step, who on the Buying Committee I haven't touched, and any fires on the Account.\n\n— GTM Leaders - Practices, GTM Leaders - Practices, 2026-07-27 00:44 —\nPractices sit between Markets and Delivery. My team shapes the solution on every qualified Opportunity — estimation, staffing model, win themes. The friction is that pursuit requests arrive as email threads with no structure: no entity in the CRM says 'this pursuit needs a data-platform architect for three days.' We re-key everything into our own tracker. Solution review is a real gate — we sign off on scope and margin before the Quote goes out — but the CRM doesn't know that gate exists, so nothing blocks a proposal that skipped us. I want pursuit support to be a first-class object linked to the Opportunity, with the practice's sign-off recorded on it. And when we win, the solution assumptions should flow to the Engagement so Delivery prices reality, not the proposal's optimism.\n\n— GTM - Practices, GTM - Practices, 2026-07-27 00:44 —\nI'm the one building the estimates and the demo assets for pursuits. My pain is rework: the same solution deck gets rebuilt because nobody can find the last one — there's no library keyed by industry or offering. Estimates live in spreadsheets mailed around; version confusion has burned us in front of clients. When an Opportunity moves stages nobody tells me — I find out the proposal I'm polishing died a week ago. If the Opportunity record drove my work queue — stage changes, due dates, what the Account context is — I'd stop working on dead deals. One more: win/loss reasons never come back to us, so the practices never learn which solution patterns actually close.\n\n— Leader - Sales Operations, Leader - Sales Operations, 2026-07-27 00:44 —\nSales Ops owns pipeline hygiene, the forecast cadence, and the quote-to-approval flow. Two truths people won't tell you: first, our published SLA on pricing approval is three business days and we hit it — when the request arrives complete. What reps call 'two weeks' includes the week the request sits with missing scope or an unsigned practice review. Second, forecast accuracy problems are data-entry problems: stage definitions are interpreted differently by every market. I spend my week reconciling Forecast Snapshots against reality. What I need is enforced stage criteria — an Opportunity can't sit in 'Negotiate' without a Quote attached and a Buying Committee mapped — and an approval flow with timestamps so we can see exactly where a request stalls instead of arguing about whose fault the delay is.\n\n— Sales Operations, Sales Operations, 2026-07-27 00:45 —\nI run the weekly pipeline scrub and administer the CRM. Most of my time is chasing reps to fix Opportunity records — close dates in the past, blank next steps, amounts that don't match the Quote. The Forecast Snapshot job runs Sunday night; by Wednesday it's fiction. Duplicate Accounts are chronic — the same client exists three times with different names, so nobody trusts account-level reporting. Territory changes are a fire drill: reassigning Opportunities and Contacts takes days of exports and imports. And every quarter-end, finance asks me why the closed-won total doesn't match what Billing sees — the answer is usually a renewal logged as new business or an amount edited after close. Guardrails at the moment of entry would save me a hundred hours a quarter.\n\n— Leader - Alliances, Leader - Alliances, 2026-07-27 00:45 —\nAlliances brings partner-sourced pipeline — hyperscalers and ISVs. Every co-sell deal has two sides: our Opportunity and the Partner's referral in their system, and reconciling them is manual. Partner-influenced revenue is systematically under-reported because reps forget to tag the Partner on the Opportunity, and that under-reporting costs us real money — partner funds and tier status are earned on registered, attributed deals. I need partner attribution to be structural: a co-sell Opportunity linked to the Partner record from day one, registration deadlines tracked, and a view of pipeline by partner I can take into QBRs. Also joint Campaigns with partners — today Marketing runs them but the resulting Leads don't carry the partner association, so the co-marketing story falls apart at measurement.\n\n— Leader - Delivery, Leader - Delivery, 2026-07-27 00:45 —\nDelivery inherits whatever Sales signed. The Engagement record we receive at kickoff is thin — the SOW pdf and a start date. The estimate assumptions, the risks the pursuit team knew about, the client's stated success criteria — none of it transfers, so we rediscover it billably and the client notices. Staffing is the second gap: we see demand late because nothing tells us a big Opportunity is trending to close; TA hears about hiring needs after the ink is dry. On running Engagements, Escalations are managed in email — sales finds out an Account is on fire when the renewal stalls. I want a hard link: Opportunity to Engagement with assumptions carried over, demand signals to TA at 70 percent win probability, and Escalations visible on the Account so the whole team sees the same health picture.\n\n— Leader - Legal, Leader - Legal, 2026-07-27 00:45 —\nLegal touches every deal at contract time — MSAs, SOWs, NDAs, DPAs. The Contract itself lives in our document system; the CRM only knows a deal is 'in legal', which becomes the black box everyone blames. Redline cycles are where time actually goes, and the delay is usually waiting on client counsel or on business terms the account team hasn't decided — but we can't show that, so Legal eats the blame for slow deals. I want contract status stages visible on the Opportunity — drafting, client review, redlines, signature — with owner and timestamp per stage. Second issue: non-standard terms get negotiated deal by deal with no memory; we re-litigate the same liability cap every quarter. A clause playbook linked to Contracts would cut our cycle meaningfully. And renewals: signed Contracts should drive renewal dates on the Account automatically.\n\n— Leader - TA, Leader - TA, 2026-07-27 00:45 —\nTalent Acquisition is downstream of a pipeline it can't see. Delivery asks for niche skills with two weeks' notice because the deal 'suddenly' closed — that deal was ninety days in the pipeline. If I saw demand forming — Opportunities by practice, size and probability — I could open requisitions early and hit start dates. Today my demand signal is a Friday phone call. Bench economics suffer in both directions: we hire late and burn margin on contractors, or hire on rumor and eat bench cost when the deal slips. The link I want is explicit: an Opportunity above a threshold generates a staffing-demand signal with the roles from the practice estimate, and TA works from that queue. Also, candidate commitments are promises to clients — when a named person is in a proposal, I need to know before they're double-booked.\n\n— HR, HR, 2026-07-27 00:46 —\nHR owns onboarding and the people data every other function quietly depends on. When Delivery wins an Engagement, the joiners' start dates, roles and assignments live in three systems that don't agree — the offer letter, the staffing plan and the timesheet tool. New joiners bill from day one on paper but their access and onboarding actually complete in week two, and that gap becomes an awkward Invoice conversation with the client. I'd like engagement staffing to drive onboarding tasks automatically: the day someone is assigned to an Engagement, the checklist starts, and Delivery sees readiness. Also utilisation and leave: account teams promise continuity to clients without seeing planned leave — the same person is on two committed schedules. One truthful people-record, visible where the client commitments are made, would prevent most of it.\n\n— Operator resolution, 2026-07-27 —\nDispute (Leader - Marketing vs standing claims about CRM effectiveness): \"I can't tell which Campaigns actually produced revenue, so I'm defending marketing spend with first-touch guesses.\"\nSettled: the newer account stands. Recorded as evidence; the dispute is closed.\n\n— Operator resolution, 2026-07-27 —\nDispute (Sales Leaders - Markets vs standing claims about CRM effectiveness): \"The underlying Opportunity data is stale — reps update stages the night before the call, so the snapshot reflects theater, not reality.\"\nSettled: the newer account stands. Recorded as evidence; the dispute is closed.\n\n— Operator resolution, 2026-07-27 —\nDispute (Sales reps - Markets vs standing claims about CRM effectiveness): \"Day to day I live in the CRM but I sell in email and calls, so half my activity never lands on the Opportunity.\"\nSettled: the newer account stands. Recorded as evidence; the dispute is closed.\n\n— Operator resolution, 2026-07-27 —\nDispute (GTM Leaders - Practices vs standing claims about CRM effectiveness): \"The CRM doesn't know that gate exists, so nothing blocks a proposal that skipped us.\"\nSettled: the newer account stands. Recorded as evidence; the dispute is closed.\n\n— Finance, Finance, 2026-07-27 00:56 —\nFinance sees the CRM's numbers only when they disagree with ours. Closed-won in the CRM and what Billing actually invoices diverge every quarter — renewals logged as new business, amounts edited after close, Billing Schedules built by hand from the SOW instead of flowing from the Opportunity. Revenue recognition needs the Contract's terms, the Billing Schedule and the Engagement's actuals to line up, and today that's a month-end reconciliation exercise across three systems. On deal governance: our discount review adds two days at most when the request arrives with a complete Quote — what burns time is chasing the missing pieces. What I want is one thread from Opportunity to Contract to Billing Schedule to Invoice, so the forecast the board sees and the cash we collect are the same number.\n\n— Talent Acquisition, Talent Acquisition, 2026-07-27 00:56 —\nI run requisitions and sourcing for delivery roles. My problem is lead time: a niche architect takes eight to ten weeks to land, and I usually get four. The demand exists in the pipeline for months before it reaches me — I just can't see it. When a requisition finally opens, the role description is a copy-paste from the SOW, not the practice's estimate, so I source against the wrong profile and lose two weeks. I also have no feedback loop: which pursuits my early hires actually supported, whether the bench absorbed the slip when a deal pushed a quarter. Give me a demand queue driven by the pipeline — role, practice, probability, need-by date — and I'll stop being the last to know and the first to blame.\n\n— Executive Leadership, Executive Leadership, 2026-07-27 00:57 —\nWhat I told the sponsor team at kickoff still stands: we are not buying a CRM, we are buying one version of the truth about our pipeline. Today every function shows me a different number — Sales has a forecast, Finance has another, Delivery plans against a third. The cost isn't the software licenses, it's the Monday mornings spent arguing about whose spreadsheet is right. Success for me is simple: one pipeline the whole value chain trusts, hand-offs that don't drop what the client already told us, and the ability to see — not ask — whether a big deal is real. If this programme gives my leadership team the same picture of the business, it pays for itself before the first invoice.\n\n— Sales - Markets, Sales reps - Markets, 2026-07-27 00:58 —\nJoint session with the markets sales team. The group confirmed the leaders' and reps' accounts: pipeline data goes stale between Monday reviews, lead quality from Marketing is disputed both ways, and pricing approval is the single biggest cycle-time complaint — with Sales Ops maintaining the delay sits in incomplete requests. No new workflows surfaced beyond what the individual conversations captured; the team's one addition: renewal opportunities should be created automatically from Contract end dates instead of relying on account managers' calendars.\n\n— Operator resolution, 2026-07-27 —\nDispute (Finance vs standing claims about CRM effectiveness): \"Closed-won in the CRM and what Billing actually invoices diverge every quarter — renewals logged as new business, amounts edited after close\"\nSettled: the newer account stands. Recorded as evidence; the dispute is closed.",
+      "listen._dismissedListenRoles": "[\"customer success manager\",\"hr manager\",\"gtm sales\",\"gtm sales manager\",\"markets\",\"delivery\",\"head of delivery\",\"practices\",\"manager markets\",\"marketing\",\"finance\",\"sales ops\",\"alliances\",\"talent\",\"legal\",\"manager sales ops\",\"manager talent\",\"manager marketing\",\"manager delivery\",\"manager finance\",\"manager practices\",\"manager alliances\",\"manager legal\",\"executive leadership\",\"all sales personas\",\"sales\",\"head of sales\",\"talent acquisition\",\"head of hr\",\"it architect\",\"head of it\",\"vertical sales\",\"markets leadership\",\"practices sales\",\"practices leadership\",\"leader - finance\"]"
+    },
+    "conflictsResolved": [
+      {
+        "field": "listen._savedAt",
+        "sourceUsed": "currentInput",
+        "sourceIgnored": "existingArtifact"
+      },
+      {
+        "field": "listen._directoryPeople",
+        "sourceUsed": "currentInput",
+        "sourceIgnored": "existingArtifact"
+      }
+    ]
+  }
+}

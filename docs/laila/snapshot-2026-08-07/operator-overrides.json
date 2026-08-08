@@ -1,0 +1,296 @@
+[
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-27T01:06:57.247Z",
+    "note": "Workflow \"Opportunity Signal Generation\" moved to area \"Marketing\"",
+    "fieldKey": "currentStateAtlas"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-27T01:06:57.247Z",
+    "note": "Workflow edited: \"Opportunity Signal Generation\"",
+    "fieldKey": "currentStateAtlas"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-27T03:16:36.787Z",
+    "note": "Entity edited: \"Quote\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-27T03:16:36.787Z",
+    "note": "Entity edited: \"Contract\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-27T03:19:55.618Z",
+    "note": "Entity removed: \"User\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-27T03:19:55.618Z",
+    "note": "Entity removed: \"Pricing Item\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-27T03:19:55.618Z",
+    "note": "Entity edited: \"Lead\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-27T03:19:55.618Z",
+    "note": "Entity edited: \"Lead Score\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-27T03:19:55.618Z",
+    "note": "Entity edited: \"Proposal\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-27T03:19:55.618Z",
+    "note": "Entity edited: \"SOW\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-27T03:19:55.618Z",
+    "note": "Entity edited: \"Escalation\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-27T03:19:55.618Z",
+    "note": "Entity edited: \"Signal\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-27T03:19:55.618Z",
+    "note": "Entity edited: \"Signal Action\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-27T03:19:55.618Z",
+    "note": "Entity edited: \"Interaction\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-27T03:19:55.618Z",
+    "note": "Entity edited: \"Entity Profile\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-27T03:19:55.618Z",
+    "note": "Entity edited: \"Document\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-27T03:33:05.260Z",
+    "note": "Entity removed: \"Entity Profile\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-27T03:33:05.260Z",
+    "note": "Entity edited: \"Opportunity\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-27T03:33:05.260Z",
+    "note": "Entity edited: \"Forecast Snapshot\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-27T03:33:05.260Z",
+    "note": "Entity edited: \"Interaction\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-27T03:52:03.652Z",
+    "note": "Entity edited: \"Opportunity\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-27T03:52:03.652Z",
+    "note": "Entity edited: \"Opportunity Line Item\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-27T03:52:03.652Z",
+    "note": "Entity edited: \"Practice Forecast Split\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-27T03:52:03.652Z",
+    "note": "Entity edited: \"Practice Contribution\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-27T03:52:03.652Z",
+    "note": "Entity edited: \"Quote\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-27T03:52:03.652Z",
+    "note": "Entity edited: \"Proposal\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-27T03:52:03.652Z",
+    "note": "Entity edited: \"SOW\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-27T03:52:03.652Z",
+    "note": "Entity edited: \"Staffing\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-27T03:52:03.652Z",
+    "note": "Entity edited: \"Revenue Projection\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-27T03:52:03.652Z",
+    "note": "Entity edited: \"Signal\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-27T03:52:03.652Z",
+    "note": "Entity edited: \"Signal Action\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-29T06:33:18.774Z",
+    "note": "Entity removed: \"Interaction\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-29T06:33:18.774Z",
+    "note": "Entity edited: \"Account\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-29T06:33:18.774Z",
+    "note": "Entity edited: \"Buying Committee\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-29T06:33:18.774Z",
+    "note": "Relation added: \"Partner is a type of Account\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-29T06:33:18.774Z",
+    "note": "Relation added: \"Account produces Signal\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-29T06:33:18.774Z",
+    "note": "Relation added: \"Document applies to Account\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-29T06:33:18.774Z",
+    "note": "Relation added: \"Document applies to Lead\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-29T06:33:18.774Z",
+    "note": "Relation added: \"Document applies to Opportunity\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-29T06:33:18.774Z",
+    "note": "Relation added: \"Document applies to Contract\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-29T06:33:18.774Z",
+    "note": "Relation added: \"SOW is a type of Document\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-29T06:33:18.774Z",
+    "note": "Relation added: \"Partner participates in Opportunity\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-29T06:33:18.774Z",
+    "note": "Relation added: \"Signal Action applies to Signal\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-29T06:33:18.774Z",
+    "note": "Relation removed: \"Account produces Engagement\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-29T06:33:18.774Z",
+    "note": "Relation removed: \"Account produces Invoice\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-29T06:33:18.774Z",
+    "note": "Relation removed: \"Contract produces Billing Schedule\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-29T06:33:18.774Z",
+    "note": "Relation removed: \"Partner produces Account\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-29T06:33:18.774Z",
+    "note": "Relation edited: \"Opportunity produces Forecast Snapshot\"",
+    "fieldKey": "domainOntology"
+  },
+  {
+    "by": "ibkhalid1@gmail.com",
+    "ts": "2026-07-29T06:33:18.774Z",
+    "note": "Relation edited: \"Contract produces SOW\"",
+    "fieldKey": "domainOntology"
+  }
+]
