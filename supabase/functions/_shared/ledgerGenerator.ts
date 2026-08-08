@@ -173,17 +173,41 @@ export function generateClaimsBatch(source: GenSource): GeneratedBatch {
 export interface ValidationError { code: string; about?: string; detail: string; }
 export interface ValidationResult { ok: boolean; errors: ValidationError[]; elementCount: number; claimCount: number; unknownCount: number; }
 
-const VALUE_KINDS = new Set(["scalar", "ref", "ref-list", "unresolved-ref", "unknown", "na"]);
-const FORBIDDEN_CLAIM_KEYS = ["id", "supersededBy", "superseded_by", "contradicts", "escalateTo", "escalate_to", "closedBy", "closed_by"];
+/** A batch claim = AssertInput shape. GeneratedClaim is the generator's stricter subtype
+ *  (source 'generated', no closedBy); an IMPORT adapter emits the same shape with its own
+ *  source class and a closedBy (the import/disposition attribution). One shape, one store. */
+export interface BatchClaim {
+  about: string; value: ClaimValue; world: World; layer: Layer;
+  source: string; status: Status; ownerWhileOpen: Owner;
+  closedBy?: { method: string; by: string; verbatim?: string };
+}
+export interface Batch { elements: GeneratedElement[]; claims: BatchClaim[]; }
 
-export function validateBatch(batch: GeneratedBatch): ValidationResult {
+/** Per-caller policy. The SHAPE checks (about, value, reference, binder discipline on
+ *  store-computed fields) are universal; the source ceiling, slot completeness, and
+ *  whether a closedBy is allowed are the caller's policy — the generator vs an import. */
+export interface ValidateOptions {
+  allowedSources?: string[];        // generator: ['generated']; override adapter: ['dispositioned','code-derived']
+  requireSlotCompleteness?: boolean; // generator: true (declares whole elements); import: false (targeted claims)
+  allowClosedBy?: boolean;           // generator: false (never closes); import: true (carries the disposition attribution)
+  checkElementIds?: boolean;         // generator: true (a MODEL must not mint ids); import: false (ids are code-derived by construction, and use el:removed:/el:rel: prefixes)
+}
+
+const VALUE_KINDS = new Set(["scalar", "ref", "ref-list", "unresolved-ref", "unknown", "na"]);
+// store/human-owned fields no batch may carry (id/supersededBy/… are the store's); closedBy is
+// conditionally forbidden — the generator never closes, an import adapter attributes its disposition.
+const ALWAYS_FORBIDDEN = ["id", "supersededBy", "superseded_by", "contradicts", "escalateTo", "escalate_to"];
+
+export function validateBatch(batch: Batch, opts: ValidateOptions = {}): ValidationResult {
+  const { allowedSources = ["generated"], requireSlotCompleteness = true, allowClosedBy = false, checkElementIds = true } = opts;
+  const FORBIDDEN_CLAIM_KEYS = allowClosedBy ? ALWAYS_FORBIDDEN : [...ALWAYS_FORBIDDEN, "closedBy", "closed_by"];
   const errors: ValidationError[] = [];
   const err = (code: string, detail: string, about?: string) => errors.push({ code, about, detail });
   const els = Array.isArray(batch.elements) ? batch.elements : [];
   const cls = Array.isArray(batch.claims) ? batch.claims : [];
 
-  // element ids must be code-derived (recomputable from kind+name), never model-minted
-  for (const e of els) {
+  // element ids must be code-derived (recomputable from kind+name), never model-minted (generator-only)
+  for (const e of checkElementIds ? els : []) {
     const expected = e.kind === "entity" ? `el:entity:${slug(e.name)}`
       : e.kind === "attribute" ? `el:attr:${slug((els.find((x) => x.id === e.of)?.name) ?? "")}.${slug(e.name)}`
         : e.kind === "workflow" ? `el:wf:${slug(e.name)}` : null; // relation/step ids are content-hashed; checked by prefix only
@@ -198,8 +222,8 @@ export function validateBatch(batch: GeneratedBatch): ValidationResult {
     // structural
     if (typeof about !== "string" || !about.includes("#")) { err("bad-about", `about must be <elementId>#<slot>: ${JSON.stringify(about)}`); continue; }
     for (const k of FORBIDDEN_CLAIM_KEYS) if (k in (c as unknown as Record<string, unknown>)) err("forbidden-key", `claim carries store/human-owned key '${k}' (binder discipline)`, about);
-    // (2) source ceiling
-    if (c.source !== "generated") err("source-ceiling", `source '${c.source}' > generated; the generator may only propose`, about);
+    // (2) source ceiling — the caller's allowed source classes (never `asserted` unless the caller says so)
+    if (!allowedSources.includes(c.source)) err("source-ceiling", `source '${c.source}' not in [${allowedSources.join(", ")}]`, about);
     // value shape
     if (!c.value || !VALUE_KINDS.has(c.value.kind)) { err("bad-value", `unknown value kind`, about); continue; }
     if (c.value.kind === "unknown") unknownCount += 1;
@@ -211,8 +235,10 @@ export function validateBatch(batch: GeneratedBatch): ValidationResult {
     const st = c.status;
     if (c.value.kind === "unknown" && st !== "open") err("status-coherence", `unknown ⇒ open, got '${st}'`, about);
     if (c.value.kind === "na" && st !== "n/a") err("status-coherence", `na ⇒ n/a, got '${st}'`, about);
-    if ((c.value.kind === "scalar" || c.value.kind === "ref" || c.value.kind === "ref-list") && st !== "weak")
-      err("status-coherence", `substantive generated value ⇒ weak (never closed), got '${st}'`, about);
+    // substantive: the generator may only propose (weak); an import may close (weak|closed) — never open/blocked
+    const substantiveOk = allowClosedBy ? (st === "weak" || st === "closed") : st === "weak";
+    if ((c.value.kind === "scalar" || c.value.kind === "ref" || c.value.kind === "ref-list") && !substantiveOk)
+      err("status-coherence", `substantive value ⇒ ${allowClosedBy ? "weak|closed" : "weak (generator never closes)"}, got '${st}'`, about);
     // owner present
     if (!c.ownerWhileOpen || !["role", "joint", "unowned"].includes((c.ownerWhileOpen as Owner).kind)) err("bad-owner", `missing/invalid ownerWhileOpen`, about);
     const eid = elementIdOf(about);
@@ -220,7 +246,8 @@ export function validateBatch(batch: GeneratedBatch): ValidationResult {
   }
 
   // (1) slot completeness — every element carries the full required slot set for its kind
-  for (const e of els) {
+  // (the anti-omission guard; generator-only — an import adapter emits targeted claims, not whole elements)
+  for (const e of requireSlotCompleteness ? els : []) {
     const req = REQUIRED_SLOTS[e.kind]; if (!req) continue;
     const have = claimsByElement.get(e.id) ?? new Set<string>();
     for (const slotName of req) if (!have.has(slotName)) err("slot-incomplete", `element ${e.id} (${e.kind}) missing required slot '${slotName}' — omission is what makes a guess look like fact`, e.id);
