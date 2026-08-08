@@ -3,8 +3,11 @@
 create table if not exists public.ledger_elements (
   id text not null, program_id text not null, kind text not null,
   name text not null, of text, refs jsonb not null default '{}'::jsonb,
+  dropped boolean not null default false,      -- regeneration no longer produces it; row STAYS (orphan target)
   primary key (program_id, id)                 -- element ids are program-agnostic too
 );
+-- idempotent for a pre-existing table (create-if-not-exists won't add the column)
+alter table public.ledger_elements add column if not exists dropped boolean not null default false;
 create table if not exists public.ledger_claims (
   id text not null,                            -- contentId(about,world,source,value) — program-agnostic hash
   program_id text not null,                    -- engagement scope + audit program_id
@@ -26,9 +29,13 @@ create table if not exists public.ledger_rename_intents (
   old_element_id text not null, new_element_id text not null, by text not null, at timestamptz not null default now()
 );
 
--- audit linkage: the SAME Step 1 trigger writes the append-only audit row on every ledger write
+-- audit linkage: the SAME Step 1 trigger writes the append-only audit row on every ledger write —
+-- on BOTH state-bearing ledger tables (claims and elements), so element maintenance is audited too.
 drop trigger if exists aura_audit_ledger on public.ledger_claims;
 create trigger aura_audit_ledger after insert or update or delete on public.ledger_claims
+  for each row execute function public.aura_audit();
+drop trigger if exists aura_audit_ledger_elements on public.ledger_elements;
+create trigger aura_audit_ledger_elements after insert or update or delete on public.ledger_elements
   for each row execute function public.aura_audit();
 
 -- the RLS predicate calls auth.uid(); `authenticated` must be able to reach it.

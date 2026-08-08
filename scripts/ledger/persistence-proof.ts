@@ -101,9 +101,8 @@ async function main() {
   const fresh = migrate(S);
   const incoming: AssertInput[] = fresh.claims().filter((c) => c.world === "to-be" && !c.supersededBy && c.source === "generated")
     .map((c) => ({ about: c.about, value: c.value, world: c.world, layer: c.layer, source: c.source, ownerWhileOpen: c.ownerWhileOpen, status: c.status, closedBy: c.closedBy }));
-  const incomingEls = new Set(fresh.elements().map((e) => e.id));
   const rec0 = process.hrtime.bigint();
-  const report = await led.reconcile(incoming, incomingEls);
+  const report = await led.reconcile(incoming, fresh.elements());
   const recMs = Number(process.hrtime.bigint() - rec0) / 1e6;
   const stillClosed = (await led.liveClaimsAbout(about)).some((c) => c.source === "asserted" && c.closedBy?.by === "vp-sales");
   say(`reconciled ${incoming.length} generated claims in ${recMs.toFixed(0)}ms`);
@@ -118,7 +117,7 @@ async function main() {
   const dfresh = migrate(dropped);
   const dIncoming: AssertInput[] = dfresh.claims().filter((c) => c.world === "to-be" && !c.supersededBy && c.source === "generated")
     .map((c) => ({ about: c.about, value: c.value, world: c.world, layer: c.layer, source: c.source, ownerWhileOpen: c.ownerWhileOpen, status: c.status }));
-  const dReport = await led.reconcile(dIncoming, new Set(dfresh.elements().map((e) => e.id)));
+  const dReport = await led.reconcile(dIncoming, dfresh.elements());
   const orphanPreserved = (await led.liveClaimsAbout(orphanAbout)).some((c) => c.source === "asserted");
   const orphans = await led.orphanedClosures(); // the queryable orphan projection
   const orphanFlagged = dReport.orphanedClosures.some((o) => o.about === orphanAbout) || orphans.some((o) => o.about === orphanAbout);
