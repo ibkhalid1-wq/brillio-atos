@@ -312,10 +312,13 @@ export function buildLineModel(program: ProgramSummary): LineModel {
     {
       id: "listen", name: "Listen", scope: "per area",
       chip: gateChip(listenGate, listenOk), gate: listenGate,
+      // Roster reach — who has a link out or has replied. NOT "heard": the honest
+      // heard-count is attributed ledger closures (shown in the header + Discover),
+      // and this roster figure is a different, coarser thing (see surface-redesign.md).
       intake: heard.total > 0
-        ? `${heard.done} of ${heard.total} voices heard — add to the record from the classic Listen board`
+        ? `${heard.done} of ${heard.total} on the roster reached — add to the record from the classic Listen board`
         : "Interviews & portal links — waits for the Kit to cast the roster",
-      note: "A correction demotes the slice it touches; everything downstream keeps its maturity but is flagged needs refresh until regenerated.",
+      note: "A correction reopens the claims the slice rests on; everything downstream keeps its maturity but reads evidence-moved until rebuilt.",
       stations: [
         station(program, onto, listenOk, { perArea: listenSegments(!!onto?.present) }),
         station(program, atlas, listenOk, { perArea: listenSegments(!!atlas?.present) }),

@@ -31,6 +31,9 @@ import { canonicalFrameArea, stakeholderPrimaryArea } from "@/v3/components/flow
 import { buildMeetingIcs, meetingKit, sponsorLinkQuestions } from "@/v3/components/flow/flowMeetings";
 import DiscoveryKitAlign from "@/v3/components/flow/DiscoveryKitAlign";
 import { supabase } from "@/integrations/supabase/client";
+import { useProgramLedger } from "@/v3/lib/ledger/useProgramLedger";
+import { HeardReadout, ConvergenceReadout, UnownedSeamStrip, ProvisionalMark, ClaimStatus, SourceTag } from "@/v3/components/flow/studio/ledgerPrimitives";
+import DesignLoopZones from "@/v3/components/flow/DesignLoopZones";
 import "./theLine.css";
 
 const FlowArtifactStudio = lazy(() => import("./studio/FlowArtifactStudio"));
@@ -181,9 +184,9 @@ function Station({ station, onOpen, onRegen, onGenerate, regenerating, generatin
                 e.preventDefault(); e.stopPropagation();
                 if (!regenerating) onRegen!(station.card!);
               }}>
-              {regenerating ? "regenerating…" : "needs refresh ↻"}
+              {regenerating ? "rebuilding…" : "evidence moved ↻"}
             </span>
-          ) : <span className="v3ln-rf">needs refresh ↻</span>
+          ) : <span className="v3ln-rf">evidence moved</span>
         ) : canGen ? (
           // Inputs are ready but nothing's been generated — a visual badge for
           // the action the tile itself carries (aria-hidden: the tile's own
@@ -303,6 +306,8 @@ function packFor(program: ProgramSummary, who: string, movementId: "frame" | "li
 
 export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenameRole, onMintFollowUp, onScheduleFollowUp, onRunAgent, onRecordGate, onReopenGate, onSendForApproval }: TheLineProps) {
   const model = useMemo(() => buildLineModel(program), [program]);
+  // The ONE in-browser ledger read every surface here shares (read-only migrate).
+  const ledger = useProgramLedger(program);
   const [gateFor, setGateFor] = useState<LineBand | null>(null);
   const [docFor, setDocFor] = useState<ArtifactCardModel | null>(null);
   // A section chip on the board deep-links into the studio at that section.
@@ -729,15 +734,21 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
       </div>
 
       {tab === "work" ? (
-        <div className="v3ln-stats">
+        <>
+        <div className="v3ln-stats ledger">
           <div><span className="v3ln-sl">Round</span><span className="v3ln-sv">{model.round}</span></div>
-          <div><span className="v3ln-sl">Converged</span><span className="v3ln-sv">{model.stats.converged} of {model.stats.areasTotal} areas</span></div>
-          <button type="button" className="v3ln-statbtn" onClick={() => setTab("discovery")}
-            title="Open Discover — who has been heard, who is waiting">
-            <span className="v3ln-sl">Voices heard</span><span className="v3ln-sv">{model.stats.heardTotal > 0 ? `${model.stats.heardDone} of ${model.stats.heardTotal}` : "—"}</span>
+          <button type="button" className="v3ln-statbtn wide" onClick={() => setTab("discovery")}
+            title="Attributed closures — a person closed the slot. The honest heard-count, not a roster tally.">
+            <span className="v3ln-sl">Heard <span className="v3ln-sl-note">attributed closures</span></span>
+            <HeardReadout heard={ledger.heard} />
           </button>
-          <div><span className="v3ln-sl">Needs refresh</span><span className={`v3ln-sv${model.stats.refresh > 0 ? " acc" : ""}`}>{model.stats.refresh > 0 ? `${model.stats.refresh} station${model.stats.refresh === 1 ? "" : "s"}` : "—"}</span></div>
+          <div className="v3ln-stat-wide">
+            <span className="v3ln-sl">Convergence <span className="v3ln-sl-note">real claim closures</span></span>
+            <ConvergenceReadout burnDown={ledger.kit.burnDown} />
+          </div>
         </div>
+        <UnownedSeamStrip unownedBands={ledger.unownedBands} seamBands={ledger.seamBands} />
+        </>
       ) : null}
 
       {note ? <div className="v3ln-toast" role="status">{note}</div> : null}
@@ -765,28 +776,15 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
             </div>
           ) : null}
           {band.id === "loop" && band.stations.some((s) => s.lane) ? (
-            // The Design Loop is a pipeline, not a bag of cards: design the
-            // build (Envision), then validate it with clients (Show). The lanes
-            // make that structure legible; each design station previews its
-            // own sections so the phase reads without opening a studio.
-            (["design", "validate"] as const).map((lane) => {
-              const stns = band.stations.filter((s) => s.lane === lane);
-              if (!stns.length) return null;
-              return (
-                <div key={lane} className="v3ln-lane">
-                  <div className="v3ln-lane-h">{lane === "design" ? "Design — the team builds it" : "Validate — clients sign off"}</div>
-                  <div className={`v3ln-stns n${stns.length}`}>
-                    {stns.map((s) => (
-                      <Station key={s.id} station={s} onOpen={openStation}
-                        onRegen={onRunAgent ? regenerate : undefined}
-                        onGenerate={onRunAgent ? generate : undefined}
-                        regenerating={!!(s.card && regenBusy[s.card.id])}
-                        generating={!!(s.card && genBusy[s.card.id])} />
-                    ))}
-                  </div>
-                </div>
-              );
-            })
+            // The Design Loop is a LEDGER SURFACE, not four refreshable cards: three
+            // ownership zones keyed to source class (operator builds · stakeholders
+            // shape · joint), convergence promoted to real closures. See
+            // DesignLoopZones.tsx and docs/aura/surface-redesign.md.
+            <DesignLoopZones band={band} ledger={ledger}
+              onOpen={openStation}
+              onRegen={onRunAgent ? regenerate : undefined}
+              onGenerate={onRunAgent ? generate : undefined}
+              regenBusy={regenBusy} genBusy={genBusy} />
           ) : (
           <div className={`v3ln-stns n${band.stations.length + (band.id === "frame" && onSaveInputs ? 1 : 0)}`}>
             {/* The Company Brief leads Frame: who the client IS comes before
@@ -825,7 +823,7 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
               {MATURITY_WORDS[m]}
             </span>
           ))}
-          <span className="v3ln-lg"><span className="v3ln-rf">needs refresh ↻</span>evidence changed beneath it</span>
+          <span className="v3ln-lg"><span className="v3ln-rf">evidence moved</span>the claims under it moved — rebuild to re-ground it</span>
         </div>
       ) : null}
 
@@ -850,11 +848,20 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                 </select>
               </label>
             ) : null}
-            <span className="v3ln-scope">{filteredCast.filter((r) => r.heard).length} of {filteredCast.length} heard{areaFilter && castAreas.includes(areaFilter) ? ` in ${areaFilter}` : ""}</span>
+            <span className="v3ln-scope">{filteredCast.filter((r) => r.heard).length} of {filteredCast.length} linked / responded{areaFilter && castAreas.includes(areaFilter) ? ` in ${areaFilter}` : ""}</span>
             {onSaveInputs ? (
               <button type="button" className="v3ln-a" onClick={() => openCapture()}>＋ add to the record</button>
             ) : null}
           </header>
+          {/* Ledger-honest heard: the roster count above is who has a link out or
+              replied; the AUTHORITATIVE heard-count is attributed ledger closures
+              (a person closed a slot) — one figure, shared with the Work header. */}
+          <div className="v3ln-ledgerstrip">
+            <span className="v3ln-ledgerstrip-l">On the ledger</span>
+            <HeardReadout heard={ledger.heard} />
+            <span className="v3ln-ledgerstrip-sep" aria-hidden="true">·</span>
+            <UnownedSeamStrip unownedBands={ledger.unownedBands} seamBands={ledger.seamBands} />
+          </div>
           <div className="v3ln-cast">
             {filteredCast.map((row) => (
               <div key={row.label} className="v3ln-cr"
@@ -1033,8 +1040,19 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                 </select>
               </label>
             ) : null}
-            <span className="v3ln-scope">{recordGroups.reduce((n, g) => n + g.items.length, 0)} entries</span>
+            <span className="v3ln-scope">{recordGroups.reduce((n, g) => n + g.items.length, 0)} evidence entries</span>
           </header>
+          {/* The entries below are attributed evidence (who said it, when) — real.
+              But the LEDGER attributes only closures: 26 attributed, and every one
+              is an operator touch (weak, no verbatim), not a stakeholder assertion.
+              Shown so "who said what" never over-claims what the ledger holds. */}
+          <div className="v3ln-ledgerstrip">
+            <span className="v3ln-ledgerstrip-l">Attributed on the ledger</span>
+            <span className="v3ln-rec-attr"><ClaimStatus state="closed" showLabel={false} /> <b>{ledger.heard.total}</b> attributed closures</span>
+            <span className="v3ln-ledgerstrip-sep" aria-hidden="true">·</span>
+            <span className="v3ln-rec-attr"><SourceTag source="dispositioned" /> <b>{ledger.stats.closedWithoutVerbatim}</b> operator touches (weak, no verbatim)</span>
+            <ProvisionalMark what="per-area attribution needs the stakeholder write path; all closures read into one band today" />
+          </div>
           {recordGroups.length === 0 ? (
             <div className="v3ln-note">Nothing on the record yet{areaFilter ? ` for ${areaFilter}` : ""} — capture a conversation or share a link from Discover.</div>
           ) : recordGroups.map((group) => (

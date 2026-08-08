@@ -7,7 +7,8 @@
  *
  * Works within theLine.css / v3.css tokens (the Listen movement hue). Read-only.
  */
-import type { SlotState } from "@/v3/lib/ledger/projections";
+import type { SlotState, KitView, HeardRegister } from "@/v3/lib/ledger/projections";
+import type { OwnershipClass } from "@/v3/lib/ledger/useProgramLedger";
 
 // ── claim status — five states, distinguishable at a glance and not by colour alone ──
 const STATUS_META: Record<SlotState | "closed", { glyph: string; label: string; cls: string; title: string }> = {
@@ -76,5 +77,98 @@ export function DeviationMarker({ classification, stillReferenced }: { classific
       <span aria-hidden="true">{unbacked ? "▲" : "✓"}</span> as-is<span aria-hidden="true"> → </span>to-be · {unbacked ? "unbacked" : "deliberate"}
       {stillReferenced ? <span className="v3lc-dev-ref" title="the removed element is still referenced elsewhere"> · still referenced</span> : null}
     </span>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Shared cross-surface vocabulary (the "build once, use everywhere" layer).
+// One heard readout, one convergence readout, one ownership tag, one unowned/seam
+// strip — so the kit, the Design Loop, the artifact views and the stats header can
+// never again show three different numbers for the same thing.
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── a provisional mark — the honest interim where a figure can't yet be computed
+//    truthfully in-browser (per-area, per-stakeholder, persisted). Shape + text,
+//    never colour alone. ──
+export function ProvisionalMark({ what }: { what: string }) {
+  return (
+    <span className="v3lc-prov" title={`provisional — ${what}`}>
+      <span aria-hidden="true">◇</span> provisional
+    </span>
+  );
+}
+
+// ── ownership by SOURCE CLASS — the ledger's own encoding, not an invented
+//    taxonomy. operator = decision/dispositioned · stakeholder = asserted ·
+//    joint = both on one locus · draft = machine-proposed, awaiting a human. ──
+const OWNERSHIP_META: Record<OwnershipClass, { icon: string; label: string; title: string }> = {
+  operator: { icon: "▧", label: "operator", title: "operator-decided — a decision or disposition on record (operator owns it)" },
+  stakeholder: { icon: "✍", label: "stakeholder", title: "stakeholder-asserted — a person's answer stands here (a stakeholder owns it)" },
+  joint: { icon: "⋈", label: "joint", title: "joint — both an operator decision and a stakeholder assertion live on this locus" },
+  draft: { icon: "✧", label: "draft", title: "machine draft — generated / exported only, awaiting a decision or an assertion" },
+};
+export function OwnershipTag({ cls, count, showLabel = true }: { cls: OwnershipClass; count?: number; showLabel?: boolean }) {
+  const m = OWNERSHIP_META[cls];
+  return (
+    <span className={`v3lc-own is-${cls}`} title={m.title}>
+      <span aria-hidden="true">{m.icon}</span>
+      {showLabel ? <span className="v3lc-own-l">{m.label}</span> : <span className="v3lc-sr">{m.label}</span>}
+      {count != null ? <span className="v3lc-own-n">{count}</span> : null}
+    </span>
+  );
+}
+
+// ── the ONE heard readout: attributed human closures from the ledger (not roster
+//    counts). Per-area is not computable in-browser (all closures land in one band
+//    here), so per-area carries a provisional mark rather than a fabricated split. ──
+export function HeardReadout({ heard, perAreaProvisional = true }: { heard: HeardRegister; perAreaProvisional?: boolean }) {
+  return (
+    <span className="v3lc-heard" title={`${heard.total} attributed closures — the honest heard-count (a person closed the slot), distinct from ${heard.totalClosedOrWeak} machine-import closures`}>
+      <span className="v3lc-heard-n">{heard.total}</span>
+      <span className="v3lc-heard-l">attributed{heard.total === 1 ? " closure" : " closures"}</span>
+      {perAreaProvisional ? <ProvisionalMark what="per-area heard needs the stakeholder write path; all closures read into one band today" /> : null}
+    </span>
+  );
+}
+
+// ── the ONE convergence readout: real ledger closures (burn-down), not demo-verdict
+//    area sign-offs. Per-area convergence needs the write path → provisional. ──
+export function ConvergenceReadout({ burnDown, perAreaProvisional = true }: { burnDown: KitView["burnDown"]; perAreaProvisional?: boolean }) {
+  return (
+    <span className="v3lc-conv">
+      <span className="v3lc-conv-bar" role="img" aria-label={`${burnDown.pctClosed}% of claims closed or weak`}>
+        <span style={{ width: `${burnDown.pctClosed}%` }} />
+      </span>
+      <span className="v3lc-conv-l">
+        <b>{burnDown.pctClosed}%</b> <span className="v3lc-conv-sub">{burnDown.closed} closed/weak · {burnDown.open} open</span>
+      </span>
+      {perAreaProvisional ? <ProvisionalMark what="per-area convergence is demo-verdict sign-off, gated on the stakeholder write path" /> : null}
+    </span>
+  );
+}
+
+// ── the loud signals: unowned pinned first, then seams (joint-owned) as their own
+//    rows. A surface that shows tidy area tabs and no unowned reproduces the "0
+//    unowned" fabrication — this strip exists so they can't. ──
+export function UnownedSeamStrip({ unownedBands, seamBands }: { unownedBands: KitView["bands"]; seamBands: KitView["bands"] }) {
+  const unownedOpen = unownedBands.reduce((n, b) => n + b.open, 0);
+  if (!unownedBands.length && !seamBands.length) return null;
+  return (
+    <div className="v3lc-uss" aria-label="unowned and seam ownership">
+      <span className="v3lc-uss-lead">
+        <BandTag kind="unowned" label="UNOWNED" />
+        <span className="v3lc-uss-n">{unownedOpen} open, nobody owns them</span>
+      </span>
+      {seamBands.length ? (
+        <span className="v3lc-uss-seams">
+          <span className="v3lc-uss-seams-l">{seamBands.length} seam{seamBands.length === 1 ? "" : "s"}</span>
+          {seamBands.map((b) => (
+            <span key={b.key} className="v3lc-uss-seam" title={`${b.label} — ${b.open} open, jointly owned`}>
+              <span aria-hidden="true">⋈</span> {b.label}<span className="v3lc-uss-seam-n">{b.open}</span>
+            </span>
+          ))}
+        </span>
+      ) : null}
+    </div>
   );
 }
