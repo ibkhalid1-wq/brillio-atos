@@ -256,10 +256,64 @@ and a real incremental update, report actual counts, and replace the modelled fi
   incremental MODELLED") was replaced in place with the measured result; this report carries the same
   numbers. No other document cited the old ratio (grep-checked).
 
-## G · Step 1b static test — **deferred (not started)**
+## I · Inline workflow-editor write-path audit (item 5)
 
-Lowest-priority "if time remains" item, and Step-1-adjacent (action_type / affected_kind are the
-intent/audit payload). Deferred rather than rushed near sensitive territory. It is a clean bounded
-follow-on: author a source-reading static test asserting every emitted `action_type` ∈ its documented
-closed set, every `affected_kind` ∈ its closed set, and no client call site passes `actor` — test
-only, no intent wiring, no payload change.
+Audited the inline Current-State Atlas editor (`AtlasSeamView.tsx` — inline workflow/step CRUD +
+detail popover, replacing the separate "edit a workflow" form). The write path:
+`AtlasSeamView` → `WorkflowStudio.onChange` → `FlowArtifactStudio` draft → `applyArtifactEdit`
+(`flowArtifactEdit.ts`) → blob `inner.currentStateAtlas.workflows[].steps[]`. Findings:
+
+- **What it writes / action_type:** every inline edit is `edit_artifact` (affected_kind `artifact`) —
+  the **same** generic verb as any studio edit; the specific step/field is the `affected_id`
+  JSON-pointer, not a new verb. That is **correct by the anti-synonym rule** (doc §6.2a: a
+  sub-distinction derivable from `affected_id` must NOT get its own verb), not a census gap.
+- **Step-1b:** independent. The editor uses the JWT actor via `applyArtifactEdit`; it does not read
+  or publish Step-1 intent. Consistent with §H's finding that no client publishes `aura.intent` yet.
+- **Stale-artifact loss — my earlier hypothesis REFUTED (report it, don't bury it):** I expected
+  inline edits might be silently discarded on regeneration the way I feared overrides were. They are
+  **not** — inline edits ARE operator overrides: `applyArtifactEdit` runs `overrideNotes` and appends
+  to `flowOperatorOverrides` (`flowArtifactEdit.ts:62–69`), so they are **already counted** by
+  `operatorOverrideCount()` and **already surfaced** by the regeneration warning built in item 1(b).
+  No separate wiring needed; item 1(b) already protects inline atlas edits.
+- **Honest limit inherited:** the override note for a step edit is coarse (`Workflow edited: "name"`
+  — the whole-workflow deep-diff, not the step or the value), the same *touched, not confirmed*
+  limitation as the rest of the log (§listen-gap-list caveat). The warning counts it; it can't yet
+  say which step.
+
+## J · Grounding by provenance on Laila (item 6a)
+
+Measured against the committed snapshot (`operator-overrides.json` 49 entries + `domain-ontology.json`
+33 entities / 35 relations). Provenance split of the ontology's **entities**:
+
+- **Stakeholder-touched (override-corrected): 20 / 33 = 61%.** Named in the override log as
+  edited/removed by a stakeholder session.
+- **Code-derived only (never touched): 13 / 33 = 39%.** Pure generator output; no human ever moved
+  the element specifically.
+- Relations were curated too: **9 added, 4 removed, 2 edited** (15 relation-level corrections).
+- The log also names 3 entities since **removed** (`User`, `Pricing Item`, `Entity Profile`).
+
+**The honest ladder (not a bind rate):** even the 61% "touched" tier is *touched, not confirmed* — the
+log records THAT an element changed, with no diff and no reason, so 0% carries a recorded rationale.
+So Laila's ontology is: 39% untouched generator output, 61% lightly-corrected, **0% attributed**. This
+is the number the `claims-register.md` row anticipated ("the first grounding number, framed
+correctly") — it is a *provenance* count, not an app-displayed traceability metric, and it is measured
+in a report, not asserted in the UI. Fleet-wide "is 61% typical?" needs cross-engagement reads — DB-gated (terminal list).
+
+## G · Step 1b static test — **static half AUTHORED** (`auditVocabulary.test.ts`)
+
+Reversed the earlier deferral where it could be done safely. Step-1b's runtime half (client publishes
+`aura.intent`) is genuinely un-authorable: the client sets `aura.intent` **nowhere** (grep-empty), so
+there is no live emit surface to assert `action_type ∈ ACTION_TYPES` against, and building that wiring
+is the gated Step-1 work. But the **static half** is real and safe, and is now committed as
+`src/v3/__tests__/auditVocabulary.test.ts` (6 tests, green). It parses the one source of truth
+(`action-type-vocabulary.md` §1/§2/§5) and pins:
+- every action's `affected_kind` ∈ the §5 closed set (membership — no orphan kind);
+- no `action_type` defined twice (a duplicate is a synonym by construction — §6.2a);
+- the user/system split is exactly the `system.` prefix (§3);
+- every §5 kind is used by ≥1 action (no dead kind);
+- **the client sets `aura.intent` at no site** — the *"no actor passed from the client"* invariant in
+  the only form testable before intent wiring (the DB derives audit `actor` from the JWT; a
+  client-set audit actor would be a spoof). When Step-1b wiring lands, this test's replacement adds
+  the `∈ ACTION_TYPES` emit check and the per-emit no-`actor`-key check — the header says so.
+
+Author-only: no intent wiring, no payload change, no Step-1 gate touched.
