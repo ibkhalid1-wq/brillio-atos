@@ -245,6 +245,94 @@ then refines *within* the system instead of reinventing it.
 
 ---
 
+## F-F · Attributes have no value set, so lifecycle stages cannot be captured
+
+**Defect.** An attribute like `Opportunity.stage` *is* an enum — its meaning is its permitted values,
+in order: **Prospecting → Qualification → Proposal → Closed Won**. The schema has nowhere to record
+that. Attributes are untyped strings (F-D) with **no `values` / `enum` / value-set field at all**, so
+there is no place to say `stage` is an enum, let alone list its members or their order.
+
+Measured on Laila's ontology (178 attributes): **33 are enum-shaped by name** — `stage`, `status`,
+`type`, `tier`, `category`, `severity`, `healthRag`, `rag`, `projection_status`, … spanning 24 of 33
+entities (`Opportunity.stage`, `Lead.status`, `Quote.status`, `Contract.status`, `Engagement.healthRag`,
+`Escalation.severity`, `Delivery Health.rag`, and 26 more). Every one has a value set a stakeholder
+carries in their head and the artifact cannot hold.
+
+**Why this is stronger than F-D's typing case.** F-D argues attribute *types* are discarded — but a
+type is usually *inferable* (the generator reads `amount` and proposes `monetary` with high accuracy;
+the stakeholder confirms in passing). **A stage set is never inferable.** No amount of name-reading
+tells you a CRM's opportunity stages are Prospecting/Qualification/Proposal/Closed-Won rather than
+Discover/Scope/Negotiate/Won, or that "Closed Lost" is a terminal state that stage can reach but not
+leave. Only the domain owner knows. So where F-D is *mostly a schema+generator fix with one Listen
+ask*, F-F is *a schema fix whose value is realisable only through a stakeholder answer* — the enum
+field is inert until Listen fills it. This makes stage sets the highest-value Listen question in the
+build (see the lifecycle-axis Listen questions in `docs/laila/listen-gap-list.md`): exact, uncontested,
+and recitable.
+
+**The consequence is already demonstrated.** The assembled prototype (`prototypeAssembly.ts`, item H
+of the 2026-08-07 session) rendered `Opportunity.stage` as the **record title** — because with no type
+and no value set, the role deriver fell back to "first attribute = title." A `stage` that the UI
+should draw as an ordered pipeline chip instead became the screen heading. Nothing said otherwise, so
+the heuristic won. That misrender is F-F made visible on a populated screen.
+
+**Proposed schema addition (record, do not implement — gated).**
+
+```jsonc
+// ontology.entity.attributes[] — extend the F-D attribute object:
+{ "name": "stage", "type": "code",
+  "valueSet": {
+    "kind": "enum" | "open",                       // open = free vocabulary, no fixed members
+    "values": ["Prospecting","Qualification","Proposal","Closed Won"],   // in lifecycle order
+    "terminal": ["Closed Won","Closed Lost"],        // states a record can enter but not leave
+    "confidence": "asserted"                         // enum members are ALWAYS a stakeholder assertion
+  }
+}
+```
+
+**Cost.** Schema field + reader (render an enum as a pipeline/chip, not a title): client-buildable, and
+composes with `deriveRoles()` (a `status`/`stage` role with a value set becomes an ordered control).
+The **members themselves are a Listen ask** — one question per enum-shaped attribute on a lifecycle
+entity, distributed to the session that owns the entity. Generator/edge portions gated (no Deno here).
+- *Readers:* `semanticRoles.ts` (would consume the value set once present), the prototype assembler
+  (would render an enum control instead of guessing), `journeyGraph.ts` (a `stage` value set is the
+  *within-entity* lifecycle, complementary to the cross-entity journey it derives from relations).
+
+---
+
+## F-G · Workflows have no phase assignment
+
+**Defect.** A Current-State Atlas workflow has `area`, `name`, `owner`, `trigger`, `steps`, `handoffs`,
+`failureModes` — but **no lifecycle-phase field**. The atlas's vertical ordering reads as a lifecycle
+to a human (Signal Generation, then Qualification, then Forecasting) but to the system it is **array
+position**: nothing declares a phase, and reordering the array silently reorders the "lifecycle."
+
+The two-dimensional atlas grid (item 2, `AtlasLifecycleGrid.tsx`) therefore **derives** each workflow's
+phase from the entities its steps touch — a workflow referencing `Opportunity` sits at the Opportunity
+phase — and marks every placement `derived`. That works and is honest, but it is a derivation standing
+in for a missing field: it re-computes on every render, cannot be corrected by a stakeholder, and
+inherits the ambiguity of the `produces` graph (a workflow touching entities across three phases is
+placed by a frequency heuristic, not by anyone's statement).
+
+**Proposed schema addition (record, do not implement — gated).**
+
+```jsonc
+// atlas.workflows[] — add:
+{ "phase": "Qualification",                 // the lifecycle stage this workflow advances
+  "phaseConfidence": "asserted" | "derived" // derived = Aura's entity-based guess until confirmed
+}
+```
+
+**Cost and what it buys.** One optional string field on the workflow object. Cheap to add, but it is
+**a stored-artifact change → gated** (this session must not write a phase field into the atlas). Once
+present: the grid stops guessing (reads `phase` when asserted, falls to the derivation only when
+absent); the vertical axis becomes correctable by the operator/stakeholder rather than recomputed; and
+phase gains provenance (`derived` vs `asserted`) exactly as F-D/F-F do for attributes. Until then the
+derived axis is the honest interim — a view, not a fact.
+- *Readers:* `AtlasLifecycleGrid.tsx` (would prefer an asserted `phase` over the derivation);
+  `journeyGraph.placeWorkflows()` (its output becomes the *fallback*, not the only source).
+
+---
+
 ## Priority
 
 | Finding | Blocks Architect? | Needs the gate? | Cheapest first move |
@@ -254,9 +342,20 @@ then refines *within* the system instead of reinventing it.
 | **F-C** cross-artifact coherence | Yes (silent incoherence) | **No** — pure client derivation | Client coherence pass + in-diagram marks (already surfaced by the multi-area swimlane) |
 | **F-D** ontology discards types/optionality | Indirectly (keeps generation generative) | Schema + generator do; readers don't | Attribute-`type` + relation-`optionality` fields; generator proposes types, Listen confirms optionality |
 | **F-E** generator ignores the design system | No (appearance) | Generator does; client export does not | `meridian.css` in every export (done); generator emits `.m-*` markup (gated) |
+| **F-F** attributes have no value set | Yes (stage sets unrenderable) | Schema does; **members are a Listen ask** | `valueSet` field + enum-as-pipeline reader (client); ordered members captured in Listen |
+| **F-G** workflows have no phase | Yes (vertical axis has no field) | Schema does; grid derives now | Optional `phase` field (gated write); grid reads asserted, falls to the derivation |
 
 F-A and F-B are one gated generator pass together (both extend the step contract). F-D is the same
 class one level up (the ontology contract), and pairs naturally with them — one gated schema pass
 adds step fields (F-A/B) and the attribute-`type` + relation-`optionality` fields (F-D) together;
 optionality is the only part that needs a Listen question. F-C and the client side of F-E ship now,
 gate-free. F-E's generator markup is the last gated piece.
+
+**F-F and F-G are the lifecycle axis's two schema gaps, and they sit in this same gated pass.** F-F
+(attribute value sets) is F-D's argument sharpened: a type is inferable, a stage set never is, so its
+enum members are the highest-value Listen ask — the schema field is gated, the members are captured in
+Listen once the field lands. F-G (workflow phase) is why the two-dimensional atlas grid must *derive*
+its vertical axis: the artifact cannot hold a phase, so the grid computes one and marks it derived. The
+field itself is a one-line stored-artifact change — gated, because writing a phase into the atlas is
+exactly the schema change this pass defers. Neither is implemented here; both are recorded so the gated
+pass takes them together with F-A/F-B/F-D.
