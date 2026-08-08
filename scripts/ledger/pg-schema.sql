@@ -31,6 +31,11 @@ drop trigger if exists aura_audit_ledger on public.ledger_claims;
 create trigger aura_audit_ledger after insert or update or delete on public.ledger_claims
   for each row execute function public.aura_audit();
 
+-- the RLS predicate calls auth.uid(); `authenticated` must be able to reach it.
+-- (Real Supabase grants this; the bare-Postgres shim needs it stated.)
+grant usage on schema auth to authenticated, anon;
+grant execute on function auth.uid() to authenticated, anon;
+
 -- RLS: engagement-scoped, owner-only-until-Authority (Step 1's interim posture). NOT open.
 do $rls$
 declare t text;
