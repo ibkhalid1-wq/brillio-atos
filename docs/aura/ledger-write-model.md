@@ -1,5 +1,12 @@
 # Aura — The write model (resolved on paper, before persistence)
 
+> **SUPERSEDED (2026-08-08) — persistence is built and the A-vs-B sequencing call is made: Option A is
+> LIVE.** Change now flows generator + override adapter → reconcile (`option-a-report.md`); `migrate()` is
+> retired to a deprecated bootstrap/equivalence baseline. The "resolved on paper, before persistence" and
+> "persistence waits on the A-vs-B call" framing below is historical. The merge (`reconcile`) landed and is
+> proven multi-round, generator-fed (`reconcile-multiround.md`, `option-a-report.md`); the owner fix,
+> element maintenance, and honest heard-count all shipped (`persistence-report.md`).
+
 The cold review returned "not safe to build persistence on" for one structural reason: the write model
 is undefined — `migrate()` rebuilds the ledger from the blob every time and never reads an existing
 ledger, so a regeneration silently discards every ledger-side closure. This session resolves it as a
