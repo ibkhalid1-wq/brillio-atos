@@ -206,4 +206,49 @@ Six sessions reach Architect. Two are **seam sessions** (two functions in the ro
 
 ---
 
+## 11 · Lifecycle-stage questions — the enum members F-F cannot yet hold
+
+The best-value questions in Listen. Every entity on the derived cross-entity journey (item 1 of the
+lifecycle-axis session; the `produces` chain Lead → Opportunity → Contract → Engagement → Revenue
+Recognition) carries an enum-shaped attribute — `stage`, `status`, `severity`, `healthRag` — whose
+**meaning is its permitted values, in order**. **33 of 178 attributes are enum-shaped** and not one
+records its members: the ontology has no value-set field (finding **F-F** in
+`artifact-schema-findings.md`). Nobody hesitates on their own stages, sales can recite them, and the
+answer is exact — so these are the cheapest, highest-certainty grounding in the whole build.
+
+> **⚠ These answers have nowhere to land in the artifact yet.** F-F is gated (adding a `valueSet` field
+> is a schema change this pass defers). So capture every answer **verbatim, attributed, held outside
+> Aura** (same capture protocol as §9), and ingest it the moment F-F's field exists. **An answer
+> captured with no destination is still worth having; an answer *assumed* to be stored when it isn't is
+> not** — do not let a recited stage set read as "grounded" in Aura when Aura cannot hold it.
+
+**Ask four things per entity** (identical template; the value is in the entity-specific answer):
+1. **What are the stages, in order?** (the ordered enum members)
+2. **What moves a record from one to the next?** (the transition trigger — event, approval, field)
+3. **What can go backwards, and from where to where?** (reopen / regress / rework edges)
+4. **What is terminal?** (states a record can enter but never leave — Closed Won, Closed Lost, Cancelled)
+
+| Owning session (from §8) | Entity · enum attribute | Why it's the entity's spine |
+|---|---|---|
+| **Marketing & Demand** (S5) | **Lead** · `status` | Top-of-funnel qualification states; the MQL handoff (G9) is a *transition* answer |
+| **Sales Leaders / Sales** (with S1) | **Opportunity** · `stage`, `type` | The canonical CRM pipeline (Prospecting → Qualification → Proposal → Closed Won/Lost). Rendered as a *title* in the prototype for lack of a value set — the F-F demonstration |
+| **Sales Ops / Practices** (S1, G11) | **Quote** · `status`, **Proposal** · `status`, **Forecast Snapshot** · `projection_status` | Quote/proposal issue→accept→supersede; forecast draft→submitted→locked |
+| **Legal × Finance — seam** (S2, G2) | **Contract** · `status`, `contractType`; **SOW**; **Invoice** · `status`; **Billing Schedule** · `billing_type` | The highest reversal-cost states: contract execution + amendment/supersession, and invoice raise→sent→paid→credited. *What can go backwards* here is the entitlement question |
+| **Delivery × TA — seam** (S4) | **Engagement** · `status`, `healthRag`; **Milestone** · `status`; **Delivery Health** · `rag` | Delivery lifecycle + the RAG health enum (Green/Amber/Red is an *ordered* set with its own transition rules) |
+| **Delivery / CS** (S4, G12) | **Escalation** · `severity`, `status` | Severity ladder + open→ack→resolved→closed; the delivery→sales escalation loop is a *backwards* edge |
+
+**Note on `healthRag` / `rag` / `severity`.** These are enums too, but *status-of-health* enums, not
+lifecycle-progression enums — their "order" is a severity scale (Green→Amber→Red), and question 2
+("what moves it") is a *rule*, not an event. Capture them with the same four questions; the value set
+still cannot be stored until F-F, and the ordering still matters to how the UI renders them (a RAG
+control, not a free-text field — the same misrender F-F describes).
+
+**Complementary to the cross-entity journey.** Item 1 derives the lifecycle *between* entities (the
+`produces` graph); these stage sets are the lifecycle *within* an entity. Both are "the lifecycle
+axis"; the atlas grid shows the first, and F-F's value sets would let a screen render the second. The
+journey derivation needs no field (it reads relations); the stage sets need F-F. That difference — one
+derivable, one only assertable — is exactly the split the lifecycle-axis session was meant to establish.
+
+---
+
 *Produced read-only against the "Laila CRM" engagement (`3acf97de`); no ontology, atlas, or kit content was modified. Held outside Aura, versioned, so it survives to re-ingestion once the governance substrate lands.*
