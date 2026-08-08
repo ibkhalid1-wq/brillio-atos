@@ -16,7 +16,17 @@ import { type LedgerStore, type AssertInput } from "./store";
 import { type Claim, type ClaimValue, contentId, isLive, type LedgerElement } from "./types";
 
 const substantive = (v: ClaimValue): boolean => v.kind !== "unknown" && v.kind !== "na";
-const valueEq = (a: ClaimValue, b: ClaimValue): boolean => JSON.stringify(a) === JSON.stringify(b);
+// Order-independent canonical form: sorts object keys recursively (arrays keep their
+// order — significant for ref-list). Values written by the batch and read back from
+// Postgres jsonb differ only in object-key ordering (jsonb reorders keys by length),
+// so a naive JSON.stringify falsely reports identical ref/ref-list/unresolved-ref
+// values as different, which spuriously fires reconcile's recency rule.
+const canonical = (v: unknown): string => {
+  if (v === null || typeof v !== "object") return JSON.stringify(v) ?? "null";
+  if (Array.isArray(v)) return `[${v.map(canonical).join(",")}]`;
+  return `{${Object.keys(v as Record<string, unknown>).sort().map((k) => `${JSON.stringify(k)}:${canonical((v as Record<string, unknown>)[k])}`).join(",")}}`;
+};
+const valueEq = (a: ClaimValue, b: ClaimValue): boolean => canonical(a) === canonical(b);
 const valueConflicts = (a: ClaimValue, b: ClaimValue): boolean => substantive(a) && substantive(b) && !valueEq(a, b);
 const ATTRIBUTED = new Set(["asserted", "dispositioned", "document", "regulation", "precedent"]);
 const isAttributedClosure = (c: Claim): boolean => ATTRIBUTED.has(c.source) && (c.status === "closed" || c.status === "weak");
