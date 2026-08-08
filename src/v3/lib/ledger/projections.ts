@@ -95,6 +95,33 @@ export function buildAtlasView(store: LedgerStore): WorkflowView[] {
   })).sort((a, b) => a.name.localeCompare(b.name));
 }
 
+// ── heard-count (honest) — an attributed HUMAN closure, not a machine import ──
+// migrate() closes nearly every slot `weak` via `{by:"prototype", method:"import"}`;
+// counting those as "heard" inflates the register. A slot is HEARD only when a person
+// closed it: an attributed source, a non-import method, and a human `by` (not the
+// prototype/system token). This is the single definition the kit + register share.
+const ATTRIBUTED_SOURCES = new Set(["asserted", "dispositioned", "document", "regulation", "precedent"]);
+const SYSTEM_ACTORS = new Set(["prototype", "import", "system", "?"]);
+export const isHeardClosure = (c: Claim): boolean =>
+  isLive(c) && (c.status === "closed" || c.status === "weak") && ATTRIBUTED_SOURCES.has(c.source)
+  && !!c.closedBy && c.closedBy.method !== "import" && !SYSTEM_ACTORS.has((c.closedBy.by || "").toLowerCase());
+
+export interface HeardRegister { byBand: Array<{ band: string; heard: number }>; total: number; totalClosedOrWeak: number; }
+/** The corrected claims register: attributed human closures per owner band + total,
+ *  alongside the raw closed|weak count the old register conflated it with. */
+export function buildHeardRegister(store: LedgerStore): HeardRegister {
+  const byBand = new Map<string, number>();
+  let total = 0;
+  for (const c of store.claims()) {
+    if (!isHeardClosure(c)) continue;
+    total += 1;
+    const key = ownerLabel(c.ownerWhileOpen);
+    byBand.set(key, (byBand.get(key) ?? 0) + 1);
+  }
+  const totalClosedOrWeak = store.claims().filter((c) => isLive(c) && (c.status === "closed" || c.status === "weak")).length;
+  return { byBand: [...byBand.entries()].map(([band, heard]) => ({ band, heard })).sort((a, b) => b.heard - a.heard || a.band.localeCompare(b.band)), total, totalClosedOrWeak };
+}
+
 // ── 2.4c · kit view (function-grouped; seams as joint bands; unowned its own band) ──
 export interface KitBand { key: string; kind: "function" | "seam" | "unowned"; label: string; open: number; blocking: number; heard: number; }
 export interface KitView { bands: KitBand[]; burnDown: { total: number; closed: number; open: number; pctClosed: number }; }
@@ -109,10 +136,13 @@ export function buildKitView(store: LedgerStore): KitView {
     bandMap.set(key, b);
   };
   for (const i of q.items) push(i.owner, i);
-  // heard-count = closed claims owned by that band (computed, not stored)
-  for (const c of store.claims().filter((c) => isLive(c) && (c.status === "closed" || c.status === "weak"))) {
-    const key = ownerLabel(c.ownerWhileOpen); const b = bandMap.get(key);
-    if (b) b.heard += 1;
+  // heard-count = attributed HUMAN closures owned by that band (honest; not machine imports).
+  // A band with only open unknowns still appears (open>0); heard stays 0 until a person closes.
+  for (const c of store.claims()) {
+    if (!isHeardClosure(c)) continue;
+    const key = ownerLabel(c.ownerWhileOpen);
+    const b = bandMap.get(key) ?? { key, kind: c.ownerWhileOpen.kind === "joint" ? "seam" : c.ownerWhileOpen.kind === "unowned" ? "unowned" : "function", label: key, open: 0, blocking: 0, heard: 0 };
+    b.heard += 1; bandMap.set(key, b);
   }
   const bands = [...bandMap.values()].sort((a, b) =>
     (a.kind === "unowned" ? -2 : a.kind === "seam" ? -1 : 0) - (b.kind === "unowned" ? -2 : b.kind === "seam" ? -1 : 0)
