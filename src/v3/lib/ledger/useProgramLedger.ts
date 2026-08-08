@@ -23,6 +23,7 @@
 import { useMemo } from "react";
 import type { ProgramSummary } from "@/new/types";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
+import { readMovementInputs } from "@/v3/components/flow/flowShellData";
 import { migrate, migrationStats, type Snapshot, type MigrationStats } from "./migrate";
 import {
   buildUnknownQueue, buildKitView, buildDeviationRegister, buildHeardRegister,
@@ -30,8 +31,14 @@ import {
   type UnknownQueue, type KitView, type Deviation, type HeardRegister,
   type OntologyElementView, type WorkflowView,
 } from "./projections";
+import { buildReadModel } from "./pgStore";
 import type { LedgerStore } from "./store";
-import { isLive } from "./types";
+import { isLive, slotOf } from "./types";
+import {
+  readOperatorActions, foldOwnership, applyOwnership, activeAssignments, decidedFates,
+  type OperatorAction, type AssignAction, type ScheduleAction, type CaptureAction,
+  type DecideFateAction, type RedirectAction,
+} from "./operatorActions";
 
 /** Ownership by SOURCE CLASS, the ledger's own encoding (not an invented taxonomy):
  *  operator = decision/dispositioned · stakeholder = asserted · joint = a locus with
@@ -80,6 +87,21 @@ export interface ProgramLedger {
   /** unowned + seam bands (the loud signals), pulled from the kit view for reuse. */
   unownedBands: KitView["bands"];
   seamBands: KitView["bands"];
+  /** Operator verbs (surface layer). ASSIGN + DECIDE-FATE are already applied to the
+   *  projections above (ownership/status overlay); captures/schedules/redirects are
+   *  annotations the surface carries and were NOT injected as ledger closures. */
+  actions: OperatorAction[];
+  /** currently-owned loci (active assignments, superseded ones folded out). */
+  assignments: AssignAction[];
+  schedules: ScheduleAction[];
+  captures: CaptureAction[];
+  redirects: RedirectAction[];
+  /** loci the operator decided the fate of (out-of-scope / escalate). */
+  decideFates: DecideFateAction[];
+  /** loci with an operator-entered capture — shown provisional, never counted as heard. */
+  capturedAbouts: Set<string>;
+  /** read-side conflicts: two live claims on one locus (freeze-and-adjudicate). */
+  conflicts: Array<{ about: string; slot: string; count: number }>;
 }
 
 /** Build the read-only ledger + every projection for a program. Memoized on the
@@ -93,7 +115,34 @@ export function useProgramLedger(program?: ProgramSummary): ProgramLedger {
       atlas: (program ? (readArtifactDoc(program, "currentStateAtlas") as Record<string, unknown>) : {}) ?? {},
       overrides,
     };
-    const store = migrate(snap);
+    const migrated = migrate(snap);
+
+    // ── operator verbs, applied as a surface overlay over the read model ──
+    // ASSIGN re-derives ownership (unowned → owned-and-open) by re-pointing the open
+    // claim's owner; the projections below then read the assigned state. buildReadModel
+    // is the DB read-model constructor — no store/precedence code is touched.
+    const actions = readOperatorActions(program ? readMovementInputs(program, "listen") : undefined);
+    const schedules = actions.filter((a): a is ScheduleAction => a.kind === "schedule");
+    const captures = actions.filter((a): a is CaptureAction => a.kind === "capture");
+    const redirects = actions.filter((a): a is RedirectAction => a.kind === "redirect");
+    const fold = foldOwnership(actions);
+    const store = fold.size
+      ? buildReadModel(migrated.elements(), applyOwnership(migrated.claims(), fold))
+      : migrated;
+    const assignments = [...activeAssignments(actions).values()];
+    const decideFates = [...decidedFates(actions).values()];
+
+    // read-side conflicts: precedence leaves two live claims on one locus. Computed
+    // over the read model (surface layer) — the projections/store are untouched.
+    const conflicts: Array<{ about: string; slot: string; count: number }> = [];
+    const seenAbout = new Set<string>();
+    for (const c of store.claims()) {
+      if (!isLive(c) || seenAbout.has(c.about)) continue;
+      seenAbout.add(c.about);
+      const r = store.resolve(c.about);
+      if (r.conflicts && r.conflicts.length > 1) conflicts.push({ about: c.about, slot: slotOf(c.about), count: r.conflicts.length });
+    }
+
     const kit = buildKitView(store);
     return {
       store,
@@ -107,6 +156,14 @@ export function useProgramLedger(program?: ProgramSummary): ProgramLedger {
       ownership: ownershipSummary(store),
       unownedBands: kit.bands.filter((b) => b.kind === "unowned"),
       seamBands: kit.bands.filter((b) => b.kind === "seam"),
+      actions,
+      assignments,
+      schedules,
+      captures,
+      redirects,
+      decideFates,
+      capturedAbouts: new Set(captures.map((c) => c.about)),
+      conflicts,
     };
   }, [program]);
 }
