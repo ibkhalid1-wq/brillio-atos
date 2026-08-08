@@ -423,6 +423,30 @@
 .v3ln-goal-stats{font-size:13px;color:var(--v3-text-secondary)}
 .v3ln-goal-stats b{font-size:17px;color:var(--v3-text-primary);font-variant-numeric:tabular-nums;margin:0 1px}
 .v3ln-goal-heard{font-size:11px}
+/* Discover engagement dashboard: who to engage, sorted by state */
+.v3ln-engbar{display:flex;flex-wrap:wrap;align-items:center;gap:7px 12px;margin:0 0 10px;padding:8px 12px;border:1px solid var(--fs-line);border-radius:10px;background:var(--v3-surface-2)}
+.v3ln-engbar-l{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--v3-text-muted)}
+.v3ln-engpill{font-size:11px;color:var(--v3-text-secondary);display:inline-flex;align-items:center;gap:4px}
+.v3ln-engpill b{font-size:14px;color:var(--v3-text-primary);font-variant-numeric:tabular-nums}
+.v3ln-engpill.is-ready b{color:var(--v3-accent-2)}
+.v3ln-engpill.is-in-flight b{color:var(--v3-amber)}
+.v3ln-engpill.is-blocked b{color:#5a4fa0}
+.v3ln-engbar-note{font-size:10px;color:var(--v3-text-muted);font-style:italic;flex-basis:100%}
+.v3ln-eng-hdr{margin:10px 0 4px;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--v3-text-muted);border-bottom:1px solid var(--fs-line);padding-bottom:4px}
+.v3ln-eng-hdr.is-ready{color:var(--v3-accent-2)}
+.v3ln-eng-hdr.is-in-flight{color:var(--v3-amber)}
+.v3ln-eng-hdr.is-blocked{color:#5a4fa0}
+.v3ln-engrow{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:2px}
+.v3ln-eng{font-size:9.5px;font-weight:750;letter-spacing:.04em;text-transform:uppercase;border-radius:5px;padding:1px 7px;border:1px solid var(--fs-line);color:var(--v3-text-muted)}
+.v3ln-eng.is-ready{color:var(--v3-accent-2);border-color:color-mix(in srgb,var(--v3-accent-2) 40%,var(--fs-line));background:color-mix(in srgb,var(--v3-accent-2) 7%,transparent)}
+.v3ln-eng.is-in-flight{color:var(--v3-amber);border-color:color-mix(in srgb,var(--v3-amber) 40%,var(--fs-line))}
+.v3ln-eng.is-blocked{color:#5a4fa0;border-color:color-mix(in srgb,#6C5FAE 40%,var(--fs-line));background:color-mix(in srgb,#6C5FAE 6%,transparent)}
+.v3ln-eng.is-done{color:var(--v3-text-muted)}
+.v3ln-eng-why{font-size:10px;color:var(--v3-text-muted)}
+/* inline ageing — to-do escalation, never alarm; intensifies with age */
+.v3ln-age{font-size:10px;font-weight:600;color:var(--v3-text-muted);display:inline-flex;align-items:center;gap:3px}
+.v3ln-age.warm{color:var(--v3-amber);font-weight:700}
+.v3ln-age.hot{color:var(--v3-amber);font-weight:800;background:color-mix(in srgb,var(--v3-amber) 12%,transparent);border-radius:5px;padding:1px 6px}
 
 /* ══ Operator inbox — assign / decide-fate / schedule / adjudicate + exits ══ */
 .v3ib{display:flex;flex-direction:column;gap:11px;margin:0 0 16px}

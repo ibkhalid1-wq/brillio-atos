@@ -12,7 +12,7 @@
  * One write path, two skins: the chromes can run at the same time and can
  * never disagree, because there is nothing here to disagree with.
  */
-import { Suspense, lazy, useEffect, useMemo, useState, type ComponentProps } from "react";
+import { Fragment, Suspense, lazy, useEffect, useMemo, useState, type ComponentProps } from "react";
 import type { ProgramSummary } from "@/new/types";
 import { buildLineModel, LINE_GLYPHS, type LineBand, type LineStation } from "@/v3/lib/lineModel";
 import {
@@ -409,6 +409,65 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
   const filteredCast = areaFilter && castAreas.includes(areaFilter)
     ? cast.filter((row) => row.areas.includes(areaFilter))
     : cast;
+
+  // ── Discover as an engagement dashboard: each person's DOMINANT actionable state,
+  // computed from the ledger (operator assignments + roster signal). Ageing on
+  // in-flight is OPERATOR-TRACKED (the operator's chase, timed by hand) — honest until
+  // the stakeholder link is live and the same clock times a real system send.
+  type EngState = "ready" | "in-flight" | "blocked" | "done";
+  const ENG_LABEL: Record<EngState, string> = { ready: "Ready", "in-flight": "In flight", blocked: "Blocked", done: "Done for now" };
+  const engagementByLabel = useMemo(() => {
+    const now = Date.now();
+    const words = (s: string) => s.toLowerCase().split(/[^a-z]+/).filter((w) => w.length > 2);
+    const seamTokens = new Set<string>();
+    for (const b of ledger.seamBands) for (const t of b.label.split("⋈")) seamTokens.add(t.trim().toLowerCase());
+    // open ledger questions per owner band (function), to map onto the people who work
+    // that function — "done" means the LEDGER has nothing open on your turf, never the
+    // roster's evidence flag (which would reproduce "N of N heard").
+    const bands = ledger.queue.byOwner.map((b) => ({ words: new Set(words(b.owner)), n: b.items.length }));
+    const byLabel = new Map<string, { state: EngState; ageDays: number | null; open: number; done: number; needsSession: boolean; onTurf: number }>();
+    for (const row of cast) {
+      const key = row.label.trim().toLowerCase();
+      const assigned = ledger.assignments.filter((a) => a.owner.label.trim().toLowerCase() === key);
+      const open = assigned.filter((a) => !ledger.capturedAbouts.has(a.about));
+      const done = assigned.filter((a) => ledger.capturedAbouts.has(a.about));
+      const oldest = open.reduce<number | null>((m, a) => { const t = Date.parse(a.at); return Number.isNaN(t) ? m : (m === null ? t : Math.min(m, t)); }, null);
+      const ageDays = oldest !== null ? Math.max(0, Math.floor((now - oldest) / 86400000)) : null;
+      const tokens = new Set<string>([...row.areas.flatMap(words), ...words(row.role)]);
+      let onTurf = 0;
+      for (const b of bands) { for (const w of b.words) if (tokens.has(w)) { onTurf += b.n; break; } }
+      const needsSession = row.areas.some((ar) => seamTokens.has(ar.trim().toLowerCase())) || seamTokens.has(row.role.trim().toLowerCase());
+      let state: EngState;
+      if (open.length > 0 || row.awaiting) state = "in-flight";      // engaged, awaiting a response
+      else if (onTurf > 0) state = "ready";                          // the ledger has open questions on their turf
+      else if (needsSession) state = "blocked";                      // only a seam left for them
+      else state = "done";                                           // nothing open maps to them
+      byLabel.set(row.label, { state, ageDays, open: open.length, done: done.length, needsSession, onTurf });
+    }
+    return byLabel;
+  }, [cast, ledger.assignments, ledger.capturedAbouts, ledger.seamBands, ledger.queue.byOwner]);
+  const sortedCast = useMemo(() => {
+    const rank: Record<EngState, number> = { ready: 0, "in-flight": 1, blocked: 2, done: 3 };
+    return [...filteredCast].sort((a, b) => {
+      const ea = engagementByLabel.get(a.label), eb = engagementByLabel.get(b.label);
+      const ra = rank[ea?.state ?? "done"], rb = rank[eb?.state ?? "done"];
+      if (ra !== rb) return ra - rb;
+      if (ea?.state === "in-flight") return (eb?.ageDays ?? -1) - (ea?.ageDays ?? -1);          // chase oldest first
+      if (ea?.state === "ready") return b.questions.length - a.questions.length;                // most-unblocking first (proxy)
+      return a.label.localeCompare(b.label);
+    });
+  }, [filteredCast, engagementByLabel]);
+  const engSummary = useMemo(() => {
+    const c = { ready: 0, "in-flight": 0, blocked: 0, done: 0 } as Record<EngState, number>;
+    let oldest = 0;
+    for (const row of filteredCast) {
+      const e = engagementByLabel.get(row.label); if (!e) continue;
+      c[e.state] += 1;
+      if (e.state === "in-flight" && e.ageDays != null) oldest = Math.max(oldest, e.ageDays);
+    }
+    return { ...c, oldest };
+  }, [filteredCast, engagementByLabel]);
+  const ageStr = (d: number) => d === 0 ? "today" : d === 1 ? "1 day" : d < 21 ? `${d} days` : `${Math.floor(d / 7)} weeks`;
 
   // ── the record: every attributed evidence entry across the spine, newest
   // first, each mapped to its speaker's area so the Record projection can
@@ -896,9 +955,25 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
           {/* The operator inbox: the actionable subset — assign / decide-fate / schedule /
               adjudicate, reassignment, and the stakeholder exits (interim). */}
           <OperatorInbox ledger={ledger} candidates={verbCandidates} by="operator" onCommit={commitOperatorAction} />
+          {/* Discover as an engagement dashboard: who needs attention and why, sorted by
+              state. Ageing on in-flight is operator-tracked until the link is live. */}
+          <div className="v3ln-engbar" role="note" aria-label="Engagement — who needs attention">
+            <span className="v3ln-engbar-l">Who to engage</span>
+            <span className="v3ln-engpill is-ready"><b>{engSummary.ready}</b> ready</span>
+            <span className="v3ln-engpill is-in-flight"><b>{engSummary["in-flight"]}</b> in flight{engSummary.oldest > 0 ? ` · oldest ${ageStr(engSummary.oldest)}` : ""}</span>
+            <span className="v3ln-engpill is-blocked"><b>{engSummary.blocked}</b> blocked</span>
+            <span className="v3ln-engpill is-done"><b>{engSummary.done}</b> done for now</span>
+            <span className="v3ln-engbar-note">ageing is operator-tracked (the chase), not a system-tracked reply — until the link is live</span>
+          </div>
           <div className="v3ln-cast">
-            {filteredCast.map((row) => (
-              <div key={row.label} className="v3ln-cr"
+            {sortedCast.map((row, i) => {
+              const eng = engagementByLabel.get(row.label);
+              const prevState = i > 0 ? engagementByLabel.get(sortedCast[i - 1].label)?.state : undefined;
+              const showHeader = eng && eng.state !== prevState;
+              return (
+              <Fragment key={row.label}>
+              {showHeader ? <div className={`v3ln-eng-hdr is-${eng!.state}`}>{ENG_LABEL[eng!.state]}</div> : null}
+              <div className="v3ln-cr"
                 onClick={(e) => {
                   // The whole row toggles the expansion — except clicks that
                   // already mean something (buttons, links, inputs).
@@ -914,6 +989,25 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                     <b>{row.label}</b>
                     {row.isRole ? <span>role — assign a name to send</span>
                       : row.role && row.role !== row.label ? <span>{row.role}</span> : null}
+                    {(() => {
+                      const e = engagementByLabel.get(row.label);
+                      if (!e) return null;
+                      const aged = e.state === "in-flight" && e.ageDays != null;
+                      return (
+                        <span className="v3ln-engrow">
+                          <span className={`v3ln-eng is-${e.state}`}>{ENG_LABEL[e.state]}</span>
+                          {aged ? (
+                            <span className={`v3ln-age${e.ageDays! >= 21 ? " hot" : e.ageDays! >= 9 ? " warm" : ""}`}
+                              title="operator-tracked — the team's chase, timed by hand (not a system-tracked reply until the link is live)">
+                              awaiting · {ageStr(e.ageDays!)} · operator-tracked
+                            </span>
+                          ) : e.state === "in-flight" ? <span className="v3ln-age">awaiting response · operator-tracked</span>
+                          : e.state === "blocked" && e.needsSession ? <span className="v3ln-eng-why">needs a joint session</span>
+                          : e.state === "ready" ? <span className="v3ln-eng-why">{e.onTurf} open on their turf — send a link</span>
+                          : null}
+                        </span>
+                      );
+                    })()}
                   </span>
                   <span className="v3ln-cr-areas">
                     {row.areas.map((area) => (
@@ -1048,7 +1142,9 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                   </span>
                 ) : null}
               </div>
-            ))}
+              </Fragment>
+              );
+            })}
           </div>
         </section>
       ) : null}
