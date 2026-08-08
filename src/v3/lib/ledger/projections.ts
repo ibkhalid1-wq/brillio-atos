@@ -186,7 +186,18 @@ export function buildSessionAgenda(store: LedgerStore): AgendaItem[] {
 
 // ── 2.5 · deviation register (as-is vs to-be on one locus) ─────────────────────
 export type DeviationClass = "document-backed" | "unbacked";
-export interface Deviation { about: string; asIs: string; toBe: string; classification: DeviationClass; stillReferenced: boolean; }
+export interface Deviation {
+  about: string; asIs: string; toBe: string; classification: DeviationClass;
+  stillReferenced: boolean;
+  // when stillReferenced: HOW it was matched. A clean structural link (removed element →
+  // reference) needs the binder; until then this is a NAME candidate, surfaced as unverified,
+  // never a silent name join.
+  stillReferencedVia?: "name-candidate-unverified";
+}
+// substantive value kinds a deviation can be about. ref-list is INCLUDED — it is the exact
+// shape imports emit (a Salesforce picklist / FHIR value set), so the primary import deviation
+// must be able to register (it silently could not before).
+const DEV_SUBSTANTIVE = new Set(["scalar", "ref", "ref-list"]);
 export function buildDeviationRegister(store: LedgerStore): Deviation[] {
   const live = store.claims().filter(isLive);
   const referencedNames = new Set(live.filter((c) => c.value.kind === "unresolved-ref").map((c) => (c.value as { name: string }).name.toLowerCase()));
@@ -194,15 +205,25 @@ export function buildDeviationRegister(store: LedgerStore): Deviation[] {
   for (const c of live) (byAbout.get(c.about) ?? byAbout.set(c.about, []).get(c.about)!).push(c);
   const out: Deviation[] = [];
   for (const [about, cs] of byAbout) {
-    const asIs = cs.filter((c) => c.world === "as-is" && (c.value.kind === "scalar" || c.value.kind === "ref"));
-    const toBe = cs.filter((c) => c.world === "to-be" && (c.value.kind === "scalar" || c.value.kind === "ref"));
+    const asIs = cs.filter((c) => c.world === "as-is" && DEV_SUBSTANTIVE.has(c.value.kind));
+    const toBe = cs.filter((c) => c.world === "to-be" && DEV_SUBSTANTIVE.has(c.value.kind));
     if (!asIs.length || !toBe.length) continue;
-    if (JSON.stringify(asIs[0].value) === JSON.stringify(toBe[0].value)) continue; // no deviation
-    const backed = toBe.some((c) => c.source === "document" || c.source === "regulation" || c.source === "external-standard");
-    // is the element (by name) still referenced elsewhere as an unresolved-ref?
+    const asIsVals = new Set(asIs.map((c) => JSON.stringify(c.value)));         // compare against ALL as-is, not [0]
+    const asIsStr = [...new Set(asIs.map(valueStr))].join(" | ");
     const el = store.elements().find((e) => e.id === elementIdOf(about));
-    const stillReferenced = !!el && referencedNames.has(el.name.toLowerCase());
-    out.push({ about, asIs: valueStr(asIs[0]), toBe: valueStr(toBe[0]), classification: backed ? "document-backed" : "unbacked", stillReferenced });
+    const nameMatch = !!el && referencedNames.has(el.name.toLowerCase());
+    // one deviation per to-be claim that differs from every as-is value (multiplicity honored,
+    // not an arbitrary [0]); classification reflects THAT claim's source, never a coexisting one.
+    for (const t of toBe) {
+      if (asIsVals.has(JSON.stringify(t.value))) continue;
+      const backed = t.source === "document" || t.source === "regulation" || t.source === "external-standard";
+      out.push({
+        about, asIs: asIsStr, toBe: valueStr(t),
+        classification: backed ? "document-backed" : "unbacked",
+        stillReferenced: nameMatch,
+        ...(nameMatch ? { stillReferencedVia: "name-candidate-unverified" as const } : {}),
+      });
+    }
   }
-  return out.sort((a, b) => a.about.localeCompare(b.about));
+  return out.sort((a, b) => a.about.localeCompare(b.about) || a.toBe.localeCompare(b.toBe));
 }
