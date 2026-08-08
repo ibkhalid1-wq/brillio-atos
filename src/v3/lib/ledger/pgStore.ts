@@ -58,20 +58,20 @@ export class PgLedger {
     await c.query(
       `insert into ledger_claims (id,program_id,about,world,source,status,layer,value,owner,superseded_by,closed_by,contradicts,escalate_to,blocked_reason)
        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
-       on conflict (id) do update set status=excluded.status, superseded_by=excluded.superseded_by, contradicts=excluded.contradicts, escalate_to=excluded.escalate_to, blocked_reason=excluded.blocked_reason`,
+       on conflict (program_id,id) do update set status=excluded.status, superseded_by=excluded.superseded_by, contradicts=excluded.contradicts, escalate_to=excluded.escalate_to, blocked_reason=excluded.blocked_reason`,
       [cl.id, this.programId, cl.about, cl.world, cl.source, cl.status, cl.layer, JSON.stringify(cl.value), JSON.stringify(cl.ownerWhileOpen),
        cl.supersededBy ?? null, cl.closedBy ? JSON.stringify(cl.closedBy) : null, cl.contradicts ?? [], cl.escalateTo ?? null, cl.blockedReason ?? null]);
   }
   private async patch(c: PoolClient, id: string, fields: Partial<Claim>): Promise<void> {
-    await c.query("update ledger_claims set superseded_by=coalesce($2,superseded_by), status=coalesce($3,status), blocked_reason=coalesce($4,blocked_reason), contradicts=coalesce($5,contradicts), escalate_to=coalesce($6,escalate_to) where id=$1",
-      [id, fields.supersededBy ?? null, fields.status ?? null, fields.blockedReason ?? null, fields.contradicts ?? null, fields.escalateTo ?? null]);
+    await c.query("update ledger_claims set superseded_by=coalesce($3,superseded_by), status=coalesce($4,status), blocked_reason=coalesce($5,blocked_reason), contradicts=coalesce($6,contradicts), escalate_to=coalesce($7,escalate_to) where program_id=$1 and id=$2",
+      [this.programId, id, fields.supersededBy ?? null, fields.status ?? null, fields.blockedReason ?? null, fields.contradicts ?? null, fields.escalateTo ?? null]);
   }
 
   /** Precedence-aware insert, mirroring the in-memory store — one locked transaction. */
   async assert(input: AssertInput): Promise<Claim> {
     const id = contentId("cl", input.about, input.world, input.source, JSON.stringify(input.value));
     return this.withLockedTxn(input.about, async (c) => {
-      const ex = await c.query("select * from ledger_claims where id=$1", [id]);
+      const ex = await c.query("select * from ledger_claims where program_id=$1 and id=$2", [this.programId, id]);
       if (ex.rows.length) return rowToClaim(ex.rows[0]); // identical claim → corroboration
       const status = input.status
         ?? (input.value.kind === "unknown" ? "open" : input.value.kind === "na" ? "n/a" : input.closedBy ? (input.closedBy.verbatim ? "closed" : "weak") : "weak");
@@ -149,13 +149,13 @@ export class PgLedger {
     const c = await this.pool.connect();
     try {
       await c.query("begin");
-      for (const e of mem.elements()) await c.query("insert into ledger_elements (id,program_id,kind,name,of,refs) values ($1,$2,$3,$4,$5,$6) on conflict (id) do nothing", [e.id, this.programId, e.kind, e.name, e.of ?? null, JSON.stringify(e.refs ?? {})]);
+      for (const e of mem.elements()) await c.query("insert into ledger_elements (id,program_id,kind,name,of,refs) values ($1,$2,$3,$4,$5,$6) on conflict (program_id,id) do nothing", [e.id, this.programId, e.kind, e.name, e.of ?? null, JSON.stringify(e.refs ?? {})]);
       // insert claims WITHOUT re-running precedence (the mem store already resolved it); set intent once
       await c.query("select set_config('aura.intent', $1, true)", [JSON.stringify({ action_type: "ledger.bootstrap", affected_kind: "claim", actor: this.actor })]);
       for (const cl of mem.claims()) {
         await c.query(
           `insert into ledger_claims (id,program_id,about,world,source,status,layer,value,owner,superseded_by,closed_by,contradicts,escalate_to,blocked_reason)
-           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) on conflict (id) do nothing`,
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) on conflict (program_id,id) do nothing`,
           [cl.id, this.programId, cl.about, cl.world, cl.source, cl.status, cl.layer, JSON.stringify(cl.value), JSON.stringify(cl.ownerWhileOpen),
            cl.supersededBy ?? null, cl.closedBy ? JSON.stringify(cl.closedBy) : null, cl.contradicts ?? [], cl.escalateTo ?? null, cl.blockedReason ?? null]);
       }

@@ -1,19 +1,21 @@
 -- Ledger persistence schema (docs/aura/persistence-report.md). Mutable, precedence-
 -- resolved; every write emits an append-only audit_events row via the Step 1 trigger.
 create table if not exists public.ledger_elements (
-  id text primary key, program_id text not null, kind text not null,
-  name text not null, of text, refs jsonb not null default '{}'::jsonb
+  id text not null, program_id text not null, kind text not null,
+  name text not null, of text, refs jsonb not null default '{}'::jsonb,
+  primary key (program_id, id)                 -- element ids are program-agnostic too
 );
 create table if not exists public.ledger_claims (
-  id text primary key,                       -- contentId(about,world,source,value)
-  program_id text not null,                   -- engagement scope + audit program_id
+  id text not null,                            -- contentId(about,world,source,value) — program-agnostic hash
+  program_id text not null,                    -- engagement scope + audit program_id
   about text not null, world text not null, source text not null, status text not null, layer text not null,
   value jsonb not null,                        -- A1 tagged union
   owner jsonb not null,                        -- ownerWhileOpen (role | joint | unowned)
   superseded_by text,                          -- soft link (filtered by null); NOT a FK (contentId hashes source)
   closed_by jsonb, contradicts text[] not null default '{}', escalate_to text, blocked_reason text,
-  created_at timestamptz not null default now()
-);
+  created_at timestamptz not null default now(),
+  primary key (program_id, id)                 -- contentId is program-agnostic; two engagements migrating
+);                                             -- the same blob share ids, so the PK MUST be program-scoped
 create index if not exists ledger_claims_locus on public.ledger_claims (program_id, about, world);
 create index if not exists ledger_claims_open  on public.ledger_claims (program_id) where status in ('open','blocked');
 create index if not exists ledger_claims_live  on public.ledger_claims (about, world) where superseded_by is null;
