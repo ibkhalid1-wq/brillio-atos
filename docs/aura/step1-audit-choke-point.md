@@ -285,13 +285,26 @@ that implied full coverage would be worse than none — these are the holes.
   is `deno check`-able / exercised, using the corrected inventory above. (`saveProgramToSupabase`
   delete and the vocabulary census enumeration, the two lower-risk pre-wiring items, ARE done.)
 
-## Post-apply items (need the Supabase CLI — cannot be done from this repo)
-Do these right after `supabase db push`, in order:
+## How to apply — the CLI is NOT required
+The migration `supabase/migrations/20260807_audit_events.sql` is plain SQL with no
+psql meta-commands, so it can be applied **either** way:
+- **Dashboard SQL editor (no CLI):** open the scratch (then, when ready, production)
+  project → SQL editor → paste the whole migration file → Run. This is the path the
+  verification kit is now packaged for; see `step1-verify-runbook.md` and
+  `step1-scratch-setup.md`.
+- **CLI, if you have it:** `supabase db push`.
+
+The database gate never actually required the CLI — every script in the kit is SQL a
+browser SQL editor runs. See `db-access-options.md` for dashboard vs psql vs MCP.
+
+## Post-apply items (run after applying, either way), in order
 1. **Regenerate Supabase types (L1).** `audit_events` is NOT in the generated
    `src/integrations/supabase/types.ts` — it can't be, the migration hasn't applied.
-   Run `supabase gen types typescript --project-id <id> > src/integrations/supabase/types.ts`
-   so `audit_events` (and its `intent_missing`, `partial`, `program_id text` columns)
-   become typed. **Not blocking today:** no TS code reads or writes `audit_events` (the
+   Run `npx supabase gen types typescript --project-id <id> > src/integrations/supabase/types.ts`
+   (via `npx`, so no global CLI install is needed — this is the one step that prefers
+   the codegen tool over the SQL editor) so `audit_events` (and its `intent_missing`,
+   `partial`, `program_id text` columns) become typed. **Not blocking today:** no TS
+   code reads or writes `audit_events` (the
    trigger writes it in SQL; `intent_missing` is set by the trigger, not TS), so there
    is no current type-safety gap — this is purely to type a *future* audit reader. Do
    **not** hand-author the table into `types.ts`: it is codegen output and a hand-edit
@@ -314,8 +327,10 @@ Do these right after `supabase db push`, in order:
   retired table removed (4e476b2); S8 type-reality confirmed — migration + scratch
   bootstrap both use `text`, trigger is type-agnostic (no change needed); L1 typed-
   `audit_events` scheduled as a post-apply item above.
-- [ ] Migration applied and reversible — **blocked on your environment** (author-side had no DB).
-- [ ] Real data run through it, numbers reported — **blocked**; verify script ready.
+- [ ] Migration applied and reversible — **not yet applied**. No longer blocked on tooling:
+  the migration + kit run in a browser SQL editor (no CLI). ~20 min on a throwaway project;
+  see `step1-scratch-setup.md`.
+- [ ] Real data run through it, numbers reported — verify kit ready and editor-packaged.
 - [x] Nothing downstream removed. Retirement is an additive rename. The one client writer
   to `adam_program_events` (`logFlowEvent`) is now deleted (S7) — it was dead and
   silently failing; the separate legacy `adam_audit_log` trail is untouched.
