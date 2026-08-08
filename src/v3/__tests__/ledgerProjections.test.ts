@@ -8,7 +8,7 @@ import { migrate, type Snapshot } from "@/v3/lib/ledger/migrate";
 import { buildUnknownQueue, buildOntologyView, buildAtlasView, buildKitView, buildDeviationRegister, buildSessionAgenda } from "@/v3/lib/ledger/projections";
 import { createLedgerStore } from "@/v3/lib/ledger/store";
 import { salesforceToClaims } from "@/v3/lib/ledger/adapters";
-import { buildReadModel } from "@/v3/lib/ledger/pgStore";
+import { buildReadModel } from "@/v3/lib/ledger/readModel";
 import type { Claim, LedgerElement } from "@/v3/lib/ledger/types";
 
 const snap = (f: string) => JSON.parse(readFileSync(resolve(__dirname, `../../../docs/laila/snapshot-2026-08-07/${f}`), "utf8"));

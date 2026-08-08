@@ -99,7 +99,7 @@ function OperatorTile({ station, role, onOpen, onRegen, onGenerate, regenerating
         {present && onRegen && station.card ? (
           <button type="button" className="v3dl-mini" disabled={regenerating}
             onClick={() => onRegen!(station.card!)}
-            title="Rebuild this from the current claims (a decision is re-grounded, not a blob refreshed)">
+            title="Rebuild this from the current claims (a decision is re-derived from the claims, not a blob refreshed)">
             {regenerating ? "rebuilding…" : "↻ rebuild from claims"}
           </button>
         ) : null}
