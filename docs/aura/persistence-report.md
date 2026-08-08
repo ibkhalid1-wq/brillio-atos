@@ -1,4 +1,19 @@
-# Aura — Persistence build: BLOCKED (no database)
+# Aura — Persistence build: DATABASE NOW AVAILABLE (local); build not yet run
+
+> **UPDATE 2026-08-08 — the block is lifted.** A real local Postgres was stood up (no cloud account, no
+> sudo): **PostgreSQL 18.4** via the `embedded-postgres` npm build, running detached on
+> **`127.0.0.1:5433`**, database **`aura_ledger`**, exposed as `DATABASE_URL` in `~/.zshrc` (visible to
+> every shell). Verified: connection, **transaction-scoped advisory locks** (`pg_advisory_xact_lock`),
+> and **DDL** all work — the two features the adapter + concurrency proof depend on. Helpers:
+> `~/aura-ledger-pg/start.sh` / `stop.sh`. **Caveat:** this is a *bare* Postgres, so the Step 1 kit's
+> role/RLS checks must use the bare-Postgres auth shim (already in the scratch bootstrap), not Supabase's
+> real `auth.uid()`/roles — slightly less faithful to prod than a throwaway Supabase project would be,
+> but every contract the persistence build needs is exercisable. **Re-run the persistence prompt to
+> build against it.** The historical block record below stands for context.
+
+---
+
+# Aura — Persistence build: BLOCKED (no database) — historical, superseded by the update above
 
 **Status: not started. The point-of-no-return step was not taken because its precondition — a live
 database — is absent.** This is the specified stop condition ("No database connection — stop before
