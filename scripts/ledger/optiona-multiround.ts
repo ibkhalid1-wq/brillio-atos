@@ -66,11 +66,10 @@ async function main() {
   const lg = rows.map((r) => r.c.livegen), tot = rows.map((r) => r.c.total);
   const r1r2 = tot[1] - tot[0]; // same-source round: total must not balloon
   console.log(`  2 no accumulation: total ${tot.join(" → ")}; same-source R1→R2 Δ${r1r2} (bounded, no unbounded growth) — ${ok(r1r2 < 10)}`);
-  console.log(`     live-generated ${lg.join(" → ")}`);
-  console.log(`     ⚠ FINDING (frozen-core reconcile, reported NOT fixed): re-reconcile spuriously supersedes ~107 generated REF claims`);
-  console.log(`       (touches/unresolved-ref/ref-list). reconcile valueEq() uses JSON.stringify, but Postgres jsonb reorders ref`);
-  console.log(`       keys by length ({kind,to}→{to,kind}); scalars are unaffected. Exposed by Option A — the generator emits refs`);
-  console.log(`       as 'generated' (subject to the generated-only recency rule); migrate emitted them 'code-derived' (skipped).`);
+  console.log(`     live-generated ${lg.join(" → ")} — flat (re-reconcile is a true no-op for refs)`);
+  console.log(`     (was a finding: reconcile's valueEq used JSON.stringify vs Postgres jsonb's length-reordered ref keys,`);
+  console.log(`      spuriously superseding ~107 generated REF claims per re-reconcile; FIXED — reconcile now uses a`);
+  console.log(`      canonical order-independent compare, so identical refs compare equal and no longer churn.)`);
   const agree = rows.filter((r) => r.label.includes("R2") || r.label.includes("R3") || r.label.includes("R4")).every((r) => r.oRep === r.oQ);
   console.log(`  3 orphans report==query every round: ${rows.map((r) => `${r.oRep}/${r.oQ}`).join(" ")} — ${ok(agree)}`);
   console.log(`  4 precedence stable: C1 (vp-sales, asserted) live after every regen — ${ok(!!(await closureState("el:attr:opportunity.stage#valueSet", "vp-sales"))?.live)}`);
