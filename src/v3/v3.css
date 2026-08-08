@@ -7991,6 +7991,40 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-seam-wf-open:focus-visible {outline:2px solid var(--v3-accent-2);outline-offset:2px;border-radius:3px}
 .v3fs-seam-wf-open-i {font-size:9px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--v3-accent-2);opacity:0;transition:opacity .14s ease}
 .v3fs-seam-wf-open:hover .v3fs-seam-wf-open-i,.v3fs-seam-wf-open:focus-visible .v3fs-seam-wf-open-i {opacity:.9}
+/* ── Atlas lifecycle grid (area × derived phase) ───────────────────────────── */
+.v3fs-lgrid {display:flex;flex-direction:column;gap:13px}
+.v3fs-lgrid-ctx {display:flex;flex-direction:column;gap:7px;font-size:12px;line-height:1.5;color:var(--v3-text-secondary)}
+.v3fs-lgrid-ctx-row {display:flex;gap:9px;align-items:baseline}
+.v3fs-lgrid-ctx code {font-size:11px;background:var(--v3-surface-2);border:1px solid var(--v3-border-soft);border-radius:4px;padding:0 4px}
+.v3fs-lgrid-ctx b {color:var(--v3-text-primary);font-weight:650}
+.v3fs-lgrid-tag {flex:none;font-size:9px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--v3-text-muted);width:74px;padding-top:1px}
+.v3fs-der {color:var(--v3-accent-2);font-weight:650;border-bottom:1px dotted color-mix(in srgb,var(--v3-accent-2) 60%,transparent);cursor:help}
+.v3fs-lgrid-scroll {overflow-x:auto;border:1px solid var(--fs-line);border-radius:11px;background:var(--fs-card)}
+.v3fs-lgrid-table {display:grid;min-width:max-content}
+.v3fs-lgrid-corner {position:sticky;left:0;z-index:2;background:var(--v3-surface-2);border-bottom:1px solid var(--fs-line);border-right:1px solid var(--fs-line);padding:9px 11px;font-size:9px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--v3-text-muted)}
+.v3fs-lgrid-colh {background:var(--v3-surface-2);border-bottom:1px solid var(--fs-line);border-left:1px solid var(--v3-border-soft);padding:8px 11px;font-size:12px;font-weight:650;color:var(--v3-text-primary);white-space:nowrap}
+.v3fs-lgrid-rowh {position:sticky;left:0;z-index:1;display:flex;flex-direction:column;gap:2px;background:var(--v3-surface-2);border-right:1px solid var(--fs-line);border-bottom:1px solid var(--v3-border-soft);padding:9px 11px}
+.v3fs-lgrid-rowh b {font-size:12px;color:var(--v3-text-primary);font-weight:700}
+.v3fs-lgrid-headline {font-size:11px;font-weight:600;color:var(--v3-accent-2)}
+.v3fs-lgrid-band {font-size:10px;line-height:1.35;color:var(--v3-text-muted)}
+.v3fs-lgrid-cell {border-left:1px solid var(--v3-border-soft);border-bottom:1px solid var(--v3-border-soft);padding:7px;display:flex;flex-direction:column;gap:6px;min-height:44px}
+.v3fs-lgrid-cell.is-empty {background:repeating-linear-gradient(135deg,transparent,transparent 6px,color-mix(in srgb,var(--v3-border-soft) 40%,transparent) 6px,color-mix(in srgb,var(--v3-border-soft) 40%,transparent) 7px)}
+.v3fs-lgrid-cell.is-seam {background:color-mix(in srgb,var(--v3-amber) 6%,transparent)}
+.v3fs-lgrid-chip {text-align:left;font:inherit;display:flex;flex-direction:column;gap:3px;background:var(--v3-surface);border:1px solid var(--v3-border-soft);border-radius:7px;padding:6px 8px;cursor:pointer;transition:box-shadow .12s ease,transform .06s ease}
+.v3fs-lgrid-chip:hover {box-shadow:0 1px 5px rgba(0,0,0,.14)}
+.v3fs-lgrid-chip:active {transform:translateY(.5px)}
+.v3fs-lgrid-chip:focus-visible {outline:2px solid var(--v3-accent-2);outline-offset:2px}
+.v3fs-lgrid-chip-name {font-size:11.5px;font-weight:600;color:var(--v3-text-primary);line-height:1.25}
+.v3fs-lgrid-chip-meta {display:flex;flex-wrap:wrap;gap:5px;align-items:center;font-size:10px}
+.v3fs-lgrid-cross {color:var(--v3-amber);font-weight:650;font-size:10px}
+.v3fs-lgrid-marks {display:flex;gap:5px;flex-wrap:wrap}
+.v3fs-mark {font-size:10px;font-weight:700;border-radius:5px;padding:0 4px}
+.v3fs-mark--gap {color:var(--v3-red);background:color-mix(in srgb,var(--v3-red) 12%,transparent)}
+.v3fs-mark--cross {color:var(--v3-amber);background:color-mix(in srgb,var(--v3-amber) 13%,transparent)}
+.v3fs-mark--unseen {color:var(--v3-text-secondary);background:var(--v3-surface-2)}
+.v3fs-lgrid-legend {display:flex;flex-wrap:wrap;gap:14px;font-size:11px;color:var(--v3-text-muted);align-items:center}
+.v3fs-lgrid-legend .v3fs-mark {font-size:10px}
+.v3fs-lgrid-seamnote {color:var(--v3-text-secondary);font-style:italic}
 .v3fs-wf-editor-h {margin:22px 0 12px;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--v3-text-muted);border-top:1px solid var(--fs-line);padding-top:15px}
 /* Business-event chips — the ontology's events referenced on a step or a
    trigger; amber to read as "something happens", vs the indigo entity nouns. */
