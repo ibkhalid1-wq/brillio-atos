@@ -1,0 +1,34 @@
+{
+  "decisionQueue": [
+    {
+      "id": "reopen-gate-frame-1786018135233",
+      "type": "gate-approval",
+      "title": "Gate reopened: frame",
+      "source": "gate-reopen",
+      "status": "open",
+      "phaseId": "frame",
+      "priority": "high",
+      "question": "The frame gate has been reopened. Reason: Inputs changed after the gate was recorded. Review the gate conditions and re-approve when resolved.",
+      "createdAt": "2026-08-06T12:08:55.233Z",
+      "recommendation": "Address the reopen reason, re-run gate review, then re-approve."
+    }
+  ],
+  "gateReviews": {
+    "frame": {
+      "status": "remediation-requested",
+      "phaseId": "frame",
+      "summary": "Gate approved manually — AI gate review was not available.",
+      "blockers": [],
+      "approvedAt": null,
+      "approvedBy": null,
+      "reopenedAt": "2026-08-06T12:08:55.233Z",
+      "reopenedBy": "ibkhalid1@gmail.com",
+      "generatedAt": "2026-07-18T16:47:19.910Z",
+      "exitCriteria": [],
+      "reopenReason": "Inputs changed after the gate was recorded",
+      "readinessScore": 75,
+      "recommendations": [],
+      "remediationNote": null
+    }
+  }
+}
