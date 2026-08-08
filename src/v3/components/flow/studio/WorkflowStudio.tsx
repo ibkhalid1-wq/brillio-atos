@@ -17,6 +17,7 @@ import { workflowArea, GENERAL_AREA } from "@/v3/components/flow/flowAreas";
 import { listenCoverageAreas, canonicalFrameArea } from "@/v3/components/flow/listenCoverage";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
 import AtlasSeamView from "./AtlasSeamView";
+import AtlasLifecycleGrid from "./AtlasLifecycleGrid";
 
 interface PainHit {
   severity: string;
@@ -394,6 +395,10 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program,
       <CollapsibleCard label="Areas & seams — every workflow across the areas it crosses" defaultOpen>
         <AtlasSeamView doc={doc} program={program} frameAreas={frameAreas} onOpenArtifact={onOpenArtifact}
           onChange={onChange} editable={!locked}
+          onPickWorkflow={(i) => { setActive(i); setSelected(null); }} />
+      </CollapsibleCard>
+      <CollapsibleCard label="Lifecycle × area — the derived second axis (area across, phase down)" defaultOpen={false}>
+        <AtlasLifecycleGrid doc={doc} program={program} frameAreas={frameAreas}
           onPickWorkflow={(i) => { setActive(i); setSelected(null); }} />
       </CollapsibleCard>
       <div className="v3fs-wf-editor-h">Edit a workflow</div>
