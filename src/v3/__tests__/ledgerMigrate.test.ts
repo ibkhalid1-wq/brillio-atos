@@ -20,7 +20,6 @@ describe("ledger migration on Laila", () => {
   });
 
   it("produces measured counts (printed for the report)", () => {
-    // eslint-disable-next-line no-console
     console.log("MIGRATION STATS", JSON.stringify(stats, null, 2));
     expect(stats.elements).toBeGreaterThan(100);
     expect(stats.claims).toBeGreaterThan(300);
