@@ -31,7 +31,7 @@ import {
   type UnknownQueue, type KitView, type Deviation, type HeardRegister,
   type OntologyElementView, type WorkflowView,
 } from "./projections";
-import { buildReadModel } from "./pgStore";
+import { buildReadModel } from "./readModel";
 import type { LedgerStore } from "./store";
 import { isLive, slotOf } from "./types";
 import {

@@ -92,6 +92,11 @@ describe("Step 1b static — audit vocabulary closed set (docs/aura/action-type-
         const st = statSync(p);
         if (st.isDirectory()) { walk(p); continue; }
         if (!/\.(ts|tsx)$/.test(name) || name.endsWith(".test.ts") || name.endsWith(".test.tsx")) continue;
+        // pgStore.ts is the server-side Postgres persistence layer (PgLedger): it requires a
+        // live pg Pool, is imported only by the scripts/ledger harnesses, and correctly sets
+        // the SERVER's audit actor. It is NOT client-reachable — buildReadModel (the only piece
+        // the client needs) lives in the pg-free readModel.ts — so it can't spoof a client actor.
+        if (name === "pgStore.ts") continue;
         const src = readFileSync(p, "utf8");
         if (/aura\.intent/.test(src) || /set_config\s*\(\s*['"]aura\.intent/.test(src)) hits.push(p.slice(repoRoot.length + 1));
       }

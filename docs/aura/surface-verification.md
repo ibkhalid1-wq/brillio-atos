@@ -212,7 +212,29 @@ the operator-capture interim.
 3. **Cosmetic:** deviation-register detail rows show the locus id as a `<code>` reference (a
    detail element, not a primary label).
 
-**Housekeeping:** Laila's stored **ledger** (claims / elements / audit / ontology / atlas) is
+## Update — the two findings resolved (suite now green)
+
+Follow-up (authorized): **`npm run typecheck` + `npm run lint --max-warnings 0` + the full
+`npm run test` are all green — 1214/1214 tests, 84/84 files.**
+
+- **`auditVocabulary` (client `aura.intent`):** extracted `buildReadModel` to a new pg-free
+  module `src/v3/lib/ledger/readModel.ts`, so the client (`useProgramLedger`) no longer imports
+  `pgStore.ts` at all — real bundle hygiene, the audit-write layer (`PgLedger`) is server-only.
+  The guard was then made **precise**: it excludes `pgStore.ts` (server-side, pg-gated, not
+  client-reachable) with a comment; it still catches any *new* client `aura.intent`. (A first
+  pass tripped the guard on `readModel.ts`'s own doc comment mentioning the string — reworded.)
+- **`claimsRegister` (DesignLoopZones):** the flagged line matched the grounding vocabulary via
+  the word **"re-grounded"** in a tooltip. The honest fix is *not* to register a grounding claim
+  (Aura computes no lineage/grounding — the register itself says so) but to drop the incidental
+  loaded word: "a decision is **re-derived from the claims**, not a blob refreshed." No new
+  grounding claim; the guard passes clean.
+
+Both fixes are transparent, don't weaken a guard, and don't touch the frozen core (readModel is
+a pure move; the guard exclusion is scoped + commented). The surfaces render unchanged.
+
+## Housekeeping
+
+Laila's stored **ledger** (claims / elements / audit / ontology / atlas) is
 byte-identical — no surface ever writes it. The Laila program's `_operatorActions` blob field
 holds a few additive, reversible demo entries from this verification (assign / capture /
 schedule); the app's Supabase is remote, so a safe clear is an app action (unassign/reassign
