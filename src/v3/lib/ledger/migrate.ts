@@ -20,16 +20,44 @@ const s = (v: string | number | boolean): ClaimValue => ({ kind: "scalar", value
 const OPEN = { kind: "unknown" } as const;
 const ENUMISH = /(^|_)(stage|status|phase|state|type|category|tier|priority|severity|health|rag|disposition|outcome)($|_)/i;
 
-/** Coarse owner for a slot, from the entity's area — a role token, never a name join to a person. */
-const ownerFor = (area: string): Owner => {
+/**
+ * Primary business function for an area/actor string, or null when it maps to none.
+ * The FIRST match wins (Laila areas carry multi-area strings; the first is the owner).
+ * Single source of truth for both single-owner and seam (joint) decisions.
+ */
+const FUNCTIONS: Array<[RegExp, string]> = [
+  [/practice|capability|competenc/, "Practices"],
+  [/alliance|partner/, "Alliances"],
+  [/finance|invoic|billing|revenue/, "Finance"],
+  [/legal|contract/, "Legal"],
+  [/deliver|engagement/, "Delivery"],
+  [/market/, "Marketing"],
+  [/sales ops|ops|operation/, "Sales Ops"],
+  [/sales|opportunity|account/, "Sales"],
+];
+const functionOf = (area: string): string | null => {
   const a = (area || "").toLowerCase();
-  if (/finance|invoic|billing|revenue/.test(a)) return { kind: "role", role: "Finance" };
-  if (/legal|contract/.test(a)) return { kind: "role", role: "Legal" };
-  if (/deliver|engagement/.test(a)) return { kind: "role", role: "Delivery" };
-  if (/market/.test(a)) return { kind: "role", role: "Marketing" };
-  if (/sales ops|ops|operation/.test(a)) return { kind: "role", role: "Sales Ops" };
-  if (/sales|opportunity|account/.test(a)) return { kind: "role", role: "Sales Leaders" };
-  return { kind: "role", role: "Sales Ops" };
+  for (const [re, fn] of FUNCTIONS) if (re.test(a)) return fn;
+  return null;
+};
+/** Preserve the ledger's existing role labels for the function tokens. */
+const ROLE_LABEL: Record<string, string> = { Sales: "Sales Leaders" };
+
+/**
+ * Owner for a slot, from its area. Emits `unowned` where the area maps to no known
+ * function (the fix: no more `return Sales Ops` fabrication), else a role token —
+ * never a name join to a person.
+ */
+const ownerFor = (area: string): Owner => {
+  const fn = functionOf(area);
+  return fn ? { kind: "role", role: ROLE_LABEL[fn] ?? fn } : { kind: "unowned" };
+};
+
+/** A genuinely shared locus: joint(A ⋈ B) with endpoints sorted for determinism, else a fallback. */
+const jointOrOwner = (areaA: string, areaB: string, fallback: string): Owner => {
+  const a = functionOf(areaA), b = functionOf(areaB);
+  if (a && b && a !== b) { const [x, y] = [a, b].sort(); return { kind: "joint", a: x, b: y }; }
+  return ownerFor(a ? areaA : b ? areaB : fallback);
 };
 
 export interface Snapshot { ontology: Record<string, unknown>; atlas: Record<string, unknown>; overrides: Array<Record<string, unknown>>; }
@@ -42,7 +70,8 @@ export function migrate(snap: Snapshot): LedgerStore {
 
   const entIdByName = new Map<string, string>();
   const nameByLower = new Map<string, string>();
-  for (const e of entities) { const n = String(e.name ?? ""); if (n) { const id = `el:entity:${slug(n)}`; entIdByName.set(n, id); nameByLower.set(n.toLowerCase(), n); } }
+  const areaByName = new Map<string, string>();
+  for (const e of entities) { const n = String(e.name ?? ""); if (n) { const id = `el:entity:${slug(n)}`; entIdByName.set(n, id); nameByLower.set(n.toLowerCase(), n); areaByName.set(n, String(e.area ?? "")); } }
 
   const A = (about: string, value: ClaimValue, source: Source, world: World, layer: Layer, owner: Owner, opts: { closed?: { by: string; method?: "assertion" | "disposition" | "document" | "import"; verbatim?: string }; status?: "open" | "weak" | "closed" | "blocked" | "n/a" } = {}) =>
     store.assert({ about, value, source, world, layer, ownerWhileOpen: owner, status: opts.status,
@@ -78,10 +107,11 @@ export function migrate(snap: Snapshot): LedgerStore {
     const from = String(r.from ?? ""), to = String(r.to ?? ""); if (!from || !to) continue;
     const rid = `el:rel:${slug(from)}-${slug(to)}`;
     store.addElement({ id: rid, kind: "relation", name: `${from}→${to}`, refs: { from: entIdByName.get(from) ?? "", to: entIdByName.get(to) ?? "" } });
-    const owner = ownerFor("sales ops");
+    // a relation whose endpoints have different primary functions is a genuine seam → joint(A ⋈ B)
+    const owner = jointOrOwner(areaByName.get(from) ?? "", areaByName.get(to) ?? "", "sales ops");
     if (r.cardinality) A(aboutOf(rid, "cardinality"), s(String(r.cardinality)), "code-derived", "to-be", "domain", owner, { status: "weak" });
-    A(aboutOf(rid, "optionality"), OPEN, "generated", "to-be", "domain", { kind: "role", role: "Sales Leaders" }, { status: "open" }); // F-D
-    if (String(r.relation ?? "").toLowerCase() === "produces") A(aboutOf(rid, "semantics"), OPEN, "generated", "to-be", "domain", { kind: "role", role: "Sales Leaders" }, { status: "open" });
+    A(aboutOf(rid, "optionality"), OPEN, "generated", "to-be", "domain", owner, { status: "open" }); // F-D
+    if (String(r.relation ?? "").toLowerCase() === "produces") A(aboutOf(rid, "semantics"), OPEN, "generated", "to-be", "domain", owner, { status: "open" });
   }
 
   // ── workflows + steps ──
@@ -101,7 +131,9 @@ export function migrate(snap: Snapshot): LedgerStore {
       const action = String(st.action ?? "");
       const sid = contentId("el:step", wid, String(st.actor ?? ""), action.slice(0, 60)); // A6 content id, not index
       store.addElement({ id: sid, kind: "step", name: action.slice(0, 60), of: wid });
-      A(aboutOf(sid, "action"), s(action), "generated", "to-be", "domain", owner, { status: "weak" });
+      // a step whose actor-area differs from the workflow's owning area is a handoff seam → joint
+      const stepOwner = jointOrOwner(area, String(st.actor ?? ""), area || "sales ops");
+      A(aboutOf(sid, "action"), s(action), "generated", "to-be", "domain", stepOwner, { status: "weak" });
       A(aboutOf(sid, "automationDisposition"), OPEN, "generated", "to-be", "configuration", ownerFor("sales ops"), { status: "open" }); // F-A
       A(aboutOf(sid, "actorRole"), OPEN, "generated", "to-be", "configuration", ownerFor("sales ops"), { status: "open" }); // 56-role
       const isDecision = /approv|review|decide|gate|threshold/i.test(action);
@@ -111,7 +143,7 @@ export function migrate(snap: Snapshot): LedgerStore {
         const target = entIdByName.get(en);
         A(aboutOf(sid, `touches.${slug(en)}`),
           target ? { kind: "ref", to: target } : { kind: "unresolved-ref", name: en, why: "step references an entity the ontology does not hold (F-C coherence gap)" },
-          "code-derived", "to-be", "domain", owner, target ? { closed: { by: "prototype" }, status: "weak" } : { status: "blocked" });
+          "code-derived", "to-be", "domain", stepOwner, target ? { closed: { by: "prototype" }, status: "weak" } : { status: "blocked" });
       }
     }
   }
