@@ -333,6 +333,28 @@ derived axis is the honest interim — a view, not a fact.
 
 ---
 
+## Absorbed by the claims ledger (2026-08-08)
+
+> **F-A through F-G are no longer seven separate schema patches.** The claims-ledger structure
+> (`ledger-spec.md`) absorbs them: each becomes a **slot in a Tier-3 shape**, born `?unknown`, rather
+> than a bespoke field. See `ledger-generation-contract.md` for the mapping. What changed for each:
+
+| Finding | Re-expressed as | Status |
+|---|---|---|
+| **F-A** automation boundary | `decision`/`lifecycle` shape → `step#automationDisposition` (born unknown) | absorbed; consumed by the unknown queue (blocking) |
+| **F-B** decision points | `decision` shape → `step#decision{condition,authority,outcomes}` | absorbed; born unknown |
+| **F-C** cross-artifact coherence | falls out of the ledger — an unresolvable step→entity ref is an `unresolved-ref` claim; a contradiction is a live pair | absorbed; **built** (deviation register + contradictions on migrated Laila) |
+| **F-D** attribute types / optionality | base attribute `#dataType`, relation `#optionality` (generator proposes, born weak/unknown) | absorbed; migration emits these as open unknowns |
+| **F-E** design system | out of the claims schema — an appearance concern | not a claim (unchanged; still the gated edge markup) |
+| **F-F** attribute value set | `lifecycle` shape → `attr#valueSet{members,terminal}` (born unknown) | absorbed; **an import CLOSES it** (Salesforce picklist / FHIR binding, built) |
+| **F-G** workflow phase | `lifecycle` shape → `workflow#phase` (born unknown; grid derives until asserted) | absorbed; migration emits `#phase` open |
+
+**Gated remainder** (specified, not built): the **generator** emitting claims-with-unknowns and its
+validation (`ledger-generation-contract.md`) — edge/Deno; the **shape declarations in Frame** as a
+runtime step; **persistence** of the ledger (the store is storage-agnostic; a Supabase adapter is the
+gated piece). The client side — store, projections, queue, deviation register, import transforms — is
+built and tested.
+
 ## Priority
 
 | Finding | Blocks Architect? | Needs the gate? | Cheapest first move |

@@ -1,6 +1,13 @@
 # The Fabric — a deterministic layer between ontology/atlas and prototype
 
 > Status: spec + the client-buildable core. The model-dependent and edge pieces are marked and gated.
+>
+> **Reframed by the claims ledger (2026-08-08).** The fabric derives a prototype from the ontology +
+> atlas; the ledger now says *what those inputs are worth*. Every ontology/atlas value the fabric reads
+> is a **`to-be` claim, mostly `generated`/`weak`** — so a fabric-rendered prototype is a to-be draft
+> built on weak claims, and should read as such. The fabric's determinism and the ledger's certainty are
+> complementary: the fabric fixes *structure*, the ledger fixes *how sure each slot is*. Nothing here is
+> superseded; this note pins that the fabric's inputs are claims, not facts.
 
 ## Why
 

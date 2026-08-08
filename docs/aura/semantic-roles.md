@@ -2,6 +2,13 @@
 
 > Status: spec + the client-buildable deriver. Grounded on Laila's real ontology
 > (33 entities, 35 relations, 178 attributes, entity-level `standardAlignment`).
+>
+> **Reframed by the claims ledger (2026-08-08).** The ontology values this deriver reads are now
+> *claims* (`ledger-spec.md`): mostly `generated`/`weak`, world `to-be`. The "0 / 178 typed" gap is
+> not a missing field but **178 `attr#dataType` open-unknown claims** in the ledger, and the "213
+> assignments to capture" cost is the ledger's **unknown queue** (measured 395 open, ranked by owner).
+> Role derivation (derived-vs-heuristic) is orthogonal to claim status and stands unchanged; the point
+> that supersedes here is that "types are absent" is now a first-class *open claim*, not an omission.
 
 ## The contract
 
