@@ -150,10 +150,16 @@ model authoring the same structure, so the floor is a strict improvement.
 
 ## What's buildable now vs gated
 
-- **Buildable now (client, deterministic, testable):** `deriveFabric(ontology, atlas)`, the region-id
-  scheme, the fabric-diff/delta, and delta→region resolution. All pure functions over the stored
-  artifacts. This spec fixes their contracts; the implementation is a follow-on slice (kept out of
-  this doc's commit to avoid coupling a large module to a spec).
+- **Built now (client, deterministic, tested):** `deriveFabric(ontology, atlas)` (`fabric.ts`), the
+  region-id scheme, and `diffFabric` + `reconcileRefinements` (`fabricDelta.ts`) — the fabric-diff and
+  the preserve-or-escalate refinement logic. All pure functions over the stored artifacts. **Measured
+  on Laila with a real one-attribute change: 359 nodes → 1 added, 1 removed, 2 changed, 356 unchanged
+  (0.84% re-emitted).** Rename honesty: `diffFabric` takes an optional known old→new map (from the
+  edit event); with no map a rename correctly shows as remove+add — a diff cannot *infer* a rename
+  without guessing, and guessing is exactly what the region-identity discipline forbids.
+  Refinement reconciliation returns preserved / conflict / orphaned — never a silent overwrite, and
+  never an auto-merge (the stated honest limit). Delta→region *resolution in the live generator*
+  (rewriting only the `data-fabric-id` elements a delta names) is the gated edge piece below.
 - **Model-dependent:** copy only (labels, help text, flow narrative) — a scoped, per-region prompt.
 - **Gated (edge):** teaching the generator to emit region-tagged markup (`data-fabric-id`) against
   the fabric instead of a free-form document — the same gated change as **F-E** in
