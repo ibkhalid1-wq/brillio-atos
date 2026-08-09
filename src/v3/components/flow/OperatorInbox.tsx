@@ -60,12 +60,12 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit }: Prop
   const unownedGroups = new Map<string, typeof unowned>();
   for (const it of unowned) (unownedGroups.get(groupOf(it.about)) ?? unownedGroups.set(groupOf(it.about), []).get(groupOf(it.about))!).push(it);
 
-  const seamGroups = new Map<string, string[]>();
-  for (const it of ledger.queue.items) {
-    if (it.owner.kind !== "joint") continue;
-    (seamGroups.get(it.ownerLabel) ?? seamGroups.set(it.ownerLabel, []).get(it.ownerLabel)!).push(it.about);
-  }
-  const markedPairs = new Map(ledger.schedules.map((s) => [s.pair, s] as const));
+  // The session queue is the ONE source (ledger.sessionQueue) — seam questions,
+  // jointly owned, grouped by function pair. Never recomputed here.
+  const sessionQueue = ledger.sessionQueue;
+  // A "schedule" action = the seam is on the session plan (intent). It carries NO
+  // date — scheduling is gated — so the open item on every seam is a DATE.
+  const onPlan = new Map(ledger.schedules.map((s) => [s.pair, s] as const));
 
   const run = async (key: string, action: OperatorAction | OperatorAction[]) => {
     setBusy(key); try { await onCommit(action); } finally { setBusy(null); }
@@ -104,7 +104,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit }: Prop
       <header className="v3ib-top">
         <span className="v3ib-title">Inbox</span>
         <span className="v3ib-count">
-          <b>{unownedGroups.size}</b> need an owner · <b>{seamGroups.size - markedPairs.size}</b> need a session{ledger.conflicts.length ? <> · <b>{ledger.conflicts.length}</b> to adjudicate</> : null}
+          <b>{unownedGroups.size}</b> need an owner · <b>{sessionQueue.length}</b> awaiting a date{ledger.conflicts.length ? <> · <b>{ledger.conflicts.length}</b> to adjudicate</> : null}
         </span>
         <span className="v3ib-of">the small operator-action subset — the burn-down above is the goal.</span>
       </header>
@@ -136,8 +136,8 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit }: Prop
                   <ul className="v3ib-grp-qs">
                     {items.map((it) => (
                       <li key={it.about} className="v3ib-grp-q">
-                        <ClaimStatus state="open" showLabel={false} />
-                        <QLine about={it.about} />
+                        <ClaimStatus state={it.status} showLabel={false} />
+                        <QLine about={it.about} tail={it.status === "blocked" ? <span className="v3ib-blk" title="Blocked (e.g. an unresolved reference) — still ownerless; assigning an owner is valid, it just can't be answered until unblocked">blocked</span> : undefined} />
                         <button type="button" className="v3ib-btn ghost sm" onClick={() => setFate((s) => ({ ...s, [it.about]: !s[it.about] }))}>no owner?</button>
                         {fate[it.about] ? (
                           <span className="v3ib-fate">
@@ -156,28 +156,31 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit }: Prop
         )}
       </section>
 
-      {/* 2 · SEAMS → mark for a joint session */}
+      {/* 2 · SEAMS → the session queue. Joint ownership is AUTO-SET at seam detection
+          (migrate: jointOrOwner), so there is nothing to "mark" — the seam is already
+          jointly owned and its questions grouped. The only pending thing is a DATE, which
+          is gated. So a seam is either AWAITING-A-DATE or (once scheduling lands) BOOKED —
+          no no-op "marked" state that confirms a thing already true. */}
       <section className="v3ib-src">
         <header className="v3ib-h">
           <OwnershipTag cls="joint" showLabel={false} />
           <span className="v3ib-verb">Sessions</span>
-          <span className="v3ib-lead"><b>{seamGroups.size}</b> seam{seamGroups.size === 1 ? "" : "s"} — jointly owned; a <b>joint session to book</b>, not a gap. Scheduling is gated, so marking records intent.</span>
+          <span className="v3ib-lead"><b>{sessionQueue.length}</b> seam{sessionQueue.length === 1 ? "" : "s"} — <b>already jointly owned</b> (auto-set at detection). Each is a joint session; the open item is a <b>date</b>, which is gated.</span>
+          <ProvisionalMark what="scheduling a real date is a gated write — 'propose a time' records the intent only" />
         </header>
-        {seamGroups.size === 0 ? <p className="v3ib-empty">No seams.</p> : (
+        {sessionQueue.length === 0 ? <p className="v3ib-empty">No seams.</p> : (
           <ul className="v3ib-seams">
-            {[...seamGroups.entries()].sort((a, b) => b[1].length - a[1].length).map(([pair, abouts]) => {
-              const marked = markedPairs.get(pair);
+            {sessionQueue.map(({ pair, abouts }) => {
+              const planned = onPlan.get(pair);
               return (
-                <li key={pair} className={`v3ib-seam${marked ? " marked" : ""}`}>
+                <li key={pair} className={`v3ib-seam${planned ? " planned" : ""}`}>
                   <span className="v3ib-seam-h"><span aria-hidden="true">⋈</span> {pair}</span>
-                  {marked ? (
-                    <span className="v3ib-marked">marked · {abouts.length} question{abouts.length === 1 ? "" : "s"} grouped · <span className="v3ib-nodate">no date yet</span></span>
+                  <span className="v3ib-seam-n">{abouts.length} joint question{abouts.length === 1 ? "" : "s"} · <span className="v3ib-nodate">⏳ awaiting a date</span></span>
+                  {planned ? (
+                    <span className="v3ib-onplan">on the session plan · no date yet (gated)</span>
                   ) : (
-                    <>
-                      <span className="v3ib-seam-n">{abouts.length} question{abouts.length === 1 ? "" : "s"} to settle together</span>
-                      <button type="button" className="v3ib-btn ghost" disabled={busy === pair}
-                        onClick={() => void run(pair, { kind: "schedule", pair, parties: pair.split("⋈").map((s) => s.trim()) as [string, string], abouts, by, at: nowISO() })}>{busy === pair ? "…" : "mark for joint session"}</button>
-                    </>
+                    <button type="button" className="v3ib-btn ghost" disabled={busy === pair}
+                      onClick={() => void run(pair, { kind: "schedule", pair, parties: pair.split("⋈").map((s) => s.trim()) as [string, string], abouts, by, at: nowISO() })}>{busy === pair ? "…" : "propose a time"}</button>
                   )}
                 </li>
               );
@@ -193,7 +196,20 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit }: Prop
           <span className="v3ib-lead"><b>{ledger.conflicts.length}</b> conflict{ledger.conflicts.length === 1 ? "" : "s"} — two live claims on one locus; the element <b>freezes</b>, no auto-winner.</span>
           <ProvisionalMark what="resolution completion is a write — gated; read-side only for now" />
         </header>
-        {ledger.conflicts.length === 0 ? <p className="v3ib-empty">No contested loci — precedence resolved everything cleanly.</p> : (
+        {ledger.conflicts.length === 0 ? (
+          // A PASSED check, not an empty slot — adjudication exists and is currently
+          // clear. Quiet, present, not alarm. And honest that 0-now ≠ 0-forever:
+          // conflicts appear once stakeholders assert competing answers, and with 0
+          // stakeholder assertions yet, "0 conflicts" partly means "no one's answered".
+          <p className="v3ib-passed" role="note">
+            <span className="v3ib-passed-tick" aria-hidden="true">✓</span>
+            <span className="v3ib-passed-body">
+              <b>0 conflicts</b> — precedence resolved every contested locus cleanly.
+              <span className="v3ib-passed-sub">Conflicts surface once stakeholders assert competing answers; with <b>{ledger.ownership.stakeholder}</b> stakeholder assertions so far, this also reads &ldquo;no one&rsquo;s answered yet.&rdquo;</span>
+            </span>
+            <ProvisionalMark what="0-now, not 0-forever — stakeholder assertions are the gated write" />
+          </p>
+        ) : (
           <ul className="v3ib-list">
             {ledger.conflicts.map((c) => (
               <li key={c.about} className="v3ib-row is-frozen">

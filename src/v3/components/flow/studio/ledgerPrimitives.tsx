@@ -149,9 +149,12 @@ export function ConvergenceReadout({ burnDown, perAreaProvisional = true }: { bu
 // ── the loud signals: unowned pinned first, then seams (joint-owned) as their own
 //    rows. A surface that shows tidy area tabs and no unowned reproduces the "0
 //    unowned" fabrication — this strip exists so they can't. ──
-export function UnownedSeamStrip({ unownedBands, seamBands, openTotal }: { unownedBands: KitView["bands"]; seamBands: KitView["bands"]; openTotal?: number }) {
-  const unownedOpen = unownedBands.reduce((n, b) => n + b.open, 0);
-  if (!unownedBands.length && !seamBands.length) return null;
+export function UnownedSeamStrip({ unownedBands, seamBands, openTotal, unownedOpen: unownedOpenProp }: { unownedBands: KitView["bands"]; seamBands: KitView["bands"]; openTotal?: number; unownedOpen?: number }) {
+  // Read the ONE canonical unowned count when the caller passes it (ledger.unownedOpen =
+  // queue.counts.unowned), so this strip and the goal headline can never diverge again
+  // (5 vs 6 before). Falls back to the band sum only when no canonical count is supplied.
+  const unownedOpen = unownedOpenProp ?? unownedBands.reduce((n, b) => n + b.open, 0);
+  if (!unownedBands.length && !seamBands.length && !unownedOpen) return null;
   // A denominator so a small orphan reads small: "5 of 600 unowned" is not the same
   // crisis as "5 of 8". Unowned is a calm orphan chip, not a red alarm; seams are a
   // to-do (a meeting to book), styled apart from unowned.

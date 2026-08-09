@@ -36,6 +36,8 @@ import { HeardReadout, ConvergenceReadout, UnownedSeamStrip, ProvisionalMark, Cl
 import DesignLoopZones from "@/v3/components/flow/DesignLoopZones";
 import OperatorInbox from "@/v3/components/flow/OperatorInbox";
 import { serializeOperatorActions, OPERATOR_ACTIONS_FIELD, type OperatorAction } from "@/v3/lib/ledger/operatorActions";
+import { ownerRoleLabelForArea } from "@/v3/lib/ledger/migrate";
+import { questionForLocus } from "@/v3/lib/ledger/phrasing";
 import "./theLine.css";
 
 const FlowArtifactStudio = lazy(() => import("./studio/FlowArtifactStudio"));
@@ -416,15 +418,58 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
   // the stakeholder link is live and the same clock times a real system send.
   type EngState = "ready" | "in-flight" | "blocked" | "done";
   const ENG_LABEL: Record<EngState, string> = { ready: "Ready", "in-flight": "In flight", blocked: "Blocked", done: "Done for now" };
+  // A roster person → the ledger OWNER-LABEL(s) they own, via the ledger's own
+  // function mapping (ownerRoleLabelForArea) — NOT area-word overlap. This is the
+  // F-1/turf root fix: a person's questions are the OPEN unknowns on loci THEY OWN,
+  // so the same locus can never land under two owners and inflate everyone's count.
+  const ownerLabelsFor = useMemo(() => {
+    const m = new Map<string, Set<string>>();
+    for (const row of cast) {
+      const labels = new Set<string>();
+      // A person owns their PRIMARY function — from their ROLE/title, else their
+      // primary area. NOT the union of every coverage area they're tagged with:
+      // nearly everyone "covers" Sales, so unioning coverage reproduces the
+      // area-inherited bleed (Alliances inheriting Sales-handoff questions). The
+      // ledger owns each locus by ONE role, so a person maps to ONE owning function.
+      const primary = ownerRoleLabelForArea(row.role) ?? ownerRoleLabelForArea(row.label) ?? ownerRoleLabelForArea(row.area);
+      if (primary) labels.add(primary);
+      m.set(row.label, labels);
+    }
+    return m;
+  }, [cast]);
+  // Each person's SOLO-answerable owned questions (dedup by locus), read from the
+  // one soloByOwner projection. Seams are excluded by construction (joint owners are
+  // never in soloByOwner) — they live in the session queue, not on an async list.
+  const ownedQuestionsFor = useMemo(() => {
+    const nameOf = new Map(ledger.store.elements().map((e) => [e.id, e.name] as const));
+    const m = new Map<string, Array<{ about: string; question: string; typeTag: string }>>();
+    for (const row of cast) {
+      const seen = new Set<string>();
+      const out: Array<{ about: string; question: string; typeTag: string }> = [];
+      for (const label of ownerLabelsFor.get(row.label) ?? []) {
+        for (const it of ledger.soloByOwner.get(label) ?? []) {
+          if (seen.has(it.about)) continue; seen.add(it.about);
+          const p = questionForLocus(it.about, (id) => nameOf.get(id));
+          out.push({ about: it.about, question: p.question, typeTag: p.typeTag });
+        }
+      }
+      m.set(row.label, out);
+    }
+    return m;
+  }, [cast, ownerLabelsFor, ledger.soloByOwner, ledger.store]);
+  // Does this person sit on either side of an open seam? (blocked = only a joint
+  // session left for them). Read from the one session queue, by owner-label.
+  const seamPairsFor = useMemo(() => {
+    const m = new Map<string, string[]>();
+    for (const row of cast) {
+      const labels = ownerLabelsFor.get(row.label) ?? new Set<string>();
+      const pairs = ledger.sessionQueue.filter((s) => s.pair.split("⋈").some((p) => labels.has(p.trim()))).map((s) => s.pair);
+      m.set(row.label, pairs);
+    }
+    return m;
+  }, [cast, ownerLabelsFor, ledger.sessionQueue]);
   const engagementByLabel = useMemo(() => {
     const now = Date.now();
-    const words = (s: string) => s.toLowerCase().split(/[^a-z]+/).filter((w) => w.length > 2);
-    const seamTokens = new Set<string>();
-    for (const b of ledger.seamBands) for (const t of b.label.split("⋈")) seamTokens.add(t.trim().toLowerCase());
-    // open ledger questions per owner band (function), to map onto the people who work
-    // that function — "done" means the LEDGER has nothing open on your turf, never the
-    // roster's evidence flag (which would reproduce "N of N heard").
-    const bands = ledger.queue.byOwner.map((b) => ({ words: new Set(words(b.owner)), n: b.items.length }));
     const byLabel = new Map<string, { state: EngState; ageDays: number | null; open: number; done: number; needsSession: boolean; onTurf: number }>();
     for (const row of cast) {
       const key = row.label.trim().toLowerCase();
@@ -433,19 +478,17 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
       const done = assigned.filter((a) => ledger.capturedAbouts.has(a.about));
       const oldest = open.reduce<number | null>((m, a) => { const t = Date.parse(a.at); return Number.isNaN(t) ? m : (m === null ? t : Math.min(m, t)); }, null);
       const ageDays = oldest !== null ? Math.max(0, Math.floor((now - oldest) / 86400000)) : null;
-      const tokens = new Set<string>([...row.areas.flatMap(words), ...words(row.role)]);
-      let onTurf = 0;
-      for (const b of bands) { for (const w of b.words) if (tokens.has(w)) { onTurf += b.n; break; } }
-      const needsSession = row.areas.some((ar) => seamTokens.has(ar.trim().toLowerCase())) || seamTokens.has(row.role.trim().toLowerCase());
+      const onTurf = (ownedQuestionsFor.get(row.label) ?? []).length;   // real owned-solo load, not area coverage
+      const needsSession = (seamPairsFor.get(row.label) ?? []).length > 0;
       let state: EngState;
       if (open.length > 0 || row.awaiting) state = "in-flight";      // engaged, awaiting a response
-      else if (onTurf > 0) state = "ready";                          // the ledger has open questions on their turf
-      else if (needsSession) state = "blocked";                      // only a seam left for them
-      else state = "done";                                           // nothing open maps to them
+      else if (onTurf > 0) state = "ready";                          // open questions on loci THEY OWN
+      else if (needsSession) state = "blocked";                      // only a seam session left for them
+      else state = "done";                                           // nothing open owned by them
       byLabel.set(row.label, { state, ageDays, open: open.length, done: done.length, needsSession, onTurf });
     }
     return byLabel;
-  }, [cast, ledger.assignments, ledger.capturedAbouts, ledger.seamBands, ledger.queue.byOwner]);
+  }, [cast, ledger.assignments, ledger.capturedAbouts, ownedQuestionsFor, seamPairsFor]);
   const sortedCast = useMemo(() => {
     const rank: Record<EngState, number> = { ready: 0, "in-flight": 1, blocked: 2, done: 3 };
     return [...filteredCast].sort((a, b) => {
@@ -453,7 +496,7 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
       const ra = rank[ea?.state ?? "done"], rb = rank[eb?.state ?? "done"];
       if (ra !== rb) return ra - rb;
       if (ea?.state === "in-flight") return (eb?.ageDays ?? -1) - (ea?.ageDays ?? -1);          // chase oldest first
-      if (ea?.state === "ready") return b.questions.length - a.questions.length;                // most-unblocking first (proxy)
+      if (ea?.state === "ready") return (eb?.onTurf ?? 0) - (ea?.onTurf ?? 0);                  // biggest real owned load first
       return a.label.localeCompare(b.label);
     });
   }, [filteredCast, engagementByLabel]);
@@ -603,6 +646,7 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
   // that only writes to a denied clipboard reads as broken.
   const [linkShown, setLinkShown] = useState<{ who: string; url: string } | null>(null);
   const [qOpen, setQOpen] = useState<Record<string, boolean>>({});
+  const [areaOpen, setAreaOpen] = useState<Record<string, boolean>>({});
   // Company brief — who the client IS. A web-fetched DRAFT the operator
   // confirms or overrides; only their save writes it to the record.
   const [briefOpen, setBriefOpen] = useState(false);
@@ -833,7 +877,7 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
             <ConvergenceReadout burnDown={ledger.kit.burnDown} />
           </div>
         </div>
-        <UnownedSeamStrip unownedBands={ledger.unownedBands} seamBands={ledger.seamBands} openTotal={ledger.queue.counts.total} />
+        <UnownedSeamStrip unownedBands={ledger.unownedBands} seamBands={ledger.seamBands} openTotal={ledger.queue.counts.total} unownedOpen={ledger.unownedOpen} />
         </>
       ) : null}
 
@@ -947,7 +991,7 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
             <span className="v3ln-goal-lead">The goal — close the burn-down</span>
             <span className="v3ln-goal-stats">
               <b>{ledger.kit.burnDown.open}</b> open unknowns · <b>{ledger.heard.total}</b> answered
-              {" "}· <b>{ledger.queue.counts.unowned}</b> unowned · <b>{ledger.seamBands.length}</b> seam{ledger.seamBands.length === 1 ? "" : "s"}
+              {" "}· <b>{ledger.unownedOpen}</b> unowned · <b>{ledger.seamBands.length}</b> seam{ledger.seamBands.length === 1 ? "" : "s"}
             </span>
             <ConvergenceReadout burnDown={ledger.kit.burnDown} />
             <span className="v3ln-goal-heard"><HeardReadout heard={ledger.heard} /></span>
@@ -1002,27 +1046,57 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                               awaiting · {ageStr(e.ageDays!)} · operator-tracked
                             </span>
                           ) : e.state === "in-flight" ? <span className="v3ln-age">awaiting response · operator-tracked</span>
-                          : e.state === "blocked" && e.needsSession ? <span className="v3ln-eng-why">needs a joint session</span>
-                          : e.state === "ready" ? <span className="v3ln-eng-why">{e.onTurf} open on their turf — send a link</span>
+                          : e.state === "blocked" && e.needsSession ? <span className="v3ln-eng-why" title="A jointly-owned seam — settled in a session, not solo. It's in the session queue.">only a joint session left</span>
+                          : e.state === "ready" ? <span className="v3ln-eng-why" title="Open unknowns on loci THIS person owns (their solo load) — not area coverage, not seam questions.">{e.onTurf} open on loci they own — send a link</span>
                           : null}
                         </span>
                       );
                     })()}
                   </span>
                   <span className="v3ln-cr-areas">
-                    {row.areas.map((area) => (
-                      <button key={area} type="button"
-                        className={`v3ln-cr-area${areaFilter === area ? " on" : areaFilter && castAreas.includes(areaFilter) ? " dim" : ""}`}
-                        title={areaFilter === area ? "Show all areas" : `Filter to ${area}`}
-                        onClick={() => setAreaFilter(areaFilter === area ? "" : area)}>{area}</button>
-                    ))}
+                    {/* Routing signal (which turf each person covers) — kept, but collapsed
+                        to the primary few + "+N more" (the same idiom the seams strip uses),
+                        so seven tags don't clutter the row. Filtered area is always shown. */}
+                    {(() => {
+                      const CAP = 3;
+                      const expanded = !!areaOpen[row.label];
+                      // Keep the active filter visible even if it sits past the cap.
+                      const primary = row.areas.slice(0, CAP);
+                      if (areaFilter && row.areas.includes(areaFilter) && !primary.includes(areaFilter)) primary[CAP - 1] = areaFilter;
+                      const shown = expanded ? row.areas : primary;
+                      const hidden = row.areas.length - shown.length;
+                      return (
+                        <>
+                          {shown.map((area) => (
+                            <button key={area} type="button"
+                              className={`v3ln-cr-area${areaFilter === area ? " on" : areaFilter && castAreas.includes(areaFilter) ? " dim" : ""}`}
+                              title={areaFilter === area ? "Show all areas" : `Filter to ${area}`}
+                              onClick={() => setAreaFilter(areaFilter === area ? "" : area)}>{area}</button>
+                          ))}
+                          {hidden > 0 && !expanded ? (
+                            <button type="button" className="v3ln-cr-area more"
+                              title={`Also covers: ${row.areas.slice(CAP).join(", ")}`}
+                              onClick={(e) => { e.stopPropagation(); setAreaOpen((s) => ({ ...s, [row.label]: true })); }}>+{hidden} more</button>
+                          ) : expanded && row.areas.length > CAP ? (
+                            <button type="button" className="v3ln-cr-area more"
+                              onClick={(e) => { e.stopPropagation(); setAreaOpen((s) => ({ ...s, [row.label]: false })); }}>less</button>
+                          ) : null}
+                        </>
+                      );
+                    })()}
                   </span>
                   <span className="v3ln-cr-right">
+                  {(() => {
+                    const owned = ownedQuestionsFor.get(row.label) ?? [];
+                    return (
                   <button type="button" className="v3ln-cr-qbtn" aria-expanded={!!qOpen[row.label]}
+                    title="Open unknowns on loci this person OWNS (their solo load) — seam questions are in the session queue, not here"
                     onClick={() => setQOpen((s) => ({ ...s, [row.label]: !s[row.label] }))}>
-                    {row.questions.length} question{row.questions.length === 1 ? "" : "s"}
+                    {owned.length} owned question{owned.length === 1 ? "" : "s"}
                     <span aria-hidden="true">{qOpen[row.label] ? " ▴" : " ▾"}</span>
                   </button>
+                    );
+                  })()}
                   {(() => {
                     // The persona's journey at a glance: Listen (ontology) then
                     // Loop (prototype). Each segment only appears once that phase
@@ -1062,7 +1136,24 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                 </div>
                 {qOpen[row.label] ? (
                   <div className="v3ln-cr-body">
-                    <ul className="v3ln-cr-qs">{row.questions.map((q, i) => <li key={i}>{q}</li>)}</ul>
+                    {/* The async list = OPEN unknowns on loci this person OWNS, derived from
+                        the ledger (soloByOwner), NOT area-inherited kit questions. Seam
+                        questions are excluded — they're in the session queue. */}
+                    {(() => {
+                      const owned = ownedQuestionsFor.get(row.label) ?? [];
+                      const seams = seamPairsFor.get(row.label) ?? [];
+                      if (!owned.length) return (
+                        <p className="v3ln-cr-noq">No open unknowns on loci {row.label} owns.{seams.length ? ` Their open work is a joint session — it's in the session queue (${seams.join(", ")}).` : " Their durable link still carries the interview script."}</p>
+                      );
+                      return (
+                        <ul className="v3ln-cr-qs owned">
+                          {owned.map((q) => (
+                            <li key={q.about} title={q.about}><span className="v3ln-cr-qtype">{q.typeTag}</span>{q.question}</li>
+                          ))}
+                          {seams.length ? <li className="v3ln-cr-seamnote">＋ seam questions ({seams.join(", ")}) are in the session queue — a joint session, not solo.</li> : null}
+                        </ul>
+                      );
+                    })()}
                     {linkShown?.who === row.label ? (
                       <span className="v3ln-cr-url-row">
                         <input className="v3ln-cr-url" readOnly value={linkShown.url}

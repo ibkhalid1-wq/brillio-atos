@@ -35,13 +35,26 @@ const FUNCTIONS: Array<[RegExp, string]> = [
   [/sales ops|ops|operation/, "Sales Ops"],
   [/sales|opportunity|account/, "Sales"],
 ];
-const functionOf = (area: string): string | null => {
+export const functionOf = (area: string): string | null => {
   const a = (area || "").toLowerCase();
   for (const [re, fn] of FUNCTIONS) if (re.test(a)) return fn;
   return null;
 };
 /** Preserve the ledger's existing role labels for the function tokens. */
 const ROLE_LABEL: Record<string, string> = { Sales: "Sales Leaders" };
+
+/**
+ * The ledger OWNER LABEL for an area/role string — the exact label `ownerFor`
+ * stamps on a role-owned locus (function mapping + ROLE_LABEL), or null when the
+ * string maps to no known function. Exported so a surface can route a roster
+ * person to the loci THEY OWN using the SAME mapping the ledger owns by — one
+ * source of truth, no drifting copy of the FUNCTIONS table. Pure; no behaviour
+ * change to migrate() itself.
+ */
+export const ownerRoleLabelForArea = (area: string): string | null => {
+  const fn = functionOf(area);
+  return fn ? (ROLE_LABEL[fn] ?? fn) : null;
+};
 
 /**
  * Owner for a slot, from its area. Emits `unowned` where the area maps to no known
