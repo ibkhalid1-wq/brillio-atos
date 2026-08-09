@@ -45,9 +45,11 @@ export default function LedgerLensPanel({ program }: { program?: ProgramSummary 
       </p>
 
       {/* burn-down */}
-      <div className="v3lc-burn" role="img" aria-label={`burn-down: ${kit.burnDown.pctClosed}% of claims closed or weak`}>
-        <div className="v3lc-burn-bar"><span style={{ width: `${kit.burnDown.pctClosed}%` }} /></div>
-        <span className="v3lc-burn-l">{kit.burnDown.closed} closed/weak · {kit.burnDown.open} open · <b>{kit.burnDown.pctClosed}%</b></span>
+      {/* settlement bar (closed + pre-filled weak) — distinct from CONVERGENCE, which
+          counts real verbatim closures only */}
+      <div className="v3lc-burn" role="img" aria-label={`burn-down: ${kit.burnDown.pctSettled}% of claims closed or weak`}>
+        <div className="v3lc-burn-bar"><span style={{ width: `${kit.burnDown.pctSettled}%` }} /></div>
+        <span className="v3lc-burn-l">{kit.burnDown.closed} closed · {kit.burnDown.weak} weak · {kit.burnDown.open} open · <b>{kit.burnDown.pctSettled}%</b></span>
       </div>
 
       {/* primitive showcase — each in its states, for the visual pass */}

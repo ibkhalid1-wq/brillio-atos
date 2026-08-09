@@ -8098,8 +8098,10 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3lc-heard-l{font-size:11px;color:var(--v3-text-muted)}
 /* the ONE convergence readout */
 .v3lc-conv{display:inline-flex;align-items:center;gap:9px;flex-wrap:wrap}
-.v3lc-conv-bar{display:inline-block;width:120px;height:8px;background:var(--v3-surface-2);border:1px solid var(--fs-line);border-radius:6px;overflow:hidden}
+.v3lc-conv-bar{display:inline-flex;width:120px;height:8px;background:var(--v3-surface-2);border:1px solid var(--fs-line);border-radius:6px;overflow:hidden}
 .v3lc-conv-bar span{display:block;height:100%;background:var(--mv)}
+/* pre-filled weak segment — settled provisionally, converged nothing: dim, hatched-feel */
+.v3lc-conv-bar span.wk{background:color-mix(in srgb,var(--mv) 28%,var(--v3-surface-2));opacity:.8}
 .v3lc-conv-l{font-size:11px;color:var(--v3-text-muted)}.v3lc-conv-l b{font-size:14px;color:var(--v3-text-primary);font-variant-numeric:tabular-nums}
 .v3lc-conv-sub{margin-left:3px}
 /* unowned + seam strip — signals kept legible, not a blanket alarm: the container is

@@ -149,7 +149,11 @@ export function buildHeardRegister(store: LedgerStore): HeardRegister {
 
 // ── 2.4c · kit view (function-grouped; seams as joint bands; unowned its own band) ──
 export interface KitBand { key: string; kind: "function" | "seam" | "unowned"; label: string; open: number; blocking: number; heard: number; }
-export interface KitView { bands: KitBand[]; burnDown: { total: number; closed: number; open: number; pctClosed: number }; }
+/** Burn-down split: `closed` = REAL closures (verbatim, attributed) — the only thing
+ *  CONVERGENCE may count; `weak` = pre-filled/unconfirmed (born-weak generated values,
+ *  closures without verbatim). pctClosed tracks closed only, so convergence can never
+ *  read 57% while HEARD reads 0; pctSettled = closed+weak (the claims-settlement bar). */
+export interface KitView { bands: KitBand[]; burnDown: { total: number; closed: number; weak: number; open: number; pctClosed: number; pctSettled: number }; }
 export function buildKitView(store: LedgerStore): KitView {
   const q = buildUnknownQueue(store);
   const bandMap = new Map<string, KitBand>();
@@ -173,9 +177,15 @@ export function buildKitView(store: LedgerStore): KitView {
     (a.kind === "unowned" ? -2 : a.kind === "seam" ? -1 : 0) - (b.kind === "unowned" ? -2 : b.kind === "seam" ? -1 : 0)
     || b.blocking - a.blocking || a.label.localeCompare(b.label));
   const all = store.claims().filter(isLive);
-  const closed = all.filter((c) => c.status === "closed" || c.status === "weak").length;
+  // REAL closures only — status "closed" requires a verbatim, attributed closure. A
+  // "weak" claim is a pre-filled/unconfirmed value (born-weak generated defaults,
+  // closures without verbatim): it settles a slot provisionally but converges NOTHING.
+  const closed = all.filter((c) => c.status === "closed").length;
+  const weak = all.filter((c) => c.status === "weak").length;
   const open = all.filter((c) => c.status === "open" || c.status === "blocked").length;
-  return { bands, burnDown: { total: closed + open, closed, open, pctClosed: closed + open ? +(100 * closed / (closed + open)).toFixed(1) : 0 } };
+  const total = closed + weak + open;
+  const pct = (n: number) => (total ? +(100 * n / total).toFixed(1) : 0);
+  return { bands, burnDown: { total, closed, weak, open, pctClosed: pct(closed), pctSettled: pct(closed + weak) } };
 }
 
 // ── 3.3 · confirm-or-deviate session agenda ───────────────────────────────────
