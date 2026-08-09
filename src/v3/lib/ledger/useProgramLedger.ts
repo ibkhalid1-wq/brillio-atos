@@ -27,7 +27,7 @@ import { readMovementInputs } from "@/v3/components/flow/flowShellData";
 import { migrate, migrationStats, type Snapshot, type MigrationStats } from "./migrate";
 import {
   buildUnknownQueue, buildKitView, buildDeviationRegister, buildHeardRegister,
-  buildOntologyView, buildAtlasView,
+  buildOntologyView, buildAtlasView, openOwnerQuestions, dictionaryBucket,
   type UnknownQueue, type KitView, type Deviation, type HeardRegister,
   type OntologyElementView, type WorkflowView, type QueueItem,
 } from "./projections";
@@ -128,6 +128,11 @@ export interface ProgramLedger {
   /** The applied data dictionary's name, or null — when set, the typing wall self-closed
    *  from it (code-derived · weak, deviatable). */
   dictionaryName: string | null;
+  /** The ASSIGN queue — unowned questions that genuinely need a HUMAN owner: NON-typing
+   *  (phase / decision / …). Typing questions are excluded (they route to the dictionary,
+   *  not to a person). So burn-down `unownedOpen` = assignQueue.length + the unowned slice
+   *  of `typingLoci` — a decomposition by KIND, no double-count, no drop. */
+  assignQueue: QueueItem[];
 }
 
 /** Build the read-only ledger + every projection for a program. Memoized on the
@@ -197,15 +202,19 @@ export function useProgramLedger(program?: ProgramSummary): ProgramLedger {
     // Solo-answerable OWNED loci, grouped by owner-label (role owners only). A seam
     // (joint) locus is a session question — collected separately, never on a solo
     // list. Both computed once here so counts and lists across every surface agree.
+    // THE single definitions (projections.ts), computed once and read by every surface:
+    //  · assignQueue = "need a human owner" = inbox count/list = burn-down "unowned".
+    //  · typingLoci  = the data-dictionary bucket (typing questions → system owner).
+    // Conservation (asserted in tests): all-unowned = assignQueue + the unowned slice of
+    // typingLoci — nothing vanishes, nothing double-counted.
+    const assignQueue = openOwnerQuestions(queue);
+    const typingLoci = dictionaryBucket(queue);
     const soloByOwner = new Map<string, QueueItem[]>();
     const sessionMap = new Map<string, QueueItem[]>();
-    const typingLoci: QueueItem[] = [];
     for (const it of queue.items) {
-      // TYPING questions ("what type is X?") REROUTE to the system owner as one
-      // "upload your data dictionary" ask — never N questions to a domain expert.
-      if (it.status === "open" && TYPING_SLOTS.has(it.slot)) { typingLoci.push(it); continue; }
+      if (it.status === "open" && TYPING_SLOTS.has(it.slot)) continue;   // typing → dictionary bucket
       if (it.owner.kind === "joint") { (sessionMap.get(it.ownerLabel) ?? sessionMap.set(it.ownerLabel, []).get(it.ownerLabel)!).push(it); continue; }
-      if (it.owner.kind !== "role" || it.status !== "open") continue; // unowned → the assign queue; blocked → needs unsticking; both are not a solo "send a link"
+      if (it.owner.kind !== "role" || it.status !== "open") continue;    // unowned → assignQueue; blocked → needs unsticking
       (soloByOwner.get(it.ownerLabel) ?? soloByOwner.set(it.ownerLabel, []).get(it.ownerLabel)!).push(it);
     }
     const sessionQueue = [...sessionMap.entries()]
@@ -232,11 +241,12 @@ export function useProgramLedger(program?: ProgramSummary): ProgramLedger {
       decideFates,
       capturedAbouts: new Set(captures.map((c) => c.about)),
       conflicts,
-      unownedOpen: queue.counts.unowned,
+      unownedOpen: assignQueue.length,   // burn-down "unowned" === inbox "need an owner" — ONE read
       soloByOwner,
       sessionQueue,
       typingLoci,
       dictionaryName,
+      assignQueue,
     };
   }, [program]);
 }

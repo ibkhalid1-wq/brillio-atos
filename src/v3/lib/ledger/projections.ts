@@ -8,6 +8,7 @@
  */
 import type { LedgerStore } from "./store";
 import { type Claim, type Owner, ownerLabel, slotOf, elementIdOf, isLive } from "./types";
+import { TYPING_SLOTS } from "./dictionary";
 
 // ── depth filter — which unknowns GATE the Architect vs are disposition-eligible ──
 const ARCHITECT_SLOTS = new Set(["automationDisposition", "decision", "optionality", "semantics", "valueSet", "phase", "isClientOrPartner", "handoffRule", "exists"]);
@@ -49,6 +50,24 @@ export function buildUnknownQueue(store: LedgerStore): UnknownQueue {
     .map(({ owner, items: its }) => ({ owner, items: its }));
   return { items, byOwner, unowned: items.filter((i) => i.routing === "unowned"), counts };
 }
+
+// ── THE single definition of the two headline populations, computed once (F-1) ──
+// A question NEEDS A HUMAN OWNER when it is an open unknown nobody owns whose kind is NOT
+// answered by a data dictionary (not a typing slot: dataType / valueSet / optionality). For
+// Laila and surgery this is exactly the PHASE and DECISION questions. Unit: QUESTIONS.
+// This is the ONLY source for the inbox "need an owner" list/count AND the burn-down
+// "unowned" count — no surface recomputes either number.
+export const isOwnerQuestion = (i: QueueItem): boolean =>
+  i.owner.kind === "unowned" && i.status === "open" && !TYPING_SLOTS.has(i.slot);
+// A question is DICTIONARY-answerable when it's an open typing unknown (value / type /
+// optionality) — regardless of owner. It routes to the data-dictionary bucket, never the
+// owner queue. Post-condition: this set contains zero phase/decision questions.
+export const isDictionaryQuestion = (i: QueueItem): boolean =>
+  i.status === "open" && TYPING_SLOTS.has(i.slot);
+/** The "need a human owner" questions (unit: questions). The one read for inbox + burn-down. */
+export function openOwnerQuestions(q: UnknownQueue): QueueItem[] { return q.items.filter(isOwnerQuestion); }
+/** The data-dictionary bucket — typing questions routed to the system owner (unit: questions). */
+export function dictionaryBucket(q: UnknownQueue): QueueItem[] { return q.items.filter(isDictionaryQuestion); }
 
 // ── shared: resolved slot status for an element (weak/unknown distinct from closed) ──
 export type SlotState = "closed" | "weak" | "open" | "blocked" | "n/a" | "conflict";
