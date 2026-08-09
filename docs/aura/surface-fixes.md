@@ -121,38 +121,46 @@ Verified live ("Sales · Practices · Sales Ops · +5 more").
 
 ---
 
-## 6 · Consolidate the atlas into one CRUD view — status
+## 6 · Consolidate the atlas into one ledger-aware CRUD view — built (buildable-now slice)
 
-**What's already true:** `WorkflowStudio.tsx` is one component — the swimlane diagram and
-the inline step inspector read the same `doc.workflows` state and write through the same
-`onChange`, so view and edit cannot diverge on the same data. Step identity is already
-**content-derived, not positional** (`migrate.ts:138` `contentId("el:step", wid, actor,
-action)`), so **reorder preserves claim lineage** and editing a *non-identity* slot
-(system / entities / duration) preserves it too.
+`WorkflowStudio.tsx` is one surface — the swimlane diagram and the inline step inspector read
+the same `doc.workflows` state and write through the same `onChange`, so view and edit cannot
+diverge. This pass made it a **ledger surface** and hardened deletion:
 
-**What this fix additionally requires — and the honest state:**
-- *A ledger surface (claim status per step/slot, `?unknown` editable inline).* Buildable
-  now by matching each doc step to its migrated element via `contentId` and reading
-  `buildAtlasView` slot states. **Scoped, not yet built in this pass.**
-- *Every write through reconcile + the audit trigger, attributed & precedence-respected.*
-  This is the **gated** piece and a **finding**: the persisted reconcile + audit path is
-  Option A / `PgLedger.reconcile` (server-side), which is exactly why `useProgramLedger`
-  reads a **read-only `migrate()`** in-browser. An operator atlas edit today persists to the
-  `currentStateAtlas` artifact doc (the write path the atlas has always used) and the read
-  model re-derives — it is **not yet an attributed, audited ledger claim event**. Making it
-  one needs either the gated PgLedger path or an extension of `migrate()`'s override adapter
-  to fine-grained step-slot claims — **a core change, reported not made.**
-- *Editing the identity fields (actor / action) preserves lineage.* Because identity is
-  `contentId(actor, action)`, editing those fields mints a new id — the one case reorder-safe
-  identity cannot cover. Preserving lineage across a label edit needs a **persisted stable
-  step key honoured by the read path** — again a `migrate()` (core) change. **Finding.**
-- *Deletion mark-dropped.* Buildable now as a soft `dropped` flag (keep the element so its
-  claims stay findable); the *ledger* `exists=false` on drop is the same core/reconcile
-  finding.
+**Built and verified live (on `Laila CRM`):**
+- **Claim status per step.** The studio now reads the same claims ledger (`useProgramLedger`)
+  and matches each doc step to its migrated element **by content** (workflow name + the
+  step's action prefix — exactly the ledger's content-derived id). The inspector shows the
+  step's slots: *"Ledger claims on this step — 4 weak · 2 open unknowns"*, and lists the
+  `?unknown` slots (`actorRole`, `automationDisposition`) with their source. **The atlas is a
+  ledger surface, not a detached form.** Screenshot in the session.
+- **Content-derived identity ⇒ reorder preserves lineage.** Step id is
+  `contentId("el:step", wid, actor, action)` (`migrate.ts:138`), so a **reorder** (which only
+  changes position) never restrands a step's claims, and editing a *non-identity* slot
+  (system / entities / duration) preserves them too — the match is by content, not index.
+- **Deletion is mark-dropped, not hard-delete.** "Remove step" is now **"⊘ Mark dropped"** —
+  a soft `dropped` flag; the step stays in the document (and the ledger, findable as an
+  orphan), rendered struck-through, and is **restorable**. A claim-carrying element is never
+  hard-deleted.
+- **CRUD through the atlas write path.** Create / edit / reorder / mark-drop all write the
+  `currentStateAtlas` artifact doc via `onChange` — the same artifact write path every atlas
+  edit has always used (which the override log + server reconcile consume).
 
-**Decision:** the count-reconciliation headline (fixes 1–5) is done and verified; the atlas
-consolidation's buildable-now ledger-awareness is scoped and its attributed-write core needs
-are reported as findings above, consistent with "a needed core change is a finding."
+**Findings (a needed core change is a finding, not made):**
+- **F-A (gated/core):** an atlas edit landing as an *attributed, audited* ledger **claim**
+  through reconcile + the audit trigger is the persisted Option A / `PgLedger.reconcile` path
+  (server-side) — which is exactly why `useProgramLedger` reads a **read-only `migrate()`**
+  in-browser. Today an operator edit persists to the atlas doc and the read model re-derives;
+  making it an attributed claim event needs the gated PgLedger path or an extension of
+  `migrate()`'s override adapter to fine-grained step-slot claims. The inspector states this
+  honestly: *"Answering a ?unknown lands as an attributed ledger closure through reconcile —
+  the gated write path (operator edits here persist to the atlas doc today)."*
+- **F-B (core):** editing the *identity* fields (actor / action) mints a new content-id — the
+  one case content-derived identity can't cover. Preserving lineage across a label edit needs
+  a **persisted stable step key honoured by the read path** (`migrate()`).
+- **F-C (core):** a fully honest mark-drop would also write the *ledger* `exists=false` on the
+  dropped step (like a removed entity); the soft doc flag keeps it findable now, the ledger
+  `exists=false` is the reconcile piece.
 
 ---
 
