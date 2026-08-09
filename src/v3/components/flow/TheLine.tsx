@@ -32,7 +32,7 @@ import { buildMeetingIcs, meetingKit, sponsorLinkQuestions } from "@/v3/componen
 import DiscoveryKitAlign from "@/v3/components/flow/DiscoveryKitAlign";
 import { supabase } from "@/integrations/supabase/client";
 import { useProgramLedger } from "@/v3/lib/ledger/useProgramLedger";
-import { HeardReadout, ConvergenceReadout, UnownedSeamStrip, ProvisionalMark, ClaimStatus, SourceTag } from "@/v3/components/flow/studio/ledgerPrimitives";
+import { HeardReadout, ConvergenceReadout, ProvisionalMark, ClaimStatus, SourceTag } from "@/v3/components/flow/studio/ledgerPrimitives";
 import DesignLoopZones from "@/v3/components/flow/DesignLoopZones";
 import OperatorInbox from "@/v3/components/flow/OperatorInbox";
 import { serializeOperatorActions, OPERATOR_ACTIONS_FIELD, type OperatorAction } from "@/v3/lib/ledger/operatorActions";
@@ -427,6 +427,8 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
   // F-1/turf root fix: a person's questions are the OPEN unknowns on loci THEY OWN,
   // so the same locus can never land under two owners and inflate everyone's count.
   const ownerLabelsFor = useMemo(() => {
+    const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
+    const ledgerLabels = [...ledger.soloByOwner.keys()];
     const m = new Map<string, Set<string>>();
     for (const row of cast) {
       const labels = new Set<string>();
@@ -437,10 +439,19 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
       // ledger owns each locus by ONE role, so a person maps to ONE owning function.
       const primary = ownerRoleLabelForArea(row.role) ?? ownerRoleLabelForArea(row.label) ?? ownerRoleLabelForArea(row.area);
       if (primary) labels.add(primary);
+      // ATLAS-STATED owners (non-CRM domains): the ledger can now own a locus by the
+      // atlas's own workflow.owner / step.actor string. Bind a person to those labels
+      // by EXACT normalized match on their role or name only — never fuzzy (the
+      // "Surgical Operations"→Sales Ops false-match lesson). A label nobody matches
+      // stays visible in the unbound-owners strip below, never silently unclaimed.
+      for (const L of ledgerLabels) {
+        const n = norm(L);
+        if (n === norm(row.role || "") || n === norm(row.label)) labels.add(L);
+      }
       m.set(row.label, labels);
     }
     return m;
-  }, [cast]);
+  }, [cast, ledger.soloByOwner]);
   // Each person's SOLO-answerable owned questions (dedup by locus), read from the
   // one soloByOwner projection. Seams are excluded by construction (joint owners are
   // never in soloByOwner) — they live in the session queue, not on an async list.
@@ -881,7 +892,8 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
             <ConvergenceReadout burnDown={ledger.kit.burnDown} />
           </div>
         </div>
-        <UnownedSeamStrip unownedBands={ledger.unownedBands} seamBands={ledger.seamBands} openTotal={ledger.queue.counts.total} unownedOpen={ledger.unownedOpen} />
+        {/* UnownedSeamStrip hidden by request (2026-08-09) — the same numbers stay
+            readable in the goal line (unowned/seams) and the inbox sections. */}
         </>
       ) : null}
 

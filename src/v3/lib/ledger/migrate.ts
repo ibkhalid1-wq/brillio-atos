@@ -70,6 +70,17 @@ const ownerFor = (area: string): Owner => {
 };
 
 /**
+ * A role owner STATED BY THE DATA — the atlas's own `workflow.owner` / `step.actor`
+ * string, verbatim. Used only where the function table misses (non-CRM domains, where
+ * functionOf knows no turf): an explicit, data-grounded rule hit, never an invented
+ * constant. Null when the data states nothing — the caller stays unowned then.
+ */
+const statedOwner = (stated: unknown): Owner | null => {
+  const s = String(stated ?? "").trim();
+  return s ? { kind: "role", role: s } : null;
+};
+
+/**
  * A genuinely shared locus: joint(A ⋈ B) with endpoints sorted for determinism.
  * When only one side resolves, that side owns it. When NEITHER resolves, the locus
  * is UNOWNED — never a fabricated fallback owner. A miss stays visible in burn-down
@@ -146,7 +157,10 @@ export function migrate(snap: Snapshot): LedgerStore {
     const wn = String(w.name ?? ""); if (!wn) continue;
     const wid = `el:wf:${slug(wn)}`;
     const area = String(w.area ?? "");
-    const owner = ownerFor(area);
+    // functionOf hit → the function owns it; miss → the atlas's OWN stated owner
+    // (data-grounded), else unowned. Never a constant.
+    const fnOwner = ownerFor(area);
+    const owner = fnOwner.kind === "unowned" ? (statedOwner(w.owner) ?? fnOwner) : fnOwner;
     store.addElement({ id: wid, kind: "workflow", name: wn });
     A(aboutOf(wid, "name"), s(wn), "generated", "to-be", "domain", owner, { status: "weak" });
     if (w.area) A(aboutOf(wid, "area"), s(String(w.area)), "code-derived", "to-be", "configuration", owner, { status: "weak" });
@@ -159,7 +173,11 @@ export function migrate(snap: Snapshot): LedgerStore {
       const sid = contentId("el:step", wid, String(st.actor ?? ""), action.slice(0, 60)); // A6 content id, not index
       store.addElement({ id: sid, kind: "step", name: action.slice(0, 60), of: wid });
       // a step whose actor-area differs from the workflow's owning area is a handoff seam → joint
-      const stepOwner = jointOrOwner(area, String(st.actor ?? ""));
+      // Seam/function first (unchanged); on a double-miss the step's own stated actor
+      // owns it, else the workflow's stated owner, else unowned. Data-grounded only.
+      const seamOrFn = jointOrOwner(area, String(st.actor ?? ""));
+      const stepOwner = seamOrFn.kind === "unowned"
+        ? (statedOwner(st.actor) ?? statedOwner(w.owner) ?? seamOrFn) : seamOrFn;
       A(aboutOf(sid, "action"), s(action), "generated", "to-be", "domain", stepOwner, { status: "weak" });
       A(aboutOf(sid, "automationDisposition"), OPEN, "generated", "to-be", "configuration", stepOwner, { status: "open" }); // F-A — the step's OWN owner, not a constant
       A(aboutOf(sid, "actorRole"), OPEN, "generated", "to-be", "configuration", stepOwner, { status: "open" }); // 56-role — the step's OWN owner, not a constant

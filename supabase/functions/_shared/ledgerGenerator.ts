@@ -81,6 +81,12 @@ const jointOrOwner = (areaA: string, areaB: string): Owner => {
   if (a && b && a !== b) { const [x, y] = [a, b].sort(); return { kind: "joint", a: x, b: y }; }
   return a ? ownerFor(areaA) : b ? ownerFor(areaB) : { kind: "unowned" };
 };
+// A role owner STATED BY THE DATA (workflow.owner / step.actor, verbatim) — used only
+// where functionOf misses; an explicit rule hit, never a constant (mirrors migrate.ts).
+const statedOwner = (stated: unknown): Owner | null => {
+  const s = String(stated ?? "").trim();
+  return s ? { kind: "role", role: s } : null;
+};
 
 // ── the shape-required slot set per element kind (the anti-omission contract) ──
 // Every element MUST carry these slots; the generator fills them or emits ?unknown.
@@ -161,7 +167,9 @@ export function generateClaimsBatch(source: GenSource): GeneratedBatch {
     const wn = String(w.name ?? ""); if (!wn) continue;
     const wid = `el:wf:${slug(wn)}`;
     const area = String(w.area ?? "");
-    const owner = ownerFor(area);
+    // functionOf hit → the function; miss → the atlas's OWN stated owner; else unowned.
+    const fnOwner = ownerFor(area);
+    const owner = fnOwner.kind === "unowned" ? (statedOwner(w.owner) ?? fnOwner) : fnOwner;
     elements.push({ id: wid, kind: "workflow", name: wn });
     emit(aboutOf(wid, "name"), sc(wn), "domain", owner);
     emit(aboutOf(wid, "area"), w.area ? sc(String(w.area)) : UNK, "configuration", owner);
@@ -172,7 +180,11 @@ export function generateClaimsBatch(source: GenSource): GeneratedBatch {
       const action = String(st.action ?? "");
       const actor = String(st.actor ?? "");
       const sid = contentId("el:step", wid, actor, action.slice(0, 60)); // content id, not positional (A6)
-      const stepOwner = jointOrOwner(area, actor);
+      // Seam/function first; on a double-miss the stated actor, else the workflow's
+      // stated owner, else unowned (mirrors migrate.ts).
+      const seamOrFn = jointOrOwner(area, actor);
+      const stepOwner = seamOrFn.kind === "unowned"
+        ? (statedOwner(st.actor) ?? statedOwner(w.owner) ?? seamOrFn) : seamOrFn;
       elements.push({ id: sid, kind: "step", name: action.slice(0, 60), of: wid });
       emit(aboutOf(sid, "action"), sc(action), "domain", stepOwner);
       emit(aboutOf(sid, "automationDisposition"), UNK, "configuration", stepOwner); // F-A
