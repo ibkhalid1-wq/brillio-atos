@@ -32,7 +32,10 @@ const FUNCTIONS: Array<[RegExp, string]> = [
   [/legal|contract/, "Legal"],
   [/deliver|engagement/, "Delivery"],
   [/market/, "Marketing"],
-  [/sales ops|ops|operation/, "Sales Ops"],
+  // Sales Ops requires the SALES context: "Sales Ops", "Sales Operations". A bare
+  // "…Operations" (e.g. "Surgical Operations") is NOT Sales Ops — it maps to no
+  // known function and stays unowned, rather than being swallowed by a broad match.
+  [/sales ?op/, "Sales Ops"],
   [/sales|opportunity|account/, "Sales"],
 ];
 export const functionOf = (area: string): string | null => {
@@ -66,11 +69,16 @@ const ownerFor = (area: string): Owner => {
   return fn ? { kind: "role", role: ROLE_LABEL[fn] ?? fn } : { kind: "unowned" };
 };
 
-/** A genuinely shared locus: joint(A ⋈ B) with endpoints sorted for determinism, else a fallback. */
-const jointOrOwner = (areaA: string, areaB: string, fallback: string): Owner => {
+/**
+ * A genuinely shared locus: joint(A ⋈ B) with endpoints sorted for determinism.
+ * When only one side resolves, that side owns it. When NEITHER resolves, the locus
+ * is UNOWNED — never a fabricated fallback owner. A miss stays visible in burn-down
+ * and the operator inbox rather than being silently attributed to a default role.
+ */
+const jointOrOwner = (areaA: string, areaB: string): Owner => {
   const a = functionOf(areaA), b = functionOf(areaB);
   if (a && b && a !== b) { const [x, y] = [a, b].sort(); return { kind: "joint", a: x, b: y }; }
-  return ownerFor(a ? areaA : b ? areaB : fallback);
+  return a ? ownerFor(areaA) : b ? ownerFor(areaB) : { kind: "unowned" };
 };
 
 export interface Snapshot { ontology: Record<string, unknown>; atlas: Record<string, unknown>; overrides: Array<Record<string, unknown>>; }
@@ -117,7 +125,7 @@ export function migrate(snap: Snapshot): LedgerStore {
       const aid = `el:attr:${slug(name)}.${slug(an)}`;
       store.addElement({ id: aid, kind: "attribute", name: an, of: eid });
       A(aboutOf(aid, "exists"), s(true), "code-derived", "to-be", "configuration", owner, { closed: { by: "prototype" }, status: "weak" });
-      A(aboutOf(aid, "dataType"), OPEN, "generated", "to-be", "configuration", ownerFor("sales ops"), { status: "open" }); // F-D
+      A(aboutOf(aid, "dataType"), OPEN, "generated", "to-be", "configuration", owner, { status: "open" }); // F-D — owned by the attribute's OWN entity area, not a constant
       if (ENUMISH.test(an)) A(aboutOf(aid, "valueSet"), OPEN, "generated", "to-be", "domain", owner, { status: "open" }); // F-F
     }
   }
@@ -127,7 +135,7 @@ export function migrate(snap: Snapshot): LedgerStore {
     const rid = `el:rel:${slug(from)}-${slug(to)}`;
     store.addElement({ id: rid, kind: "relation", name: `${from}→${to}`, refs: { from: entIdByName.get(from) ?? "", to: entIdByName.get(to) ?? "" } });
     // a relation whose endpoints have different primary functions is a genuine seam → joint(A ⋈ B)
-    const owner = jointOrOwner(areaByName.get(from) ?? "", areaByName.get(to) ?? "", "sales ops");
+    const owner = jointOrOwner(areaByName.get(from) ?? "", areaByName.get(to) ?? "");
     if (r.cardinality) A(aboutOf(rid, "cardinality"), s(String(r.cardinality)), "code-derived", "to-be", "domain", owner, { status: "weak" });
     A(aboutOf(rid, "optionality"), OPEN, "generated", "to-be", "domain", owner, { status: "open" }); // F-D
     if (String(r.relation ?? "").toLowerCase() === "produces") A(aboutOf(rid, "semantics"), OPEN, "generated", "to-be", "domain", owner, { status: "open" });
@@ -151,10 +159,10 @@ export function migrate(snap: Snapshot): LedgerStore {
       const sid = contentId("el:step", wid, String(st.actor ?? ""), action.slice(0, 60)); // A6 content id, not index
       store.addElement({ id: sid, kind: "step", name: action.slice(0, 60), of: wid });
       // a step whose actor-area differs from the workflow's owning area is a handoff seam → joint
-      const stepOwner = jointOrOwner(area, String(st.actor ?? ""), area || "sales ops");
+      const stepOwner = jointOrOwner(area, String(st.actor ?? ""));
       A(aboutOf(sid, "action"), s(action), "generated", "to-be", "domain", stepOwner, { status: "weak" });
-      A(aboutOf(sid, "automationDisposition"), OPEN, "generated", "to-be", "configuration", ownerFor("sales ops"), { status: "open" }); // F-A
-      A(aboutOf(sid, "actorRole"), OPEN, "generated", "to-be", "configuration", ownerFor("sales ops"), { status: "open" }); // 56-role
+      A(aboutOf(sid, "automationDisposition"), OPEN, "generated", "to-be", "configuration", stepOwner, { status: "open" }); // F-A — the step's OWN owner, not a constant
+      A(aboutOf(sid, "actorRole"), OPEN, "generated", "to-be", "configuration", stepOwner, { status: "open" }); // 56-role — the step's OWN owner, not a constant
       const isDecision = /approv|review|decide|gate|threshold/i.test(action);
       if (isDecision) A(aboutOf(sid, "decision"), OPEN, "generated", "to-be", "domain", owner, { status: "open" }); // F-B
       for (const ent of (Array.isArray(st.entities) ? st.entities : []) as unknown[]) {

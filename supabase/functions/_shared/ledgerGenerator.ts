@@ -61,7 +61,9 @@ const FUNCTIONS: Array<[RegExp, string]> = [
   [/practice|capability|competenc/, "Practices"], [/alliance|partner/, "Alliances"],
   [/finance|invoic|billing|revenue/, "Finance"], [/legal|contract/, "Legal"],
   [/deliver|engagement/, "Delivery"], [/market/, "Marketing"],
-  [/sales ops|ops|operation/, "Sales Ops"], [/sales|opportunity|account/, "Sales"],
+  // Sales Ops requires the SALES context (mirrors migrate.ts): a bare "…Operations"
+  // (e.g. "Surgical Operations") is NOT Sales Ops — it maps to none and stays unowned.
+  [/sales ?op/, "Sales Ops"], [/sales|opportunity|account/, "Sales"],
 ];
 const functionOf = (area: string): string | null => {
   const a = (area || "").toLowerCase();
@@ -73,10 +75,11 @@ const ownerFor = (area: string): Owner => {
   const fn = functionOf(area);
   return fn ? { kind: "role", role: ROLE_LABEL[fn] ?? fn } : { kind: "unowned" };
 };
-const jointOrOwner = (areaA: string, areaB: string, fallback: string): Owner => {
+// No fabricated fallback (mirrors migrate.ts): a double-miss stays UNOWNED and visible.
+const jointOrOwner = (areaA: string, areaB: string): Owner => {
   const a = functionOf(areaA), b = functionOf(areaB);
   if (a && b && a !== b) { const [x, y] = [a, b].sort(); return { kind: "joint", a: x, b: y }; }
-  return ownerFor(a ? areaA : b ? areaB : fallback);
+  return a ? ownerFor(areaA) : b ? ownerFor(areaB) : { kind: "unowned" };
 };
 
 // ── the shape-required slot set per element kind (the anti-omission contract) ──
@@ -146,7 +149,7 @@ export function generateClaimsBatch(source: GenSource): GeneratedBatch {
   for (const r of relations) {
     const from = String(r.from ?? ""), to = String(r.to ?? ""); if (!from || !to) continue;
     const rid = `el:rel:${slug(from)}-${slug(to)}`;
-    const owner = jointOrOwner(areaByName.get(from) ?? "", areaByName.get(to) ?? "", "sales ops");
+    const owner = jointOrOwner(areaByName.get(from) ?? "", areaByName.get(to) ?? "");
     elements.push({ id: rid, kind: "relation", name: `${from}→${to}`, refs: { from: idByName.get(from) ?? "", to: idByName.get(to) ?? "" } });
     emit(aboutOf(rid, "cardinality"), r.cardinality ? sc(String(r.cardinality)) : UNK, "domain", owner);
     emit(aboutOf(rid, "optionality"), UNK, "domain", owner);           // F-D
@@ -169,7 +172,7 @@ export function generateClaimsBatch(source: GenSource): GeneratedBatch {
       const action = String(st.action ?? "");
       const actor = String(st.actor ?? "");
       const sid = contentId("el:step", wid, actor, action.slice(0, 60)); // content id, not positional (A6)
-      const stepOwner = jointOrOwner(area, actor, area || "sales ops");
+      const stepOwner = jointOrOwner(area, actor);
       elements.push({ id: sid, kind: "step", name: action.slice(0, 60), of: wid });
       emit(aboutOf(sid, "action"), sc(action), "domain", stepOwner);
       emit(aboutOf(sid, "automationDisposition"), UNK, "configuration", stepOwner); // F-A
