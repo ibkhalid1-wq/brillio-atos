@@ -131,16 +131,19 @@ export function HeardReadout({ heard, perAreaProvisional = true }: { heard: Hear
   );
 }
 
-// ── the ONE convergence readout: real ledger closures (burn-down), not demo-verdict
-//    area sign-offs. Per-area convergence needs the write path → provisional. ──
+// ── the ONE convergence readout: REAL ledger closures only (verbatim, attributed).
+//    Weak pre-fill (born-weak generated values) settles slots provisionally but
+//    converges nothing — shown as a dim bar segment, never in the headline, so this
+//    number can agree with HEARD (0 attributed closures ⇒ 0% convergence). ──
 export function ConvergenceReadout({ burnDown, perAreaProvisional = true }: { burnDown: KitView["burnDown"]; perAreaProvisional?: boolean }) {
-  // Density: the headline is the %; the exact closed/open split is detail on hover.
+  // Density: the headline is the %; the closed/weak/open split is detail on hover.
   return (
-    <span className="v3lc-conv" title={`${burnDown.closed} closed/weak · ${burnDown.open} open of ${burnDown.total}`}>
-      <span className="v3lc-conv-bar" role="img" aria-label={`${burnDown.pctClosed}% of claims closed or weak (${burnDown.closed} of ${burnDown.total})`}>
+    <span className="v3lc-conv" title={`${burnDown.closed} real closures · ${burnDown.weak} pre-filled weak (unconfirmed) · ${burnDown.open} open of ${burnDown.total}`}>
+      <span className="v3lc-conv-bar" role="img" aria-label={`${burnDown.pctClosed}% of claims really closed (${burnDown.closed} of ${burnDown.total}); ${burnDown.weak} pre-filled weak`}>
         <span style={{ width: `${burnDown.pctClosed}%` }} />
+        <span className="wk" style={{ width: `${Math.max(0, burnDown.pctSettled - burnDown.pctClosed)}%` }} />
       </span>
-      <span className="v3lc-conv-l"><b>{burnDown.pctClosed}%</b> <span className="v3lc-conv-sub">closed/weak</span></span>
+      <span className="v3lc-conv-l"><b>{burnDown.pctClosed}%</b> <span className="v3lc-conv-sub">closed{burnDown.weak ? <> · {burnDown.pctSettled}% incl. pre-filled</> : null}</span></span>
       {perAreaProvisional ? <ProvisionalMark what="per-area convergence is demo-verdict sign-off, gated on the stakeholder write path" /> : null}
     </span>
   );
