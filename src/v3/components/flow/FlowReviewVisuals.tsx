@@ -38,19 +38,37 @@ function areaHue(area: string | undefined): number {
 
 /** The editable workflow, drawn as a vertical flow. Steps drag to reorder; the
  * actor and system are editable inline. */
-export function WorkflowFlow({ name, trigger, steps, onEdit, onEditMeta, onToggleRemove, onAdd, onReorder, stepComment, onStepComment, stepConfirmed, onToggleStepConfirm }: {
+/** Has THIS stakeholder changed the row from what we showed them? An added row
+ *  counts once it has content; an original counts once its action, actor, or
+ *  system differs. "Doesn't happen" (removed) is a distinct state, handled apart. */
+export function isNodeEdited(node: FlowNode): boolean {
+  if (node.removed) return false;
+  if (node.added) return !!node.action.trim();
+  return (node.original != null && node.original !== node.action)
+    || (node.originalActor ?? "") !== (node.actor ?? "")
+    || (node.originalSystem ?? "") !== (node.system ?? "");
+}
+
+export function WorkflowFlow({ name, trigger, steps, onEdit, onEditMeta, onToggleRemove, onRevert, onAdd, onReorder, stepComment, onStepComment, stepWhy, onStepWhy, stepConfirmed, onToggleStepConfirm }: {
   name: string;
   trigger?: string;
   steps: FlowNode[];
   onEdit: (index: number, action: string) => void;
   onEditMeta: (index: number, field: "actor" | "system", value: string) => void;
   onToggleRemove: (index: number) => void;
+  /** Revert THIS stakeholder's own edit on the row — restore the action/actor/
+   *  system we showed them (an added row is dropped). Only their delta is undone. */
+  onRevert: (index: number) => void;
   onAdd: (afterIndex: number) => void;
   onReorder: (from: number, to: number) => void;
   /** Read/write a free-text note on a phase/step (text + voice). When provided,
-   *  each step gains a "comment on this phase" field. */
+   *  each step gains a "describe the change in your own words" field. */
   stepComment?: (index: number) => string;
   onStepComment?: (index: number, value: string) => void;
+  /** Optional "why does it work this way?" per step — captured as attributed
+   *  context alongside the change. */
+  stepWhy?: (index: number) => string;
+  onStepWhy?: (index: number, value: string) => void;
   /** Tap-to-validate: whether the stakeholder confirmed this step is right, and
    *  a toggle. The positive counterpart to "✕ doesn't happen". */
   stepConfirmed?: (index: number) => boolean;
@@ -101,6 +119,19 @@ export function WorkflowFlow({ name, trigger, steps, onEdit, onEditMeta, onToggl
                   {(node.entities ?? []).slice(0, 4).map((ent) => <span key={ent} className="v3fs-vflow-ent">{ent}</span>)}
                 </div>
               ) : null}
+              {/* Row state, in the stakeholder's own terms — either they marked it
+                  gone, or they edited it and it's queued for the team. Each carries
+                  the matching undo, so nothing is a trap. */}
+              {node.removed ? (
+                <div className="v3fs-vflow-state gone">
+                  <span className="v3fs-vflow-chip gone">Doesn&rsquo;t happen — your input</span>
+                </div>
+              ) : isNodeEdited(node) ? (
+                <div className="v3fs-vflow-state edited">
+                  <span className="v3fs-vflow-chip edited">Edited — pending team review</span>
+                  <button type="button" className="v3fs-vflow-undo" onClick={() => onRevert(si)}>Undo my change</button>
+                </div>
+              ) : null}
               <div className="v3fs-vflow-vld">
                 {!node.removed && !node.added && onToggleStepConfirm ? (
                   <button type="button" className={`v3fs-vld yes${stepConfirmed?.(si) ? " on" : ""}`}
@@ -114,10 +145,18 @@ export function WorkflowFlow({ name, trigger, steps, onEdit, onEditMeta, onToggl
               </div>
               {!node.removed && onStepComment ? (
                 <div className="v3fs-vflow-note">
-                  <input value={stepComment?.(si) ?? ""} placeholder="Comment on this phase (optional)"
-                    onChange={(e) => onStepComment(si, e.target.value)} aria-label={`Comment on step ${si + 1}`} />
+                  <input value={stepComment?.(si) ?? ""} placeholder="Describe the change in your own words (optional)"
+                    onChange={(e) => onStepComment(si, e.target.value)} aria-label={`Describe the change to step ${si + 1}`} />
                   <DictationButton compact label="Speak this comment"
                     onText={(spoken) => onStepComment(si, joinDictation(stepComment?.(si) ?? "", spoken))} />
+                </div>
+              ) : null}
+              {!node.removed && onStepWhy ? (
+                <div className="v3fs-vflow-note why">
+                  <input value={stepWhy?.(si) ?? ""} placeholder="Why does it work this way? (optional)"
+                    onChange={(e) => onStepWhy(si, e.target.value)} aria-label={`Why step ${si + 1} works this way`} />
+                  <DictationButton compact label="Speak the reason"
+                    onText={(spoken) => onStepWhy(si, joinDictation(stepWhy?.(si) ?? "", spoken))} />
                 </div>
               ) : null}
             </div>

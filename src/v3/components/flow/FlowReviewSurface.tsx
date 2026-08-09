@@ -99,8 +99,7 @@ function ReviewHeader({ stakeholder, programme, objective, intro, areaLabel, ret
       {intro ? <p className="v3fs-rvw-sub">{intro}</p> : null}
       {areaLabel ? <p className="v3fs-rvw-scoped"><b>This covers {areaLabel}</b> — the workflows and terms in your world.</p> : null}
       <div className="v3fs-rvw-ask">
-        <span className="lbl">What we need from you</span>
-        Walk your workflow and the terms below — <b>confirm what&rsquo;s right, fix what&rsquo;s not, add what we missed</b>. Type or talk; it saves as you go, and nothing is final until the team reviews it.
+        Walk through your workflow below — <b>confirm what&rsquo;s right, fix what&rsquo;s not, add what we missed</b>. It saves as you go; nothing is final until the team reviews it.
       </div>
     </header>
   );
@@ -240,6 +239,8 @@ function ListenWorkflowSurface({ review, stakeholder, programme, objective, subm
   const [addedTerms, setAddedTerms] = usePersistentState<Array<{ name: string; note: string }>>(draftKey, "lwAdd", []);
   // A free-text comment per workflow phase/step, keyed `${wi}.${si}` (text + voice).
   const [stepNotes, setStepNotes] = usePersistentState<Record<string, string>>(draftKey, "lwStepNotes", {});
+  // Optional "why does it work this way?" per step, same key — captured as context.
+  const [stepWhy, setStepWhy] = usePersistentState<Record<string, string>>(draftKey, "lwStepWhy", {});
   // Tap-to-validate: steps + terms the stakeholder actively confirmed are right.
   // Confirmation is signal — it turns silence into a validated model, not "maybe".
   const [stepConfirmed, setStepConfirmed] = usePersistentState<Record<string, boolean>>(draftKey, "lwStepOk", {});
@@ -258,6 +259,19 @@ function ListenWorkflowSurface({ review, stakeholder, programme, objective, subm
       // A brand-new (added) row is deleted outright; an original is struck through.
       if (step.added) return steps.filter((_, j) => j !== si);
       return steps.map((s, j) => j !== si ? s : { ...s, removed: !s.removed });
+    }));
+  // Undo just THIS stakeholder's own edit on a row — an added row is dropped;
+  // an edited original is restored to what we showed (action/actor/system). Their
+  // delta only; nothing else on the row is touched.
+  const revertStep = (wi: number, si: number) => setWfSteps((prev) =>
+    prev.map((steps, i) => {
+      if (i !== wi) return steps;
+      const step = steps[si];
+      if (step.added) return steps.filter((_, j) => j !== si);
+      return steps.map((s, j) => j !== si ? s : {
+        ...s, action: s.original ?? s.action, removed: false,
+        actor: s.originalActor ?? s.actor, system: s.originalSystem ?? s.system,
+      });
     }));
   const addStep = (wi: number, at: number) => setWfSteps((prev) =>
     prev.map((steps, i) => {
@@ -289,7 +303,8 @@ function ListenWorkflowSurface({ review, stakeholder, programme, objective, subm
     const notedTerms = review.terms.map((t, i) => ({ name: t.name, note: (termNotes[String(i)] ?? "").trim() })).filter((r) => r.note);
     const newTerms = addedTerms.filter((t) => t.name.trim());
     const answered = review.questions.map((q, i) => ({ q, a: (answers[String(i)] ?? "").trim() })).filter((r) => r.a);
-    const noted = Object.values(stepNotes).filter((v) => v.trim()).length;
+    const noted = new Set([...Object.entries(stepNotes), ...Object.entries(stepWhy)]
+      .filter(([, v]) => v.trim()).map(([k]) => k)).size;
     const confirmedSteps = Object.values(stepConfirmed).filter(Boolean).length;
     const confirmedTerms = Object.values(termConfirmed).filter(Boolean).length;
     const dataTerms = Object.values(termData).filter((v) => v.trim()).length;
@@ -297,14 +312,21 @@ function ListenWorkflowSurface({ review, stakeholder, programme, objective, subm
       + (narration.trim() ? 1 : 0) + notedTerms.length + newTerms.length + answered.length + noted
       + confirmedSteps + confirmedTerms + dataTerms;
     return { workflows, notedTerms, newTerms, answered, confirmedSteps, confirmedTerms, dataTerms, count };
-  }, [review, wfSteps, narration, termNotes, answers, addedTerms, stepNotes, stepConfirmed, termConfirmed, termData]);
+  }, [review, wfSteps, narration, termNotes, answers, addedTerms, stepNotes, stepWhy, stepConfirmed, termConfirmed, termData]);
 
   const [area, setArea] = useState(review.recipientArea ?? "");
   const areas = areasOf(review.workflows);
 
   const compose = () => {
+    // Fold each step's "why does it work this way?" into the same attributed note
+    // channel so it reaches the record as context, never a silently-dropped field.
+    const mergedNotes: Record<string, string> = { ...stepNotes };
+    for (const [k, why] of Object.entries(stepWhy)) {
+      if (!why.trim()) continue;
+      mergedNotes[k] = [mergedNotes[k]?.trim(), `Why it works this way: ${why.trim()}`].filter(Boolean).join(" — ");
+    }
     const base = composeListenWorkflowAnswers(review, {
-      workflows: review.workflows.map((w, wi) => ({ name: w.name, steps: wfSteps[wi] ?? [], stepNotes, workflowIndex: wi })),
+      workflows: review.workflows.map((w, wi) => ({ name: w.name, steps: wfSteps[wi] ?? [], stepNotes: mergedNotes, workflowIndex: wi })),
       narration, termNotes, answers, addedTerms,
     });
     // Fold the tap-to-validate confirmations into the same attributed evidence
@@ -331,15 +353,18 @@ function ListenWorkflowSurface({ review, stakeholder, programme, objective, subm
       <div className="v3fs-rvw">
         <div className="v3fs-rvw-section-h"><span className="v3fs-rvw-step-ic" aria-hidden="true">⇄</span>Your workflow — fix it, add steps, or mark what doesn&rsquo;t happen</div>
         {review.workflows.map((wf, wi) => area && hasArea(review.workflows, area) && wf.area !== area ? null : (
-          <section key={wi} className="v3fs-rvw-wf plain">
+          <section key={wi} id={`rvw-wf-${wi}`} className="v3fs-rvw-wf plain">
             <WorkflowFlow name={wf.name} trigger={wf.trigger} steps={wfSteps[wi] ?? []}
               onEdit={(si, action) => editStep(wi, si, action)}
               onEditMeta={(si, field, value) => editMeta(wi, si, field, value)}
               onToggleRemove={(si) => toggleRemove(wi, si)}
+              onRevert={(si) => revertStep(wi, si)}
               onAdd={(at) => addStep(wi, at)}
               onReorder={(from, to) => reorderStep(wi, from, to)}
               stepComment={(si) => stepNotes[`${wi}.${si}`] ?? ""}
               onStepComment={(si, v) => setStepNotes((p) => ({ ...p, [`${wi}.${si}`]: v }))}
+              stepWhy={(si) => stepWhy[`${wi}.${si}`] ?? ""}
+              onStepWhy={(si, v) => setStepWhy((p) => ({ ...p, [`${wi}.${si}`]: v }))}
               stepConfirmed={(si) => !!stepConfirmed[`${wi}.${si}`]}
               onToggleStepConfirm={(si) => setStepConfirmed((p) => ({ ...p, [`${wi}.${si}`]: !p[`${wi}.${si}`] }))} />
           </section>
@@ -414,19 +439,25 @@ function ListenWorkflowSurface({ review, stakeholder, programme, objective, subm
         <div className="v3fs-rvw-live-h">Your changes {proposal.count ? <span>{proposal.count}</span> : null}</div>
         {proposal.count ? (
           <div className="v3fs-rvw-live-body">
-            {proposal.workflows.map((w, i) => (
-              <div key={i} className="v3fs-rvw-live-wf">
-                <b>{w.name}</b>
-                <ul>
-                  {w.changes.map((s, j) => (
-                    <li key={j} className={s.added ? "add" : s.removed ? "del" : "chg"}>
-                      {s.added ? `Added: ${s.action}` : s.removed ? `Removed: ${s.original ?? s.action}` : `Changed: ${s.action}`}
-                    </li>
-                  ))}
-                  {w.reordered ? <li className="chg">Steps reordered</li> : null}
-                </ul>
-              </div>
-            ))}
+            {proposal.workflows.map((w) => {
+              // Index entry — clicking scrolls to the workflow it changed, so a long
+              // list of changes stays navigable back to the row it came from.
+              const wi = review.workflows.findIndex((rw) => rw.name === w.name);
+              return (
+                <button key={w.name} type="button" className="v3fs-rvw-live-wf"
+                  onClick={() => document.getElementById(`rvw-wf-${wi}`)?.scrollIntoView({ behavior: "smooth", block: "center" })}>
+                  <b>{w.name}</b>
+                  <ul>
+                    {w.changes.map((s, j) => (
+                      <li key={j} className={s.added ? "add" : s.removed ? "del" : "chg"}>
+                        {s.added ? `Added: ${s.action}` : s.removed ? `Removed: ${s.original ?? s.action}` : `Changed: ${s.action}`}
+                      </li>
+                    ))}
+                    {w.reordered ? <li className="chg">Steps reordered</li> : null}
+                  </ul>
+                </button>
+              );
+            })}
             {narration.trim() ? <p className="v3fs-rvw-live-note">“{narration.trim()}”</p> : null}
             {proposal.newTerms.length ? <p className="v3fs-rvw-live-note add">{proposal.newTerms.length} new term{proposal.newTerms.length === 1 ? "" : "s"}</p> : null}
             {proposal.notedTerms.length ? <p className="v3fs-rvw-live-note">{proposal.notedTerms.length} term note{proposal.notedTerms.length === 1 ? "" : "s"}</p> : null}
