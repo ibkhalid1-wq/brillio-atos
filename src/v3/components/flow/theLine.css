@@ -521,3 +521,21 @@
 .v3ib-grp-q{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
 .v3ib-marked{font-size:11px;color:var(--v3-positive,#3f9d6b);font-weight:600}
 .v3ib-nodate{color:var(--v3-amber);font-weight:700}
+/* seam "on the session plan" — intent recorded, date still gated */
+.v3ib-seam.planned{border-left-style:solid;background:color-mix(in srgb,#6C5FAE 8%,var(--fs-card))}
+.v3ib-onplan{font-size:11px;color:#5a4fa0;font-weight:650}
+/* blocked-unowned tag in the assign list */
+.v3ib-blk{font-size:10px;font-weight:700;letter-spacing:.02em;text-transform:uppercase;color:var(--v3-amber);border:1px solid color-mix(in srgb,var(--v3-amber) 45%,transparent);border-radius:4px;padding:0 4px;margin-left:4px}
+/* 0-adjudicate PASSED state — quiet present check, not an empty slot or alarm */
+.v3ib-passed{display:flex;align-items:flex-start;gap:9px;margin:2px 0 0;padding:8px 11px;border:1px solid color-mix(in srgb,var(--v3-positive,#3f9d6b) 30%,var(--fs-line));border-left:3px solid var(--v3-positive,#3f9d6b);border-radius:8px;background:color-mix(in srgb,var(--v3-positive,#3f9d6b) 5%,var(--fs-card))}
+.v3ib-passed-tick{color:var(--v3-positive,#3f9d6b);font-weight:800;font-size:13px;line-height:1.3}
+.v3ib-passed-body{font-size:12px;color:var(--v3-text-primary);line-height:1.5}
+.v3ib-passed-sub{display:block;margin-top:2px;font-size:11px;color:var(--v3-text-muted)}
+/* owned-question list in the roster expansion */
+.v3ln-cr-qs.owned li{display:flex;gap:6px;align-items:baseline}
+.v3ln-cr-qtype{font-size:9px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--v3-accent-2);flex-shrink:0}
+.v3ln-cr-seamnote{color:#5a4fa0!important;font-style:italic}
+.v3ln-cr-noq{margin:0;padding:2px 0 0 2px;font-size:11px;color:var(--v3-text-muted);font-style:italic;max-width:560px;line-height:1.45}
+/* collapsed "+N more" area chip — same idiom as the seams strip */
+.v3ln-cr-area.more{color:var(--v3-text-muted);font-weight:700;background:color-mix(in srgb,var(--v3-text-muted) 8%,transparent)}
+.v3ln-cr-area.more:hover{color:var(--v3-accent-2);background:color-mix(in srgb,var(--v3-accent-2) 12%,transparent)}

@@ -15,7 +15,7 @@ const isArchitectGating = (about: string): boolean => ARCHITECT_SLOTS.has(slotOf
 
 // ── 2.3 · the unknown queue ───────────────────────────────────────────────────
 export type Routing = "blocking" | "unowned" | "answerable-without-a-meeting" | "blocked";
-export interface QueueItem { about: string; owner: Owner; ownerLabel: string; routing: Routing; slot: string; }
+export interface QueueItem { about: string; owner: Owner; ownerLabel: string; routing: Routing; slot: string; status: "open" | "blocked"; }
 export interface UnknownQueue {
   items: QueueItem[];
   byOwner: Array<{ owner: string; items: QueueItem[] }>;
@@ -26,11 +26,17 @@ export interface UnknownQueue {
 export function buildUnknownQueue(store: LedgerStore): UnknownQueue {
   const open = store.claims().filter((c) => isLive(c) && (c.status === "open" || c.status === "blocked"));
   const items: QueueItem[] = open.map((c) => {
-    const routing: Routing = c.status === "blocked" ? "blocked"
-      : c.ownerWhileOpen.kind === "unowned" ? "unowned"
+    // UNOWNED is decided by OWNERSHIP first, before the blocked routing — a locus
+    // nobody owns is unowned whether or not it is also blocked, and the operator's
+    // next move on it is the same either way: assign an owner. Counting it under
+    // "blocked" instead (the old order) hid one blocked-unowned locus, so the Work
+    // header (kit band, ownership-counted) read 6 while this queue read 5. One
+    // definition now: unowned = open-unknowns (open OR blocked) that nobody owns.
+    const routing: Routing = c.ownerWhileOpen.kind === "unowned" ? "unowned"
+      : c.status === "blocked" ? "blocked"
         : isArchitectGating(c.about) ? "blocking"
           : "answerable-without-a-meeting";
-    return { about: c.about, owner: c.ownerWhileOpen, ownerLabel: ownerLabel(c.ownerWhileOpen), routing, slot: slotOf(c.about) };
+    return { about: c.about, owner: c.ownerWhileOpen, ownerLabel: ownerLabel(c.ownerWhileOpen), routing, slot: slotOf(c.about), status: c.status === "blocked" ? "blocked" : "open" };
   });
   const counts = { blocking: 0, unowned: 0, "answerable-without-a-meeting": 0, blocked: 0, total: items.length } as UnknownQueue["counts"];
   for (const i of items) counts[i.routing] += 1;

@@ -29,7 +29,7 @@ import {
   buildUnknownQueue, buildKitView, buildDeviationRegister, buildHeardRegister,
   buildOntologyView, buildAtlasView,
   type UnknownQueue, type KitView, type Deviation, type HeardRegister,
-  type OntologyElementView, type WorkflowView,
+  type OntologyElementView, type WorkflowView, type QueueItem,
 } from "./projections";
 import { buildReadModel } from "./readModel";
 import type { LedgerStore } from "./store";
@@ -102,6 +102,21 @@ export interface ProgramLedger {
   capturedAbouts: Set<string>;
   /** read-side conflicts: two live claims on one locus (freeze-and-adjudicate). */
   conflicts: Array<{ about: string; slot: string; count: number }>;
+  /** THE ONE unowned number — open-unknowns (open or blocked) nobody owns. Every
+   *  surface that says "unowned" reads this, so the Work header and the goal strip
+   *  can never diverge again (they read 6 vs 5 before). = queue.counts.unowned. */
+  unownedOpen: number;
+  /** Solo-answerable OPEN unknowns grouped by the ledger owner-label that owns them
+   *  (role owners only — seams are joint and never here). This is the single source
+   *  for "a person's questions": a roster person maps to owner-label(s) via the
+   *  ledger's own function mapping, and reads THEIR loci here — not area-inherited
+   *  questions. Kills the turf over-count (the same locus can't land under two
+   *  different owners). */
+  soloByOwner: Map<string, QueueItem[]>;
+  /** The session queue: seam (jointly-owned) questions grouped by function pair.
+   *  A jointly-owned locus is a SESSION question, never a solo one — it lives here,
+   *  not on any individual's async list. The inbox Sessions panel reads this. */
+  sessionQueue: Array<{ pair: string; abouts: string[]; items: QueueItem[] }>;
 }
 
 /** Build the read-only ledger + every projection for a program. Memoized on the
@@ -144,10 +159,27 @@ export function useProgramLedger(program?: ProgramSummary): ProgramLedger {
     }
 
     const kit = buildKitView(store);
+    const queue = buildUnknownQueue(store);
+
+    // ── one derivation of "a person's questions" and "the session queue" ──
+    // Solo-answerable OWNED loci, grouped by owner-label (role owners only). A seam
+    // (joint) locus is a session question — collected separately, never on a solo
+    // list. Both computed once here so counts and lists across every surface agree.
+    const soloByOwner = new Map<string, QueueItem[]>();
+    const sessionMap = new Map<string, QueueItem[]>();
+    for (const it of queue.items) {
+      if (it.owner.kind === "joint") { (sessionMap.get(it.ownerLabel) ?? sessionMap.set(it.ownerLabel, []).get(it.ownerLabel)!).push(it); continue; }
+      if (it.owner.kind !== "role" || it.status !== "open") continue; // unowned → the assign queue; blocked → needs unsticking; both are not a solo "send a link"
+      (soloByOwner.get(it.ownerLabel) ?? soloByOwner.set(it.ownerLabel, []).get(it.ownerLabel)!).push(it);
+    }
+    const sessionQueue = [...sessionMap.entries()]
+      .map(([pair, items]) => ({ pair, items, abouts: items.map((i) => i.about) }))
+      .sort((a, b) => b.items.length - a.items.length || a.pair.localeCompare(b.pair));
+
     return {
       store,
       stats: migrationStats(store),
-      queue: buildUnknownQueue(store),
+      queue,
       kit,
       devs: buildDeviationRegister(store),
       heard: buildHeardRegister(store),
@@ -164,6 +196,9 @@ export function useProgramLedger(program?: ProgramSummary): ProgramLedger {
       decideFates,
       capturedAbouts: new Set(captures.map((c) => c.about)),
       conflicts,
+      unownedOpen: queue.counts.unowned,
+      soloByOwner,
+      sessionQueue,
     };
   }, [program]);
 }
