@@ -20,7 +20,7 @@ import { useState, type ReactNode } from "react";
 import type { ProgramLedger } from "@/v3/lib/ledger/useProgramLedger";
 import type { OperatorAction } from "@/v3/lib/ledger/operatorActions";
 import { slotOf, elementIdOf } from "@/v3/lib/ledger/types";
-import { questionForLocus, readableName } from "@/v3/lib/ledger/phrasing";
+import { questionForLocus, readableName, makeNameOf } from "@/v3/lib/ledger/phrasing";
 import { ClaimStatus, OwnershipTag, ProvisionalMark, SourceTag } from "@/v3/components/flow/studio/ledgerPrimitives";
 
 interface Candidate { label: string; role: string }
@@ -47,14 +47,22 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit }: Prop
   const elements = ledger.store.elements();
   const nameOf = new Map(elements.map((e) => [e.id, e.name] as const));
   const elOf = new Map(elements.map((e) => [e.id, e] as const));
-  const Q = (about: string) => questionForLocus(about, (id) => nameOf.get(id));
+  // Qualified names — "Appointment.status", not a bare "status" — so every question is
+  // self-descriptive and two same-slot rows on different elements never look identical.
+  const qualifiedName = makeNameOf(elements);
+  const Q = (about: string) => questionForLocus(about, qualifiedName);
   const groupOf = (about: string) => {
     const el = elOf.get(elementIdOf(about));
     if (el?.of) return nameOf.get(el.of) || readableName(undefined, el.of);
     return el?.name || readableName(undefined, elementIdOf(about));
   };
 
-  const unowned = ledger.queue.unowned;
+  // ASSIGN = unowned NON-typing questions (phase / decision) — the ones that genuinely need
+  // a human owner. Typing (values / type / optionality) is excluded: it routes to the data
+  // dictionary, closed by one upload from the system owner, never assigned to a person. So
+  // burn-down `unownedOpen` decomposes into assignQueue + the unowned slice of typingLoci —
+  // no double-count, no drop (both still open, both still in the 106 burn-down).
+  const unowned = ledger.assignQueue;
   // Group unowned questions by their element (the area-cascade shape): one "assign an
   // owner" per group that cascades to the questions under it, not N inbox cards.
   const unownedGroups = new Map<string, typeof unowned>();
@@ -103,10 +111,28 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit }: Prop
     <div className="v3ib" aria-label="Operator inbox">
       <header className="v3ib-top">
         <span className="v3ib-title">Inbox</span>
+        {/* ONE UNIT — QUESTIONS, the same unit the burn-down uses (18 unowned, 106 open),
+            so no reader reconciles "12" against "18". "Need an owner" is unowned QUESTIONS
+            (= burn-down = the Assign section), NOT the 12 elements those route through.
+            Each count sums exactly the section below it and clicks through to it. */}
         <span className="v3ib-count">
-          <b>{unownedGroups.size}</b> need an owner · <b>{sessionQueue.length}</b> awaiting a date{ledger.conflicts.length ? <> · <b>{ledger.conflicts.length}</b> to adjudicate</> : null}
+          {([
+            ["ib-assign", unowned.length, "need an owner"],
+            ["ib-sessions", sessionQueue.length, "awaiting a date"],
+            ["ib-adjudicate", ledger.conflicts.length, "to adjudicate"],
+            ["ib-inflight", ledger.assignments.length, "in flight"],
+          ] as const).map(([id, n, label], i) => (
+            <span key={id}>
+              {i > 0 ? " · " : ""}
+              <button type="button" className="v3ib-countbtn" title={`Jump to ${label}`}
+                onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "center" })}>
+                <b>{n}</b> {label}
+              </button>
+            </span>
+          ))}
+          <span className="v3ib-unit"> · questions</span>
         </span>
-        <span className="v3ib-of">the small operator-action subset — the burn-down above is the goal.</span>
+        <span className="v3ib-of">the operator-decision queue — four sources, each a section below. The burn-down above is the goal.</span>
       </header>
 
       {/* 0 · THE TYPING WALL → one dictionary upload to the SYSTEM OWNER (not N questions
@@ -137,13 +163,23 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit }: Prop
       })() : null}
 
       {/* 1 · UNOWNED → ASSIGN (grouped, cascades) / DECIDE FATE */}
-      <section className="v3ib-src">
+      {/* EMPTY-STATE: 0 needs-an-owner is just not-started → collapsed one-liner. */}
+      {unowned.length === 0 ? (
+        <div id="ib-assign" className="v3ib-src v3ib-collapsed-row">
+          <OwnershipTag cls="operator" showLabel={false} />
+          <span className="v3ib-collapsed-l">Need an owner · <b>0</b></span>
+          <span className="v3ib-collapsed-hint">every open <b>phase / decision</b> question has an owner (value-set questions route to the dictionary above). Nothing to assign now.</span>
+        </div>
+      ) : (
+      <section id="ib-assign" className="v3ib-src">
         <header className="v3ib-h">
           <OwnershipTag cls="operator" showLabel={false} />
-          <span className="v3ib-verb">Assign</span>
-          <span className="v3ib-lead"><b>{unowned.length}</b> unowned question{unowned.length === 1 ? "" : "s"} across <b>{unownedGroups.size}</b> element{unownedGroups.size === 1 ? "" : "s"} — route each element&apos;s questions to an owner. Not an answer; heard-count untouched.</span>
+          <span className="v3ib-verb">Need an owner</span>
+          {/* QUESTIONS is the unit (same as the burn-down); the 12 is ELEMENTS, labelled. Only
+              PHASE / DECISION questions are here — value-set/type questions route to the
+              dictionary, so each row is a genuine ownership decision, not a typing chore. */}
+          <span className="v3ib-lead"><b>{unowned.length}</b> question{unowned.length === 1 ? "" : "s"} <span className="v3ib-unit">(phase · decision)</span> across <b>{unownedGroups.size}</b> <span className="v3ib-unit">element{unownedGroups.size === 1 ? "" : "s"}</span> — route each element&apos;s questions to an owner. Not an answer; heard-count untouched.</span>
         </header>
-        {unowned.length === 0 ? <p className="v3ib-empty">Nothing unowned — every open question has an owner.</p> : (
           <ul className="v3ib-list">
             {[...unownedGroups.entries()].map(([group, items]) => {
               const key = `grp:${group}`;
@@ -180,22 +216,30 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit }: Prop
               );
             })}
           </ul>
-        )}
       </section>
+      )}
 
       {/* 2 · SEAMS → the session queue. Joint ownership is AUTO-SET at seam detection
           (migrate: jointOrOwner), so there is nothing to "mark" — the seam is already
           jointly owned and its questions grouped. The only pending thing is a DATE, which
           is gated. So a seam is either AWAITING-A-DATE or (once scheduling lands) BOOKED —
           no no-op "marked" state that confirms a thing already true. */}
-      <section className="v3ib-src">
-        <header className="v3ib-h">
-          <OwnershipTag cls="joint" showLabel={false} />
-          <span className="v3ib-verb">Sessions</span>
-          <span className="v3ib-lead"><b>{sessionQueue.length}</b> seam{sessionQueue.length === 1 ? "" : "s"} — <b>already jointly owned</b> (auto-set at detection). Each is a joint session; the open item is a <b>date</b>, which is gated.</span>
-          <ProvisionalMark what="scheduling a real date is a gated write — 'propose a time' records the intent only" />
-        </header>
-        {sessionQueue.length === 0 ? <p className="v3ib-empty">No seams.</p> : (
+      <section id="ib-sessions" className="v3ib-src">
+        {/* EMPTY-STATE: 0 seams is just not-started (no caveat) → collapsed one-liner with a
+            feeds-from hint, never a full card. It expands to the full panel once it has content. */}
+        {sessionQueue.length === 0 ? (
+          <div className="v3ib-collapsed-row">
+            <OwnershipTag cls="joint" showLabel={false} />
+            <span className="v3ib-collapsed-l">Sessions · <b>0</b></span>
+            <span className="v3ib-collapsed-hint">seam questions land here when a relation crosses two functions — auto-jointly-owned, then a date to propose. Nothing to act on yet.</span>
+          </div>
+        ) : (<>
+          <header className="v3ib-h">
+            <OwnershipTag cls="joint" showLabel={false} />
+            <span className="v3ib-verb">Sessions</span>
+            <span className="v3ib-lead"><b>{sessionQueue.length}</b> seam{sessionQueue.length === 1 ? "" : "s"} — <b>already jointly owned</b> (auto-set at detection). Each is a joint session; the open item is a <b>date</b>, which is gated.</span>
+            <ProvisionalMark what="scheduling a real date is a gated write — 'propose a time' records the intent only" />
+          </header>
           <ul className="v3ib-seams">
             {sessionQueue.map(({ pair, abouts }) => {
               const planned = onPlan.get(pair);
@@ -213,11 +257,11 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit }: Prop
               );
             })}
           </ul>
-        )}
+        </>)}
       </section>
 
       {/* 3 · CONFLICTS → ADJUDICATE (read-side; resolution gated) */}
-      <section className="v3ib-src">
+      <section id="ib-adjudicate" className="v3ib-src">
         <header className="v3ib-h">
           <span className="v3ib-verb">Adjudicate</span>
           <span className="v3ib-lead"><b>{ledger.conflicts.length}</b> conflict{ledger.conflicts.length === 1 ? "" : "s"} — two live claims on one locus; the element <b>freezes</b>, no auto-winner.</span>
@@ -228,13 +272,21 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit }: Prop
           // clear. Quiet, present, not alarm. And honest that 0-now ≠ 0-forever:
           // conflicts appear once stakeholders assert competing answers, and with 0
           // stakeholder assertions yet, "0 conflicts" partly means "no one's answered".
+          // FULL PANEL — the 0 here is load-bearing: adjudication exists and is currently
+          // clear, and collapsing it would let the operator assume it's settled. The caveat
+          // below is CONDITIONAL on the assertion count — it self-clears the moment anyone
+          // has asserted (0-now ≠ 0-forever only while nobody has answered).
           <p className="v3ib-passed" role="note">
             <span className="v3ib-passed-tick" aria-hidden="true">✓</span>
             <span className="v3ib-passed-body">
               <b>0 conflicts</b> — precedence resolved every contested locus cleanly.
-              <span className="v3ib-passed-sub">Conflicts surface once stakeholders assert competing answers; with <b>{ledger.ownership.stakeholder}</b> stakeholder assertions so far, this also reads &ldquo;no one&rsquo;s answered yet.&rdquo;</span>
+              {ledger.ownership.stakeholder === 0 ? (
+                <span className="v3ib-passed-sub">Conflicts surface once stakeholders assert competing answers; with <b>0</b> stakeholder assertions so far, this also reads &ldquo;no one&rsquo;s answered yet.&rdquo;</span>
+              ) : (
+                <span className="v3ib-passed-sub"><b>{ledger.ownership.stakeholder}</b> stakeholder assertion{ledger.ownership.stakeholder === 1 ? "" : "s"} on record and still no conflict — genuinely clean.</span>
+              )}
             </span>
-            <ProvisionalMark what="0-now, not 0-forever — stakeholder assertions are the gated write" />
+            {ledger.ownership.stakeholder === 0 ? <ProvisionalMark what="0-now, not 0-forever — stakeholder assertions are the gated write" /> : null}
           </p>
         ) : (
           <ul className="v3ib-list">
@@ -249,14 +301,22 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit }: Prop
       </section>
 
       {/* OWNED & IN-FLIGHT → reassign / unassign + the stakeholder's three exits */}
-      <section className="v3ib-src is-gated">
-        <header className="v3ib-h">
-          <OwnershipTag cls="stakeholder" showLabel={false} />
-          <span className="v3ib-verb">Owned &amp; in-flight</span>
-          <span className="v3ib-lead">Reassign if you routed wrong; or record the holder&apos;s exit. Operator-entered captures: <b>{ledger.captures.length}</b> — <b>not</b> counted as heard.</span>
-          <ProvisionalMark what="only a stakeholder ANSWER through the system ticks heard — gated" />
-        </header>
-        {ledger.assignments.length === 0 ? <p className="v3ib-empty">Assign an unowned question above and it lands here — awaiting its owner&apos;s response.</p> : (
+      <section id="ib-inflight" className="v3ib-src is-gated">
+        {/* EMPTY-STATE: 0 in-flight is just not-started → collapsed one-liner with the
+            feeds-from hint (so the operator knows where an assigned question will appear). */}
+        {ledger.assignments.length === 0 ? (
+          <div className="v3ib-collapsed-row">
+            <OwnershipTag cls="stakeholder" showLabel={false} />
+            <span className="v3ib-collapsed-l">In-flight · <b>0</b></span>
+            <span className="v3ib-collapsed-hint">assign an unowned question above and it lands here — awaiting its owner&apos;s response, with the three exits.</span>
+          </div>
+        ) : (<>
+          <header className="v3ib-h">
+            <OwnershipTag cls="stakeholder" showLabel={false} />
+            <span className="v3ib-verb">Owned &amp; in-flight</span>
+            <span className="v3ib-lead">Reassign if you routed wrong; or record the holder&apos;s exit. Operator-entered captures: <b>{ledger.captures.length}</b> — <b>not</b> counted as heard.</span>
+            <ProvisionalMark what="only a stakeholder ANSWER through the system ticks heard — gated" />
+          </header>
           <ul className="v3ib-list">
             {ledger.assignments.map((a) => {
               const cap = ledger.captures.find((c) => c.about === a.about);
@@ -319,7 +379,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit }: Prop
               );
             })}
           </ul>
-        )}
+        </>)}
       </section>
 
       {/* DECIDED trace */}

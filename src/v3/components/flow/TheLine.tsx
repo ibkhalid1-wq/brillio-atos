@@ -990,8 +990,8 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
           <div className="v3ln-goal">
             <span className="v3ln-goal-lead">The goal — close the burn-down</span>
             <span className="v3ln-goal-stats">
-              <b>{ledger.kit.burnDown.open}</b> open unknowns · <b>{ledger.heard.total}</b> answered
-              {" "}· <b>{ledger.unownedOpen}</b> unowned · <b>{ledger.seamBands.length}</b> seam{ledger.seamBands.length === 1 ? "" : "s"}
+              <b>{ledger.kit.burnDown.open}</b> open <span className="v3ln-unit">questions</span> · <b>{ledger.heard.total}</b> answered
+              {" "}· <b>{ledger.unownedOpen}</b> need an owner{ledger.typingLoci.length ? <> · <b>{ledger.typingLoci.length}</b> → dictionary</> : null} · <b>{ledger.seamBands.length}</b> seam{ledger.seamBands.length === 1 ? "" : "s"}
             </span>
             <ConvergenceReadout burnDown={ledger.kit.burnDown} />
             <span className="v3ln-goal-heard"><HeardReadout heard={ledger.heard} /></span>

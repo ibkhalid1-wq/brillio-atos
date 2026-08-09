@@ -8,7 +8,35 @@
  * "<name> — <slot>?" and are reported (see `UNPHRASED_SLOTS`) rather than showing the
  * raw id as the primary label.
  */
-import { elementIdOf, slotOf } from "./types";
+import { elementIdOf, slotOf, type LedgerElement } from "./types";
+
+/** Trim a long name at a WORD boundary + ellipsis — never mid-word. The full string is
+ *  what the caller shows on hover. (Step element names are `action.slice(0,60)` at the
+ *  migrate layer, so a step's name is already a 60-char cut — this stops it cutting a
+ *  second time mid-word on screen; the full action isn't in the element name — a finding.) */
+export function wordSafe(s: string, max = 52): string {
+  if (s.length <= max) return s;
+  const cut = s.slice(0, max);
+  const lastSpace = cut.lastIndexOf(" ");
+  return (lastSpace > max * 0.5 ? cut.slice(0, lastSpace) : cut).replace(/[\s,.;:]+$/, "") + "…";
+}
+
+/** Build a `nameOf` that QUALIFIES an attribute with its parent entity — "Appointment.status",
+ *  not a bare "status" (Appointment.status and Condition.status are different questions). Steps
+ *  keep their action name. Long names are word-safe-trimmed for display. */
+export function makeNameOf(elements: readonly LedgerElement[]): (id: string) => string | undefined {
+  const byId = new Map(elements.map((e) => [e.id, e] as const));
+  return (id) => {
+    const el = byId.get(id);
+    if (!el) return undefined;
+    let name = el.name;
+    if ((el.kind === "attribute" || el.kind === "relation") && el.of) {
+      const parent = byId.get(el.of);
+      if (parent?.name) name = `${parent.name}.${el.name}`;
+    }
+    return wordSafe(name);
+  };
+}
 
 /** Small human tag for the slot type (kept beside the question, not as the label). */
 const SLOT_TYPE_LABEL: Record<string, string> = {

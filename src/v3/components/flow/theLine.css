@@ -534,6 +534,18 @@
 .v3ib-grp-h .v3ib-controls{margin-left:auto}
 .v3ib-grp-qs{list-style:none;margin:0;padding:0 0 0 2px;display:flex;flex-direction:column;gap:4px;border-top:1px dashed var(--fs-line);padding-top:6px}
 .v3ib-grp-q{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+/* inbox header — clickable count buttons + explicit unit */
+.v3ib-countbtn{font:inherit;font-size:inherit;color:var(--v3-text-secondary);background:none;border:0;padding:0 2px;cursor:pointer;border-radius:4px}
+.v3ib-countbtn b{color:var(--v3-text-primary);font-variant-numeric:tabular-nums}
+.v3ib-countbtn:hover{color:var(--v3-accent-2);background:color-mix(in srgb,var(--v3-accent-2) 10%,transparent)}
+.v3ib-countbtn:focus-visible{outline:2px solid var(--v3-accent-2);outline-offset:1px}
+.v3ib-unit{color:var(--v3-text-muted);font-weight:400;font-style:italic}
+.v3ln-unit{color:var(--v3-text-muted);font-weight:400;font-style:italic;font-size:.92em}
+/* empty-state one-liner — collapsed section (not-started, no caveat) */
+.v3ib-collapsed-row{display:flex;align-items:center;gap:8px;padding:6px 11px;font-size:11.5px;color:var(--v3-text-muted);border:1px solid var(--fs-line);border-radius:8px;background:var(--fs-card)}
+.v3ib-collapsed-l{font-weight:700;color:var(--v3-text-secondary);white-space:nowrap}
+.v3ib-collapsed-l b{color:var(--v3-text-primary)}
+.v3ib-collapsed-hint{color:var(--v3-text-muted);line-height:1.4}
 /* data-dictionary reroute ask (the typing wall → one upload to the system owner) */
 .v3ib-dict{border-left:3px solid var(--v3-accent-2);background:color-mix(in srgb,var(--v3-accent-2) 4%,var(--fs-card))}
 .v3ib-dict-ask{display:flex;flex-direction:column;gap:3px;margin-top:6px;padding:7px 11px;border:1px dashed color-mix(in srgb,var(--v3-accent-2) 40%,var(--fs-line));border-radius:8px;background:var(--fs-card)}
