@@ -8972,6 +8972,22 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-vld.no:hover {border-color:var(--v3-amber);color:var(--v3-amber)}
 .v3fs-vld.no.on {background:var(--v3-amber-soft);border-color:var(--v3-amber);color:var(--v3-amber)}
 .v3fs-vld:focus-visible {outline:2px solid var(--v3-accent-2);outline-offset:2px}
+/* Row state, in the stakeholder's own words: a small chip saying what they did,
+   with the matching undo right beside it so no change is a one-way door. */
+.v3fs-vflow-state {display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin-top:9px}
+.v3fs-vflow-chip {font-size:11px;font-weight:650;letter-spacing:-.005em;border-radius:99px;padding:3px 10px;
+  border:1px solid transparent;white-space:nowrap}
+.v3fs-vflow-chip.edited {color:var(--v3-accent-2);background:color-mix(in srgb,var(--v3-accent-2) 11%,transparent);
+  border-color:color-mix(in srgb,var(--v3-accent-2) 30%,transparent)}
+.v3fs-vflow-chip.gone {color:var(--v3-amber);background:var(--v3-amber-soft);
+  border-color:color-mix(in srgb,var(--v3-amber) 30%,transparent)}
+.v3fs-vflow-undo {font:inherit;font-size:11.5px;font-weight:600;color:var(--v3-text-muted);background:none;border:none;
+  padding:2px 2px;cursor:pointer;text-decoration:underline;text-underline-offset:2px;text-decoration-thickness:1px}
+.v3fs-vflow-undo:hover {color:var(--v3-text)}
+.v3fs-vflow-undo:focus-visible {outline:2px solid var(--v3-accent-2);outline-offset:2px;border-radius:4px}
+.v3fs-vflow-note.why input {font-size:12px}
+.v3fs-vflow-node.added .v3fs-vflow-chip.edited {color:var(--v3-green);
+  background:color-mix(in srgb,var(--v3-green) 11%,transparent);border-color:color-mix(in srgb,var(--v3-green) 30%,transparent)}
 /* A confirmed card reads as settled — a green left accent, both surfaces alike. */
 .v3fs-olist-card.confirmed {border-left-color:var(--v3-green)}
 .v3fs-vflow-node.confirmed .v3fs-vflow-card {border-color:color-mix(in srgb,var(--v3-green) 42%,var(--fs-line));
@@ -9018,6 +9034,13 @@ details[open] > summary .v3fs-disc-c::after {display:none}
   background:var(--fs-indigo-wash);border-radius:99px;padding:1px 8px;letter-spacing:0}
 .v3fs-rvw-live-empty {margin:8px 0 0;font-size:12px;color:var(--v3-text-muted);font-style:italic}
 .v3fs-rvw-live-body {display:flex;flex-direction:column;gap:9px;margin-top:9px;max-height:34vh;overflow:auto}
+/* Each entry is an index link back to the workflow it changed — a full-width,
+   left-aligned button that reads as text but jumps to the row on click. */
+.v3fs-rvw-live-wf {display:block;width:100%;text-align:left;font:inherit;color:inherit;
+  background:none;border:none;padding:5px 7px;margin:0 -7px;border-radius:8px;cursor:pointer;
+  transition:background var(--v3-transition-fast)}
+.v3fs-rvw-live-wf:hover {background:color-mix(in srgb,var(--v3-accent-2) 7%,transparent)}
+.v3fs-rvw-live-wf:focus-visible {outline:2px solid var(--v3-accent-2);outline-offset:1px}
 .v3fs-rvw-live-wf b {font-size:12.5px}
 .v3fs-rvw-live-wf ul {list-style:none;margin:3px 0 0;padding:0;display:flex;flex-direction:column;gap:3px}
 .v3fs-rvw-live-wf li {font-size:12px;padding-left:16px;position:relative}
