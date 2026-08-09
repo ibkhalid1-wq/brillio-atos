@@ -571,3 +571,4 @@
 /* collapsed "+N more" area chip — same idiom as the seams strip */
 .v3ln-cr-area.more{color:var(--v3-text-muted);font-weight:700;background:color-mix(in srgb,var(--v3-text-muted) 8%,transparent)}
 .v3ln-cr-area.more:hover{color:var(--v3-accent-2);background:color-mix(in srgb,var(--v3-accent-2) 12%,transparent)}
+

@@ -47,9 +47,10 @@ describe("functionOf — most-specific wins, no broad swallow, no default", () =
   });
 });
 
-// A domain with NO function-mappable areas (mirrors the surgery-cancellation program):
-// the CRM function table owns none of it, so EVERY open question must be unowned —
-// never fabricated onto a default owner (the Chief-of-Surgery magnet).
+// A domain with NO function-mappable areas (mirrors the surgery-cancellation program).
+// Remedy A: owners come from the DATA — the atlas's own stated `step.actor` /
+// `workflow.owner` — where functionOf misses; a locus the data names nobody for stays
+// UNOWNED. Never a constant, never the Chief-of-Surgery magnet.
 const surgery: Snapshot = {
   ontology: {
     entities: [
@@ -69,17 +70,49 @@ const surgery: Snapshot = {
   overrides: [],
 };
 
-describe("surgery domain — no function-mappable area → all unowned, none fabricated", () => {
+describe("surgery domain — owners from the DATA (stated actor/owner) or unowned; never a constant", () => {
   const q = buildUnknownQueue(migrate(surgery));
   const open = q.items.filter((i) => i.status === "open");
 
-  it("ZERO open questions are role-owned (no fabricated owner)", () => {
-    expect(open.filter((i) => i.owner.kind === "role")).toHaveLength(0);
+  it("NEVER a constant/fabricated owner — no CRM function label appears on surgery", () => {
+    const labels = new Set(open.filter((i) => i.owner.kind === "role").map((i) => i.ownerLabel));
+    for (const bad of ["Sales Ops", "Sales Leaders", "Sales", "Practices", "Alliances", "Finance", "Legal", "Delivery", "Marketing"]) {
+      expect(labels.has(bad)).toBe(false);
+    }
   });
 
-  it("every open question is unowned and therefore visible in burn-down / inbox", () => {
-    expect(open.every((i) => i.owner.kind === "unowned")).toBe(true);
-    expect(open.length).toBeGreaterThan(0);
+  it("step questions are owned by their STATED actor, verbatim (data-grounded rule hit)", () => {
+    const stepOwned = open.filter((i) => i.about.startsWith("el:step") && i.owner.kind === "role");
+    expect(stepOwned.length).toBeGreaterThan(0);
+    // exactly the fixture's stated actors — nothing invented, nothing else
+    expect(new Set(stepOwned.map((i) => i.ownerLabel))).toEqual(new Set(["Surgeon", "Anesthesiologist"]));
+  });
+
+  it("a locus the data names NOBODY for stays UNOWNED and visible (no invention)", () => {
+    // this fixture's workflows state no `owner` → workflow-level phase stays unowned
+    const phase = open.filter((i) => i.slot === "phase");
+    expect(phase.length).toBeGreaterThan(0);
+    expect(phase.every((i) => i.owner.kind === "unowned")).toBe(true);
+    // entity/attribute areas map to no function and no person exists in the data → unowned
+    const entityLevel = open.filter((i) => i.about.startsWith("el:entity") || i.about.startsWith("el:attr"));
+    expect(entityLevel.every((i) => i.owner.kind === "unowned")).toBe(true);
+  });
+
+  it("a STATED workflow owner takes the workflow-level questions (phase, decision)", () => {
+    const owned = migrate({
+      ...surgery,
+      atlas: { workflows: [{ name: "Case Cancellation Review", area: "Surgical Operations", owner: "Chief of Surgery", trigger: "cancel requested",
+        steps: [{ action: "Decide whether to reschedule or cancel", actor: "Surgeon" }] }] },
+    } as Snapshot);
+    const oq = buildUnknownQueue(owned).items.filter((i) => i.status === "open");
+    const phase = oq.filter((i) => i.slot === "phase");
+    expect(phase.length).toBeGreaterThan(0);
+    expect(phase.every((i) => i.owner.kind === "role" && i.ownerLabel === "Chief of Surgery")).toBe(true);
+    // the step decision rides the workflow owner; step disposition/actor-role ride the actor
+    const decision = oq.filter((i) => i.slot === "decision");
+    expect(decision.every((i) => i.ownerLabel === "Chief of Surgery")).toBe(true);
+    const disp = oq.filter((i) => i.slot === "automationDisposition");
+    expect(disp.every((i) => i.ownerLabel === "Surgeon")).toBe(true);
   });
 });
 
