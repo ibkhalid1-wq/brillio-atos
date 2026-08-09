@@ -499,9 +499,26 @@ function BlueprintStudio({ doc, onChange, program }: StudioProps) {
           </ul>
         </div>
       ) : null}
-      <CollapsibleCard label="Orchestration map" hint="agents and what flows between them — edges are derived: outputs feeding inputs">
+      {/* ONE model, many lenses — the blueprint is projections of the same agents,
+          not ten documents. The canvas is the primary surface (toggle the lens to
+          re-emphasise data / HITL / eval / build on the SAME agents); the summary
+          counts read inline so the operator learns the shape without opening drawers;
+          the sections below are the editable detail (progressive disclosure). */}
+      <div className="v3fs-bp-summary" role="note">
+        <span className="v3fs-bp-summary-l">One model, five lenses:</span>
+        <b>{agents.items.length}</b> agents ·
+        {" "}<b>{asArray(doc.dataContracts).length}</b> data contracts ·
+        {" "}<b>{asArray(doc.hitlPoints).length}</b> HITL points ·
+        {" "}<b>{asArray(doc.evalPlan).length}</b> evals ·
+        {" "}<b>{asStrings(doc.buildSequence).length}</b> build slices ·
+        {" "}<b>{asArray(doc.journeys).length || asArray(doc.tracks).length}</b> journeys
+        <span className="v3fs-bp-summary-hint">— toggle the lens on the canvas; edit each dimension in the sections below</span>
+      </div>
+      <CollapsibleCard label="Blueprint canvas — one model, toggle the lens" defaultOpen
+        hint="agents and what flows between them; the lens re-emphasises data contracts · HITL · eval · build on the same canvas">
         <BlueprintGraph doc={doc} />
       </CollapsibleCard>
+      <div className="v3fs-bp-editdiv" role="note">The sections below <b>edit</b> the one model above — each is the underlying detail of a lens, not a separate document.</div>
       <CollapsibleCard label="Journeys" hint="the orchestrated experience — stages across, lanes down: customer · user · agent · systems">
         <JourneyGrid doc={doc} onChange={onChange} />
       </CollapsibleCard>
