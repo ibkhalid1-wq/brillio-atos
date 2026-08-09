@@ -32,6 +32,7 @@ import {
   type OntologyElementView, type WorkflowView, type QueueItem,
 } from "./projections";
 import { buildReadModel } from "./readModel";
+import { projectKitQuestions, type KitQuestion } from "./kitProjection";
 import { reconcile } from "./merge";
 import { parseDictionaryCsv, dictionaryToClaims, TYPING_SLOTS, type ParsedDictionary } from "./dictionary";
 import type { LedgerStore } from "./store";
@@ -197,6 +198,10 @@ export function useProgramLedger(program?: ProgramSummary): ProgramLedger {
 
     const kit = buildKitView(store);
     const queue = buildUnknownQueue(store);
+    // Kit questions ARE the open unknowns, phrased for humans — the SAME source the
+    // operator queue reads (buildUnknownQueue), never a separately-generated list. One
+    // list, so the stakeholder's kit and the operator's queue can't drift.
+    const kitQuestions: KitQuestion[] = projectKitQuestions(store);
 
     // ── one derivation of "a person's questions" and "the session queue" ──
     // Solo-answerable OWNED loci, grouped by owner-label (role owners only). A seam
@@ -226,6 +231,7 @@ export function useProgramLedger(program?: ProgramSummary): ProgramLedger {
       stats: migrationStats(store),
       queue,
       kit,
+      kitQuestions,   // the one projection: open unknowns phrased for humans (kit === queue)
       devs: buildDeviationRegister(store),
       heard: buildHeardRegister(store),
       ontology: buildOntologyView(store),
