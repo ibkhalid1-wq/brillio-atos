@@ -81,7 +81,7 @@ export default function FlowBrief({ token }: { token: string }) {
         <section>
           <h2>The numbers</h2>
           <div className="v3fs-pack-stats">
-            <div><b>{Number(numbers.voicesHeard ?? 0)}/{Number(numbers.voicesTotal ?? 0) || "—"}</b><span>voices heard</span></div>
+            <div><b>{Number(numbers.voicesHeard ?? 0)}/{Number(numbers.voicesTotal ?? 0) || "—"}</b><span>voices on record</span></div>
             <div><b>{Number(numbers.demosAccepted ?? 0)}/{Number(numbers.demosTotal ?? 0) || "—"}</b><span>demos accepted</span></div>
             <div><b>{Number(numbers.words ?? 0).toLocaleString()}</b><span>words of evidence</span></div>
             <div><b>{Number(numbers.waiting ?? 0)}</b><span>decisions waiting</span></div>

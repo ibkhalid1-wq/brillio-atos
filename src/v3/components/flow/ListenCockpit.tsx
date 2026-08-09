@@ -14,6 +14,8 @@
 import { useMemo, useState } from "react";
 import { areaProgress } from "@/v3/components/flow/flowAreas";
 import { readContradictions } from "@/v3/components/flow/flowShellData";
+import { useProgramLedger } from "@/v3/lib/ledger/useProgramLedger";
+import { HeardReadout } from "@/v3/components/flow/studio/ledgerPrimitives";
 import type { ProgramSummary } from "@/new/types";
 
 export default function ListenCockpit({ program }: {
@@ -21,6 +23,7 @@ export default function ListenCockpit({ program }: {
 }) {
   const rows = useMemo(() => areaProgress(program), [program]);
   const disputes = useMemo(() => readContradictions(program, true), [program]);
+  const ledger = useProgramLedger(program);
   const [open, setOpen] = useState(true);
 
   // A single-area programme reads fine on the Discovery board alone — the
@@ -63,7 +66,9 @@ export default function ListenCockpit({ program }: {
             </div>
           ) : (
             <div className="v3fs-lc-clear" role="note">
-              ✓ No open contradictions — {heardTotal}/{personaTotal} voices heard and the accounts agree.
+              {/* Roster reach is who's on the record; the honest heard-count is attributed
+                  ledger closures (the same figure the Work header shows) — not "voices heard". */}
+              ✓ No open contradictions — {heardTotal}/{personaTotal} on the roster · <HeardReadout heard={ledger.heard} /> on the ledger. The accounts agree.
             </div>
           )}
         </div>
