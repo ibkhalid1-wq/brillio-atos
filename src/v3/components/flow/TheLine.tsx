@@ -348,11 +348,15 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
           .map((row) => row.area);
         const areas = covered.length ? [...new Set(covered)]
           : [canonicalFrameArea(kitAreas, stakeholderPrimaryArea(program, stakeholder.name ?? "", stakeholder.role))].filter(Boolean) as string[];
+        const questions = [...new Set(stakeholder.linkQuestions ?? stakeholder.questions)];
         return {
           label, role: stakeholder.role, isRole: stakeholder.isRole, movementId, captureField,
           area: areas[0] ?? "", areas,
-          heard: col.heard, awaiting: !col.heard && !!col.pack,
-          questions: [...new Set(stakeholder.linkQuestions ?? stakeholder.questions)],
+          // "Awaiting" needs a pack that actually CARRIES questions — a link with zero
+          // sent questions is not in-flight (the two-reads invariant: in-flight-with-
+          // 0-sent must be unrepresentable). Same read that feeds the sent count.
+          heard: col.heard, awaiting: !col.heard && !!col.pack && questions.length > 0,
+          questions,
           stakeholder,
         };
       });
