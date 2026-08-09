@@ -8158,6 +8158,24 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-bp-auto {font-family:var(--v3-font-mono);font-size:9px;color:var(--v3-amber)}
 .v3fs-bp-purpose {font-size:9.5px;color:var(--v3-text-secondary);line-height:1.45;max-width:190px;white-space:normal}
 .v3fs-bp-hitl {font-size:9px;font-weight:700;color:var(--v3-accent-2)}
+/* Blueprint canvas-with-lenses */
+.v3fs-bp-wrap {display:flex;flex-direction:column;gap:9px}
+.v3fs-bp-lenses {display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.v3fs-bp-lens {font:inherit;font-size:11.5px;font-weight:650;color:var(--v3-text-secondary);background:var(--fs-card);border:1px solid var(--v3-border-soft);border-radius:99px;padding:3px 12px;cursor:pointer}
+.v3fs-bp-lens:hover {border-color:var(--v3-accent-2);color:var(--v3-accent-2)}
+.v3fs-bp-lens.on {background:var(--v3-accent-2);color:#fff;border-color:var(--v3-accent-2)}
+.v3fs-bp-lens:focus-visible {outline:2px solid var(--v3-accent-2);outline-offset:1px}
+.v3fs-bp-lens-hint {font-size:10.5px;color:var(--v3-text-muted);font-style:italic}
+.v3fs-bp-unknowns {margin-left:auto;font-size:10px;font-weight:700;color:var(--v3-amber);border:1px solid color-mix(in srgb,var(--v3-amber) 45%,transparent);border-radius:99px;padding:2px 9px}
+.v3fs-bp-dim {opacity:.42}
+.v3fs-bp-gated {box-shadow:0 0 0 2px color-mix(in srgb,var(--v3-accent-2) 55%,transparent)}
+.v3fs-bp-seq {display:inline-block;margin-left:5px;font-size:9px;font-weight:800;color:#fff;background:var(--v3-accent-2);border-radius:99px;padding:0 5px;vertical-align:middle}
+.v3fs-bp-auto.unknown {color:var(--v3-amber);font-weight:800}
+.v3fs-bp-summary {display:flex;flex-wrap:wrap;align-items:baseline;gap:5px;font-size:12px;color:var(--v3-text-secondary);padding:8px 12px;border:1px solid var(--v3-border-soft);border-left:3px solid var(--v3-accent-2);border-radius:10px;background:var(--fs-card);margin-bottom:10px}
+.v3fs-bp-summary b {color:var(--v3-text-primary);font-variant-numeric:tabular-nums}
+.v3fs-bp-summary-l {font-weight:700;color:var(--v3-text-primary)}
+.v3fs-bp-summary-hint {flex-basis:100%;font-size:10.5px;color:var(--v3-text-muted);font-style:italic}
+.v3fs-bp-editdiv {font-size:11px;color:var(--v3-text-muted);margin:6px 2px 2px;padding-top:6px;border-top:1px dashed var(--fs-line)}
 .v3fs-strat-board {display:grid;gap:12px}
 .v3fs-strat-col {position:relative;border:1.5px solid var(--fs-line);border-radius:13px;padding:14px 15px;background:var(--fs-card);display:flex;flex-direction:column;gap:9px}
 .v3fs-strat-col.rec {border-color:var(--v3-green);box-shadow:0 12px 30px -14px color-mix(in srgb, var(--v3-green) 40%, transparent)}

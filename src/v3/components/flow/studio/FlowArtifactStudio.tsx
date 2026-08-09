@@ -599,12 +599,20 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
         ) : null}
 
         {artifact.stale ? (
+          // Claim-status, not a generic staleness flag: an upstream claim this
+          // document rests on moved (or its own inputs changed). The intended path
+          // is a TARGETED update of the affected sections (the fabric's incremental
+          // path) — but only a full rebuild is wired today, so we say so plainly and
+          // never present nuke-and-rebuild as if it were the update.
           <div className="v3fs-dv-band amber">
-            <span>Evidence changed since this document was generated.{overrideCount > 0
-              ? ` ⚠ ${overrideCount} stakeholder correction${overrideCount === 1 ? "" : "s"} on this document will be replaced — regeneration does not merge them.`
-              : ""}</span>
+            <span>
+              <b>The claims this {artifact.title} rests on moved</b> since it was generated — an upstream deliverable was rebuilt or its own inputs changed.{overrideCount > 0
+                ? ` ⚠ ${overrideCount} stakeholder correction${overrideCount === 1 ? "" : "s"} would be replaced — a full rebuild does not merge them.`
+                : ""} A <b>targeted update of just the affected sections</b> is the intended path; today only a full rebuild is wired.
+            </span>
             {onRegenerate ? (
-              <button type="button" className="v3fs-btn" onClick={() => { guardedRegenerate(); onClose(); }}>Regenerate</button>
+              <button type="button" className="v3fs-btn" title="A full rebuild REPLACES the whole document from the current claims — the affected-sections-only update is not yet wired"
+                onClick={() => { guardedRegenerate(); onClose(); }}>↻ Rebuild in full</button>
             ) : null}
           </div>
         ) : null}

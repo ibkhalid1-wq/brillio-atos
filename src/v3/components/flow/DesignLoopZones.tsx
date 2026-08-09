@@ -20,9 +20,12 @@
  * zone reads 0 assertions today. That 0 is the truth of the read model, marked
  * provisional/gated, NEVER dressed up as convergence the ledger doesn't have.
  */
+import { useMemo, useState } from "react";
 import type { LineBand, LineStation } from "@/v3/lib/lineModel";
 import type { ArtifactCardModel } from "@/v3/components/flow/flowShellData";
 import type { ProgramLedger } from "@/v3/lib/ledger/useProgramLedger";
+import { questionForLocus } from "@/v3/lib/ledger/phrasing";
+import type { Routing } from "@/v3/lib/ledger/projections";
 import {
   OwnershipTag, HeardReadout, ConvergenceReadout, ProvisionalMark,
   ClaimStatus, SourceTag, DeviationMarker,
@@ -127,6 +130,27 @@ export default function DesignLoopZones({ band, ledger, onOpen, onRegen, onGener
   const stakeholderOpen = ledger.queue.counts.blocking + ledger.queue.counts["answerable-without-a-meeting"];
   const stakeholderAsserts = ledger.ownership.stakeholder; // 0 in-browser (write path gated)
 
+  // ── the stakeholder queue as a WORK QUEUE — each headline number drills through
+  // to the questions it counts (not a dead affordance). "owned" = blocking+answerable
+  // (the role-owned open set); each segment filters to its routing set. Filtered off
+  // the one queue projection, phrased plain-language. ──
+  const [drill, setDrill] = useState<null | "owned" | Routing>(null);
+  const nameOf = useMemo(() => new Map(ledger.store.elements().map((e) => [e.id, e.name] as const)), [ledger.store]);
+  const drillItems = useMemo(() => {
+    if (!drill) return [];
+    const match = (r: Routing) => drill === "owned" ? (r === "blocking" || r === "answerable-without-a-meeting") : r === drill;
+    return ledger.queue.items.filter((i) => match(i.routing) && i.owner.kind === "role")
+      .map((i) => ({ ...i, ...questionForLocus(i.about, (id) => nameOf.get(id)) }));
+  }, [drill, ledger.queue.items, nameOf]);
+  const DrillBtn = ({ k, n, label }: { k: "owned" | Routing; n: number; label: string }) => (
+    <button type="button" className={`v3dl-drillbtn${drill === k ? " on" : ""}`} aria-pressed={drill === k}
+      disabled={n === 0}
+      title={n === 0 ? `No ${label} questions` : `Show the ${n} ${label} question${n === 1 ? "" : "s"}`}
+      onClick={() => setDrill(drill === k ? null : k)}>
+      <b>{n}</b> {label}{n > 0 ? <span className="v3dl-drillchev" aria-hidden="true">{drill === k ? " ▴" : " ▾"}</span> : null}
+    </button>
+  );
+
   return (
     <div className="v3dl">
       {/* convergence promoted to the header — real closures, not a 0-of-10 counter */}
@@ -180,13 +204,28 @@ export default function DesignLoopZones({ band, ledger, onOpen, onRegen, onGener
             </div>
           </div>
           <div className="v3dl-queue">
-            <span className="v3dl-queue-t">Owned questions awaiting a stakeholder</span>
-            <span className="v3dl-queue-n"><b>{stakeholderOpen}</b> open unknowns owned by a role</span>
+            <span className="v3dl-queue-t">Owned questions awaiting a stakeholder — a work queue, click to drill in</span>
+            {/* THE work — each number drills to the questions it counts, filtered by
+                that operator action. Not a dead affordance. */}
+            <span className="v3dl-queue-n"><DrillBtn k="owned" n={stakeholderOpen} label="open unknowns owned by a role" /></span>
             <span className="v3dl-queue-sub">
-              <ClaimStatus state="open" showLabel={false} /> {ledger.queue.counts.blocking} blocking ·
-              {" "}{ledger.queue.counts["answerable-without-a-meeting"]} answerable-without-a-meeting ·
-              {" "}{ledger.queue.counts.blocked} blocked
+              <ClaimStatus state="open" showLabel={false} />
+              <DrillBtn k="blocking" n={ledger.queue.counts.blocking} label="blocking — gates the Architect" /> ·
+              <DrillBtn k="answerable-without-a-meeting" n={ledger.queue.counts["answerable-without-a-meeting"]} label="answerable — send a link now" /> ·
+              <DrillBtn k="blocked" n={ledger.queue.counts.blocked} label="blocked — needs unsticking" />
             </span>
+            {drill ? (
+              <ul className="v3dl-drilllist" aria-label={`${drill} questions`}>
+                {drillItems.slice(0, 24).map((it) => (
+                  <li key={it.about} title={it.about}>
+                    <span className="v3dl-drill-type">{it.typeTag}</span>
+                    <span className="v3dl-drill-q">{it.question}</span>
+                    <span className="v3dl-drill-owner">→ {it.ownerLabel}</span>
+                  </li>
+                ))}
+                {drillItems.length > 24 ? <li className="v3dl-drill-more">+{drillItems.length - 24} more — work them in the Discover inbox</li> : null}
+              </ul>
+            ) : null}
           </div>
         </div>
       </section>
