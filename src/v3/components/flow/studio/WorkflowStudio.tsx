@@ -16,6 +16,9 @@ import {
 import { workflowArea, GENERAL_AREA } from "@/v3/components/flow/flowAreas";
 import { listenCoverageAreas, canonicalFrameArea } from "@/v3/components/flow/listenCoverage";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
+import { useProgramLedger } from "@/v3/lib/ledger/useProgramLedger";
+import type { SlotView, StepView } from "@/v3/lib/ledger/projections";
+import { ClaimStatus } from "@/v3/components/flow/studio/ledgerPrimitives";
 import AtlasSeamView from "./AtlasSeamView";
 import AtlasLifecycleGrid from "./AtlasLifecycleGrid";
 import LedgerLensPanel from "./LedgerLensPanel";
@@ -186,6 +189,32 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program,
   const [selected, setSelected] = useState<number | null>(null);
   const workflow = workflows[Math.min(active, Math.max(0, workflows.length - 1))];
   const steps = useMemo(() => (workflow ? asArray(workflow.steps).map(asRecord) : []), [workflow]);
+
+  // LEDGER-AWARE: this atlas edit surface reads the same claims ledger every other
+  // surface reads, so each step shows its CLAIM STATUS (source + open/weak/closed/
+  // conflict per slot) — the atlas is a ledger surface, not a detached form. Matched
+  // by CONTENT (workflow name + the step's action prefix), which is exactly the
+  // ledger's content-derived step id (migrate: contentId over actor+action) — so a
+  // reorder never restrands a step's claims (identity is content, not position).
+  const ledger = useProgramLedger(program);
+  const ledgerWf = useMemo(
+    () => ledger.atlas.find((w) => w.name.trim().toLowerCase() === asText(workflow?.name).trim().toLowerCase()),
+    [ledger.atlas, workflow],
+  );
+  const claimsForStep = useCallback((action: string): StepView | undefined => {
+    const n = action.slice(0, 60).trim().toLowerCase();
+    return ledgerWf?.steps.find((s) => s.name.trim().toLowerCase() === n);
+  }, [ledgerWf]);
+  // A compact claim-status summary for a step's slots (open unknowns loudest).
+  const stepClaimSummary = (sv?: StepView): { openSlots: SlotView[]; weak: number; closed: number; conflict: number } => {
+    const slots = sv?.slots ?? [];
+    return {
+      openSlots: slots.filter((s) => s.state === "open" || s.state === "blocked"),
+      weak: slots.filter((s) => s.state === "weak").length,
+      closed: slots.filter((s) => s.state === "closed").length,
+      conflict: slots.filter((s) => s.state === "conflict").length,
+    };
+  };
   // Business events woven into the diagram: an event chip on the step that
   // raises it, and the workflow's trigger named as an event where one starts
   // it. Events LIVE on this document now (the atlas's own events table below
@@ -347,10 +376,14 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program,
     patchWorkflow({ steps: next });
     setSelected(to);
   };
-  const removeStep = () => {
+  // MARK-DROPPED, not hard-delete: a step can carry closed claims (its lineage),
+  // and reconcile's element handling keeps a dropped element findable as an orphan
+  // rather than destroying it. So "remove" sets a soft `dropped` flag — the step
+  // stays in the document (and in the ledger, findable), rendered struck-through,
+  // and is restorable. A true hard delete of a claim-carrying element is refused.
+  const dropStep = () => {
     if (selected == null) return;
-    patchWorkflow({ steps: steps.filter((_, index) => index !== selected) });
-    setSelected(null);
+    patchStep(selected, { dropped: !asRecord(steps[selected]).dropped });
   };
   const addWorkflow = () => {
     writeWorkflows([...workflows, { name: `Workflow ${workflows.length + 1}`, owner: "", trigger: "", steps: [], handoffs: [], failureModes: [] }]);
@@ -518,7 +551,7 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program,
                         <div key={index} className="v3fs-swim-cell has">
                           <button
                             type="button"
-                            className={`v3fs-swim-tile${selected === index ? " on" : ""}${pain ? ` pain-${pain.severity}` : ""}`}
+                            className={`v3fs-swim-tile${selected === index ? " on" : ""}${pain ? ` pain-${pain.severity}` : ""}${asRecord(step).dropped ? " dropped" : ""}`}
                             onClick={() => setSelected(selected === index ? null : index)}
                             onMouseEnter={showStepPeek(index)}
                             onMouseLeave={() => setPeek(null)}
@@ -577,15 +610,45 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program,
             {selected != null && steps[selected] ? (
               <div className="v3fs-wf-inspector">
                 <div className="v3fs-wf-insp-h">
-                  <span className="v3fs-wf-insp-t">Step {selected + 1} <i>of {steps.length}</i></span>
+                  <span className="v3fs-wf-insp-t">Step {selected + 1} <i>of {steps.length}</i>
+                    {asRecord(steps[selected]).dropped ? <span className="v3fs-wf-dropped-tag" title="Mark-dropped — the step and its claims stay findable; not hard-deleted">⊘ dropped</span> : null}</span>
                   {locked ? null : (
                     <span className="v3fs-wf-insp-actions">
                       <button type="button" className="v3fs-btn" disabled={selected === 0} onClick={() => moveStep(-1)}>← Earlier</button>
                       <button type="button" className="v3fs-btn" disabled={selected === steps.length - 1} onClick={() => moveStep(1)}>Later →</button>
-                      <button type="button" className="v3fs-btn" onClick={removeStep}>Remove step</button>
+                      <button type="button" className="v3fs-btn" onClick={dropStep}
+                        title={asRecord(steps[selected]).dropped ? "Restore this step" : "Mark dropped — the step's claims stay findable (not hard-deleted)"}>
+                        {asRecord(steps[selected]).dropped ? "↩ Restore" : "⊘ Mark dropped"}</button>
                     </span>
                   )}
                 </div>
+                {/* CLAIM STATUS per element — this atlas edit surface reads the ledger.
+                    Editing a slot is a claim on that locus; a ?unknown slot is an open
+                    unknown, shown here (answering it in the ledger is the gated write). */}
+                {(() => {
+                  const sv = claimsForStep(asText(steps[selected].action));
+                  const sum = stepClaimSummary(sv);
+                  if (!sv) return <div className="v3fs-wf-claims none">No ledger claims matched this step yet (content-derived id — set the action to ground it).</div>;
+                  return (
+                    <div className="v3fs-wf-claims">
+                      <span className="v3fs-wf-claims-h">Ledger claims on this step</span>
+                      <span className="v3fs-wf-claims-sum">
+                        {sum.closed ? <span><ClaimStatus state="closed" showLabel={false} /> {sum.closed} closed</span> : null}
+                        {sum.weak ? <span><ClaimStatus state="weak" showLabel={false} /> {sum.weak} weak</span> : null}
+                        {sum.conflict ? <span><ClaimStatus state="conflict" showLabel={false} /> {sum.conflict} conflict</span> : null}
+                        {sum.openSlots.length ? <span><ClaimStatus state="open" showLabel={false} /> {sum.openSlots.length} open unknown{sum.openSlots.length === 1 ? "" : "s"}</span> : null}
+                      </span>
+                      {sum.openSlots.length ? (
+                        <ul className="v3fs-wf-claims-open">
+                          {sum.openSlots.map((s) => (
+                            <li key={s.about} title={s.about}><code>{s.slot}</code> <span className="v3fs-wf-claims-q">= ?unknown</span> <span className="v3fs-wf-claims-src">{s.source}</span></li>
+                          ))}
+                        </ul>
+                      ) : null}
+                      <span className="v3fs-wf-claims-note">Answering a ?unknown lands as an attributed ledger closure through reconcile — the gated write path (operator edits here persist to the atlas doc today).</span>
+                    </div>
+                  );
+                })()}
                 <TextField label="Action — what happens in this step" value={asText(steps[selected].action)} onChange={(next) => patchStep(selected, { action: next })} />
                 <div className="v3fs-stu-grid3">
                   <TextField label="Persona (lane)" value={asText(steps[selected].actor)} onChange={(next) => patchStep(selected, { actor: next })} />
