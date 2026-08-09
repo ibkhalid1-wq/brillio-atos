@@ -109,6 +109,33 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit }: Prop
         <span className="v3ib-of">the small operator-action subset — the burn-down above is the goal.</span>
       </header>
 
+      {/* 0 · THE TYPING WALL → one dictionary upload to the SYSTEM OWNER (not N questions
+          to the domain expert). "What type is X?" (dataType/valueSet/optionality) is answered
+          by the client's data dictionary, imported as code-derived · weak. See
+          docs/aura/data-dictionary-import.md. */}
+      {ledger.dictionaryName || ledger.typingLoci.length > 0 ? (() => {
+        const systemOwner = candidates.find((c) => /\b(it|ehr|system|systems|admin|data|platform|technolog|salesforce)\b/i.test(`${c.label} ${c.role}`));
+        return (
+          <section className="v3ib-src v3ib-dict">
+            <header className="v3ib-h">
+              <SourceTag source="code-derived" />
+              <span className="v3ib-verb">Data dictionary</span>
+              {ledger.dictionaryName ? (
+                <span className="v3ib-lead">Typing questions closed from <b>{ledger.dictionaryName}</b> — <b>{ledger.typingLoci.length}</b> typing unknown{ledger.typingLoci.length === 1 ? "" : "s"} left (the genuinely-contested residue). Dictionary claims are <b>code-derived · weak</b> — any owner can still deviate.</span>
+              ) : (
+                <span className="v3ib-lead"><b>{ledger.typingLoci.length}</b> &ldquo;what type is X?&rdquo; question{ledger.typingLoci.length === 1 ? "" : "s"} (types · value sets · optionality) — <b>one upload</b> of the data dictionary closes the wall, not {ledger.typingLoci.length} form fields to the domain expert.</span>
+              )}
+            </header>
+            {!ledger.dictionaryName && ledger.typingLoci.length > 0 ? (
+              <div className="v3ib-dict-ask">
+                <span className="v3ib-dict-to">→ <b>{systemOwner ? systemOwner.label : "the system owner (IT/EHR Lead, Salesforce admin)"}</b>{systemOwner && systemOwner.role !== systemOwner.label ? ` · ${systemOwner.role}` : ""}</span>
+                <span className="v3ib-dict-msg">&ldquo;Upload your current data dictionary&rdquo; — one ask, routed to the system owner, not the domain expert. <ProvisionalMark what="freeform-document parsing is model-gated; CSV/XLSX dictionaries parse now" /></span>
+              </div>
+            ) : null}
+          </section>
+        );
+      })() : null}
+
       {/* 1 · UNOWNED → ASSIGN (grouped, cascades) / DECIDE FATE */}
       <section className="v3ib-src">
         <header className="v3ib-h">

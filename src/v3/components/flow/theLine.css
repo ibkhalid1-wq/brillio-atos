@@ -534,6 +534,11 @@
 .v3ib-grp-h .v3ib-controls{margin-left:auto}
 .v3ib-grp-qs{list-style:none;margin:0;padding:0 0 0 2px;display:flex;flex-direction:column;gap:4px;border-top:1px dashed var(--fs-line);padding-top:6px}
 .v3ib-grp-q{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+/* data-dictionary reroute ask (the typing wall → one upload to the system owner) */
+.v3ib-dict{border-left:3px solid var(--v3-accent-2);background:color-mix(in srgb,var(--v3-accent-2) 4%,var(--fs-card))}
+.v3ib-dict-ask{display:flex;flex-direction:column;gap:3px;margin-top:6px;padding:7px 11px;border:1px dashed color-mix(in srgb,var(--v3-accent-2) 40%,var(--fs-line));border-radius:8px;background:var(--fs-card)}
+.v3ib-dict-to{font-size:12px;color:var(--v3-text-primary)}
+.v3ib-dict-msg{font-size:11px;color:var(--v3-text-muted)}
 .v3ib-marked{font-size:11px;color:var(--v3-positive,#3f9d6b);font-weight:600}
 .v3ib-nodate{color:var(--v3-amber);font-weight:700}
 /* seam "on the session plan" — intent recorded, date still gated */

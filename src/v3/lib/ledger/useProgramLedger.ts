@@ -32,6 +32,8 @@ import {
   type OntologyElementView, type WorkflowView, type QueueItem,
 } from "./projections";
 import { buildReadModel } from "./readModel";
+import { reconcile } from "./merge";
+import { parseDictionaryCsv, dictionaryToClaims, TYPING_SLOTS, type ParsedDictionary } from "./dictionary";
 import type { LedgerStore } from "./store";
 import { isLive, slotOf } from "./types";
 import {
@@ -117,6 +119,15 @@ export interface ProgramLedger {
    *  A jointly-owned locus is a SESSION question, never a solo one — it lives here,
    *  not on any individual's async list. The inbox Sessions panel reads this. */
   sessionQueue: Array<{ pair: string; abouts: string[]; items: QueueItem[] }>;
+  /** Open TYPING loci (dataType / valueSet / optionality) — the "what type is X?" wall.
+   *  These are REROUTED off individual domain-expert lists (excluded from soloByOwner):
+   *  a data dictionary answers them in one upload from the SYSTEM owner, not N form
+   *  fields from the domain expert. If a dictionary is applied, most are already closed
+   *  and this shrinks to the genuinely-contested typing residue. */
+  typingLoci: QueueItem[];
+  /** The applied data dictionary's name, or null — when set, the typing wall self-closed
+   *  from it (code-derived · weak, deviatable). */
+  dictionaryName: string | null;
 }
 
 /** Build the read-only ledger + every projection for a program. Memoized on the
@@ -132,11 +143,32 @@ export function useProgramLedger(program?: ProgramSummary): ProgramLedger {
     };
     const migrated = migrate(snap);
 
+    // ── data-dictionary import (the PRIMARY typing-close path) ──
+    // If the client uploaded a data dictionary (fingerprint-safe `_dataDictionary` — CSV
+    // string, or a pre-parsed {name,fields}), parse it and reconcile its claims into the
+    // store through the SAME reconcile() the FHIR/Salesforce adapters use. It fills the
+    // dataType/valueSet/optionality unknowns as `code-derived · weak` — deviatable. No new
+    // mechanism; one more source feeding proven machinery.
+    let dictionaryName: string | null = null;
+    const listenInputs = program ? readMovementInputs(program, "listen") : undefined;
+    const dictRaw = (listenInputs as Record<string, unknown> | undefined)?._dataDictionary;
+    if (dictRaw) {
+      const dict: ParsedDictionary = typeof dictRaw === "string"
+        ? parseDictionaryCsv(dictRaw)
+        : (dictRaw as ParsedDictionary);
+      if (dict?.fields?.length) {
+        const { batch, elements } = dictionaryToClaims(dict, new Set(migrated.elements().map((e) => e.id)));
+        for (const e of elements) migrated.addElement(e);
+        reconcile(migrated, batch, new Set(migrated.elements().map((e) => e.id)));
+        dictionaryName = dict.name || "uploaded-dictionary";
+      }
+    }
+
     // ── operator verbs, applied as a surface overlay over the read model ──
     // ASSIGN re-derives ownership (unowned → owned-and-open) by re-pointing the open
     // claim's owner; the projections below then read the assigned state. buildReadModel
     // is the DB read-model constructor — no store/precedence code is touched.
-    const actions = readOperatorActions(program ? readMovementInputs(program, "listen") : undefined);
+    const actions = readOperatorActions(listenInputs);
     const schedules = actions.filter((a): a is ScheduleAction => a.kind === "schedule");
     const captures = actions.filter((a): a is CaptureAction => a.kind === "capture");
     const redirects = actions.filter((a): a is RedirectAction => a.kind === "redirect");
@@ -167,7 +199,11 @@ export function useProgramLedger(program?: ProgramSummary): ProgramLedger {
     // list. Both computed once here so counts and lists across every surface agree.
     const soloByOwner = new Map<string, QueueItem[]>();
     const sessionMap = new Map<string, QueueItem[]>();
+    const typingLoci: QueueItem[] = [];
     for (const it of queue.items) {
+      // TYPING questions ("what type is X?") REROUTE to the system owner as one
+      // "upload your data dictionary" ask — never N questions to a domain expert.
+      if (it.status === "open" && TYPING_SLOTS.has(it.slot)) { typingLoci.push(it); continue; }
       if (it.owner.kind === "joint") { (sessionMap.get(it.ownerLabel) ?? sessionMap.set(it.ownerLabel, []).get(it.ownerLabel)!).push(it); continue; }
       if (it.owner.kind !== "role" || it.status !== "open") continue; // unowned → the assign queue; blocked → needs unsticking; both are not a solo "send a link"
       (soloByOwner.get(it.ownerLabel) ?? soloByOwner.set(it.ownerLabel, []).get(it.ownerLabel)!).push(it);
@@ -199,6 +235,8 @@ export function useProgramLedger(program?: ProgramSummary): ProgramLedger {
       unownedOpen: queue.counts.unowned,
       soloByOwner,
       sessionQueue,
+      typingLoci,
+      dictionaryName,
     };
   }, [program]);
 }
