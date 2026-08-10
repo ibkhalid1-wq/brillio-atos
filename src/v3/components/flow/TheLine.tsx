@@ -37,6 +37,7 @@ import DesignLoopZones from "@/v3/components/flow/DesignLoopZones";
 import OperatorInbox from "@/v3/components/flow/OperatorInbox";
 import { serializeOperatorActions, OPERATOR_ACTIONS_FIELD, type OperatorAction } from "@/v3/lib/ledger/operatorActions";
 import { ownerRoleLabelForArea } from "@/v3/lib/ledger/migrate";
+import type { ArtifactAskMark } from "@/v3/lib/ledger/artifactAsks";
 import { questionForLocus } from "@/v3/lib/ledger/phrasing";
 import "./theLine.css";
 
@@ -861,6 +862,23 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
     window.setTimeout(() => setNote(null), 6000);
   };
 
+  // Artifact-ask marks (requested / has-none) — appended to the fingerprint-safe
+  // `_artifactAsks` field via the SAME silent-save channel as operator actions.
+  const commitAskMark = (mark: ArtifactAskMark) => {
+    if (!onSaveInputs) { setNote("No write handler available in this view."); window.setTimeout(() => setNote(null), 5000); return; }
+    const next = [...readAskMarks(), mark];
+    void onSaveInputs("listen", { _artifactAsks: JSON.stringify(next) }, { silent: true });
+    setNote(mark.mark === "requested"
+      ? `Requested — the ${mark.sor} dictionary ask is now operator-tracked (ages until provided).`
+      : `Recorded — ${mark.sor} has no dictionary; the Frame item is complete.`);
+    window.setTimeout(() => setNote(null), 6000);
+  };
+  const readAskMarks = (): ArtifactAskMark[] => {
+    const raw = (readMovementInputs(program, "listen") as Record<string, unknown> | undefined)?._artifactAsks;
+    const arr = typeof raw === "string" ? (() => { try { return JSON.parse(raw) as unknown; } catch { return []; } })() : raw;
+    return Array.isArray(arr) ? (arr.filter((m): m is ArtifactAskMark => !!m && typeof m === "object" && typeof (m as ArtifactAskMark).sor === "string")) : [];
+  };
+
   return (
     <div className="v3ln">
       <div className="v3ln-tabs" role="tablist" aria-label="Line projections">
@@ -1014,7 +1032,7 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
           </div>
           {/* The operator inbox: the actionable subset — assign / decide-fate / schedule /
               adjudicate, reassignment, and the stakeholder exits (interim). */}
-          <OperatorInbox ledger={ledger} candidates={verbCandidates} by="operator" onCommit={commitOperatorAction} />
+          <OperatorInbox ledger={ledger} candidates={verbCandidates} by="operator" onCommit={commitOperatorAction} onAskMark={commitAskMark} />
           {/* Discover as an engagement dashboard: who needs attention and why, sorted by
               state. Ageing on in-flight is operator-tracked until the link is live. */}
           <div className="v3ln-engbar" role="note" aria-label="Engagement — who needs attention">

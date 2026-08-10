@@ -22,6 +22,7 @@ import type { OperatorAction } from "@/v3/lib/ledger/operatorActions";
 import { slotOf, elementIdOf } from "@/v3/lib/ledger/types";
 import { questionForLocus, readableName, makeNameOf } from "@/v3/lib/ledger/phrasing";
 import { ClaimStatus, OwnershipTag, ProvisionalMark, SourceTag } from "@/v3/components/flow/studio/ledgerPrimitives";
+import { asksNeedingChase, isSystemOwner, type ArtifactAskMark } from "@/v3/lib/ledger/artifactAsks";
 
 interface Candidate { label: string; role: string }
 interface Props {
@@ -29,12 +30,15 @@ interface Props {
   candidates: Candidate[];
   by: string;
   onCommit: (action: OperatorAction | OperatorAction[]) => Promise<void>;
+  /** Record an artifact-ask mark (requested / has-none) — the `_artifactAsks`
+   *  underscore-field write, same silent-save channel as operator actions. */
+  onAskMark?: (mark: ArtifactAskMark) => void;
 }
 
 const nowISO = () => new Date().toISOString();
 const OTHER = "__other__";
 
-export default function OperatorInbox({ ledger, candidates, by, onCommit }: Props) {
+export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskMark }: Props) {
   const [sel, setSel] = useState<Record<string, string>>({});
   const [other, setOther] = useState<Record<string, string>>({});
   const [fate, setFate] = useState<Record<string, boolean>>({});
@@ -143,32 +147,68 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit }: Prop
         <span className="v3ib-of">the operator-decision queue — four sources, each a section below. The burn-down above is the goal.</span>
       </header>
 
-      {/* 0 · THE TYPING WALL → one dictionary upload to the SYSTEM OWNER (not N questions
-          to the domain expert). "What type is X?" (dataType/valueSet/optionality) is answered
-          by the client's data dictionary, imported as code-derived · weak. See
-          docs/aura/data-dictionary-import.md. */}
-      {ledger.dictionaryName || ledger.typingLoci.length > 0 ? (() => {
-        const systemOwner = candidates.find((c) => /\b(it|ehr|system|systems|admin|data|platform|technolog|salesforce)\b/i.test(`${c.label} ${c.role}`));
+      {/* 0 · ARTIFACT ASKS — the dictionary ask, PREVENTIVE by default: one ask per
+          system of record, born at SoR identification (Frame). This inbox shows an ask
+          ONLY while unprovided (remedial chase) — self-clearing on import; questions
+          minted after an import REOPEN the same ask, never a second one. Ageing is the
+          same operator-tracked rule as people. See docs/aura/data-dictionary-import.md. */}
+      {(() => {
+        const chase = asksNeedingChase(ledger.artifactAsks);
+        const unattributed = ledger.artifactAsks.unattributed;
+        if (!chase.length && !unattributed.weight) return null;   // self-cleared → hidden
+        const now = Date.now();
         return (
           <section className="v3ib-src v3ib-dict">
             <header className="v3ib-h">
               <SourceTag source="code-derived" />
               <span className="v3ib-verb">Data dictionary</span>
-              {ledger.dictionaryName ? (
-                <span className="v3ib-lead">Typing questions closed from <b>{ledger.dictionaryName}</b> — <b>{ledger.typingLoci.length}</b> typing unknown{ledger.typingLoci.length === 1 ? "" : "s"} left (the genuinely-contested residue). Dictionary claims are <b>code-derived · weak</b> — any owner can still deviate.</span>
-              ) : (
-                <span className="v3ib-lead"><b>{ledger.typingLoci.length}</b> &ldquo;what type is X?&rdquo; question{ledger.typingLoci.length === 1 ? "" : "s"} (types · value sets · optionality) — <b>one upload</b> of the data dictionary closes the wall, not {ledger.typingLoci.length} form fields to the domain expert.</span>
-              )}
+              <span className="v3ib-lead"><b>{chase.length}</b> system{chase.length === 1 ? "" : "s"} of record with an unprovided dictionary — <b>one upload each</b> closes the typing wall, not form fields to the domain expert. Dictionary claims land <b>code-derived · weak</b> — any owner can still deviate.</span>
             </header>
-            {!ledger.dictionaryName && ledger.typingLoci.length > 0 ? (
+            {chase.map((ask) => {
+              // owner: the derivation's, else the shared detection over the roster, else TBC — never fabricated
+              const fallback = candidates.find((c) => isSystemOwner(c.label, c.role));
+              const owner = ask.owner ?? fallback?.label ?? null;
+              const ownerRole = ask.ownerRole ?? fallback?.role ?? null;
+              const age = ask.requestedAt ? Math.max(0, Math.floor((now - Date.parse(ask.requestedAt)) / 86400000)) : null;
+              return (
+                <div key={ask.sor} className="v3ib-dict-ask">
+                  <span className="v3ib-dict-to">
+                    <b>{ask.sor}</b> <span className="v3ib-unit">({ask.entityCount} entit{ask.entityCount === 1 ? "y" : "ies"})</span>
+                    {" "}→ <b>{owner ?? "TBC"}</b>{owner && ownerRole && ownerRole !== owner ? ` · ${ownerRole}` : ""}
+                    {" "}· <b>closes {ask.weight}</b> open question{ask.weight === 1 ? "" : "s"}
+                  </span>
+                  <span className="v3ib-dict-msg">
+                    {ask.state === "reopened" ? (
+                      <><b>reopened</b> — {ask.weight} typing question{ask.weight === 1 ? "" : "s"} since the import attach to this same ask (never a second one).</>
+                    ) : ask.state === "requested" ? (
+                      <>requested · <span className={`v3ln-age${age !== null && age >= 21 ? " hot" : age !== null && age >= 9 ? " warm" : ""}`}>awaiting {age !== null ? `· ${age}d` : ""} · operator-tracked</span></>
+                    ) : (
+                      <><b>not yet requested</b> — an incomplete Frame item until requested, provided, or marked has-none.</>
+                    )}
+                    {" "}<ProvisionalMark what="freeform-document parsing is model-gated; CSV/XLSX dictionaries parse now" />
+                  </span>
+                  {onAskMark ? (
+                    <span className="v3ib-dict-actions">
+                      {ask.state === "unrequested" || ask.state === "reopened" ? (
+                        <button type="button" className="v3ib-btn ghost sm" onClick={() => onAskMark({ sor: ask.sor, mark: "requested", by, at: nowISO() })}>mark requested</button>
+                      ) : null}
+                      {ask.state !== "has-none" ? (
+                        <button type="button" className="v3ib-btn ghost sm" onClick={() => onAskMark({ sor: ask.sor, mark: "has-none", by, at: nowISO() })}>has no dictionary</button>
+                      ) : null}
+                    </span>
+                  ) : null}
+                </div>
+              );
+            })}
+            {unattributed.weight ? (
               <div className="v3ib-dict-ask">
-                <span className="v3ib-dict-to">→ <b>{systemOwner ? systemOwner.label : "the system owner (IT/EHR Lead, Salesforce admin)"}</b>{systemOwner && systemOwner.role !== systemOwner.label ? ` · ${systemOwner.role}` : ""}</span>
-                <span className="v3ib-dict-msg">&ldquo;Upload your current data dictionary&rdquo; — one ask, routed to the system owner, not the domain expert. <ProvisionalMark what="freeform-document parsing is model-gated; CSV/XLSX dictionaries parse now" /></span>
+                <span className="v3ib-dict-to"><b>{unattributed.weight}</b> typing question{unattributed.weight === 1 ? "" : "s"} on entities with <b>no system of record named</b></span>
+                <span className="v3ib-dict-msg">a Frame gap, not an ask — name the SoR and these attach to its ask.</span>
               </div>
             ) : null}
           </section>
         );
-      })() : null}
+      })()}
 
       {/* 1 · UNOWNED → ASSIGN (grouped, cascades) / DECIDE FATE */}
       {/* EMPTY-STATE: a 0 section is HIDDEN (by request, 2026-08-10) — the inbox shows
