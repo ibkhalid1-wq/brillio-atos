@@ -50,6 +50,11 @@ export interface ArtifactAsk {
   abouts: string[];            // the loci behind the weight (the one count, traceable)
   entityCount: number;         // entities recorded against this SoR
   requestedAt: string | null;  // ageing anchor — set only by the explicit request mark
+  /** The dictionary satisfying THIS ask — its own upload if it has one, else the
+   *  programme-wide one, else null. Named so a surface can say which file answered. */
+  dictionary: string | null;
+  /** True when the dictionary on file is this SoR's OWN, not the global upload. */
+  ownDictionary: boolean;
   /** Where the SoR was named. `frame` = the sponsor's Frame input only (no ontology
    *  models it yet — the ask is born at Frame time); `ontology` = entities carry it;
    *  `both` = the sponsor named it AND the model holds it. Never inferred. */
@@ -98,14 +103,21 @@ export function deriveArtifactAsks(
   opts: {
     roster?: ReadonlyArray<{ label: string; role: string }>;
     marks?: ReadonlyArray<ArtifactAskMark>;
+    /** The PROGRAMME-WIDE dictionary (the un-keyed upload), null when there is none. */
     dictionaryName?: string | null;
     /** Systems of record the SPONSOR named in Frame (`parseDeclaredSors` of the
      *  Frame input). An ask is born here too, before any ontology exists — naming
      *  a SoR and creating its ask are one act whichever surface the name arrives on. */
     declaredSors?: readonly string[];
+    /** Per-SoR dictionaries on file: lowercased SoR → the dictionary's name. Each ask
+     *  is satisfied by ITS OWN upload; one system's dictionary never answers another's. */
+    dictionaryBySor?: ReadonlyMap<string, string>;
   } = {},
 ): ArtifactAskView {
-  const { roster = [], marks = [], dictionaryName = null, declaredSors = [] } = opts;
+  const {
+    roster = [], marks = [], dictionaryName = null, declaredSors = [],
+    dictionaryBySor = new Map<string, string>(),
+  } = opts;
 
   // ── SoR per entity, from the RESOLVED live claim (asserted beats generated) ──
   const sorByEntity = new Map<string, string>();
@@ -165,11 +177,17 @@ export function deriveArtifactAsks(
   }
 
   const asks: ArtifactAsk[] = [...bySor.values()].map(({ sor, entityCount, source }) => {
+    const key = sor.trim().toLowerCase();
     const abouts = aboutsBySor.get(sor) ?? [];
-    const mark = markBySor.get(sor.trim().toLowerCase());
+    const mark = markBySor.get(key);
+    // THIS SoR's own dictionary answers it; the programme-wide upload answers it only
+    // because it claims to cover everything. A CRM export says nothing about the
+    // finance system, so an ask is never marked provided by another SoR's file.
+    const own = dictionaryBySor.get(key) ?? null;
+    const dictionary = own ?? dictionaryName;
     const state: ArtifactAskState =
       mark?.mark === "has-none" ? "has-none"
-        : dictionaryName ? (abouts.length ? "reopened" : "provided")
+        : dictionary ? (abouts.length ? "reopened" : "provided")
           : mark?.mark === "requested" ? "requested"
             : "unrequested";
     return {
@@ -178,7 +196,7 @@ export function deriveArtifactAsks(
       ownerRole: systemOwner?.role ?? null,
       weight: abouts.length, abouts, entityCount,
       requestedAt: mark?.mark === "requested" ? mark.at : null,
-      source,
+      source, dictionary, ownDictionary: !!own,
     };
   }).sort((a, b) => b.weight - a.weight || a.sor.localeCompare(b.sor));
 
@@ -205,14 +223,19 @@ export const asksNeedingChase = (view: ArtifactAskView): ArtifactAsk[] =>
  * full view (they agree — asserted in tests).
  *
  * `declared` is the Frame input where the sponsor NAMES the systems, so the ask can
- * be born at Frame time — before any ontology exists. Optional and last, so the
- * ontology-only callers that predate the field are unchanged.
+ * be born at Frame time — before any ontology exists. `providedSors` are the systems
+ * with their OWN dictionary on file. Both optional and last, so the callers that
+ * predate them are unchanged.
+ *
+ * `dictionaryProvided` is the PROGRAMME-WIDE upload — the one that claims to cover
+ * everything. A per-SoR dictionary handles only its own system.
  */
 export function frameSorReadiness(
   ontology: unknown,
   marks: ReadonlyArray<ArtifactAskMark>,
   dictionaryProvided: boolean,
   declared: readonly string[] = [],
+  providedSors: readonly string[] = [],
 ): { named: string[]; unhandled: string[]; complete: boolean; fromFrame: string[]; fromOntology: string[] } {
   const entities = ontology && typeof ontology === "object" && Array.isArray((ontology as { entities?: unknown }).entities)
     ? ((ontology as { entities: unknown[] }).entities) : [];
@@ -228,6 +251,8 @@ export function frameSorReadiness(
   for (const sor of fromFrame) if (!byKey.has(sor.toLowerCase())) byKey.set(sor.toLowerCase(), sor);
   const named = [...byKey.values()].sort();
   const marked = new Set(marks.map((m) => m.sor.trim().toLowerCase()));
-  const unhandled = dictionaryProvided ? [] : named.filter((sor) => !marked.has(sor.trim().toLowerCase()));
+  const provided = new Set(providedSors.map((s) => s.trim().toLowerCase()));
+  const unhandled = dictionaryProvided ? []
+    : named.filter((sor) => !marked.has(sor.trim().toLowerCase()) && !provided.has(sor.trim().toLowerCase()));
   return { named, unhandled, complete: unhandled.length === 0, fromFrame, fromOntology };
 }

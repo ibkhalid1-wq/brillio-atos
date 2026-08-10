@@ -202,6 +202,71 @@ describe("Frame SoR input — the ask is born when the sponsor names the system"
   });
 });
 
+/**
+ * PER-SoR DICTIONARIES — `_dataDictionary` was ONE global CSV, so a single CRM export
+ * marked every system's ask satisfied. A CRM export answers nothing about the finance
+ * system; that is fabrication by omission. Each ask now consumes its OWN dictionary.
+ */
+describe("each ask consumes its own dictionary", () => {
+  const twoSystems: Snapshot = {
+    ontology: {
+      entities: [
+        { name: "Case", area: "Surgical Operations", systemOfRecord: "EHR", attributes: ["status", "priority"] },
+        { name: "Invoice", area: "Finance", systemOfRecord: "Billing", attributes: ["amount", "terms"] },
+      ],
+      relations: [],
+    },
+    atlas: { workflows: [] },
+    overrides: [],
+  };
+  /** Close one SoR's typing loci the way importing ITS dictionary does. */
+  const importFor = (store: ReturnType<typeof migrate>, sor: string) => {
+    for (const about of deriveArtifactAsks(store, {}).asks.find((a) => a.sor === sor)!.abouts) {
+      store.assert({ about, value: { kind: "scalar", value: "string" }, world: "to-be", layer: "configuration",
+        source: "code-derived", ownerWhileOpen: { kind: "unowned" }, status: "weak",
+        closedBy: { method: "import", by: `dictionary:${sor}` } });
+    }
+  };
+
+  it("the EHR dictionary satisfies the EHR ask and LEAVES the Billing ask open", () => {
+    const store = migrate(twoSystems);
+    importFor(store, "EHR");
+    const v = deriveArtifactAsks(store, { dictionaryBySor: new Map([["ehr", "ehr-dd"]]) });
+    const ehr = v.asks.find((a) => a.sor === "EHR")!;
+    const billing = v.asks.find((a) => a.sor === "Billing")!;
+    expect(ehr.state).toBe("provided");
+    expect(ehr.dictionary).toBe("ehr-dd");
+    expect(ehr.ownDictionary).toBe(true);
+    // the honest part: nothing about Billing was answered by the EHR file
+    expect(billing.state).toBe("unrequested");
+    expect(billing.dictionary).toBeNull();
+    expect(billing.weight).toBeGreaterThan(0);
+    expect(asksNeedingChase(v).map((a) => a.sor)).toEqual(["Billing"]);
+    expect(v.frameComplete).toBe(false);
+  });
+
+  it("the PROGRAMME-WIDE upload still claims to cover everything — the old behaviour, kept and named", () => {
+    const store = migrate(twoSystems);
+    importFor(store, "EHR");
+    const v = deriveArtifactAsks(store, { dictionaryName: "everything-dd" });
+    const billing = v.asks.find((a) => a.sor === "Billing")!;
+    expect(billing.state).toBe("reopened");        // covered, but questions remain
+    expect(billing.dictionary).toBe("everything-dd");
+    expect(billing.ownDictionary).toBe(false);     // not its own file — say so
+  });
+
+  it("ONE ASK PER SoR survives keyed uploads, and conservation is untouched", () => {
+    const store = migrate(twoSystems);
+    const bucket = dictionaryBucket(buildUnknownQueue(store)).length;
+    const v = deriveArtifactAsks(store, {
+      declaredSors: ["ehr"],
+      dictionaryBySor: new Map([["ehr", "a"], ["billing", "b"]]),
+    });
+    expect(v.asks).toHaveLength(2);                                     // not 3
+    expect(v.asks.reduce((n, a) => n + a.weight, 0) + v.unattributed.weight).toBe(bucket);
+  });
+});
+
 describe("the Frame GATE surfaces the sponsor's declaration — before any ontology exists", () => {
   const programme = (frameInputs: Record<string, unknown>, inner: Record<string, unknown> = {}): ProgramSummary => ({
     id: "p1", name: "SoR", client: "", methodology: "atos-flow",
@@ -231,5 +296,20 @@ describe("the Frame GATE surfaces the sponsor's declaration — before any ontol
     ));
     expect(item!.label).toContain("2 of 2 systems of record");   // EHR + Billing, not 3
     expect(item!.why).toBe("1 on the ontology · 1 named in Frame only");
+  });
+
+  it("a PER-SoR dictionary handles only its own system; the programme-wide one handles all", () => {
+    const csv = "Entity,Field,Type\nCase,Status,picklist";
+    const withInputs = (listen: Record<string, unknown>) => ({
+      id: "p1", name: "SoR", client: "", methodology: "atos-flow",
+      rawData: { data: { phaseInputs: { frame: { systemsOfRecord: "EHR\nBilling" }, listen } } },
+      updatedAt: "2026-08-10",
+    } as unknown as ProgramSummary);
+    const perSor = sorItem(withInputs({ _dataDictionary: JSON.stringify({ EHR: csv }) }))!;
+    expect(perSor.done).toBe(false);
+    expect(perSor.label).toContain("1 of 2 systems of record");
+    expect(perSor.label).toContain("Billing");        // the one still unanswered, named
+    const global = sorItem(withInputs({ _dataDictionary: csv }))!;
+    expect(global.done).toBe(true);                   // the un-keyed upload claims to cover everything
   });
 });

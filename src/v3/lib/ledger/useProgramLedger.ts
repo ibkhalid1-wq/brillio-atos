@@ -35,7 +35,7 @@ import { buildReadModel } from "./readModel";
 import { projectKitQuestions, type KitQuestion } from "./kitProjection";
 import { deriveArtifactAsks, parseDeclaredSors, type ArtifactAskMark, type ArtifactAskView } from "./artifactAsks";
 import { reconcile } from "./merge";
-import { parseDictionaryCsv, dictionaryToClaims, TYPING_SLOTS, type ParsedDictionary } from "./dictionary";
+import { readDictionarySources, dictionaryToClaims, TYPING_SLOTS } from "./dictionary";
 import type { LedgerStore } from "./store";
 import { isLive, slotOf } from "./types";
 import {
@@ -172,24 +172,25 @@ export function useProgramLedger(program?: ProgramSummary): ProgramLedger {
     const migrated = migrate(snap);
 
     // ── data-dictionary import (the PRIMARY typing-close path) ──
-    // If the client uploaded a data dictionary (fingerprint-safe `_dataDictionary` — CSV
-    // string, or a pre-parsed {name,fields}), parse it and reconcile its claims into the
-    // store through the SAME reconcile() the FHIR/Salesforce adapters use. It fills the
-    // dataType/valueSet/optionality unknowns as `code-derived · weak` — deviatable. No new
-    // mechanism; one more source feeding proven machinery.
-    let dictionaryName: string | null = null;
+    // The client's dictionaries (fingerprint-safe `_dataDictionary` — a CSV string, a
+    // pre-parsed {name,fields}, or a KEYED map of one per system of record) are parsed
+    // and reconciled into the store through the SAME reconcile() the FHIR/Salesforce
+    // adapters use. They fill the dataType/valueSet/optionality unknowns as
+    // `code-derived · weak` — deviatable. No new mechanism; one more source feeding
+    // proven machinery. EVERY source is imported: the claims a Finance dictionary
+    // closes are as real as the CRM one's.
+    let dictionaryName: string | null = null;                 // the programme-wide upload
+    const dictionaryBySor = new Map<string, string>();        // lowercased SoR → its own dictionary
     const listenInputs = program ? readMovementInputs(program, "listen") : undefined;
     const dictRaw = (listenInputs as Record<string, unknown> | undefined)?._dataDictionary;
-    if (dictRaw) {
-      const dict: ParsedDictionary = typeof dictRaw === "string"
-        ? parseDictionaryCsv(dictRaw)
-        : (dictRaw as ParsedDictionary);
-      if (dict?.fields?.length) {
-        const { batch, elements } = dictionaryToClaims(dict, new Set(migrated.elements().map((e) => e.id)));
-        for (const e of elements) migrated.addElement(e);
-        reconcile(migrated, batch, new Set(migrated.elements().map((e) => e.id)));
-        dictionaryName = dict.name || "uploaded-dictionary";
-      }
+    for (const { sor, dict } of readDictionarySources(dictRaw)) {
+      if (!dict.fields.length) continue;   // an unparsable upload closes nothing — and says so
+      const { batch, elements } = dictionaryToClaims(dict, new Set(migrated.elements().map((e) => e.id)));
+      for (const e of elements) migrated.addElement(e);
+      reconcile(migrated, batch, new Set(migrated.elements().map((e) => e.id)));
+      const name = dict.name || "uploaded-dictionary";
+      if (sor) dictionaryBySor.set(sor.trim().toLowerCase(), name);
+      else dictionaryName = name;
     }
 
     // ── artifact-ask marks (preventive dictionary ask, one per SoR) — same
@@ -252,7 +253,7 @@ export function useProgramLedger(program?: ProgramSummary): ProgramLedger {
     const declaredSors = parseDeclaredSors(
       (program ? readMovementInputs(program, "frame") : undefined)?.systemsOfRecord,
     );
-    const artifactAsks = deriveArtifactAsks(store, { marks: askMarks, dictionaryName, declaredSors });
+    const artifactAsks = deriveArtifactAsks(store, { marks: askMarks, dictionaryName, declaredSors, dictionaryBySor });
     // Kit questions ARE the open unknowns, phrased for humans — the SAME source the
     // operator queue reads (buildUnknownQueue), never a separately-generated list. One
     // list, so the stakeholder's kit and the operator's queue can't drift.

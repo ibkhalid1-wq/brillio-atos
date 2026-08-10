@@ -14,6 +14,7 @@ import { getFormalArtifactContent, getFormalArtifactConfidence, FORMAL_ARTIFACT_
 import { listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
 import { stakeholderPrimaryArea, GENERAL_AREA } from "@/v3/components/flow/flowAreas";
 import { frameSorReadiness, parseDeclaredSors, type ArtifactAskMark } from "@/v3/lib/ledger/artifactAsks";
+import { readDictionarySources } from "@/v3/lib/ledger/dictionary";
 
 /**
  * Find a quoted claim inside a source transcript, tolerantly: curly quotes
@@ -883,7 +884,16 @@ export function gateChecklist(program: ProgramSummary, movement: PhaseDefinition
       const listenIn = readMovementInputs(program, "listen") as Record<string, unknown>;
       const askMarks = Array.isArray(listenIn._artifactAsks)
         ? (listenIn._artifactAsks as ArtifactAskMark[]).filter((m) => m && typeof m.sor === "string") : [];
-      const sor = frameSorReadiness(inner.domainOntology, askMarks, !!listenIn._dataDictionary, declaredSors);
+      // A dictionary handles the SoR it was uploaded FOR; only the programme-wide
+      // upload claims to cover everything (readDictionarySources — the one reader of
+      // the additively-keyed `_dataDictionary` field).
+      const dictionaries = readDictionarySources(listenIn._dataDictionary);
+      const sor = frameSorReadiness(
+        inner.domainOntology, askMarks,
+        dictionaries.some((d) => d.sor === null && d.dict.fields.length),
+        declaredSors,
+        dictionaries.filter((d) => d.sor && d.dict.fields.length).map((d) => d.sor as string),
+      );
       if (sor.named.length) {
         // Where the names came from — the operator can see whether the ontology has
         // caught up with the sponsor's list, or the sponsor with the ontology's.

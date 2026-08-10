@@ -7,7 +7,10 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { migrate, type Snapshot } from "@/v3/lib/ledger/migrate";
 import { reconcile } from "@/v3/lib/ledger/merge";
-import { parseDictionaryCsv, dictionaryToClaims, TYPING_SLOTS, type ParsedDictionary } from "@/v3/lib/ledger/dictionary";
+import {
+  parseDictionaryCsv, dictionaryToClaims, TYPING_SLOTS,
+  readDictionarySources, writeDictionaryField, type ParsedDictionary,
+} from "@/v3/lib/ledger/dictionary";
 import { isLive, slotOf } from "@/v3/lib/ledger/types";
 import type { LedgerStore } from "@/v3/lib/ledger/store";
 
@@ -69,5 +72,77 @@ describe("data-dictionary → reconcile closes the typing wall", () => {
     const live = store.liveClaimsAbout(dictClaim!.about).filter(isLive);
     expect(live.some((c) => c.source === "asserted")).toBe(true);
     expect(live.some((c) => c.source === "code-derived")).toBe(false); // dictionary superseded by the human answer
+  });
+});
+
+/**
+ * ONE FIELD, ONE OR MANY UPLOADS — `_dataDictionary` accepts a keyed map ADDITIVELY.
+ * The whole point is that nothing already stored changes shape or stops working: a
+ * plain CSV string stays valid and reads as the programme-wide dictionary, and the
+ * keyed form appears only once a per-SoR upload actually happens.
+ */
+describe("the dictionary field: keyed per SoR, additively", () => {
+  const csv = ["Entity,Field,Type", "Case,Status,picklist"].join("\n");
+  const csv2 = ["Entity,Field,Type", "Invoice,Amount,currency"].join("\n");
+
+  it("BACKWARD COMPATIBLE: the legacy plain CSV reads as the ONE programme-wide dictionary", () => {
+    const sources = readDictionarySources(csv);
+    expect(sources).toHaveLength(1);
+    expect(sources[0].sor).toBeNull();
+    expect(sources[0].dict.fields).toHaveLength(1);
+  });
+
+  it("BACKWARD COMPATIBLE: a pre-parsed {name,fields} doc still reads, and is not mistaken for a keyed map", () => {
+    const sources = readDictionarySources({ name: "sf", fields: [{ entity: "Case", field: "Status" }] });
+    expect(sources).toHaveLength(1);
+    expect(sources[0].sor).toBeNull();
+    expect(sources[0].dict.name).toBe("sf");
+  });
+
+  it("a keyed map yields one source per system, the reserved '*' key being the global one", () => {
+    const stored = JSON.stringify({ EHR: csv, Billing: csv2, "*": csv });
+    const sources = readDictionarySources(stored);
+    expect(sources.map((s) => s.sor)).toEqual(["EHR", "Billing", null]);
+    expect(sources[1].dict.fields[0]).toMatchObject({ entity: "Invoice", field: "Amount" });
+  });
+
+  it("nothing on file, or unreadable, is [] — never a guessed shape", () => {
+    expect(readDictionarySources(undefined)).toEqual([]);
+    expect(readDictionarySources("")).toEqual([]);
+    expect(readDictionarySources("   ")).toEqual([]);
+    expect(readDictionarySources(42)).toEqual([]);
+  });
+
+  it("a global write on a programme with no keyed uploads keeps the PLAIN CSV shape (no forced migration)", () => {
+    expect(writeDictionaryField(undefined, csv)).toBe(csv);
+    expect(writeDictionaryField(csv, csv2)).toBe(csv2);
+  });
+
+  it("a per-SoR write keys the field and PRESERVES what was already on file", () => {
+    const first = writeDictionaryField(csv, csv2, "Billing");     // legacy CSV becomes the global entry
+    expect(readDictionarySources(first).map((s) => s.sor)).toEqual([null, "Billing"]);
+    const second = writeDictionaryField(first, csv, "EHR");       // and the Billing one survives
+    expect(readDictionarySources(second).map((s) => s.sor)).toEqual([null, "Billing", "EHR"]);
+    expect(readDictionarySources(second).find((s) => s.sor === "Billing")!.dict.fields[0].entity).toBe("Invoice");
+  });
+
+  it("re-uploading for a system REPLACES its dictionary — case-insensitively, never a second entry", () => {
+    const once = writeDictionaryField(undefined, csv, "CRM");
+    const twice = writeDictionaryField(once, csv2, "crm");
+    const sources = readDictionarySources(twice);
+    expect(sources).toHaveLength(1);
+    expect(sources[0].sor).toBe("CRM");                            // the first spelling is kept
+    expect(sources[0].dict.fields[0].entity).toBe("Invoice");      // with the new content
+  });
+
+  it("a per-SoR dictionary reconciles into the store exactly like the global one (same path, same claims)", () => {
+    const store = migrate(snapshot);
+    const before = typingOpen(store);
+    const source = readDictionarySources(writeDictionaryField(undefined, [
+      "Entity,Field,Type", "Opportunity,Stage,picklist",
+    ].join("\n"), "CRM"))[0];
+    expect(source.sor).toBe("CRM");
+    applyDict(store, source.dict);
+    expect(typingOpen(store)).toBeLessThan(before);
   });
 });

@@ -123,3 +123,88 @@ export function dictionaryToClaims(dict: ParsedDictionary, existingElementIds: S
 
 /** The typing slots a data dictionary answers — the wall it dissolves. */
 export const TYPING_SLOTS = new Set(["dataType", "valueSet", "optionality"]);
+
+/* ── Per-SoR dictionaries: ONE field, one or many uploads ──────────────────────
+ *
+ * `_dataDictionary` began as ONE global CSV for the whole programme. But the ask is
+ * per system of record (`artifactAsks.ts`): a CRM export answers nothing about the
+ * finance system, and marking all five of Laila's SoRs "provided" off one upload is
+ * exactly the papering-over this codebase exists to prevent.
+ *
+ * So the field accepts a KEYED MAP — `{"<SoR>": "<csv>", "*": "<csv>"}` — ADDITIVELY:
+ * a plain CSV string (or a pre-parsed {name,fields} doc) remains valid and is read as
+ * the ONE global dictionary, so no existing programme changes shape or breaks. The
+ * keyed form is only written once a per-SoR upload actually happens.
+ */
+
+/** The reserved key for a dictionary that is NOT tied to one system of record. */
+export const GLOBAL_DICTIONARY_KEY = "*";
+
+/** One dictionary on file. `sor === null` is the global upload. */
+export interface DictionarySource { sor: string | null; dict: ParsedDictionary }
+
+const isRecordValue = (v: unknown): v is Record<string, unknown> =>
+  !!v && typeof v === "object" && !Array.isArray(v);
+const looksParsed = (v: unknown): boolean =>
+  isRecordValue(v) && Array.isArray((v as { fields?: unknown }).fields);
+
+/** A stored value → a parsed dictionary. Unrecognisable ⇒ null (never a guess). */
+const toDictionary = (value: unknown, name: string): ParsedDictionary | null => {
+  if (typeof value === "string") return value.trim() ? parseDictionaryCsv(value, name) : null;
+  if (looksParsed(value)) {
+    const v = value as ParsedDictionary;
+    return { name: String(v.name || name), fields: Array.isArray(v.fields) ? v.fields : [] };
+  }
+  return null;
+};
+
+/** The stored field as a key→value map, the legacy plain string keyed as global. */
+function storedMap(raw: unknown): Record<string, unknown> {
+  if (raw === null || raw === undefined) return {};
+  let value: unknown = raw;
+  if (typeof raw === "string") {
+    const text = raw.trim();
+    if (!text) return {};
+    // Only a JSON object can be the keyed form; anything else is CSV text, and a
+    // failed parse means exactly that — it is never treated as a broken map.
+    if (text.startsWith("{")) { try { value = JSON.parse(text); } catch { value = raw; } }
+  }
+  if (typeof value === "string" || looksParsed(value)) return { [GLOBAL_DICTIONARY_KEY]: value };
+  if (isRecordValue(value)) return { ...value };
+  return {};
+}
+
+/**
+ * Every dictionary on file, in write order. Backward compatible by construction: the
+ * legacy single CSV reads as one source with `sor: null`.
+ */
+export function readDictionarySources(raw: unknown): DictionarySource[] {
+  const out: DictionarySource[] = [];
+  for (const [key, value] of Object.entries(storedMap(raw))) {
+    const sor = key === GLOBAL_DICTIONARY_KEY ? null : key.trim() || null;
+    const dict = toDictionary(value, sor ? `${sor} dictionary` : "uploaded-dictionary");
+    if (dict) out.push({ sor, dict });
+  }
+  return out;
+}
+
+/**
+ * Attach `csv` to `sor` (null/blank ⇒ the global dictionary), preserving everything
+ * already on file. Returns the STRING to store — underscore fields are always
+ * strings. A global upload on a programme that has no per-SoR dictionaries keeps the
+ * plain-CSV shape, so nothing migrates that does not have to.
+ *
+ * Keys match case-insensitively: re-uploading for "crm" replaces the "CRM" entry
+ * rather than creating a second dictionary for one system.
+ */
+export function writeDictionaryField(raw: unknown, csv: string, sor?: string | null): string {
+  const existing = storedMap(raw);
+  const wanted = (sor ?? "").trim();
+  if (!wanted) {
+    const hasKeyed = Object.keys(existing).some((k) => k !== GLOBAL_DICTIONARY_KEY);
+    if (!hasKeyed) return csv;                       // the shape every reader already knows
+    return JSON.stringify({ ...existing, [GLOBAL_DICTIONARY_KEY]: csv });
+  }
+  const key = Object.keys(existing).find((k) => k.toLowerCase() === wanted.toLowerCase()) ?? wanted;
+  return JSON.stringify({ ...existing, [key]: csv });
+}

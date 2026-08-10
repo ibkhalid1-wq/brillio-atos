@@ -69,6 +69,18 @@ running program + export — the state machine is proven on the migrated ledgers
   personas / coverageMap). Projecting the artifact ask into the GENERATED kit document
   needs a schema + generator change (edge). The read model already carries the asks, so
   the projection is one section away once the schema decision lands.
-- The dictionary remains one global upload (`_dataDictionary`); per-SoR uploads (a CRM
-  dictionary vs a Finance-system dictionary, matched to their own asks) need a keyed
-  field — buildable next if wanted.
+- ~~The dictionary remains one global upload (`_dataDictionary`).~~ **BUILT (2026-08-10).**
+  The field accepts a **keyed map** ADDITIVELY — `{"<SoR>": "<csv>", "*": "<csv>"}` —
+  read by the ONE reader `readDictionarySources` and written by `writeDictionaryField`
+  through the SAME `useOperatorCommits.commitDictionary` channel (now
+  `commitDictionary(csv, sor?)`). **A plain CSV string stays valid** and reads as the
+  programme-wide dictionary, so no stored programme changes shape; the keyed form is
+  written only once a per-SoR upload happens. Each ask consumes **its own**: a CRM
+  export no longer marks the Finance ask provided (`ask.dictionary` / `ask.ownDictionary`
+  name which file answered, and whether it was that system's own). The inbox renders an
+  upload control **per ask**, its parse preview measured against **that** SoR's loci,
+  plus one "covering every system" control. Live on Laila: **5 per-SoR upload controls**
+  (CRM 126 · Project Management 31 · Finance 26 · Contract 12 · Content 8 open questions,
+  + 40 unattributed = the 243 dictionary bucket).
+  **Gated remainder:** nothing — this is entirely client-side. The freeform-document
+  (non-CSV) parse remains model-gated as before.

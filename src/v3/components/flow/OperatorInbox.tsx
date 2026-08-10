@@ -38,8 +38,9 @@ interface Props {
    *  underscore-field write, same silent-save channel as operator actions. */
   onAskMark?: (mark: ArtifactAskMark) => void;
   /** Attach the client's data dictionary (CSV text) — the WRITE half of the SoR
-   *  ask. Without it the inbox asks for an upload with no door to open. */
-  onDictionary?: (csv: string) => void | Promise<void>;
+   *  ask. Without it the inbox asks for an upload with no door to open. `sor` names
+   *  the system this file belongs to; null is the programme-wide dictionary. */
+  onDictionary?: (csv: string, sor?: string | null) => void | Promise<void>;
 }
 
 const nowISO = () => new Date().toISOString();
@@ -48,19 +49,25 @@ const OTHER = "__other__";
 export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskMark, onDictionary }: Props) {
   // The dictionary upload — parsed for a HONEST preview before it is committed:
   // the operator sees how many fields parsed and how many open questions this
-  // file would actually close, not a promise.
+  // file would actually close, not a promise. ONE hidden input serves every ask;
+  // `pendingSor` records which ask opened the dialog, so the file is attached to
+  // that system (null = the programme-wide dictionary).
   const dictRef = useRef<HTMLInputElement>(null);
-  const [dictPreview, setDictPreview] = useState<{ name: string; fields: number; closes: number; csv: string } | null>(null);
-  const readDictionaryFile = async (file: File) => {
+  const pendingSor = useRef<string | null>(null);
+  const pendingScope = useRef<string[]>([]);
+  const [dictPreview, setDictPreview] = useState<{ name: string; fields: number; closes: number; csv: string; sor: string | null; scope: number } | null>(null);
+  const readDictionaryFile = async (file: File, sor: string | null, scopeLoci: string[]) => {
     const csv = await file.text();
     const parsed = parseDictionaryCsv(csv, file.name.replace(/\.[^.]+$/, ""));
-    const typingByKey = new Set(ledger.typingLoci.map((i) => elementIdOf(i.about)));
-    // How many OPEN typing loci this dictionary actually names — a real read.
+    // Measured against THIS ask's loci when the upload is for one system; against
+    // every open typing locus for the programme-wide one. Same count either way —
+    // the loci the file actually names, never an estimate.
+    const scope = new Set(scopeLoci.map((about) => elementIdOf(about)));
     const closes = parsed.fields.reduce((n, f) => {
       const id = `el:attr:${f.entity.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-")}.${f.field.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
-      return n + (typingByKey.has(id) ? 1 : 0);
+      return n + (scope.has(id) ? 1 : 0);
     }, 0);
-    setDictPreview({ name: parsed.name, fields: parsed.fields.length, closes, csv });
+    setDictPreview({ name: parsed.name, fields: parsed.fields.length, closes, csv, sor, scope: scopeLoci.length });
   };
   const [sel, setSel] = useState<Record<string, string>>({});
   const [other, setOther] = useState<Record<string, string>>({});
@@ -200,6 +207,38 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
         const unattributed = ledger.artifactAsks.unattributed;
         if (!chase.length && !unattributed.weight) return null;   // self-cleared → hidden
         const now = Date.now();
+        // ONE upload control, rendered per ask (keyed to that SoR) and once for the
+        // programme-wide file. `loci` is the scope the preview measures against, so
+        // "closes N" means N of THIS system's open questions.
+        const uploadRow = (sor: string | null, loci: string[]) => {
+          if (!onDictionary) return null;
+          const active = dictPreview && dictPreview.sor === sor;
+          const key = sor ?? "*";
+          return (
+            <div className="v3ib-dict-up">
+              {active ? (
+                <>
+                  <span className="v3ib-dict-prev">
+                    <b>{dictPreview.name}</b> · {dictPreview.fields} field{dictPreview.fields === 1 ? "" : "s"} parsed ·
+                    {" "}<b>{dictPreview.closes}</b> of the {dictPreview.scope} open typing question{dictPreview.scope === 1 ? "" : "s"}
+                    {sor ? ` on ${sor}` : ""} match
+                    {dictPreview.closes === 0 ? " — nothing here matches an open locus; check the entity/field columns" : ""}
+                  </span>
+                  <button type="button" className="v3ib-btn" disabled={busy === `dict:${key}`}
+                    onClick={() => { setBusy(`dict:${key}`); void Promise.resolve(onDictionary(dictPreview.csv, dictPreview.sor)).finally(() => { setBusy(null); setDictPreview(null); }); }}>
+                    {busy === `dict:${key}` ? "attaching…" : sor ? `attach as the ${sor} dictionary` : "attach this dictionary"}
+                  </button>
+                  <button type="button" className="v3ib-btn ghost sm" onClick={() => setDictPreview(null)}>discard</button>
+                </>
+              ) : (
+                <button type="button" className="v3ib-btn ghost"
+                  onClick={() => { pendingSor.current = sor; pendingScope.current = loci; dictRef.current?.click(); }}>
+                  ⬆ upload {sor ? `the ${sor} dictionary` : "a dictionary covering every system"} (CSV/TSV)
+                </button>
+              )}
+            </div>
+          );
+        };
         return (
           <section className="v3ib-src v3ib-dict">
             <header className="v3ib-h">
@@ -246,6 +285,9 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                       ) : null}
                     </span>
                   ) : null}
+                  {/* EACH ask takes its OWN dictionary — a CRM export answers nothing
+                      about the finance system, so the upload is keyed to this SoR. */}
+                  {uploadRow(ask.sor, ask.abouts)}
                 </div>
               );
             })}
@@ -256,28 +298,18 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
               </div>
             ) : null}
             {/* THE UPLOAD — the write half of the ask. Parsed first so the operator
-                sees what this file actually closes before committing it. */}
+                sees what this file actually closes before committing it. Per-SoR
+                uploads sit on their own ask above; this is the one file that covers
+                every system (the shape a programme that never keys keeps). */}
             {onDictionary ? (
-              <div className="v3ib-dict-up">
+              <>
                 <input ref={dictRef} type="file" accept=".csv,.tsv,.txt" className="v3ib-sr"
-                  onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void readDictionaryFile(f); }} />
-                {dictPreview ? (
-                  <>
-                    <span className="v3ib-dict-prev">
-                      <b>{dictPreview.name}</b> · {dictPreview.fields} field{dictPreview.fields === 1 ? "" : "s"} parsed ·
-                      {" "}<b>{dictPreview.closes}</b> of the {ledger.typingLoci.length} open typing question{ledger.typingLoci.length === 1 ? "" : "s"} match
-                      {dictPreview.closes === 0 ? " — nothing here matches an open locus; check the entity/field columns" : ""}
-                    </span>
-                    <button type="button" className="v3ib-btn" disabled={busy === "dict"}
-                      onClick={() => { setBusy("dict"); void Promise.resolve(onDictionary(dictPreview.csv)).finally(() => { setBusy(null); setDictPreview(null); }); }}>
-                      {busy === "dict" ? "attaching…" : "attach this dictionary"}
-                    </button>
-                    <button type="button" className="v3ib-btn ghost sm" onClick={() => setDictPreview(null)}>discard</button>
-                  </>
-                ) : (
-                  <button type="button" className="v3ib-btn ghost" onClick={() => dictRef.current?.click()}>⬆ upload a data dictionary (CSV/TSV)</button>
-                )}
-              </div>
+                  onChange={(e) => {
+                    const f = e.target.files?.[0]; e.target.value = "";
+                    if (f) void readDictionaryFile(f, pendingSor.current, pendingScope.current);
+                  }} />
+                {uploadRow(null, ledger.typingLoci.map((i) => i.about))}
+              </>
             ) : null}
           </section>
         );
