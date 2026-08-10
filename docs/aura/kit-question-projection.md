@@ -90,10 +90,21 @@ tsc + eslint clean; 1241 tests green.
   it now clears stale loci on refresh) and `CollectBoard`'s review-link mint (accepts
   `loci`, no caller passes them yet). **Gated on one edge deploy** — `flow-portal` must
   forward `questionLoci`; source change made, not deployed.
-- **No locus-mint path for gap findings (core / curation, a finding not a tier change).**
-  There is no `mintLocus` / `ProposedEntity` / curation path in the codebase — curation
-  today is dismissals/deferrals (`_curationLog`, `_dismissedAsks`). Routing an
-  ontology-gap kit question to mint a new locus needs a curation-path addition (a new
-  element + `?unknown` claim via `store`), which the frozen core does not currently
-  expose. This is the "whether unmatched kit questions warrant minting loci" question the
-  brief anticipated — a curation-path change, reported here for a decision, not made.
+- **Locus mint for gap findings — BUILT, surface-layer (2026-08-10).** See
+  `curation-path.md`. `src/v3/lib/ledger/curation.ts` mints a **PROPOSED** element plus
+  **the one `?unknown` it opens** from a named ontology-gap kit question: a
+  `mint-element` / `retract-mint` operator action on the existing `_operatorActions`
+  underscore field (the ONE write path), applied as a **read-model overlay** in
+  `useProgramLedger` exactly the way `applyOwnership` is. **The frozen core is untouched
+  — nothing calls `store.addElement` / `store.assert`.** Provisional (`el:proposed:` id
+  prefix, content-derived via `contentId`), attributed (who / which kit question / when),
+  reversible (`retract-mint` restores the read model exactly), unowned + `?unknown` (a
+  proposal asserts only that a question exists), and never a second definition (an
+  already-modelled name mints nothing and says `alreadyModelled: <id>`). Laila evidence:
+  310 elements / 955 claims / 395 open → **311 / 956 / 396** on mint (need-an-owner
+  0 → 1) → 310 / 955 / 395 on retract. Proven by `src/v3/__tests__/curationMint.test.ts`
+  (21 cases). **Two things are NOT done, and are findings in `curation-path.md`:**
+  persisting a proposal needs a frozen-core marker (`proposed` on `LedgerElement` or a
+  `proposed` `Source`), and the mint ENTRY POINT is still library-level because no
+  in-browser surface consumes `reconcileKit` (the discovery-kit artifact is DB-only here).
+  The inbox does tag proposed questions `◇ proposed` and offers **retract proposal**.

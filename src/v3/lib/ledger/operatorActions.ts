@@ -13,7 +13,7 @@
  * attributed sources) — the exact boundary the brief says to hold. So captures live
  * here as a distinct, visible category and never enter the store the projections read.
  */
-import { isLive, ownerLabel, slotOf, type Claim, type Owner } from "./types";
+import { isLive, ownerLabel, slotOf, type Claim, type ElementKind, type Owner, type World } from "./types";
 
 export const OPERATOR_ACTIONS_FIELD = "_operatorActions";
 
@@ -122,10 +122,40 @@ export interface PinResolveAction {
   by: string;
   at: string;
 }
+/** MINT-ELEMENT — the CURATION verb. An `ontology-gap` kit question (reconcileKit: the kit
+ *  knows a thing the ontology missed) becomes a PROPOSED element plus the one `?unknown`
+ *  it opens. Provisional and attributed: who proposed it, from which kit question, when.
+ *  Applied as a read-model OVERLAY (see curation.ts) exactly like ASSIGN — never a write
+ *  into the frozen core — and reversible by `retract-mint`. Not an answer: the value is
+ *  `?unknown` and the owner `unowned`, so nothing is fabricated and heard cannot move. */
+export interface MintElementAction {
+  kind: "mint-element";
+  /** content-derived id, `el:proposed:…` — the PROPOSED marking lives in the id. */
+  elementId: string;
+  about: string;                 // the single locus minted with it (`<elementId>#<slot>`)
+  elementKind: ElementKind;
+  name: string;                  // OPERATOR-SUPPLIED; never derived from question text
+  of?: string;                   // parent element id, when the proposal is an attribute
+  slot: string;
+  world: World;
+  fromKit: string;               // the ontology-gap kit question this came from
+  reason?: string;
+  by: string;
+  at: string;
+}
+/** RETRACT-MINT — the undo. Removes a proposal from the overlay; the log keeps the trace. */
+export interface RetractMintAction {
+  kind: "retract-mint";
+  elementId: string;
+  reason?: string;
+  by: string;
+  at: string;
+}
 export type OperatorAction =
   | AssignAction | ScheduleAction | CaptureAction
   | UnassignAction | DecideFateAction | RedirectAction
-  | PinAction | PinResolveAction;
+  | PinAction | PinResolveAction
+  | MintElementAction | RetractMintAction;
 
 /** Read the operator-action log off the program (fingerprint-safe Listen field). */
 export function readOperatorActions(listenInputs: Record<string, unknown> | undefined): OperatorAction[] {

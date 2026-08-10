@@ -25,6 +25,7 @@ import { renderQuestion } from "@/v3/lib/ledger/renderQuestion";
 import { ClaimStatus, OwnershipTag, ProvisionalMark, SourceTag } from "@/v3/components/flow/studio/ledgerPrimitives";
 import { asksNeedingChase, isSystemOwner, type ArtifactAskMark } from "@/v3/lib/ledger/artifactAsks";
 import { parseDictionaryCsv } from "@/v3/lib/ledger/dictionary";
+import { retractProposal } from "@/v3/lib/ledger/curation";
 import { displayPersonLabel } from "@/v3/components/flow/flowStakeholders";
 
 interface Candidate { label: string; role: string }
@@ -120,12 +121,23 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
     </>
   );
 
+  // CURATION — loci minted from an ontology-gap kit question. `ledger.proposals` is the
+  // ONE source (nothing re-derived here). A proposal is PROVISIONAL and must never read as
+  // an element the ontology actually holds, so every question line it makes carries the mark.
+  const proposalOf = new Map(ledger.proposals.filter((p) => !p.alreadyModelled).map((p) => [p.about, p] as const));
+
   const QLine = ({ about, tail }: { about: string; tail?: ReactNode }) => {
     const p = Q(about);
+    const proposed = proposalOf.get(about);
     return (
       <span className="v3ib-q" title={about}>
         <span className="v3ib-qtype">{p.typeTag}</span>
         <span className="v3ib-qtext">{p.question}</span>
+        {proposed ? (
+          <span className="v3ib-prop" title={`PROPOSED — the ontology does not hold this. ${proposed.by} minted it from the kit question "${proposed.fromKit[0]}" on ${proposed.at.slice(0, 10)}. Provisional until someone answers it.`}>
+            <span aria-hidden="true">◇</span> proposed
+          </span>
+        ) : null}
         {tail}
       </span>
     );
@@ -300,6 +312,15 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                         <ClaimStatus state={it.status} showLabel={false} />
                         <QLine about={it.about} tail={it.status === "blocked" ? <span className="v3ib-blk" title="Blocked (e.g. an unresolved reference) — still ownerless; assigning an owner is valid, it just can't be answered until unblocked">blocked</span> : undefined} />
                         <button type="button" className="v3ib-btn ghost sm" onClick={() => setFate((s) => ({ ...s, [it.about]: !s[it.about] }))}>no owner?</button>
+                        {/* REVERSIBLE curation: a proposal minted from a kit question can be
+                            retracted, which removes the element AND its question from the read
+                            model exactly as if it had never been minted. */}
+                        {proposalOf.has(it.about) ? (
+                          <button type="button" className="v3ib-btn ghost sm" disabled={busy === it.about}
+                            title="Retract this proposal — removes the proposed element and its question; the mint stays in the action log as a trace"
+                            onClick={() => { const r = retractProposal(proposalOf.get(it.about)!.elementId, by, nowISO()); if (r) void run(it.about, r); }}>
+                            retract proposal</button>
+                        ) : null}
                         {fate[it.about] ? (
                           <span className="v3ib-fate">
                             <input className="v3ib-reason" placeholder="Reason (recorded)…" value={fateReason[it.about] ?? ""} onChange={(e) => setFateReason((s) => ({ ...s, [it.about]: e.target.value }))} />
