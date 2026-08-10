@@ -13,6 +13,7 @@ import type { ProgramSummary } from "@/new/types";
 import { readMovementInputs } from "@/v3/components/flow/flowShellData";
 import { readDirectoryPeople } from "@/v3/components/flow/flowStakeholders";
 import { serializeOperatorActions, OPERATOR_ACTIONS_FIELD, type OperatorAction } from "./operatorActions";
+import { writeDictionaryField } from "./dictionary";
 import type { ArtifactAskMark } from "./artifactAsks";
 
 export const ARTIFACT_ASKS_FIELD = "_artifactAsks";
@@ -38,8 +39,10 @@ export interface OperatorCommits {
   candidates: Array<{ label: string; role: string }>;
   commitAction: (action: OperatorAction | OperatorAction[], existing: OperatorAction[]) => Promise<void>;
   commitAskMark: (mark: ArtifactAskMark) => Promise<void>;
-  /** Attach the client's data dictionary — the write half of the SoR ask. */
-  commitDictionary: (csv: string) => Promise<void>;
+  /** Attach the client's data dictionary — the write half of the SoR ask. Pass the
+   *  SoR to attach it to THAT system's ask; omit it for a programme-wide dictionary.
+   *  Additive: the field keeps its plain-CSV shape until a per-SoR upload happens. */
+  commitDictionary: (csv: string, sor?: string | null) => Promise<void>;
   canWrite: boolean;
 }
 
@@ -71,10 +74,17 @@ export function useOperatorCommits(
     await onSaveInputs("listen", { [ARTIFACT_ASKS_FIELD]: JSON.stringify([...readAskMarks(program), mark]) }, { silent: true });
   }, [onSaveInputs, program]);
 
-  const commitDictionary = useCallback(async (csv: string) => {
+  // One dictionary per SoR, written into the SAME underscore field as a keyed map —
+  // never a second field, never a clone of the write path. `writeDictionaryField`
+  // merges with what is already on file, so attaching the Finance dictionary cannot
+  // drop the CRM one.
+  const commitDictionary = useCallback(async (csv: string, sor?: string | null) => {
     if (!onSaveInputs) return;
-    await onSaveInputs("listen", { [DATA_DICTIONARY_FIELD]: csv }, { silent: true });
-  }, [onSaveInputs]);
+    const existing = program
+      ? (readMovementInputs(program, "listen") as Record<string, unknown> | undefined)?.[DATA_DICTIONARY_FIELD]
+      : undefined;
+    await onSaveInputs("listen", { [DATA_DICTIONARY_FIELD]: writeDictionaryField(existing, csv, sor) }, { silent: true });
+  }, [onSaveInputs, program]);
 
   return { candidates, commitAction, commitAskMark, commitDictionary, canWrite: !!onSaveInputs };
 }

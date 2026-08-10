@@ -1253,7 +1253,7 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
       <OperatorInbox ledger={ledger} candidates={commits.candidates} by="operator"
         onCommit={(a) => commits.commitAction(a, ledger.actions)}
         onAskMark={(m) => { void commits.commitAskMark(m); }}
-        onDictionary={(csv) => commits.commitDictionary(csv)} />
+        onDictionary={(csv, sor) => commits.commitDictionary(csv, sor)} />
       {open.length === 0 && inbox.length === 0 && approvals.length === 0 && disputes.length === 0 && unresolvedRoles.length === 0 && coverageNames.length === 0 && exceptions.length === 0 ? (
         <div className="v3fs-quiet">
           <div className="v3fs-quiet-mark" aria-hidden="true">◈</div>
