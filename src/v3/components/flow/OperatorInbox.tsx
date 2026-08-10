@@ -25,6 +25,7 @@ import { renderQuestion } from "@/v3/lib/ledger/renderQuestion";
 import { ClaimStatus, OwnershipTag, ProvisionalMark, SourceTag } from "@/v3/components/flow/studio/ledgerPrimitives";
 import { asksNeedingChase, isSystemOwner, type ArtifactAskMark } from "@/v3/lib/ledger/artifactAsks";
 import { parseDictionaryCsv } from "@/v3/lib/ledger/dictionary";
+import { displayPersonLabel } from "@/v3/components/flow/flowStakeholders";
 
 interface Candidate { label: string; role: string }
 interface Props {
@@ -112,7 +113,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
       <label className="v3ib-sr" htmlFor={id}>Owner</label>
       <select id={id} value={sel[key] ?? ""} onChange={(e) => setSel((s) => ({ ...s, [key]: e.target.value }))}>
         <option value="">{placeholder}</option>
-        {candidates.map((c) => <option key={c.label} value={c.label}>{c.label}{c.role && c.role !== c.label ? ` — ${c.role}` : ""}</option>)}
+        {candidates.map((c) => <option key={c.label} value={c.label}>{displayPersonLabel(c.label)}{c.role && c.role !== c.label ? ` — ${c.role}` : ""}</option>)}
         <option value={OTHER}>Someone else…</option>
       </select>
       {sel[key] === OTHER ? <input className="v3ib-other" placeholder="Name a person or role" value={other[key] ?? ""} onChange={(e) => setOther((s) => ({ ...s, [key]: e.target.value }))} /> : null}
@@ -199,7 +200,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                 <div key={ask.sor} className="v3ib-dict-ask">
                   <span className="v3ib-dict-to">
                     <b>{ask.sor}</b> <span className="v3ib-unit">({ask.entityCount} entit{ask.entityCount === 1 ? "y" : "ies"})</span>
-                    {" "}→ <b>{owner ?? "TBC"}</b>{owner && ownerRole && ownerRole !== owner ? ` · ${ownerRole}` : ""}
+                    {" "}→ <b>{owner ?? "no one named yet"}</b>{owner && ownerRole && ownerRole !== owner ? ` · ${ownerRole}` : ""}
                     {" "}· <b>closes {ask.weight}</b> open question{ask.weight === 1 ? "" : "s"}
                   </span>
                   <span className="v3ib-dict-msg">

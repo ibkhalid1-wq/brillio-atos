@@ -16,6 +16,7 @@ import { deriveFabric } from "@/v3/lib/fabric";
 import { diffFabric } from "@/v3/lib/fabricDelta";
 import { deriveRoles } from "@/v3/lib/semanticRoles";
 import { TYPING_SLOTS } from "@/v3/lib/ledger/dictionary";
+import { displayPersonLabel, UNNAMED_SUFFIX_RE } from "@/v3/components/flow/flowStakeholders";
 
 const snap = (f: string) => JSON.parse(readFileSync(resolve(__dirname, `../../../docs/laila/snapshot-2026-08-07/${f}`), "utf8"));
 const lailaOntology = () => snap("domain-ontology.json");
@@ -160,5 +161,19 @@ describe("[D2] unknown kind falls back visibly", () => {
     const r = renderQuestion(store, "el:entity:case#slaWindow", "stakeholder");
     expect(r.question.trim().length).toBeGreaterThan(0);
     expect(r.affordance.kind).toBe("free-text");
+  });
+});
+
+// ── TBC is a stored machine token, never what a person reads ──
+describe("[UI] unnamed-voice label", () => {
+  it("translates the stored ' — TBC' token for humans; leaves named people alone", () => {
+    expect(displayPersonLabel("Fulfilment SME — TBC")).toBe("Fulfilment SME — no one named yet");
+    expect(displayPersonLabel("Regulatory Affairs SME – TBC")).toBe("Regulatory Affairs SME — no one named yet");
+    expect(displayPersonLabel("Ibrahim Khalid")).toBe("Ibrahim Khalid");
+    expect(displayPersonLabel("")).toBe("");
+  });
+  it("the DETECTION regex still matches the stored token (bind-a-name keeps working)", () => {
+    expect(UNNAMED_SUFFIX_RE.test("Fulfilment SME — TBC")).toBe(true);
+    expect(UNNAMED_SUFFIX_RE.test("Fulfilment SME")).toBe(false);
   });
 });
