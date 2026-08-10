@@ -91,5 +91,18 @@ export const constOwnerIsInert = (source: string, role: string): boolean => {
  */
 const escapeRe = (s: string): string => s.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
 
+/**
+ * The source with its COMMENTS removed.
+ *
+ * A guard that forbids a code pattern must not be tripped by the comment that explains
+ * why the pattern is forbidden — and in this codebase the fix and its rationale live
+ * side by side, so that collision is the normal case, not a corner one. (Concretely:
+ * the D1 guard forbids `onRecordApproval ?` as a render gate, and the comment above the
+ * now-required prop quotes that exact gate to say why it is gone.) Without this the
+ * author's only ways out are to weaken the guard or to stop writing the reason down.
+ */
+export const codeOnly = (source: string): string =>
+  source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+
 export const importsModule = (source: string, spec: string): boolean =>
   new RegExp(`from\\s+["']${escapeRe(spec)}["']`).test(source);
