@@ -119,44 +119,38 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
     && chaseCount === 0 && ledger.decideFates.length === 0;
   if (nothingToShow) return null;
 
+  // ONE UNIT — QUESTIONS, the same unit the burn-down uses, so no reader reconciles
+  // "12" against "18". A 0 section is hidden below (by request), so its 0 stat hides
+  // here too — a count button must always jump to a section that exists. When NOTHING
+  // is countable the whole header goes with it: a bare "INBOX — the operator-decision
+  // queue…" caption is chrome describing an empty thing, not information.
+  const stats = ([
+    ["ib-assign", unowned.length, "need an owner"],
+    ["ib-sessions", sessionQueue.length, "awaiting a date"],
+    ["ib-adjudicate", ledger.conflicts.length, "to adjudicate"],
+    ["ib-inflight", ledger.assignments.length, "in flight"],
+  ] as const).filter(([, n]) => n > 0);
+
   return (
     <div className="v3ib" aria-label="Operator inbox">
+      {stats.length ? (
       <header className="v3ib-top">
         <span className="v3ib-title">Inbox</span>
-        {/* ONE UNIT — QUESTIONS, the same unit the burn-down uses (18 unowned, 106 open),
-            so no reader reconciles "12" against "18". "Need an owner" is unowned QUESTIONS
-            (= burn-down = the Assign section), NOT the 12 elements those route through.
-            Each count sums exactly the section below it and clicks through to it. */}
         <span className="v3ib-count">
-          {/* A 0 section is hidden below (by request, 2026-08-10) — so its 0 stat hides
-              here too; a count button must always jump to a section that exists. */}
-          {(() => {
-            const stats = ([
-              ["ib-assign", unowned.length, "need an owner"],
-              ["ib-sessions", sessionQueue.length, "awaiting a date"],
-              ["ib-adjudicate", ledger.conflicts.length, "to adjudicate"],
-              ["ib-inflight", ledger.assignments.length, "in flight"],
-            ] as const).filter(([, n]) => n > 0);
-            // The whole inbox hides when EVERYTHING is empty, so reaching here means
-            // something below still needs attention (a dictionary chase, a decided
-            // trace) — say nothing rather than claim the queue is clear.
-            if (!stats.length) return null;
-            return (<>
-              {stats.map(([id, n, label], i) => (
-                <span key={id}>
-                  {i > 0 ? " · " : ""}
-                  <button type="button" className="v3ib-countbtn" title={`Jump to ${label}`}
-                    onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "center" })}>
-                    <b>{n}</b> {label}
-                  </button>
-                </span>
-              ))}
-              <span className="v3ib-unit"> · questions</span>
-            </>);
-          })()}
+          {stats.map(([id, n, label], i) => (
+            <span key={id}>
+              {i > 0 ? " · " : ""}
+              <button type="button" className="v3ib-countbtn" title={`Jump to ${label}`}
+                onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "center" })}>
+                <b>{n}</b> {label}
+              </button>
+            </span>
+          ))}
+          <span className="v3ib-unit"> · questions</span>
         </span>
         <span className="v3ib-of">the operator-decision queue — four sources, each a section below. The burn-down above is the goal.</span>
       </header>
+      ) : null}
 
       {/* 0 · ARTIFACT ASKS — the dictionary ask, PREVENTIVE by default: one ask per
           system of record, born at SoR identification (Frame). This inbox shows an ask
