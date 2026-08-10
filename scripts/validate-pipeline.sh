@@ -53,9 +53,14 @@ run_tests "E3 convergence = real closures only" src/v3/__tests__/convergenceBurn
 say "F. REGRESSION SENTRIES"
 # F2 — zero-count sections hidden by request (2026-08-10) — assert no resurrected collapsed rows
 grep -qn "v3ib-collapsed-row" src/v3/components/flow/OperatorInbox.tsx && fail "F2 collapsed rows resurrected" || pass "F2 zero sections hidden (by request), none resurrected"
-# F4 — fabrication grep: constant owners in live ledger paths
+# F4 — ONE fossil regression, and the label says so. This greps a single fixed string;
+#      it does NOT check "no constant-owner fabrication in ledger paths", which is what
+#      it used to claim. Two fabricated constant owners planted on the live path during
+#      the refutation pass walked straight past it and it printed PASS in the same run
+#      that F5 went red. Kept because the specific line is worth pinning; relabelled
+#      because an overstated PASS is worse than no check. F5 is the real invariant.
 FAB=$(grep -rn 'ownerFor("sales ops")' src/v3/lib/ledger/ supabase/functions/_shared/ledgerGenerator.ts 2>/dev/null || true)
-[ -z "$FAB" ] && pass "F4 no constant-owner fabrication in ledger paths" || fail "F4 fabrication: $FAB"
+[ -z "$FAB" ] && pass 'F4 no ownerFor("sales ops") regression (one fixed string — F5 is the real scan)' || fail "F4 fabrication: $FAB"
 # F5 — the FINAL GATE's three invariants, checked against the shipped source: one
 #      question-text producer, no constant role-owner literal anywhere in the ledger
 #      (ONE exemption — the dictionary's neutral band — and it is CONDITIONAL on that

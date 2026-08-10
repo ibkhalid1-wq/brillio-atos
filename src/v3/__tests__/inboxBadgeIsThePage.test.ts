@@ -116,6 +116,19 @@ const RULED = prog({
     },
   },
 });
+/** THE SHAPE (d) CANNOT REACH: one ruling and nothing else at all — no ledger blob, no
+ *  record-side items, no second operator verb. `waiting === 0` while `decided === 1`, so
+ *  the badge is legitimately hidden and the page is legitimately not empty. */
+const DECIDED_ONLY = prog({
+  phaseInputs: {
+    listen: {
+      _operatorActions: JSON.stringify([{
+        kind: "decide-fate", about: lailaQueue.items[1].about, slot: lailaQueue.items[1].slot,
+        decision: "out-of-scope", reason: "not in this programme", by: "op", at: AT,
+      }]),
+    },
+  },
+});
 
 // React 18 wants the act() flag before any root renders.
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
@@ -238,6 +251,29 @@ describe("the rail badge equals the rows the Inbox page renders", () => {
     expect(badge()).toBe(p.waiting);                         // badge === waiting
     expect(p.rendered).toBe(p.waiting + 1);                  // page === waiting + the trace
     expect(badge()).toBeLessThan(p.rendered);                // the divergence, stated
+  });
+
+  it("(e) a ruling and NOTHING ELSE: the trace is drawn, and the page does not also say it is empty", () => {
+    // THE CASE (d) CANNOT REACH. (d) carries an `assign` as well, so `waiting > 0` and
+    // FlowShell's quiet branch is never entered. `waiting === 0 && decided > 0` was
+    // untested — and it was wrong. 45cfa62 took `decided` out of the badge (right: it
+    // only grows) and moved OperatorInbox's null-render to `rendered` (right: the page
+    // still draws the trace), but FlowShell's quiet block kept asking `waiting`. So the
+    // moment an operator ruled the LAST unknown out of scope the Inbox drew
+    //   "Decided — 1 unknown the operator ruled on — an honest trace"
+    // directly above
+    //   "Nothing needs you right now."
+    // The badge is legitimately 0 here; the page is legitimately not empty. Both are true
+    // at once, which is exactly why emptiness has to be asked of `rendered`.
+    mount(DECIDED_ONLY);
+    const p = page();
+    expect(badge()).toBe(0);
+    expect(host.querySelector(".v3fs-dock-n")).toBeNull();    // nothing waits — the badge hides
+    expect(p.waiting).toBe(0);
+    expect(p.decided).toBe(1);                               // …but a row IS on the screen
+    expect(p.rendered).toBe(1);
+    expect(n(".v3fs-quiet")).toBe(0);                        // and no quiet block over it
+    expect(host.textContent).not.toContain("Nothing needs you right now.");
   });
 });
 

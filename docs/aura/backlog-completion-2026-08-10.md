@@ -512,3 +512,156 @@ No DB access, no edge deploy, no browser click-through at this gate — every nu
 above comes from the toolchain or from the committed Laila snapshot. The two
 untracked files (`docs/aura/followup-workflow.js`, `docs/aura/next-session-brief.md`)
 are left untracked, as every prior agent left them.
+
+---
+
+# REFUTATION PASS — guards + live defects
+
+Final gate over `0a023c9..ed82514` plus this pass. Three hostile verifiers re-ran the
+branch independently; their findings are triaged below. Nothing was reverted — every
+surviving defect had a fix small enough to land with a red-proof, so the branch keeps
+all four commits.
+
+## Gates, re-run from a clean tree (NOT copied forward)
+
+| Gate | Before this pass (HEAD = ed82514) | After this pass |
+|---|---|---|
+| `npx tsc --noEmit` | exit 0, no output | exit 0, no output |
+| `npm run lint` (eslint src, `--max-warnings 0`) | exit 0 | exit 0 |
+| `npx vitest run` | **106 files, 1489 tests, 0 failed** | **106 files, 1496 tests, 0 failed** |
+| `bash scripts/validate-pipeline.sh` | ALL SCRIPTED CHECKS PASS | ALL SCRIPTED CHECKS PASS |
+| `npm run build` | exit 0, 14.11s | exit 0, 12.24s |
+
+`validate-pipeline` sections that ran: A1–A3, B1/B2, B1-grep, B3–B5, C1/C2, C3/C4,
+D1–D3, E1/E2, E3, F2, F4, F5, F6, F7, G1 (×2), G2–G4.
+
+**Parked tests: ZERO.** `grep -rnE '\b(it|test|describe)\.(skip|todo|fails|only)\b|\bxit\(|\bxdescribe\('`
+over `src/` and `scripts/` returns nothing. The Guards phase parked nothing, so there
+was nothing to unpark.
+
+**Flake, disclosed:** one full-suite run in five had
+`flowLibs.test.ts > artifact studio registry > covers every atos-flow required artifact
+with a resolvable field key` time out at the 5000 ms default. The file passes standalone
+in 510 ms and passed in the other four full runs; it is untouched by any commit on this
+branch. Cause is contention under parallel workers, not a behaviour change. Outstanding
+(see below) — a timeout that fires 1-in-5 will eventually redden CI.
+
+## Per item
+
+| Item | Status | Evidence |
+|---|---|---|
+| **H1** — `not.toContain("operatorQueueCount(")` missed the exported plural | **DONE** (c37ff7e) | Replaced by an import assertion + both call spellings. Verified by reading: `grep -c "lib/ledger/operatorQueue" FlowShell.tsx` → **0**; the count is reached only via `flowInbox` (import line 27). |
+| **H3** — owner scan was a hardcoded 12-file array over a 20-file directory | **DONE** (c37ff7e) | `ledgerFilesToScan` reads the directory. Ratcheted at `finalGateInvariants.test.ts` (`readModel/pgStore/kitAgendaCache/useOperatorCommits` must be present, the 4 frozen absent, count === dir − 4). |
+| **H5** — `constOwnerIsInert` exemption granted on the string alone | **DONE** (c37ff7e) | Exemption is conditional on the binding only ever reaching weak/closed claims; fed its bypasses in `sourceGuards.test.ts`. |
+| **H5b** — *(new, this pass)* the fabrication scan was defeated by ONE const hop | **DONE** | `literalRoleOwners` matched only `/role:\s*"([^"]+)"/`. Planted on the LIVE path (`useProgramLedger.ts`): `const FALLBACK_ROLE = "Sales Ops"; export const PLANTED_OWNER = { kind: "role", role: FALLBACK_ROLE };` → **old guard 13/13 GREEN** (measured, this pass). Widened to any quote style + one resolved const hop + object shorthand; same plant → **RED**: `expected [ 'useProgramLedger.ts: Sales Ops' ] to deeply equal []`. Plant removed, tree restored. Five new cases (H6a–H6e) in `sourceGuards.test.ts`. |
+| **L1** — adjudicate queue was dead code (`conflicts.length > 1` over deduped PAIRS) | **DONE** (45cfa62) | Gate is `> 0`; `readConflicts` lifted out of the hook so the test exercises the shipped path. Red-proof reproduced this pass by the verifiers (3 red in `operatorQueueTruth`). Correct against the frozen core: `store.ts:131 conflictsFor` dedupes by sorted claim-pair key, so two contradicting live claims are exactly one pair. |
+| **L3** — badge counted history, so it could never return to zero | **DONE** (45cfa62) **+ PARTIAL fix completed this pass** | `decided` is out of `total` and into `rendered`. But 45cfa62 moved only `OperatorInbox`'s null-render to `rendered`; **FlowShell's quiet block still read `waiting`**, so a programme whose only operator action is one `decide-fate` drew the decided trace and "Nothing needs you right now." on the same screen. Fixed: new `inboxRenderedCountFrom` in `flowInbox.ts` (one definition, beside `inboxWaitingCountFrom`), read at `FlowShell.tsx`. Badge still `inboxWaitingCount`. Red-proof: new DOM case **(e)** in `inboxBadgeIsThePage.test.ts` mounts the real FlowShell over a decided-only programme; reverting the source fix gives `expected 1 to be +0` (one `.v3fs-quiet` block over one decided row). |
+| **L2** — sessions header printed SEAMS under a "· questions" suffix | **DONE** (45cfa62) | `sessionQuestionCount` is the one function; the header stat and the section summary are literally the same call. Red-proof reproduced by verifiers: 8 red across 3 files. |
+| **H4** — the headline invariant was a tautology | **DONE** (cc87711) | `inboxBadgeIsThePage.test.ts` mounts FlowShell, reads `.v3fs-dock-n`, counts DOM rows, asserts equality. Four shapes, now **five** (case (e) added this pass). |
+| **D1** — approvals counted into the badge but render-gated on an optional handler | **DONE** (cc87711) | `onRecordApproval` is required; no `onRecordApproval ?` gate anywhere; runtime case forces the omission past the type system. |
+| **transcribe** — `TranscribeButton` had no reachable render site | **DONE** (ed82514), **UNVERIFIED at runtime** | Mounted in `TheLine.tsx` below the capture textarea, appending rather than overwriting. Reachability guard **tightened this pass**: `enclosingExport` took the last `export function` above the offset without checking the offset was still inside it, so moving the JSX into a local `function CaptureDialog()` declared below the export kept the guard green while the control was orphaned again. Now every column-zero declaration is considered and a non-exported one yields `null`. Red-proof: with the old resolver the new case fails `expected { name: 'TheLine', isDefault: true } to be null`. **Still unverified:** the `flow-transcribe` 501 self-hide path needs a running edge function; no DB, no deploy. |
+
+## Also fixed this pass (verifier findings, not in the H/L/D set)
+
+- **"Waiting on you" named two different numbers on one screen.** The rail item for the
+  Inbox is labelled "responses and decisions waiting on you" and carries
+  `items.total + operatorQueueCount(ledger)` (58 on the MIXED fixture), while the page
+  section headed "Waiting on you" printed `items.total` — the record half only (3).
+  Renamed the heading and `aria-label` to **"From the record"**. A label change; no
+  arithmetic moved, no count re-derived.
+- **`validate-pipeline` F4 overstated itself.** It greps one fixed string,
+  `ownerFor("sales ops")`, and printed `PASS F4 no constant-owner fabrication in ledger
+  paths`. Both const-indirection plants walked past it and it printed PASS in the same
+  run where F5 went red. Relabelled `F4 no ownerFor("sales ops") regression (one fixed
+  string — F5 is the real scan)`. Kept, not deleted: the specific line is worth pinning.
+- **Invariant (a)'s guard was a hand-kept 4-file list.** Ten non-test modules name
+  `renderQuestion`; only four were checked for `question: "literal"`. Now a directory
+  walk of `src/v3` (tests and `renderQuestion.ts` excluded), ratcheted on the six modules
+  the old list omitted. Red-proof: a literal planted in `PortalQuestions.tsx` — one of
+  the six — goes red; under the old list it was invisible.
+
+## Invariants re-confirmed BY READING (not by trusting a commit message)
+
+1. **Frozen core untouched.** `git diff --stat 0a023c9..HEAD -- src/v3/lib/ledger/{store,types,precedence,projections}.ts`
+   is empty, and so is the same diff against the working tree for this pass.
+2. **No fabricated owner on a live path.** Grepping `src/v3/lib/ledger/` for `role:`
+   followed by any quote style returns exactly one line —
+   `dictionary.ts:24  const OWNER: Owner = { kind: "role", role: "System Owner" }` —
+   whose exemption is conditional on inertness and is re-checked every run.
+3. **One definition per number.** `operatorQueue.ts:90-91` is the only place either sum is
+   written. Readers: `OperatorInbox.tsx:252` (page) and `flowInbox.ts:68/95` (badge,
+   emptiness). No third reader in `src/`, `scripts/` or `supabase/`. FlowShell does not
+   import `operatorQueue` at all.
+4. **Question text for a ledger locus comes only from `renderQuestion.ts`.** Zero
+   `question: "…"` literals anywhere in `src/v3`. Two literals exist in
+   `src/new/lib/useGateReview.ts:96,347` — gate-remediation prompts, not locus text, so
+   outside the invariant as stated. Noted so the next reader does not re-discover them.
+
+## NOT ADDRESSED IN THIS PASS — inherited by the next session
+
+**Live defects left standing:**
+
+- **Adjudicate double-counts a locus.** `readConflicts` returns every locus with a live
+  contradiction regardless of whether that same `about` is already an open unknown under
+  `assign` or `sessionQuestions`; the sets are not disjoint. Reproduced this pass with a
+  temporary probe (created, run, deleted): one locus `el:wf:x#decision`, joint-owned →
+  `{"assign":0,"sessionQuestions":1,"adjudicate":1,"total":2}`, **1 distinct locus, badge
+  2**; unowned → `{"assign":1,...,"adjudicate":1,"total":2}`, same. The badge reads one
+  higher than there is work and the same question text draws in two sections.
+  **Why not fixed here:** the obvious fix (skip frozen `about`s when filling
+  `assignQueue`) forks `assignQueue` from `unownedOpen`, which is the burn-down's
+  "unowned" and the subject of the conservation invariant `open === owner-queue +
+  dictionary + role/joint-owned` (validate-pipeline B3). That is a partition change to
+  the queue model, not a final-gate edit. **Reachability today: ZERO** — no live path
+  calls `store.contradict`, contradictions arise only inside `store.assert`, and the
+  migrated Laila snapshot yields 0 conflict pairs over 951 loci under both the old `> 1`
+  and the new `> 0` gate. Latent, not absent; it went live the moment the gate moved.
+- **The Sessions term of "badge === page" is compared against itself.**
+  `inboxBadgeIsThePage.test.ts` reads the sessions number off the summary line, which
+  `OperatorInbox.tsx:91` computes with `sessionQuestionCount` — the same function the
+  badge uses. The per-row cross-check prints `abouts.length`, and `sessionQuestionCount`
+  is Σ`abouts.length`, so it is arithmetically guaranteed. If that function counted the
+  wrong set, badge and page would move together and both tests stay green. Disclosed in
+  the file header, but disclosed is not covered. Fix: count the expanded
+  `#ib-sessions li.v3ib-seam` rows from a source independent of `abouts.length`.
+- **`flowLibs.test.ts` registry case times out ~1 run in 5** under parallel workers
+  (passes standalone in 510 ms). Needs a per-test timeout or a lighter fixture.
+
+**Audit defects never picked up by any phase, carried forward verbatim:**
+
+- **L4** — stale locus rows.
+- **L5** — duplicate semantics phrasing.
+- **L6** — script-vs-locus labelling.
+- **L7** — false cache provenance.
+- **H2** — AST-based scan (would subsume the regex hop added here; the current resolver
+  still cannot follow const → const → role, and `enclosingExport` still assumes
+  column-zero formatting).
+- **D2** — `overrideAdapter` constant.
+- **D3** — index desync.
+
+Also still standing from the earlier sections of this document: items 1–7 under
+"Standing blockers", unchanged except **item 5**, which **L2 fixed** (the header no
+longer prints seams under a questions suffix).
+
+## Could not verify at this gate
+
+- **No DB, no edge deploy** (instructed, and the supabase CLI / deno are absent locally).
+  `pgStore.ts` / `PgLedger` / the persisted server ledger are untested, and the
+  `flow-transcribe` 501 self-hide path behind `ed82514` is asserted by source comment and
+  reachability grep, never by a running function. If the project has no `OPENAI_API_KEY`,
+  the newly-mounted `TranscribeButton` may render nothing in production.
+- **No browser.** Every DOM assertion is jsdom. CSS-dependent behaviour — the collapsed
+  Sessions disclosure's real visibility, rail-badge overflow, how "From the record — 3
+  items" actually reads under a badge of 58 — is unchecked in situ.
+- **The stakeholder write path is gated in-browser**, so `heard` is 0 by construction on
+  live Laila and the Adjudicate section is empty on real data. Everything about the
+  adjudicate queue is proven against synthetic stores only.
+
+## Process note
+
+Earlier verifier runs observed a second agent writing into this worktree (planted
+consts, `zzProbe.test.ts` / `zzTempAudit.test.ts` appearing and vanishing mid-audit).
+This pass started from and ended on a clean tree; the only untracked files at the start
+were `docs/aura/followup-workflow.js` and `docs/aura/next-session-brief.md`, and both are
+now **tracked** — they are committed with this pass rather than left for a sixth agent to
+trip over. Concurrent agents should be serialised onto separate worktrees.

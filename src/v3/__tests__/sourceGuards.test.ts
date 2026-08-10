@@ -144,4 +144,58 @@ describe("literalRoleOwners matches constants only", () => {
     expect(literalRoleOwners(`{ kind: "role", role: "Sales Ops" }`)).toEqual(["Sales Ops"]);
     expect(literalRoleOwners(`role:"Finance"`)).toEqual(["Finance"]);
   });
+
+  // ── H6 · the bypasses that walked past THIS predicate, fed to it ───────────────────
+  // Each string below was PLANTED into src/v3/lib/ledger/useProgramLedger.ts — the live
+  // path — during the refutation pass. Under the old `/role:\s*"([^"]+)"/` the whole (b)
+  // invariant stayed green: finalGateInvariants 13/13, sourceGuards 19/19, and
+  // validate-pipeline printed PASS F4/F5/F6 over a fabricated constant owner on a live
+  // module. That is the defect 0a023c9 fixed in adapters.ts, walking straight back in.
+  it("H6a: one const hop does not launder a fabricated owner", () => {
+    expect(literalRoleOwners([
+      `const FALLBACK_ROLE = "Sales Ops";`,
+      `const PLANTED_OWNER = { kind: "role", role: FALLBACK_ROLE };`,
+    ].join("\n"))).toEqual(["Sales Ops"]);
+  });
+
+  it("H6b: the quote style does not matter — single, double or template", () => {
+    expect(literalRoleOwners(`{ kind: "role", role: 'Sales Ops' }`)).toEqual(["Sales Ops"]);
+    expect(literalRoleOwners("{ kind: \"role\", role: `Sales Ops` }")).toEqual(["Sales Ops"]);
+    expect(literalRoleOwners([
+      `const FALLBACK_ROLE = 'Sales Ops';`,
+      `const O = { kind: "role", role: FALLBACK_ROLE };`,
+    ].join("\n"))).toEqual(["Sales Ops"]);
+  });
+
+  it("H6c: object shorthand is a fabrication too when the binding is a literal", () => {
+    expect(literalRoleOwners([
+      `const role = "Sales Ops";`,
+      `const O = { kind: "role", role };`,
+    ].join("\n"))).toEqual(["Sales Ops"]);
+  });
+
+  it("H6d: a NAME is never reported on its own — only a resolved typed string", () => {
+    // The hop exists to catch a CONSTANT, not to flag every identifier. A role computed
+    // from the record has no string binding in the file, so it stays unreported — which
+    // is what keeps this guard from going red on every honest derivation.
+    expect(literalRoleOwners([
+      `const O = { kind: "role", role: derivedLabel };`,
+      `const P = { kind: "role", role };`,
+    ].join("\n"))).toEqual([]);
+    expect(literalRoleOwners([
+      `const label = functionOf(id);`,
+      `const O = { kind: "role", role: label };`,
+    ].join("\n"))).toEqual([]);
+  });
+
+  it("H6e: constOwnerIsInert reads the same quote class, so the exemption cannot be smuggled", () => {
+    // A single-quoted band is now judged on its merits (here: no `ownerWhileOpen: OWNER`
+    // site at all → not inert) instead of failing to parse and returning the safe answer
+    // for the wrong reason.
+    expect(constOwnerIsInert(`const OWNER: Owner = { kind: "role", role: 'System Owner' };`, "System Owner")).toBe(false);
+    expect(constOwnerIsInert([
+      `const OWNER: Owner = { kind: "role", role: 'System Owner' };`,
+      `push({ about, ownerWhileOpen: OWNER, status: "weak" });`,
+    ].join("\n"), "System Owner")).toBe(true);
+  });
 });

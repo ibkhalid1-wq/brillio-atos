@@ -112,12 +112,33 @@ const importedSymbolsOf = (target: string, importers: Iterable<string>): Set<str
   return out;
 };
 
-/** The top-level exported symbol a source offset sits inside, if any. */
+/**
+ * The top-level exported symbol a source offset sits inside, if any.
+ *
+ * IT MUST CONSIDER EVERY TOP-LEVEL DECLARATION, not only the exported ones. The first
+ * spelling took the last `export function` ABOVE the offset and never asked whether the
+ * offset was still inside it, and it did not recognise `export const X = () => …`. Move
+ * the `<TranscribeButton>` JSX into a local
+ *
+ *     function CaptureDialog() { … }        // declared BELOW `export default function TheLine`
+ *
+ * and the old scanner still attributed the site to TheLine: the control is orphaned again
+ * — the exact defect ed82514 was written to prevent — and the guard stays green.
+ *
+ * Top level is COLUMN ZERO: this codebase indents every declaration inside a function, so
+ * the enclosing declaration of an offset is simply the last column-zero declaration above
+ * it. If that one is not exported, the offset is inside a local host and the answer is
+ * `null` — which makes the render site not-live, the fail-safe direction.
+ */
+const TOP_LEVEL_DECL = /^(export\s+)?(default\s+)?(?:async\s+)?(?:function|const|class)\s+(\w+)/gm;
+
 const enclosingExport = (src: string, offset: number): { name: string; isDefault: boolean } | null => {
   let found: { name: string; isDefault: boolean } | null = null;
-  for (const m of src.matchAll(/^export\s+(default\s+)?function\s+(\w+)/gm)) {
+  for (const m of src.matchAll(TOP_LEVEL_DECL)) {
     if (m.index! > offset) break;
-    found = { name: m[2], isDefault: !!m[1] };
+    // A non-exported declaration CLOSES the previous export as far as this offset is
+    // concerned — it cannot be nested inside it, because it starts at column zero.
+    found = m[1] ? { name: m[3], isDefault: !!m[2] } : null;
   }
   return found;
 };
@@ -165,6 +186,30 @@ describe("capture controls are reachable from the app entry", () => {
       expect(liveSites(control).map((s) => s.module)).not.toHaveLength(0);
     },
   );
+
+  it("the HOST RESOLVER refuses a local function — the scanner's own bypass, fed to it", () => {
+    // Without this, the whole suite is theatre: a render site could be moved into a
+    // helper declared BELOW the export, the control would be orphaned exactly as
+    // 564cd3d orphaned it, and `liveSites` would keep reporting it reachable because
+    // it attributed the site to the last `export function` it happened to walk past.
+    const bypass = [
+      `export default function TheLine() {`,
+      `  return <div />;`,
+      `}`,
+      ``,
+      `function CaptureDialog() {`,
+      `  return <TranscribeButton onTranscript={x} />;`,   // ← the offset under test
+      `}`,
+    ].join("\n");
+    const at = bypass.indexOf("<TranscribeButton");
+    expect(enclosingExport(bypass, at)).toBeNull();          // NOT "TheLine"
+
+    // and the honest arrangements still resolve, so this is a tightening and not a mute
+    const inside = [`export default function TheLine() {`, `  return <TranscribeButton />;`, `}`].join("\n");
+    expect(enclosingExport(inside, inside.indexOf("<TranscribeButton"))).toEqual({ name: "TheLine", isDefault: true });
+    const arrow = [`export const Panel = () => {`, `  return <TranscribeButton />;`, `};`].join("\n");
+    expect(enclosingExport(arrow, arrow.indexOf("<TranscribeButton"))).toEqual({ name: "Panel", isDefault: false });
+  });
 
   it("the capture dialog appends a transcript rather than overwriting the box", () => {
     // The dialog's textarea is a working surface: the operator may have pasted
