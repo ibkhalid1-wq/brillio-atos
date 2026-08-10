@@ -1,138 +1,357 @@
 # Next-session brief — Aura / brillio-atos
 
-Paste the block under "THE PROMPT" into a fresh session. Everything below it is the
-detail that prompt refers to.
+Every file:line below was verified against `d9113e1` on 2026-08-10 by opening the file,
+not by copying a previous doc. Where an older doc disagrees, this one is right and the
+disagreement is called out in **§2 Corrections** — read that section before trusting
+anything in `backlog-completion-2026-08-10.md`.
 
 ---
 
-## THE PROMPT
+## 1. THE PROMPT
 
 > Continue the Aura work in `~/ATOS/brillio-atos`, branch `reimagined-ui`.
 >
-> **Orient first, before doing anything:**
-> 1. `export PATH="$HOME/tools/node/bin:$HOME/.deno/bin:$PATH"` — node, deno and the
->    supabase CLI are all OFF the default Bash PATH. Assuming they're absent is a real
->    mistake that has been made; check before claiming a tool is missing.
-> 2. Read `docs/aura/next-session-brief.md` (this file) and
->    `docs/aura/backlog-completion-*.md` if it exists.
-> 3. Run `bash scripts/validate-pipeline.sh` (17 invariant checks) and `npx vitest run`.
->    That tells you the true state without reading much code.
-> 4. `git log --oneline -15` and `git status` — a background workflow may have landed
->    or partially landed work.
+> **Orient first:**
+> 1. `export PATH="$HOME/tools/node/bin:$HOME/.deno/bin:$PATH"` — node, deno (2.9.5) and
+>    the supabase CLI are all OFF the default Bash PATH. Claiming a tool is absent
+>    without checking is a mistake that has been made twice and cost real work.
+> 2. Read this file, then `docs/aura/backlog-completion-2026-08-10.md` — but read §2
+>    Corrections here FIRST; that doc carries four claims now known to be wrong.
+> 3. `bash scripts/validate-pipeline.sh` (21 checks) and `npx vitest run`. That tells you
+>    the true state without reading much code.
+> 4. `git log --oneline -12` and `git status`.
 >
-> **Then work the PENDING list below in order.** Prefer delegating bounded tasks to
-> Workflow subagents early rather than doing everything in-context — context
-> exhaustion caused real errors last session.
+> **Then work §4 in the order given.** The order is a dependency graph, not a priority
+> list — three items turn the harness red if landed out of sequence, and each says so.
 >
 > **Non-negotiable invariants** (this codebase exists to enforce them):
 > one definition per number, computed once, read by every surface; no fabricated
-> owners/counts/prices/confidence — a miss stays visible; question text comes ONLY from
-> `src/v3/lib/ledger/renderQuestion.ts`; the frozen core
+> owners/counts/prices/confidence — a miss stays visible; question text for a ledger
+> locus comes ONLY from `src/v3/lib/ledger/renderQuestion.ts`; the frozen core
 > (`src/v3/lib/ledger/{store,types,precedence,projections}.ts`) is not edited — a needed
 > core change is a FINDING; conservation holds
 > (`open === owner-queue + dictionary + role/joint-owned`).
+>
+> **Prefer delegating bounded work to Workflow subagents early.** Context exhaustion
+> caused real errors in past sessions. When a subagent reports a fix, verify the claim
+> by reading the file yourself — self-auditing agents have twice cleared defects that
+> were live.
 >
 > Do not push without being asked. Do not deploy edge functions without being asked.
 
 ---
 
-## STATE AT HANDOFF (2026-08-10)
+## 2. CORRECTIONS — earlier docs are wrong about these
 
-**Pushed:** through `d06cca1`. **Unpushed:** `564cd3d` (classic Flow sunset).
-**Deployed live:** `run-agent` on project `vudqrrqpipnkxzxslbim` (Brillio - ADAM) —
-carries the SME placeholder prompt + the budget-vs-provider 429 fix.
-Tests were green at handoff (1298) with a background workflow still running.
+**2.1 "No live path calls `store.contradict`, so the adjudicate double-count is
+unreachable."** (`backlog-completion-2026-08-10.md:617`) — **The reasoning is unsound.**
+`store.assert` auto-links contradictions internally: `store.ts:103` on `escalate`,
+`store.ts:108` on same-world `coexist`. The double-count was reproduced this session with
+**three ordinary asserts and zero `contradict()` calls** → `{"adjudicate":1,"total":2,
+"distinctLoci":1}`. Reachability depends on **data**, not on the absence of a caller.
+Commit `45cfa62`'s own message says this correctly; the later doc line contradicts it.
 
-### Background workflow (may have completed since)
-Run `wf_94981eef-76c`, script at
-`~/.claude/projects/<project>/<session>/workflows/scripts/aura-backlog-complete-wf_94981eef-76c.js`.
-9 tasks, sequential. Resume with
-`Workflow({scriptPath: "<that path>", resumeFromRunId: "wf_94981eef-76c"})` — completed
-agents replay from cache. **The last two tasks were added AFTER the run started, so the
-in-flight run does not include them; resuming from the script picks them up.**
+**The conclusion still holds, for a different reason.** The Laila snapshot was
+re-measured this session: **955 claims, 951 distinct loci, 0 `contradicts` links, 0
+conflict pairs.** Status histogram `{weak: 549, open: 395, blocked: 11}` — and those 11
+are precedence `wins`/blocked, not escalations. So reachability today is zero *as a fact
+about the data*, which a new programme can change at any time.
 
----
+**2.2 "Fixing the double-count forks `assignQueue` from `unownedOpen`."** — Half wrong.
+`useProgramLedger.ts:341` is `unownedOpen: assignQueue.length` — they are literally the
+same number and cannot fork. The real constraint is different: conservation lives in
+`inboxReconciliation.test.ts:23-24`, which computes its own
+`openOwnerQuestions(buildUnknownQueue(migrate(snapshot)))` and does **not** read the hook.
+**So the fix belongs at the SUM in `operatorQueue.ts`, never in `useProgramLedger.ts`.**
+See W-1.
 
-## PENDING
+**2.3 "`el:proposed:*` from curation is L4's example."** — `el:proposed:*` is **dormant**:
+`mintProposal` (`curation.ts:83`) has no production call site, so no live programme can
+hold one. L4's actual live cause is **slug-based element ids** (`migrate.ts:110-111, 146,
+158, 204`): a pack's `questionLoci` are frozen at mint (`flowPortal.ts:511-523`), then
+regenerating the ontology/atlas renames an entity, the id changes, and the still-durable
+link holds a locus the rebuilt portal store cannot resolve.
 
-### A. In the workflow (verify each actually landed — do not assume)
-1. **sunset-classic-flow** — DONE (`564cd3d`), unpushed.
-2. **people-duplicates** — user-reported duplicate rows in People (Laila). Cause:
-   `FlowShell.tsx` FlowPeople merges 4 lists and keys identity on
-   `peopleIdentity(r.role)` — ROLE, not person — so one human under two role spellings
-   makes two rows. **DANGER: keying too loosely MERGES TWO DIFFERENT PEOPLE.** Dedupe by
-   person identity when a name exists; role identity only for `— TBC` placeholders.
-   Must keep working: two different people in the same role → two rows (supported design).
-3. **inbox-badge** (queued late) — the left-rail Inbox icon shows no number.
-   `waitingCount` (`FlowShell.tsx` ~541) omits the ledger operator queue that moved into
-   the Inbox in `d9c69e0`. Fix with ONE exported helper shared by the badge and the Inbox
-   page's own emptiness check.
-4. **sessions-collapse** (queued late) — Sessions renders 8 pair cards whose only control
-   is a gated button. Collapse to one expandable summary line. **Do NOT delete it:** joint
-   owners are excluded from `soloByOwner` (see the `joint` branch in `useProgramLedger`),
-   so this section is those questions' only home.
-5. **model-catalog** — settings list lacks current models. Root cause is a SECOND source
-   of truth: `IntelligenceView.tsx:444` hardcodes its own array duplicating
-   `supabase/functions/_shared/modelCatalog.ts`. Add Opus 4.8 / Sonnet 5 / Fable 5, mark
-   superseded ones `legacy`, add a client↔edge lockstep test (text-parse idiom — see
-   `answerCapLockstep.test.ts`). **Do not invent prices** — flag unverified.
-6. **pack-pipeline** — HIGHEST RISK. The stakeholder linked page still receives stored
-   question STRINGS (`flowInterviewPacks[].questions`); it is the last producer off the
-   single-source renderer. Packs should carry loci; render via `renderQuestion` with
-   affordances. Backward-compatible with string-only packs. May need an edge change.
-7. **inflight-pinning** — a sent link must PIN its questions; re-derivation may not move
-   them silently; disagreement surfaces as an operator decision.
-8. **locus-minting** — no curation path exists to act on an `ontology-gap` kit question.
-   Surface-layer overlay only; provisional, attributed, retractable.
-9. **schema-trio** — (a) demote kit agenda strings to a versioned cache, (b) add a Frame
-   input naming systems of record so the ask can exist before an ontology, (c) per-SoR
-   keyed `_dataDictionary` (a plain string must stay valid).
+**2.4 Path and line drift.** `D3` is **not** in `supabase/functions/_shared/flowPortal.ts`
+— no such file exists. It is the client file `src/v3/components/flow/flowPortal.ts`.
+Other drift: L6's map is `TheLine.tsx:689-692` (not 683-686); L7's write is
+`kitAgendaCache.ts:111` (not 110); `ROLE_TEMPLATES` is `flowStakeholders.ts:500-550` and
+holds **33** prompts across 10 roles, not "~40 at :469-548" — **and none of them reach
+TheLine**, which builds its cast from Listen at `TheLine.tsx:403-414`.
 
-### B. Not in the workflow — still open
-- **Dormant server-side generator.** `_shared/ledgerGenerator.ts`, `optionA.ts`,
-  `overrideAdapter.ts` are imported by NO deployed function (proven by the deploy upload
-  manifest). The owner-fabrication fix there ships nowhere. DECIDE: wire the Option-A
-  path, or delete the dead code. Do not leave it ambiguous.
-- **Stakeholder-facing prototype is still model-authored.** The deterministic fabric
-  assembly is only in the operator studio (`PrototypeStudio`); `flow-portal` still serves
-  `prototypeBuild.html` to stakeholders. Decide: serve the assembly there too, or keep
-  the model path as a refinement layer (retiring it kills the refine loop).
-- **Constant owners** in `src/v3/lib/ledger/adapters.ts:19` and
-  `supabase/functions/_shared/overrideAdapter.ts:13` — the same fabrication pattern that
-  caused the Chief-of-Surgery bug. Dormant (not in the live read path). Retire before
-  those adapters go live.
-- **Adjudicate caveat has no home.** Hiding zero-count sections removed the honest note
-  that "0 conflicts" partly means "no one has answered yet" (0 stakeholder assertions).
-  Find it an honest home that doesn't resurrect a hidden-by-request panel.
-- **LLM polish layer** on `renderQuestion` — gated enhancement; may rephrase, never change
-  locus or kind, falls back to the template.
-- **Kits must be REGENERATED** for the SME placeholder change to appear; existing kits
-  keep `Head of … — TBC`.
-
-### C. Needs the live DB / a real program (BLOCKED locally)
-- Surgery: confirm the 61 "need an owner" drains after the owner fix + regeneration.
-- Laila roster chips (Head of Sales 9 / Head of GTM 15) vs the projection.
-- The provided-up-front dictionary path end to end (Salesforce export).
-- `audit_events` rows for the three closure methods.
-- A real duplicated People pair to validate the dedupe fix against.
+**2.5 The check count is 21.** Earlier docs say 17, then 18, then 19. Verified two ways
+(reading every call site, and counting `^PASS ` lines): **21 emitted checks, all PASS.**
 
 ---
 
-## TOOLCHAIN NOTES (learned the hard way)
-- node/npm: `$HOME/tools/node/bin`. deno 2.9.5: `$HOME/.deno/bin`. Neither on PATH.
-- Supabase CLI: `npx --yes supabase@latest` (v2.113.0). Session is CACHED, project
-  `vudqrrqpipnkxzxslbim` LINKED. `supabase functions deploy run-agent --project-ref …`
-  works. Docker is not running, so no `supabase start`.
-- `deno check` works on shared modules with NO remote imports; on function ENTRYPOINTS it
-  fails with `invalid peer certificate: UnknownIssuer` — TLS interception in the sandbox,
-  not a deno fault. Entrypoints are verified only by the deploy bundler.
-- The deploy upload manifest is the truth about what a function actually bundles.
-- `npm run claims:regen -- --force` only when the change is mechanics/comments, never for
-  a new user-facing claim.
-- Verify: `npx tsc --noEmit`, `npx eslint <files>`, `npx vitest run`,
-  `bash scripts/validate-pipeline.sh`.
+## 3. STATE AT HANDOFF (2026-08-10)
 
-## KEY DOCS
-`full-validation-2026-08-10.md` (17-check report) · `one-question-renderer.md` ·
+**HEAD `d9113e1`, branch `reimagined-ui`, pushed, working tree clean.** All measured this
+session, not copied forward:
+
+| Gate | Result |
+|---|---|
+| `npx tsc --noEmit` | exit 0, no output |
+| `npm run lint` | exit 0, no findings |
+| `npx vitest run` | **106 files, 1496 tests, 0 failures**, 14.90s |
+| `bash scripts/validate-pipeline.sh` | **21 PASS / 0 FAIL** |
+| `npm run build` | exit 0, ~12s |
+| Parked tests (`.skip/.todo/.fails/.only/xit`) | **zero, repo-wide** |
+
+Last 12 commits: `d9113e1 ed82514 cc87711 45cfa62 c37ff7e 0a023c9 e579ea8 fd1cec7
+83451d5 6b6f05d de4e2da 5468600`.
+
+**Deployment state is UNKNOWABLE from this repo.** There is no deploy manifest, no CI
+deploy step (`.github/workflows/` has only `ci.yml`), and `config.toml` sets flags for
+exactly one function. The last recorded deploy was **`run-agent` only**, carrying the SME
+placeholder prompt and the 429 fix. **Every `flow-portal` and `run-agent` source change
+since then is undeployed**, which is why three otherwise-finished features are inert.
+
+---
+
+## 4. WORK QUEUE — in dependency order
+
+### W-1 · Adjudicate double-counts a locus — `operatorQueue.ts:90`
+`const total = assign + sessionQuestions + adjudicate + pinned + inFlight + chase;` — the
+terms are not disjoint. A locus carrying both a live contradiction and a live open/blocked
+claim counts twice: the badge reads one higher than there is work, and the same question
+draws in two Inbox sections.
+
+**Fix at the sum, inside `operatorQueue.ts` only:** build
+`const frozen = new Set(ledger.conflicts.map(c => c.about))`, then filter `assign` and use
+a frozen-aware `sessionQuestionCount` (`operatorQueue.ts:49-50`). **Do not** filter
+`assignQueue` in `useProgramLedger.ts:300` — that is the partition change §2.2 warns about.
+
+> **ORDERING TRAP.** Fixing the count alone turns **F7 red**
+> (`validate-pipeline.sh:83` → `inboxBadgeIsThePage.test.ts`), because the page still
+> draws the frozen rows. `OperatorInbox.tsx:416-443` (assign section) and
+> `OperatorInbox.tsx:91,115-121` (SessionsSection) must skip the same frozen abouts in
+> the same edit.
+
+Reachability today: **zero** (§2.1). This is latent, not absent — it went live the moment
+the gate moved to `> 0`.
+
+### W-2 · The Sessions term of `badge === page` is vacuous — `inboxBadgeIsThePage.test.ts:186`
+Both sides are `sessionQuestionCount(sessionQueue)`, so the assertion is arithmetically
+guaranteed; if that function counted the wrong set, badge and page would move together and
+F7 would stay green while the operator saw a wrong number.
+
+The recorded fix (count `#ib-sessions li.v3ib-seam` rows) is **necessary but not
+sufficient** — those rows are seams, and each row's number is itself rendered from
+`abouts.length` (`OperatorInbox.tsx:121`). Needs a source that does not route through
+`abouts.length` at all. The test must also expand the disclosure first (the section
+renders zero rows while collapsed, `OperatorInbox.tsx:117`).
+
+**Land after W-1** — W-1 changes the expected number.
+
+### W-3 · `flowLibs.test.ts` timeout headroom — `flowLibs.test.ts:2485`
+**Not reproduced this session** (one full run, passed) — describe it as thin headroom, not
+confirmed flake. Measured: the single test costs **2380 ms cold** against vitest's
+**5000 ms** default, and the file goes 560 ms standalone → 2231 ms under 8-way parallel.
+It dynamically imports a 16-import React studio barrel *inside the test body*, so the whole
+transform is charged to the test.
+
+**Fix:** per-test timeout — `}, 20000);` at `flowLibs.test.ts:2495`. Do not raise the
+global; that would mask genuinely hung tests.
+
+### W-4 · The fabrication scan still launders owners — `sourceGuards.ts:81`
+The gap is **wider than recorded**. A constant role-owner escapes F5/F6 when it takes two
+const hops, comes from another module, sits behind a member/index expression, is followed
+by an `as` cast, or carries a trailing comment. So the exact `0a023c9` defect can recur
+with the whole harness green.
+
+Same root cause at `captureControlsReachable.test.ts:133`: `enclosingExport` is column-zero
+**and** alternation-bound, so a render site moved into an indented host, or one declared
+with `let`/`var`, is still attributed to the last exported declaration above it — the exact
+`ed82514` defect the guard exists to catch.
+
+**Fix:** swap both to the TypeScript compiler API (`ts.createSourceFile` — already a
+dependency); resolve `role:` initializers through their bindings, and walk the parent chain
+for the export check. **Cheap interim:** add `|let|var` and change `^` to `^[ \t]*`.
+
+Also `finalGateInvariants.test.ts:223`: `codeOnly` is applied to invariant (c) but **not**
+to the (b) owner scan — so a *comment* quoting `role: "Sales Ops"` (exactly how this
+codebase documents its own fixes) turns F5 red for prose. One-line wrap.
+
+### W-5 · The question-text cluster
+Order matters: **L4 → L7 → L6 → L5.**
+
+- **L4 — `portalQuestionModel.ts:96`.** Unresolvable loci fall back to a flat string list
+  rendered beside grouped locus cards under one header count (`FlowRespond.tsx:703`,
+  strings at `:744-746`). Answers typed into string rows are composed as bare `Q:/A:`
+  blocks (`FlowRespond.tsx:429-438`) with no `[locus: …]` tag, **so ingest cannot
+  attribute them and they close nothing.** Fix: stop folding `leftover.length` into
+  `count` at `portalQuestionModel.ts:115`; carry it as a separate `unbacked` figure and
+  give the string list its own heading. Cause is §2.3, not curation.
+- **L7 — `kitAgendaCache.ts:111`.** `loci` is written conditionally (`:109`), `note`
+  unconditionally (`:111`), so operator keystrokes from the kit studio
+  (`studios.tsx:161-169`) land stamped "cache of rendered question text — the ledger's
+  open unknowns are the source" with **no loci at all**. Fix: write the note only inside
+  the `loci.length` branch. `readKitAgendaCache` never reads `note`, so nothing breaks.
+- **L6 — `TheLine.tsx:689-692`.** A person with zero owned loci gets a link whose every
+  question carries `about: ""`, forcing mode `strings` (`portalQuestionModel.ts:81`).
+  Their page looks identical to a locus-backed one. Fix: pass a `scripted: true` flag
+  through `mintFollowUpPack` and state it on the page. No ledger change needed.
+- **L5 — `flowShellData.ts:1331`.** *"Two teams use "X" differently — which meaning should
+  the record adopt?"* travels as a plain string all the way to the `about: ""` mint, so
+  answering it closes nothing and the ambiguity stays open forever. Its counterpart at
+  `renderQuestion.ts:134` **never fires today** — this is one live voice with a dormant
+  twin, not two competing ones. Fix: either migrate `ambiguities[]` into the ledger as a
+  real `#semantics` locus (**`migrate.ts` must open `#semantics` on entities first** —
+  today `migrate.ts:152` opens it only on `el:rel:*` "produces" relations, which hits
+  `renderQuestion.ts:124`, not `:134`), or drop the branch so the record stops asking a
+  question nothing can close.
+
+### W-6 · `D3` index desync — `src/v3/components/flow/flowPortal.ts:125`
+`questions` is `.filter(Boolean)`-ed, `questionLoci` is copied through unfiltered, so one
+blank question makes every later locus point at the wrong question — violating the contract
+stated at `:27-38` in the same file. **No user-visible failure today** (nothing pairs this
+output with `portalQuestionModel`). Fix: filter both together as index-preserving pairs,
+the way the edge already does (`flow-portal/index.ts:509+519`).
+
+> Do this **before** wiring any client surface to that pairing. And do not break the
+> deliberate safety at `flowPortal.ts:396`, where the kit-agenda refresh drops loci
+> (`questionLoci: undefined`) so a re-mint can never leave stale loci pointing at new
+> questions.
+
+### W-7 · `D2` constant owner — `overrideAdapter.ts:13`
+`const OP_OWNER: Owner = { kind: "role", role: "Sales Leaders" }` stamped on every imported
+override claim. Dormant (script-only, see §6). Fix: derive from the roster, or take it as a
+parameter of `overridesToBatch` with no default. Note it is pinned by comment to
+`migrate`'s `ownerFor("sales")` — changing one without the other breaks the parity the
+`scripts/ledger/*.ts` comparison scripts assert.
+
+---
+
+## 5. GATED ON AN EDGE DEPLOY — source is committed, effect is zero
+
+**These are finished in the repo and invisible in production.** Do not re-implement them.
+
+- **O-10 — `flow-portal/index.ts:519`** forwards `questionLoci`, index-aligned to the
+  `slice(0,12)` at `:509`. Undeployed, so a stakeholder still gets the old payload with no
+  `questionLoci`; `FlowRespond.tsx:219` short-circuits and they read frozen strings.
+  **One deploy, no source change.**
+- **O-19 — `run-agent/index.ts:1269`** still asks the model for inline free-text
+  `agenda[].questions`. `grep -n "loci\|questionLoci\|renderQuestion"` over the whole
+  11k-line file returns **zero hits**. Same defect in both synthesis fallbacks
+  (`:11082`, `:11124`) — they must change together or the paths diverge in shape.
+- **O-20 — `methodology.ts:1251`** declares `systemsOfRecord` feeds domain-ontology and
+  current-state-atlas, but **neither prompt was changed**. Good news: the sponsor's names
+  *do* reach the model anonymously via the grounding-facts loop
+  (`run-agent/index.ts:2138-2144`), so **the fix is prompt-only** — no plumbing missing.
+- **PACK — `flowPortal.ts:572`.** The loci pipeline is **half-wired**, which no earlier doc
+  says: `mintFollowUpPack` **does** receive loci (`TheLine.tsx:693-698`), so follow-up
+  links carry them today. `mintReviewPack` receives none — the prop type doesn't even
+  declare the field (`FlowShell.tsx:121`, `CollectBoard.tsx:237,836`), and both call sites
+  (`:461`, `:1072`) pass questions only. **So review links will never carry loci until
+  this is threaded**, and threading it is only visible after O-10 deploys.
+
+---
+
+## 6. DORMANT — exists, runs nowhere
+
+`_shared/ledgerGenerator.ts`, `_shared/optionA.ts`, `_shared/overrideAdapter.ts` have
+**zero importers among the 16 function entrypoints** — re-verified; the apparent `optionA`
+hit is the substring inside `isProgramLevelAdoptionAgent`. They are reached only by
+hand-run `scripts/ledger/*.ts`.
+
+**This matters for the surgery test (§7.1):** the owner-derivation fix is mirrored into
+`ledgerGenerator.ts:86/172/187`, but **that mirror runs nowhere**, so regenerating surgery
+through `run-agent` will not exercise it.
+
+**Decide and record:** wire an edge entry point, or document as script-only tooling.
+Leaving it ambiguous has already caused one wrong conclusion.
+
+Also dormant: `dictionary.ts:24`'s `role: "System Owner"` — the one allowlisted constant.
+Spent at exactly one site (`:107`, `status: "weak"`), and a weak claim never enters
+`buildUnknownQueue`. **A user never sees the string.** Any future edit must keep all four
+inertness conditions of `constOwnerIsInert` (`sourceGuards.ts:112-123`) true.
+
+Also not built: the **LLM polish layer** on `renderQuestion` — the only trace is the
+docblock promise at `renderQuestion.ts:20-22`. No module, no call site, no flag. Today
+every surface gets the deterministic template, which is the safe state.
+
+---
+
+## 7. BLOCKED ON THE LIVE DB / A BROWSER
+
+Nothing in the repo can settle these. Each names what would.
+
+1. **Surgery: do the 61 "need an owner" questions drain?** The code half landed
+   (`migrate.ts:163`, atlas-stated owner fallback). The only surgery data on disk is a
+   2-entity synthetic fixture (`ownerRoutingRegression.test.ts:54`) — the real
+   8-workflow blob exists nowhere. To close: regenerate the atlas on the live programme,
+   read the stat, check conservation. **Remember §6** — the edge mirror won't run.
+2. **Laila roster chips** (Head of Sales 9 / Head of GTM 15) vs the projection
+   (`TheLine.tsx:439-483`). The roster/`_directoryPeople`/discoveryKit blobs are not in
+   the repo. Watch `ownerRoleLabelForArea` — it maps both labels through the `FUNCTIONS`
+   table (`migrate.ts:28-40`).
+3. **The dictionary path end to end.** Every link exists (`OperatorInbox.tsx:400` →
+   `parseDictionaryCsv` → preview → `commitDictionary` → `writeDictionaryField` →
+   `readDictionarySources` → `frameSorReadiness`) but none has met a real export.
+   **Blocker found this session:** `OperatorInbox.tsx:370` promises "CSV/XLSX dictionaries
+   parse now", but only CSV/TSV parse and the file input accepts `.csv,.tsv,.txt`. **An
+   operator exporting XLSX from Salesforce — the default — is told it works and then
+   cannot select the file.** Fix that before attempting the test.
+4. **`audit_events` for the three closure methods.** Blocked twice: even with a DB, the
+   browser never publishes `aura.intent` — the only `set_config` calls are in
+   `pgStore.ts:59,129,197`, and `PgLedger` has no importer outside tests/scripts. Step 1b
+   (client publishes `action_type`) is code, and comes first.
+5. **A real duplicated People pair.** The fix is live and shared (`flowStakeholders.ts:665`,
+   sole caller `FlowShell.tsx:2236`). The danger is architecturally contained: identity is
+   two functions — `labelIdentity` (`:601`, loose, for role slots) and `personKey`
+   (`:622`, strict, "NEVER discards words", for humans). `peopleDirectoryDedup.test.ts:76`
+   pins that two different people in one role stay two rows.
+6. **The adjudicate caveat has no home** (`OperatorInbox.tsx:484`). `heard` is **0 by
+   construction** on live Laila — the stakeholder write path is not wired in-browser
+   (`useProgramLedger.ts:18-21`, enforced by `projections.ts:130-132`). So "0 conflicts"
+   partly means "no one has answered yet", and the note saying so was removed with the
+   zero-count panel. Give it a home on the always-visible burn-down readout rather than
+   resurrecting a hidden panel. Original wording:
+   `git show 87e22e4^:src/v3/components/flow/OperatorInbox.tsx`.
+7. **Kits must be REGENERATED** for the SME placeholder. The rule exists only as generator
+   prompt text (`run-agent/index.ts:1252,1258,1269`) plus a server synthesizer (`:11118`).
+   Every client reader only *strips* the suffix — nothing rewrites the noun. **Do not add
+   a client-side rewrite**: that would silently edit the stored record and create a second
+   producer of stakeholder labels.
+
+---
+
+## 8. PRODUCT DECISIONS (not bugs — someone must choose)
+
+- **Stakeholder-facing prototype is still model-authored.** Confirmed both halves:
+  `flow-portal/index.ts:382,390` serves the stored `prototypeBuild.html`, while the
+  deterministic ontology+atlas assembly is operator-only. Serving the assembly means
+  porting `assemblePrototype` into an edge-importable shared module — it currently lives
+  in the client bundle and Deno cannot import from `src/v3/lib`. Keeping the model path
+  preserves the refine loop; retiring it kills it.
+- **The `— TBC` suffix regex is hand-written in at least four places**
+  (`flowStakeholders.ts:578` is the named export; `FlowShell.tsx:1137`; twice in the edge).
+  One definition, four copies — the exact smell this codebase exists to prevent.
+
+---
+
+## 9. TOOLCHAIN (learned the hard way)
+
+- node/npm: `$HOME/tools/node/bin`. deno 2.9.5: `$HOME/.deno/bin`. **Neither on PATH.**
+- Supabase CLI: `npx --yes supabase@latest` (v2.113.0). Session cached, project
+  `vudqrrqpipnkxzxslbim` (Brillio - ADAM) linked. Docker is not running → no
+  `supabase start`.
+- `deno check` works on shared modules with no remote imports; on function **entrypoints**
+  it fails with `invalid peer certificate: UnknownIssuer` — sandbox TLS interception, not
+  a deno fault. Entrypoints are verified only by the deploy bundler.
+- The deploy upload manifest is the only truth about what a function actually bundles.
+  **A grep is not** — one grep "proved" `run-agent` imports `ledgerGenerator.ts` by
+  matching `isProgramLevelAdoptionAgent`.
+- `npm run claims:regen -- --force` only for mechanics/comments, never for a new
+  user-facing claim.
+- `vitest.config.ts` sets `environment: "jsdom"` globally with no `testTimeout`; all 106
+  files pay for jsdom (89.92s summed across workers). That contention is what feeds W-3.
+
+## 10. KEY DOCS
+
+`backlog-completion-2026-08-10.md` (**read §2 here first**) ·
+`full-validation-2026-08-10.md` · `one-question-renderer.md` ·
 `kit-question-projection.md` · `artifact-asks.md` · `owner-routing-fabrication-fix.md` ·
-`need-an-owner-61.md` · `data-dictionary-import.md` · `prototype-design-system.md`
+`need-an-owner-61.md` · `data-dictionary-import.md` · `action-type-vocabulary.md` ·
+`prototype-design-system.md`
