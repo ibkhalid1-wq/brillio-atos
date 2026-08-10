@@ -23,6 +23,19 @@ export interface FlowInterviewPack {
   role: string;
   intro: string;
   questions: string[];
+  /** The LEDGER LOCI behind `questions`, index-aligned — `questionLoci[i]` is the
+   * `about` (`<elementId>#<slot>`) that `questions[i]` closes.
+   *
+   * ADDITIVE. A pack minted before this existed simply has none, and the linked
+   * page renders its stored strings exactly as before. When loci ARE present the
+   * page re-renders each through `renderQuestion(store, about, "stakeholder")` —
+   * the same producer the operator queue reads — so the two audiences read one
+   * set, and an answer names the point it closes instead of floating free.
+   *
+   * The strings stay stored beside the loci on purpose: they are the record of
+   * what was actually ASKED (the model can be re-rendered later), and the edge
+   * validates a deferral against the pack's own question list. */
+  questionLoci?: string[];
   /** Secret half of the response link (programId.secret). */
   token: string;
   createdAt: string;
@@ -109,6 +122,8 @@ export function listInterviewPacks(program: ProgramSummary): FlowInterviewPack[]
     role: String(entry.role ?? ""),
     intro: String(entry.intro ?? ""),
     questions: Array.isArray(entry.questions) ? entry.questions.map(String).filter(Boolean) : [],
+    ...(Array.isArray(entry.questionLoci) && entry.questionLoci.length
+      ? { questionLoci: entry.questionLoci.map(String) } : {}),
     token: String(entry.token ?? ""),
     createdAt: String(entry.createdAt ?? ""),
     respondedAt: typeof entry.respondedAt === "string" ? entry.respondedAt : undefined,
@@ -219,6 +234,10 @@ function askSignature(pack: Record<string, unknown>): string {
   return JSON.stringify({
     role: String(pack.role ?? ""),
     questions: Array.isArray(pack.questions) ? pack.questions.map(String) : [],
+    // The loci are part of the ANSWERABLE CORE: the same words backed by a
+    // different set of open points is a different ask (and the same words newly
+    // backed by loci is a genuinely new, closable ask).
+    questionLoci: Array.isArray(pack.questionLoci) ? pack.questionLoci.map(String) : [],
     reviewKind: String(pack.reviewKind ?? ""),
     movementId: String(pack.movementId ?? ""),
     review: pack.review ?? null,
@@ -368,7 +387,10 @@ export function mintInterviewPacks(program: ProgramSummary, actor: string): Reco
     const role = String(iv.role ?? "");
     if (JSON.stringify(pack.questions) === JSON.stringify(questions) && pack.role === role) return pack;
     refreshed += 1;
-    return { ...pack, role, questions };
+    // The agenda refresh replaces the question STRINGS, so any loci that were
+    // index-aligned to the old strings are dropped with them — never left
+    // pointing at questions that moved.
+    return { ...pack, role, questions, questionLoci: undefined };
   });
 
   const packed = new Set(existing.map((p) => String(p.stakeholder ?? "").trim().toLowerCase()));
@@ -470,7 +492,10 @@ export function mintDemoInvites(program: ProgramSummary, actor: string): Record<
  */
 export function mintFollowUpPack(
   program: ProgramSummary,
-  input: { movementId: string; who: string; questions: string[]; captureField: string; unnamed?: boolean },
+  input: { movementId: string; who: string; questions: string[]; captureField: string; unnamed?: boolean;
+    /** The ledger loci behind `questions`, index-aligned. Optional and additive:
+     *  a caller with no ledger in hand mints exactly the pack it always did. */
+    loci?: string[] },
   actor: string,
 ): Record<string, unknown> | null {
   if (!input.who.trim() || !input.questions.length) return null;
@@ -480,10 +505,19 @@ export function mintFollowUpPack(
   // The follow-up ask rides the person's ONE durable link — a plain question
   // pack (no review surface), superseding whatever ask stood before on the same
   // token. Their prior answers stay in the recap; only these new gaps are open.
+  // The 8-question cap applies to BOTH arrays together, so `questionLoci[i]`
+  // never stops pointing at `questions[i]`.
+  const askQuestions = input.questions.slice(0, 8);
+  const askLoci = (input.loci ?? []).slice(0, askQuestions.length);
   const askFields: Record<string, unknown> = {
     role: "Follow-up",
     intro: "A few points from our last conversation still need your detail — this takes minutes, in your own words.",
-    questions: input.questions.slice(0, 8),
+    questions: askQuestions,
+    // Always SET (like reviewKind/review below), so a new ask without loci clears
+    // a previous ask's loci off the durable pack rather than leaving them pointing
+    // at questions that are no longer there. `undefined` is dropped on serialise,
+    // so a loci-less mint stores exactly what it always stored.
+    questionLoci: askLoci.some((a) => a && a.trim()) ? askLoci : undefined,
     movementId: input.movementId,
     captureField: input.captureField,
     reviewKind: undefined,
@@ -531,7 +565,9 @@ export function mintFollowUpPack(
  */
 export function mintReviewPack(
   program: ProgramSummary,
-  input: { movementId: string; who: string; role: string; captureField: string; reviewKind: string; review: unknown; questions: string[]; intro: string; unnamed?: boolean },
+  input: { movementId: string; who: string; role: string; captureField: string; reviewKind: string; review: unknown; questions: string[]; intro: string; unnamed?: boolean;
+    /** Ledger loci behind `questions`, index-aligned — optional and additive. */
+    loci?: string[] },
   actor: string,
 ): Record<string, unknown> | null {
   if (!input.who.trim() || !input.review) return null;
@@ -547,10 +583,15 @@ export function mintReviewPack(
   // The ask this share sets on the person's ONE durable link. Reprojecting a
   // fresh review supersedes the old ask on the SAME token — no new secret, so a
   // link already in their inbox keeps working.
+  const reviewQuestions = input.questions.slice(0, 8);
+  const reviewLoci = (input.loci ?? []).slice(0, reviewQuestions.length);
   const askFields: Record<string, unknown> = {
     role: `review:${input.reviewKind}`,
     intro: input.intro,
-    questions: input.questions.slice(0, 8),
+    questions: reviewQuestions,
+    // Same rule as the follow-up mint: always SET, so re-sharing without loci
+    // can never leave a previous ask's loci pointing at different questions.
+    questionLoci: reviewLoci.some((a) => a && a.trim()) ? reviewLoci : undefined,
     movementId: input.movementId,
     captureField: input.captureField,
     reviewKind: input.reviewKind,

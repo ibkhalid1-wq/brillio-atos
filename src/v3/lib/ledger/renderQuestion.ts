@@ -149,6 +149,24 @@ export function renderQuestion(store: LedgerStore, about: string, audience: Audi
 
 const fallbackTail = (kind: string): string => `${questionLabel(kind).toLowerCase()}?`;
 
+/**
+ * Grounded options for a PICKER affordance — the values the ledger ALREADY HOLDS
+ * at loci of this kind (live scalar claims), never an invented vocabulary. An
+ * empty list is the honest answer when the ledger states none: the surface falls
+ * back to free text rather than offering a made-up menu. (Chips are the
+ * exception — Automate/Assist/Keep manual IS the disposition vocabulary, and it
+ * is carried on the affordance itself.)
+ */
+export function affordanceOptions(store: LedgerStore, kind: string): string[] {
+  const out = new Set<string>();
+  for (const c of store.claims()) {
+    if (!isLive(c) || c.value.kind !== "scalar" || slotOf(c.about) !== kind) continue;
+    const v = String(c.value.value).trim();
+    if (v && v.length <= 60) out.add(v);
+  }
+  return [...out].sort((a, b) => a.localeCompare(b)).slice(0, 24);
+}
+
 /** Stakeholder grouping: one card per ELEMENT (a step card), its unknowns as
  *  sub-questions. The unit stays QUESTIONS — the group header shows the count. */
 export interface QuestionGroup { elementId: string; header: string; questions: RenderedQuestion[]; count: number; }

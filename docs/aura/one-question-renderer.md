@@ -58,12 +58,17 @@ stay manual?`
 
 ## Gated / findings
 
-- **Stakeholder linked page** still receives `pack.questions` — generated agenda
-  STRINGS from the DB (the pack pipeline flagged in kit-question-projection.md). The
-  chips/pickers UI and the three-surface identity for a REAL person land there once the
-  pack carries loci instead of strings; the projection (`ledger.kitQuestions` with
-  `affordance`) is ready for it. Until then the linked page is the one surface not yet
-  drinking from the renderer — DB/edge work, not silently reached into.
+- **Stakeholder linked page — CLOSED client-side** (2026-08-10; full account in
+  `stakeholder-linked-page-loci.md`). The pack carries LOCI additively
+  (`questionLoci`, index-aligned with `questions`); the linked page rebuilds a
+  read-only store from the `liveArtifacts` the edge already ships and renders every
+  locus through `renderQuestion(…, "stakeholder")` with its affordance, grouped per
+  element by `groupQuestions`. Legacy string-only packs render exactly as before, and
+  a locus the page's store can't resolve keeps its stored ask. Test:
+  `portalLociQuestions.test.ts` — page text === operator text === kit projection, for
+  the same locus, on Laila + surgery. **Gated on ONE edge deploy**: `flow-portal` must
+  forward `questionLoci` (source change made, NOT deployed) — until then a served pack
+  carries no loci and the page degrades to the strings it always rendered.
 - **Stored kit agenda strings** (discoveryKit artifact) = the "cache-with-version"
   demotion is a generator/schema decision (edge).
 - **Roster chip live check** (Head of Sales 9 / Head of GTM 15) needs the live DB

@@ -8307,6 +8307,38 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-rvw-bq textarea {font-size:13px;font-family:inherit;border:1px solid var(--fs-line);border-radius:8px;padding:8px 11px;
   background:var(--v3-surface);color:var(--v3-text);resize:vertical;line-height:1.5}
 .v3fs-rvw-bq textarea:focus {outline:none;border-color:var(--v3-accent-2);box-shadow:0 0 0 3px color-mix(in srgb,var(--v3-accent-2) 14%,transparent)}
+
+/* ── PortalQuestions: ledger loci rendered for a stakeholder ────────────────
+   One card per ELEMENT (a step), its open unknowns as sub-questions, each with
+   the affordance its kind carries. Shared by the plain interview page and the
+   Listen review surface — one look, one implementation. */
+.v3fs-pq-note {margin:0;padding:0 12px;font-size:12.5px;color:var(--v3-text-muted)}
+.v3fs-pq-groups {display:flex;flex-direction:column;gap:12px;padding:12px}
+.v3fs-pq-card {border:1px solid var(--fs-line);border-radius:14px;background:var(--v3-surface);padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+.v3fs-pq-h {display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.v3fs-pq-el {font-size:13.5px;font-weight:650;color:var(--v3-text);line-height:1.4}
+.v3fs-pq-n {flex:none;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--v3-text-muted)}
+.v3fs-pq-q {display:flex;flex-direction:column;gap:7px;padding:10px 0 0;border-top:1px solid color-mix(in srgb,var(--fs-line) 70%,transparent)}
+.v3fs-pq-q.done {border-top-color:color-mix(in srgb,var(--v3-green) 45%,var(--fs-line))}
+.v3fs-pq-q.deferred {opacity:.85}
+.v3fs-pq-type {font-size:10.5px;font-weight:750;letter-spacing:.05em;text-transform:uppercase;color:var(--v3-accent-2)}
+.v3fs-pq-t {font-size:13.5px;color:var(--v3-text-secondary);line-height:1.55}
+.v3fs-pq-chips {display:flex;flex-wrap:wrap;gap:8px}
+.v3fs-pq-chip {font:inherit;font-size:12.5px;font-weight:600;padding:7px 13px;border-radius:999px;cursor:pointer;
+  border:1px solid var(--fs-line);background:var(--fs-card);color:var(--v3-text-secondary);
+  transition:border-color var(--v3-transition-base),background var(--v3-transition-base),color var(--v3-transition-base)}
+.v3fs-pq-chip:hover {border-color:var(--v3-accent-2);color:var(--v3-text)}
+.v3fs-pq-chip.on {border-color:var(--v3-accent-2);background:color-mix(in srgb,var(--v3-accent-2) 12%,transparent);color:var(--v3-text)}
+.v3fs-pq-pick {display:flex;flex-wrap:wrap;gap:8px}
+.v3fs-pq-pick select, .v3fs-pq-pick input, .v3fs-pq-why {font:inherit;font-size:12.5px;color:var(--v3-text);
+  border:1px solid var(--fs-line);border-radius:9px;padding:6px 10px;background:var(--v3-surface)}
+.v3fs-pq-pick select {max-width:280px}
+.v3fs-pq-pick input {flex:1;min-width:180px}
+.v3fs-pq-why {width:100%}
+.v3fs-pq-pick select:focus, .v3fs-pq-pick input:focus, .v3fs-pq-why:focus {outline:none;border-color:var(--v3-accent-2);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--v3-accent-2) 14%,transparent)}
+.v3fs-pq-foot {margin:0;padding:0 12px 12px;font-size:11.5px;color:var(--v3-text-muted);line-height:1.5}
+
 /* The live "your changes" preview — sticky at the bottom of the surface. */
 .v3fs-rvw-live {position:sticky;bottom:12px;margin-top:22px;border:1px solid var(--fs-line);border-radius:14px;
   background:var(--v3-surface);box-shadow:var(--fs-shadow);padding:14px 16px}

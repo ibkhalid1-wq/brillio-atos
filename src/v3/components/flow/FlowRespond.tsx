@@ -12,6 +12,11 @@ import { MAX_ANSWER_CHARS } from "@/v3/lib/blobGuard";
 import { DictationButton, joinDictation } from "@/v3/components/flow/FlowDictation";
 import { usePortalAttach, AttachClip } from "@/v3/components/flow/PortalAttach";
 import PilotApp from "@/v3/components/flow/PilotApp";
+import PortalQuestions from "@/v3/components/flow/PortalQuestions";
+import {
+  portalQuestionModel, composeLocusAnswers, answeredLocusCount, type PortalQuestionModel,
+} from "@/v3/components/flow/portalQuestionModel";
+import { useProgramLedger } from "@/v3/lib/ledger/useProgramLedger";
 
 /**
  * The public async-interview page — what a stakeholder sees when they open a
@@ -37,6 +42,13 @@ interface Pack {
    * stakeholder knows WHAT the programme is for before they answer. */
   objective?: string;
   questions: string[];
+  /** The LEDGER LOCI behind `questions`, index-aligned (`questionLoci[i]` is the
+   * `about` that `questions[i]` closes). When present — and when the live
+   * artifacts let this page rebuild a store — every question is re-rendered
+   * through `renderQuestion(store, about, "stakeholder")`, the SAME producer the
+   * operator queue reads, with its kind-specific affordance. Absent (every pack
+   * minted before this existed) ⇒ the stored strings render exactly as before. */
+  questionLoci?: string[];
   /** The programme's cast — lets the respondent defer a question to the
    * person who actually owns the answer. */
   roster?: Array<{ name: string; role: string }>;
@@ -102,8 +114,15 @@ interface Pack {
 
 /** Rebuild the review from the CURRENT artifacts the edge shipped, so a link
  * opened after a regeneration shows the latest workflows/ontology/blueprint.
- * Falls back (null) to the frozen `pack.review` for old/edge-less packs. */
-function reprojectFromPack(pack: Pack): ReviewPayload | null {
+ * Falls back (null) to the frozen `pack.review` for old/edge-less packs.
+ *
+ * `locusStrings` carries the loci-mode contract: null ⇒ legacy, the pack's own
+ * stored question strings ARE the question list (unchanged behaviour). A list ⇒
+ * the locus-backed questions render through the ONE renderer in their own
+ * section, so this list is only the leftovers (asks whose locus this store can't
+ * resolve) added to the review's own non-structural questions. Either way no ask
+ * is dropped and none is asked twice. */
+function reprojectFromPack(pack: Pack, locusStrings: string[] | null): ReviewPayload | null {
   if (!pack.liveArtifacts || !pack.movementId) return null;
   // Only the kinds projectStakeholderReview produces can be rebuilt live.
   if (pack.reviewKind !== "listen-workflow") return null;
@@ -120,8 +139,15 @@ function reprojectFromPack(pack: Pack): ReviewPayload | null {
   if (!fresh) return null;
   // Keep the person's own question list (their gap script, minted once) — only
   // the structural content is refreshed.
-  if (fresh.kind === "listen-workflow" && Array.isArray(pack.questions) && pack.questions.length) {
-    fresh.questions = pack.questions;
+  if (fresh.kind === "listen-workflow") {
+    if (locusStrings === null) {
+      if (Array.isArray(pack.questions) && pack.questions.length) fresh.questions = pack.questions;
+    } else {
+      // Loci mode: the projection's own non-structural prompts (appetite,
+      // compliance, constraints) stay, plus any ask this store couldn't render
+      // from its locus. The locus-backed ones live in their own section.
+      fresh.questions = [...fresh.questions, ...locusStrings];
+    }
   }
   return fresh;
 }
@@ -158,6 +184,11 @@ interface SuggestedVoice { name: string; role: string; note: string }
 interface RespondDraft {
   answers?: Record<number, string>;
   deferrals?: Record<number, string>;
+  /** Locus-keyed answers (loci-mode packs) — the locus is the stable identity, so
+   *  a draft survives a re-render of the question text. */
+  locusAnswers?: Record<string, string>;
+  locusWhys?: Record<string, string>;
+  locusDeferrals?: Record<string, string>;
   extra?: string;
   suggestedVoices?: SuggestedVoice[];
   verdict?: DemoVerdict | null;
@@ -178,6 +209,25 @@ export default function FlowRespond({ token }: { token: string }) {
   // The name greetings use — BLANK for a role-placeholder link, so every
   // surface (opener, banners, recap, demo) skips the greeting cleanly.
   const greetName = state.phase === "ready" && !state.pack.unnamed ? state.pack.stakeholder : "";
+  // ── the ledger, rebuilt on THIS page from the live artifacts the edge already
+  // ships (ontology + atlas). Read-only, the ONE read path (useProgramLedger) —
+  // no second migration, no second projection. It exists here for exactly one
+  // reason: to render this pack's LOCI through the ONE question renderer, so the
+  // stakeholder and the operator read one set in two voices.
+  const portalProgram = useMemo<ProgramSummary | undefined>(() => {
+    if (state.phase !== "ready" || !state.pack.liveArtifacts) return undefined;
+    if (!state.pack.questionLoci?.length) return undefined;   // nothing to resolve — don't migrate
+    return { rawData: { data: state.pack.liveArtifacts } } as unknown as ProgramSummary;
+  }, [state]);
+  const portalLedger = useProgramLedger(portalProgram);
+  const questionModel = useMemo<PortalQuestionModel>(
+    () => portalQuestionModel(
+      state.phase === "ready" ? state.pack : {},
+      portalProgram ? portalLedger.store : null,
+    ),
+    [state, portalProgram, portalLedger.store],
+  );
+  const lociMode = questionModel.mode === "loci";
   // The review shown — rebuilt LIVE from the current artifacts the edge shipped,
   // falling back to the pack's frozen snapshot. Memoised so the surface's draft
   // key is stable within a load.
@@ -187,7 +237,7 @@ export default function FlowRespond({ token }: { token: string }) {
     // question-only rather than rendering the wrong surface.
     () => {
       if (state.phase !== "ready") return null;
-      const chosen = reprojectFromPack(state.pack)
+      const chosen = reprojectFromPack(state.pack, lociMode ? questionModel.strings.map((s) => s.question) : null)
         ?? ((state.pack.review as { kind?: string } | undefined)?.kind === "agentify" ? null : state.pack.review)
         ?? null;
       if (!chosen) return null;
@@ -220,7 +270,7 @@ export default function FlowRespond({ token }: { token: string }) {
       }
       return chosen;
     },
-    [state],
+    [state, lociMode, questionModel],
   );
   // A regeneration can reshape the review while a draft is saved on-device; fold
   // a structural signature into the review draft key so a changed structure
@@ -230,6 +280,12 @@ export default function FlowRespond({ token }: { token: string }) {
   // Per-question deferral: "not me — this is for <name>". A deferred question
   // counts as handled here and is routed to that person's card on ingest.
   const [deferrals, setDeferrals] = useState<Record<number, string>>(draft0.deferrals ?? {});
+  // Loci-mode answers, keyed by LOCUS (not by index): a chip tap, a picker
+  // choice, a sentence — plus the optional "why" that turns a tap into a
+  // reasoned answer, and the same "not mine, ask X" routing the string list has.
+  const [locusAnswers, setLocusAnswers] = useState<Record<string, string>>(draft0.locusAnswers ?? {});
+  const [locusWhys, setLocusWhys] = useState<Record<string, string>>(draft0.locusWhys ?? {});
+  const [locusDeferrals, setLocusDeferrals] = useState<Record<string, string>>(draft0.locusDeferrals ?? {});
   // Paper-clip attachments — ONE shared mechanism for every input field on
   // the page (question answers, the demo comment, "anything else", phase
   // notes, review fields): extract the file's text into the field, keep the
@@ -262,6 +318,7 @@ export default function FlowRespond({ token }: { token: string }) {
 
   // Persist the draft as they type; clear it once the link is submitted or spent.
   const hasDraft = !!(Object.keys(answers).length || extra.trim() || Object.keys(deferrals).length
+    || Object.keys(locusAnswers).length || Object.keys(locusWhys).length || Object.keys(locusDeferrals).length
     || filledVoices.length || verdict || comment.trim() || Object.keys(phaseComments).length
     || Object.keys(beatVerdicts).length || demoRunRecords.length || Object.keys(demoFieldFlags).length);
   useEffect(() => {
@@ -274,9 +331,9 @@ export default function FlowRespond({ token }: { token: string }) {
         }
         return;
       }
-      if (hasDraft) localStorage.setItem(draftKey, JSON.stringify({ answers, deferrals, extra, suggestedVoices, verdict, comment, phaseComments, beatVerdicts, demoRunRecords, demoFieldFlags }));
+      if (hasDraft) localStorage.setItem(draftKey, JSON.stringify({ answers, deferrals, locusAnswers, locusWhys, locusDeferrals, extra, suggestedVoices, verdict, comment, phaseComments, beatVerdicts, demoRunRecords, demoFieldFlags }));
     } catch { /* private mode / quota — draft-save is best-effort */ }
-  }, [draftKey, state.phase, hasDraft, answers, deferrals, extra, suggestedVoices, verdict, comment, phaseComments, beatVerdicts, demoRunRecords, demoFieldFlags]);
+  }, [draftKey, state.phase, hasDraft, answers, deferrals, locusAnswers, locusWhys, locusDeferrals, extra, suggestedVoices, verdict, comment, phaseComments, beatVerdicts, demoRunRecords, demoFieldFlags]);
 
   useEffect(() => {
     let alive = true;
@@ -367,13 +424,20 @@ export default function FlowRespond({ token }: { token: string }) {
   const composed = useMemo(() => {
     if (state.phase !== "ready") return "";
     // Demo packs carry no questions — this memo only serves the interview view.
-    const blocks = (state.pack.questions ?? [])
-      .map((question, index) => {
+    // In loci mode the string list holds only the asks with no renderable locus;
+    // the locus-backed answers compose separately, each naming what it answers.
+    const stringQuestions = questionModel.mode === "loci"
+      ? questionModel.strings
+      : (state.pack.questions ?? []).map((question, index) => ({ index, question }));
+    const blocks = stringQuestions
+      .map(({ question, index }) => {
         if (deferrals[index]) return ""; // deferred — routed, not answered here
         const answer = (answers[index] ?? "").trim();
         return answer ? `Q: ${question}\nA: ${answer}` : "";
       })
       .filter(Boolean);
+    const locusBlock = composeLocusAnswers(questionModel.rows, locusAnswers, locusWhys, locusDeferrals);
+    if (locusBlock) blocks.unshift(locusBlock);
     if (extra.trim()) blocks.push(`Anything else:\n${extra.trim()}`);
     // Demo-walkthrough signal from a Show follow-up: beat-by-beat acceptance
     // taps and per-phase notes fold into the same attributed answer block.
@@ -387,13 +451,17 @@ export default function FlowRespond({ token }: { token: string }) {
     if (phaseLines.length) blocks.push(`Demo walkthrough, phase notes:\n${phaseLines.join("\n")}`);
     if (demoRunBlock) blocks.push(demoRunBlock);
     return blocks.join("\n\n");
-  }, [state, answers, extra, deferrals, beatVerdicts, phaseComments, demoRunBlock]);
+  }, [state, answers, extra, deferrals, beatVerdicts, phaseComments, demoRunBlock, questionModel, locusAnswers, locusWhys, locusDeferrals]);
 
   const answeredCount = useMemo(() => {
     if (state.phase !== "ready" || state.pack.kind === "demo") return 0;
-    return (state.pack.questions ?? []).reduce((count, _q, index) =>
+    const stringQuestions = questionModel.mode === "loci"
+      ? questionModel.strings
+      : (state.pack.questions ?? []).map((question, index) => ({ index, question }));
+    const strings = stringQuestions.reduce((count, { index }) =>
       count + (((answers[index] ?? "").trim() || (attachments[index] ?? []).length || deferrals[index]) ? 1 : 0), 0);
-  }, [state, answers, attachments, deferrals]);
+    return strings + answeredLocusCount(questionModel.rows, locusAnswers, locusDeferrals);
+  }, [state, answers, attachments, deferrals, questionModel, locusAnswers, locusDeferrals]);
 
   const submit = async (payload: Record<string, unknown>) => {
     setSubmitting(true);
@@ -475,6 +543,12 @@ export default function FlowRespond({ token }: { token: string }) {
               <FlowReviewSurface review={shownReview} stakeholder={greetName} clip={fieldClip}
                 programme={state.pack.programme} objective={state.pack.objective}
                 returning={!!state.pack.followUp}
+                // The SAME locus questions the plain page renders — the review
+                // surface hosts them beside the workflow they belong to, through
+                // the same component and the same ONE renderer.
+                questionModel={questionModel.mode === "loci" ? questionModel : undefined}
+                store={questionModel.mode === "loci" ? portalLedger.store : undefined}
+                roster={state.pack.roster}
                 submitting={submitting} error={error} draftKey={reviewDraftKey}
                 afterIntro={<MeetingRequestBar kind="listen" sent={meetingSent} submitting={submitting}
                   onRequest={(pref) => void requestMeeting(pref, "listen")} />}
@@ -603,7 +677,7 @@ export default function FlowRespond({ token }: { token: string }) {
           ) : (
             <>
               {state.pack.followUp ? <FollowUpBanner stakeholder={greetName}
-                submissions={state.pack.submissions ?? []} newCount={state.pack.questions.length} /> : null}
+                submissions={state.pack.submissions ?? []} newCount={questionModel.count} /> : null}
               <header className="v3fs-portal-head">
                 <div className="v3fs-hero-eyebrow">{state.pack.programme} <span>· <img src="/brillio-logo.png" alt="Brillio" className="v3fs-portal-brandimg sm" /> AURA</span></div>
                 {/* On a follow-up the banner above already greets and frames the
@@ -623,9 +697,11 @@ export default function FlowRespond({ token }: { token: string }) {
                     </p>
                   </>
                 )}
+                {/* The unit is QUESTIONS — locus-backed ones and plain ones counted
+                    the same way, so the header can't disagree with the page. */}
                 <div className="v3fs-portal-meta">
-                  <span>✎ {state.pack.questions.length} {state.pack.followUp ? (state.pack.questions.length === 1 ? "new question" : "new questions") : "questions"} — answer any</span>
-                  <span>⏱ ~{Math.max(5, Math.round(state.pack.questions.length * 1.5))} minutes</span>
+                  <span>✎ {questionModel.count} {state.pack.followUp ? (questionModel.count === 1 ? "new question" : "new questions") : "questions"} — answer any</span>
+                  <span>⏱ ~{Math.max(5, Math.round(questionModel.count * 1.5))} minutes</span>
                   <span>⛨ Reviewed by the team before anything enters the record</span>
                 </div>
               </header>
@@ -650,7 +726,25 @@ export default function FlowRespond({ token }: { token: string }) {
                     fieldFlags={demoFieldFlags} onToggleFieldFlag={toggleFieldFlag}
                     runLive={state.pack.liveDemo ? runLiveBeat : undefined} clip={fieldClip} />
                 ) : null}
-                {state.pack.questions.map((question, index) => (
+                {/* Locus-backed questions render through the ONE renderer with
+                    their kind's affordance, grouped per element. Anything the
+                    pack carried without a resolvable locus falls through to the
+                    plain list below — nothing is dropped, nothing asked twice. */}
+                {questionModel.mode === "loci" ? (
+                  <PortalQuestions store={portalLedger.store} model={questionModel}
+                    answers={locusAnswers} whys={locusWhys} deferrals={locusDeferrals}
+                    onAnswer={(about, value) => setLocusAnswers((current) => ({ ...current, [about]: value }))}
+                    onWhy={(about, value) => setLocusWhys((current) => ({ ...current, [about]: value }))}
+                    onDefer={(about, to) => setLocusDeferrals((current) => {
+                      if (!to) { const next = { ...current }; delete next[about]; return next; }
+                      return { ...current, [about]: to };
+                    })}
+                    roster={state.pack.roster} />
+                ) : null}
+                {(questionModel.mode === "loci"
+                  ? questionModel.strings
+                  : state.pack.questions.map((question, index) => ({ index, question }))
+                ).map(({ question, index }) => (
                   <label key={index} className={`v3fs-portal-card${((answers[index] ?? "").trim() || (attachments[index] ?? []).length || deferrals[index]) ? " done" : ""}${deferrals[index] ? " deferred" : ""}`}>
                     <span className="v3fs-portal-qn"><b>{index + 1}</b><em aria-hidden="true">{deferrals[index] ? "→" : "✓"}</em></span>
                     <span className="v3fs-portal-qt">{question}</span>
@@ -740,14 +834,14 @@ export default function FlowRespond({ token }: { token: string }) {
               </div>
               <div className="v3fs-portal-bar">
                 <div className="v3fs-portal-progress">
-                  <span>{answeredCount} of {state.pack.questions.length} answered</span>
+                  <span>{answeredCount} of {questionModel.count} answered</span>
                   <div className="v3fs-portal-track" aria-hidden="true">
-                    <div style={{ width: `${state.pack.questions.length ? Math.round((answeredCount / state.pack.questions.length) * 100) : 0}%` }} />
+                    <div style={{ width: `${questionModel.count ? Math.round((answeredCount / questionModel.count) * 100) : 0}%` }} />
                   </div>
                   {hasDraft ? <span className="v3fs-portal-saved">✓ Saved on this device — you can close this and come back</span> : null}
                 </div>
                 <button type="button" className="v3fs-btn pri v3fs-portal-send"
-                  disabled={submitting || (composed.trim().length < 20 && Object.values(attachments).every((docs) => !docs.length) && !Object.keys(deferrals).length && !filledVoices.length)}
+                  disabled={submitting || (composed.trim().length < 20 && Object.values(attachments).every((docs) => !docs.length) && !Object.keys(deferrals).length && !Object.keys(locusDeferrals).length && !filledVoices.length)}
                   onClick={() => void submit({
                     answers: composed,
                     documents: Object.entries(attachments).flatMap(([key, list]) =>
@@ -758,9 +852,17 @@ export default function FlowRespond({ token }: { token: string }) {
                         ...(Number.isFinite(Number(key)) ? { question: Number(key) + 1 } : {}),
                         sourceKey: doc.sourceKey,
                       }))),
-                    deferrals: Object.entries(deferrals).map(([qIndex, to]) => ({
-                      question: state.pack.questions[Number(qIndex)] ?? "", to,
-                    })).filter((entry) => entry.question && entry.to),
+                    // A deferral names the question AS THE PACK STORED IT — the edge
+                    // validates routing against the pack's own list, so a locus-mode
+                    // deferral sends the stored string, not the freshly-rendered one.
+                    deferrals: [
+                      ...Object.entries(deferrals).map(([qIndex, to]) => ({
+                        question: state.pack.questions[Number(qIndex)] ?? "", to,
+                      })),
+                      ...questionModel.rows
+                        .filter((row) => locusDeferrals[row.about])
+                        .map((row) => ({ question: row.stored, to: locusDeferrals[row.about] })),
+                    ].filter((entry) => entry.question && entry.to),
                     suggestedVoices: filledVoices.map((voice) => ({
                       name: voice.name.trim(), role: voice.role.trim(), note: voice.note.trim(),
                     })),

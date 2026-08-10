@@ -507,6 +507,17 @@ Deno.serve(async (req: Request) => {
         role: String(hit.pack.role ?? ""),
         intro: String(hit.pack.intro ?? ""),
         questions: Array.isArray(hit.pack.questions) ? hit.pack.questions.map(String).slice(0, 12) : [],
+        // The LEDGER LOCI behind those questions, index-aligned and cut with the
+        // SAME slice(0,12) so questionLoci[i] never stops pointing at
+        // questions[i]. Pass-through only — no projection here. The client
+        // re-renders each locus through the one question renderer against the
+        // liveArtifacts already shipped below, so the stakeholder and the
+        // operator read one set of questions in two voices, and an answer names
+        // the point it closes. Omitted when the pack has none (every pack minted
+        // before this existed), and the client then renders the stored strings
+        // exactly as before.
+        ...(Array.isArray(hit.pack.questionLoci) && hit.pack.questionLoci.length
+          ? { questionLoci: hit.pack.questionLoci.map(String).slice(0, 12) } : {}),
         roster,
         ...(objective ? { objective } : {}),
         ...(interviewDesign ? { design: interviewDesign } : {}),

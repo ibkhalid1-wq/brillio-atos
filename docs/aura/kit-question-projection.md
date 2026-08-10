@@ -79,14 +79,17 @@ tsc + eslint clean; 1241 tests green.
 
 ## Findings (reported, not silently done)
 
-- **Stakeholder pack pipeline (surface wire, buildable next).** The operator queue already
-  IS the projection, so operator-side there is no drift. The stakeholder's durable link
-  pack (`flowInterviewPacks`, assembled in `flowStakeholders`/`flowPortal` from
-  `kit.interviews[].agenda[].questions`) still reads the generated agenda. To close the
-  loop for the stakeholder, the pack builder must source questions from
-  `projectKitQuestions(store)` scoped to the recipient's owner-label instead of the
-  agenda. This crosses into the pack pipeline (partly edge-generated), so it's flagged as
-  the next wire, not silently reached into.
+- **Stakeholder pack pipeline — WIRED (2026-08-10).** See
+  `stakeholder-linked-page-loci.md`. The per-person durable link (`mintFollowUpPack`,
+  called from TheLine's `⎘ link`) now sources its ask from the OPEN UNKNOWNS ON LOCI
+  THAT PERSON OWNS (`ledger.soloByOwner`, the same list their drawer shows) and stores
+  the LOCI on the pack (`questionLoci`) beside the rendered strings. The linked page
+  re-renders each locus through the ONE renderer, so kit and queue are one list for a
+  real stakeholder too. Two carve-outs left string-only on purpose: the BULK
+  `mintInterviewPacks` (a pure transform over the discovery kit, no ledger in hand —
+  it now clears stale loci on refresh) and `CollectBoard`'s review-link mint (accepts
+  `loci`, no caller passes them yet). **Gated on one edge deploy** — `flow-portal` must
+  forward `questionLoci`; source change made, not deployed.
 - **No locus-mint path for gap findings (core / curation, a finding not a tier change).**
   There is no `mintLocus` / `ProposedEntity` / curation path in the codebase — curation
   today is dismissals/deferrals (`_curationLog`, `_dismissedAsks`). Routing an
