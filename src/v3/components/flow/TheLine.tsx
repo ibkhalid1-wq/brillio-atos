@@ -77,7 +77,7 @@ interface TheLineProps {
   onSaveInputs?: SaveInputsFn;
   onRenamePerson?: KitAlignProps["onRenamePerson"];
   onRenameRole?: KitAlignProps["onRenameRole"];
-  onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string; unnamed?: boolean }) => Promise<string | null>;
+  onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string; unnamed?: boolean; loci?: string[] }) => Promise<string | null>;
   onScheduleFollowUp?: (movementId: string, who: string, date: string) => Promise<void>;
   onRunAgent?: (agentId: string, phaseId?: string) => void;
   /** Record a movement's gate — demonstrated. Reopen — evidence changed.
@@ -669,8 +669,19 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
       const existing = packFor(program, row.label, row.movementId);
       let url = existing ? portalLinkFor(program.id, existing) : null;
       if (!url && onMintFollowUp) {
+        // THE ask on this person's link = the open unknowns on loci THEY OWN —
+        // the same list their drawer shows — sent as LOCI, so the linked page
+        // renders them through the ONE renderer and an answer names the point it
+        // closes. Their kit script stays the fallback when the ledger owns
+        // nothing for them: a person with no owned loci still gets a link.
+        const owned = ownedQuestionsFor.get(row.label) ?? [];
+        const ask = owned.length
+          ? owned.map((q) => ({ about: q.about, text: renderQuestion(ledger.store, q.about, "stakeholder").question }))
+          : row.questions.map((text) => ({ about: "", text }));
         url = await onMintFollowUp({
-          movementId: row.movementId, who: row.label, questions: row.questions,
+          movementId: row.movementId, who: row.label,
+          questions: ask.map((q) => q.text),
+          loci: ask.map((q) => q.about),
           captureField: row.captureField, unnamed: row.isRole,
         });
       }

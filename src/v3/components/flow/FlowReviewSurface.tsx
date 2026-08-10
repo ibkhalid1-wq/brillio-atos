@@ -18,6 +18,11 @@ import {
 } from "@/v3/components/flow/flowReviews";
 import { WorkflowFlow, OntologyMap, type FlowNode } from "@/v3/components/flow/FlowReviewVisuals";
 import { DictationButton, joinDictation } from "@/v3/components/flow/FlowDictation";
+import PortalQuestions from "@/v3/components/flow/PortalQuestions";
+import {
+  composeLocusAnswers, answeredLocusCount, type PortalQuestionModel,
+} from "@/v3/components/flow/portalQuestionModel";
+import type { LedgerStore } from "@/v3/lib/ledger/store";
 
 /** Paper-clip renderer supplied by the page (FlowRespond) so every review
  * input shares the one attach pipeline: the file's extracted text lands IN
@@ -224,9 +229,10 @@ function OntologyAtlasSurface({ review, stakeholder, programme, objective, submi
   );
 }
 
-function ListenWorkflowSurface({ review, stakeholder, programme, objective, submitting, error, onSubmit, draftKey, returning, afterIntro, clip }: {
+function ListenWorkflowSurface({ review, stakeholder, programme, objective, submitting, error, onSubmit, draftKey, returning, afterIntro, clip, questionModel, store, roster }: {
   review: ListenWorkflowReview; stakeholder: string; programme?: string; objective?: string; submitting: boolean; error: string | null;
   onSubmit: (answers: string, extras?: { suggestedVoices?: Array<{ name: string; role: string; note: string }> }) => void; draftKey?: string; returning?: boolean; afterIntro?: React.ReactNode; clip?: ClipFn;
+  questionModel?: PortalQuestionModel; store?: LedgerStore; roster?: Array<{ name: string; role: string }>;
 }) {
   const [wfSteps, setWfSteps] = usePersistentState<FlowNode[][]>(draftKey, "lwSteps",
     review.workflows.map((w) => w.steps.map((s) => ({
@@ -247,6 +253,10 @@ function ListenWorkflowSurface({ review, stakeholder, programme, objective, subm
   const [termConfirmed, setTermConfirmed] = usePersistentState<Record<string, boolean>>(draftKey, "lwTermOk", {});
   // The key data elements (fields) the stakeholder tracks about each term.
   const [termData, setTermData] = usePersistentState<Record<string, string>>(draftKey, "lwTermData", {});
+  // Locus-backed answers, keyed by LOCUS — the same identity the operator queue
+  // uses, so a draft survives a re-render of the question text.
+  const [locusAnswers, setLocusAnswers] = usePersistentState<Record<string, string>>(draftKey, "lwLocus", {});
+  const [locusWhys, setLocusWhys] = usePersistentState<Record<string, string>>(draftKey, "lwLocusWhy", {});
 
   const editStep = (wi: number, si: number, action: string) => setWfSteps((prev) =>
     prev.map((steps, i) => i !== wi ? steps : steps.map((s, j) => j !== si ? s : { ...s, action })));
@@ -308,11 +318,13 @@ function ListenWorkflowSurface({ review, stakeholder, programme, objective, subm
     const confirmedSteps = Object.values(stepConfirmed).filter(Boolean).length;
     const confirmedTerms = Object.values(termConfirmed).filter(Boolean).length;
     const dataTerms = Object.values(termData).filter((v) => v.trim()).length;
+    // Locus-backed answers count as questions answered, in the same unit.
+    const answeredLoci = answeredLocusCount(questionModel?.rows ?? [], locusAnswers);
     const count = workflows.reduce((n, w) => n + w.changes.length + (w.reordered ? 1 : 0), 0)
       + (narration.trim() ? 1 : 0) + notedTerms.length + newTerms.length + answered.length + noted
-      + confirmedSteps + confirmedTerms + dataTerms;
-    return { workflows, notedTerms, newTerms, answered, confirmedSteps, confirmedTerms, dataTerms, count };
-  }, [review, wfSteps, narration, termNotes, answers, addedTerms, stepNotes, stepWhy, stepConfirmed, termConfirmed, termData]);
+      + confirmedSteps + confirmedTerms + dataTerms + answeredLoci;
+    return { workflows, notedTerms, newTerms, answered, answeredLoci, confirmedSteps, confirmedTerms, dataTerms, count };
+  }, [review, wfSteps, narration, termNotes, answers, addedTerms, stepNotes, stepWhy, stepConfirmed, termConfirmed, termData, questionModel, locusAnswers]);
 
   const [area, setArea] = useState(review.recipientArea ?? "");
   const areas = areasOf(review.workflows);
@@ -342,7 +354,10 @@ function ListenWorkflowSurface({ review, stakeholder, programme, objective, subm
     if (okSteps.length) lines.push(`Confirmed accurate — workflow steps: ${okSteps.join("; ")}`);
     if (okTerms.length) lines.push(`Confirmed accurate — terms: ${okTerms.join(", ")}`);
     if (dataLines.length) lines.push(`Key data elements they track — ${dataLines.join("; ")}`);
-    return [base, lines.join("\n")].filter(Boolean).join("\n\n");
+    // Locus-backed answers ride the SAME attributed block, each naming the exact
+    // point in the model it answers, so the operator's ingest can attribute it.
+    const locusBlock = composeLocusAnswers(questionModel?.rows ?? [], locusAnswers, locusWhys);
+    return [base, lines.join("\n"), locusBlock].filter(Boolean).join("\n\n");
   };
 
   return (
@@ -399,6 +414,19 @@ function ListenWorkflowSurface({ review, stakeholder, programme, objective, subm
               </div>
             </section>
           </>
+        ) : null}
+
+        {/* The pack's LOCUS-BACKED questions — rendered through the ONE renderer
+            with their kind's affordance, grouped per element, right after the
+            workflow they're about. A pack with no loci renders nothing here and
+            the plain list below is exactly what it always was. */}
+        {questionModel && store ? (
+          <PortalQuestions store={store} model={questionModel}
+            heading="Open points in your process"
+            answers={locusAnswers} whys={locusWhys}
+            onAnswer={(about, value) => setLocusAnswers((p) => ({ ...p, [about]: value }))}
+            onWhy={(about, value) => setLocusWhys((p) => ({ ...p, [about]: value }))}
+            roster={roster} />
         ) : null}
 
         {(() => {
@@ -479,8 +507,14 @@ function ListenWorkflowSurface({ review, stakeholder, programme, objective, subm
   );
 }
 
-export default function FlowReviewSurface({ review, stakeholder, submitting, error, onSubmit, draftKey, programme, objective, returning, afterIntro, clip }: {
+export default function FlowReviewSurface({ review, stakeholder, submitting, error, onSubmit, draftKey, programme, objective, returning, afterIntro, clip, questionModel, store, roster }: {
   review: ReviewPayload; stakeholder: string; submitting: boolean; error: string | null;
+  /** The pack's LOCUS-BACKED questions, rendered through the ONE renderer with
+   *  their affordances. Optional: a pack without loci renders exactly as before. */
+  questionModel?: PortalQuestionModel;
+  store?: LedgerStore;
+  /** The cast — the role picker and "not mine, ask X" read it. */
+  roster?: Array<{ name: string; role: string }>;
   /** Paper-clip renderer for input fields — see ClipFn. */
   clip?: ClipFn;
   onSubmit: (answers: string, extras?: { suggestedVoices?: Array<{ name: string; role: string; note: string }> }) => void;
@@ -497,7 +531,7 @@ export default function FlowReviewSurface({ review, stakeholder, submitting, err
   afterIntro?: React.ReactNode;
 }) {
   if (review.kind === "listen-workflow") {
-    return <ListenWorkflowSurface review={review} stakeholder={stakeholder} programme={programme} objective={objective} submitting={submitting} error={error} onSubmit={onSubmit} draftKey={draftKey} returning={returning} afterIntro={afterIntro} clip={clip} />;
+    return <ListenWorkflowSurface review={review} stakeholder={stakeholder} programme={programme} objective={objective} submitting={submitting} error={error} onSubmit={onSubmit} draftKey={draftKey} returning={returning} afterIntro={afterIntro} clip={clip} questionModel={questionModel} store={store} roster={roster} />;
   }
   return <OntologyAtlasSurface review={review} stakeholder={stakeholder} programme={programme} objective={objective} submitting={submitting} error={error} onSubmit={onSubmit} draftKey={draftKey} returning={returning} afterIntro={afterIntro} clip={clip} />;
 }

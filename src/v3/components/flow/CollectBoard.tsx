@@ -231,7 +231,7 @@ export function IntervieweeDiscovery({ program, movementId, captureField, areaFi
   regenerating?: boolean;
   onRegenerateStale?: () => Promise<void>;
   onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
-  onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string; unnamed?: boolean }) => Promise<string | null>;
+  onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string; unnamed?: boolean; loci?: string[] }) => Promise<string | null>;
   /** Mint a shareable REVIEW link (workflow-agentify or ontology+atlas) — the
    * projected payload is built on the client and stored on the pack. */
   onMintReview?: (input: { movementId: string; who: string; role: string; captureField: string; reviewKind: string; review: unknown; questions: string[]; intro: string; unnamed?: boolean }) => Promise<string | null>;
@@ -830,7 +830,7 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
   approvalItems?: StakeholderApprovalItem[];
   onSendForApproval?: (input: { artifactId: string; movementId: string; artifactTitle: string; approver: { name: string; role: string; email?: string }; snapshot?: string }) => Promise<string | null>;
   onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
-  onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string; unnamed?: boolean }) => Promise<string | null>;
+  onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string; unnamed?: boolean; loci?: string[] }) => Promise<string | null>;
   /** Mint the ONE unified link for Listen/Envision — their questions folded into
    * a projected visual review (their workflow + the domain terms). */
   onMintReview?: (input: { movementId: string; who: string; role: string; captureField: string; reviewKind: string; review: unknown; questions: string[]; intro: string; unnamed?: boolean }) => Promise<string | null>;
