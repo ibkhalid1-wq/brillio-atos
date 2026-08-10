@@ -116,21 +116,29 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit }: Prop
             (= burn-down = the Assign section), NOT the 12 elements those route through.
             Each count sums exactly the section below it and clicks through to it. */}
         <span className="v3ib-count">
-          {([
-            ["ib-assign", unowned.length, "need an owner"],
-            ["ib-sessions", sessionQueue.length, "awaiting a date"],
-            ["ib-adjudicate", ledger.conflicts.length, "to adjudicate"],
-            ["ib-inflight", ledger.assignments.length, "in flight"],
-          ] as const).map(([id, n, label], i) => (
-            <span key={id}>
-              {i > 0 ? " · " : ""}
-              <button type="button" className="v3ib-countbtn" title={`Jump to ${label}`}
-                onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "center" })}>
-                <b>{n}</b> {label}
-              </button>
-            </span>
-          ))}
-          <span className="v3ib-unit"> · questions</span>
+          {/* A 0 section is hidden below (by request, 2026-08-10) — so its 0 stat hides
+              here too; a count button must always jump to a section that exists. */}
+          {(() => {
+            const stats = ([
+              ["ib-assign", unowned.length, "need an owner"],
+              ["ib-sessions", sessionQueue.length, "awaiting a date"],
+              ["ib-adjudicate", ledger.conflicts.length, "to adjudicate"],
+              ["ib-inflight", ledger.assignments.length, "in flight"],
+            ] as const).filter(([, n]) => n > 0);
+            if (!stats.length) return <span className="v3ib-unit">nothing needs the operator right now</span>;
+            return (<>
+              {stats.map(([id, n, label], i) => (
+                <span key={id}>
+                  {i > 0 ? " · " : ""}
+                  <button type="button" className="v3ib-countbtn" title={`Jump to ${label}`}
+                    onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "center" })}>
+                    <b>{n}</b> {label}
+                  </button>
+                </span>
+              ))}
+              <span className="v3ib-unit"> · questions</span>
+            </>);
+          })()}
         </span>
         <span className="v3ib-of">the operator-decision queue — four sources, each a section below. The burn-down above is the goal.</span>
       </header>
@@ -163,14 +171,9 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit }: Prop
       })() : null}
 
       {/* 1 · UNOWNED → ASSIGN (grouped, cascades) / DECIDE FATE */}
-      {/* EMPTY-STATE: 0 needs-an-owner is just not-started → collapsed one-liner. */}
-      {unowned.length === 0 ? (
-        <div id="ib-assign" className="v3ib-src v3ib-collapsed-row">
-          <OwnershipTag cls="operator" showLabel={false} />
-          <span className="v3ib-collapsed-l">Need an owner · <b>0</b></span>
-          <span className="v3ib-collapsed-hint">every open <b>phase / decision</b> question has an owner (value-set questions route to the dictionary above). Nothing to assign now.</span>
-        </div>
-      ) : (
+      {/* EMPTY-STATE: a 0 section is HIDDEN (by request, 2026-08-10) — the inbox shows
+          only what needs acting on; the header stats carry the summary. */}
+      {unowned.length === 0 ? null : (
       <section id="ib-assign" className="v3ib-src">
         <header className="v3ib-h">
           <OwnershipTag cls="operator" showLabel={false} />
@@ -224,16 +227,10 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit }: Prop
           jointly owned and its questions grouped. The only pending thing is a DATE, which
           is gated. So a seam is either AWAITING-A-DATE or (once scheduling lands) BOOKED —
           no no-op "marked" state that confirms a thing already true. */}
+      {/* EMPTY-STATE: 0 seams → section HIDDEN (by request, 2026-08-10). */}
+      {sessionQueue.length === 0 ? null : (
       <section id="ib-sessions" className="v3ib-src">
-        {/* EMPTY-STATE: 0 seams is just not-started (no caveat) → collapsed one-liner with a
-            feeds-from hint, never a full card. It expands to the full panel once it has content. */}
-        {sessionQueue.length === 0 ? (
-          <div className="v3ib-collapsed-row">
-            <OwnershipTag cls="joint" showLabel={false} />
-            <span className="v3ib-collapsed-l">Sessions · <b>0</b></span>
-            <span className="v3ib-collapsed-hint">seam questions land here when a relation crosses two functions — auto-jointly-owned, then a date to propose. Nothing to act on yet.</span>
-          </div>
-        ) : (<>
+        <>
           <header className="v3ib-h">
             <OwnershipTag cls="joint" showLabel={false} />
             <span className="v3ib-verb">Sessions</span>
@@ -257,60 +254,36 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit }: Prop
               );
             })}
           </ul>
-        </>)}
+        </>
       </section>
+      )}
 
       {/* 3 · CONFLICTS → ADJUDICATE (read-side; resolution gated) */}
+      {/* EMPTY-STATE: 0 conflicts → section HIDDEN (by request, 2026-08-10; the earlier
+          "passed check" band retired with it). */}
+      {ledger.conflicts.length === 0 ? null : (
       <section id="ib-adjudicate" className="v3ib-src">
         <header className="v3ib-h">
           <span className="v3ib-verb">Adjudicate</span>
           <span className="v3ib-lead"><b>{ledger.conflicts.length}</b> conflict{ledger.conflicts.length === 1 ? "" : "s"} — two live claims on one locus; the element <b>freezes</b>, no auto-winner.</span>
           <ProvisionalMark what="resolution completion is a write — gated; read-side only for now" />
         </header>
-        {ledger.conflicts.length === 0 ? (
-          // A PASSED check, not an empty slot — adjudication exists and is currently
-          // clear. Quiet, present, not alarm. And honest that 0-now ≠ 0-forever:
-          // conflicts appear once stakeholders assert competing answers, and with 0
-          // stakeholder assertions yet, "0 conflicts" partly means "no one's answered".
-          // FULL PANEL — the 0 here is load-bearing: adjudication exists and is currently
-          // clear, and collapsing it would let the operator assume it's settled. The caveat
-          // below is CONDITIONAL on the assertion count — it self-clears the moment anyone
-          // has asserted (0-now ≠ 0-forever only while nobody has answered).
-          <p className="v3ib-passed" role="note">
-            <span className="v3ib-passed-tick" aria-hidden="true">✓</span>
-            <span className="v3ib-passed-body">
-              <b>0 conflicts</b> — precedence resolved every contested locus cleanly.
-              {ledger.ownership.stakeholder === 0 ? (
-                <span className="v3ib-passed-sub">Conflicts surface once stakeholders assert competing answers; with <b>0</b> stakeholder assertions so far, this also reads &ldquo;no one&rsquo;s answered yet.&rdquo;</span>
-              ) : (
-                <span className="v3ib-passed-sub"><b>{ledger.ownership.stakeholder}</b> stakeholder assertion{ledger.ownership.stakeholder === 1 ? "" : "s"} on record and still no conflict — genuinely clean.</span>
-              )}
-            </span>
-            {ledger.ownership.stakeholder === 0 ? <ProvisionalMark what="0-now, not 0-forever — stakeholder assertions are the gated write" /> : null}
-          </p>
-        ) : (
-          <ul className="v3ib-list">
-            {ledger.conflicts.map((c) => (
-              <li key={c.about} className="v3ib-row is-frozen">
-                <span className="v3ib-row-h"><ClaimStatus state="conflict" showLabel={false} /><QLine about={c.about} tail={<span className="v3ib-frozen-tag">🔒 frozen · {c.count} live claims</span>} /></span>
-                <span className="v3ib-awaiting"><span className="v3ib-awaiting-l">awaiting operator adjudication — capture the resolution via the team</span><ProvisionalMark what="the resolving write is gated; no auto-winner" /></span>
-              </li>
-            ))}
-          </ul>
-        )}
+        <ul className="v3ib-list">
+          {ledger.conflicts.map((c) => (
+            <li key={c.about} className="v3ib-row is-frozen">
+              <span className="v3ib-row-h"><ClaimStatus state="conflict" showLabel={false} /><QLine about={c.about} tail={<span className="v3ib-frozen-tag">🔒 frozen · {c.count} live claims</span>} /></span>
+              <span className="v3ib-awaiting"><span className="v3ib-awaiting-l">awaiting operator adjudication — capture the resolution via the team</span><ProvisionalMark what="the resolving write is gated; no auto-winner" /></span>
+            </li>
+          ))}
+        </ul>
       </section>
+      )}
 
       {/* OWNED & IN-FLIGHT → reassign / unassign + the stakeholder's three exits */}
+      {/* EMPTY-STATE: 0 in-flight → section HIDDEN (by request, 2026-08-10). */}
+      {ledger.assignments.length === 0 ? null : (
       <section id="ib-inflight" className="v3ib-src is-gated">
-        {/* EMPTY-STATE: 0 in-flight is just not-started → collapsed one-liner with the
-            feeds-from hint (so the operator knows where an assigned question will appear). */}
-        {ledger.assignments.length === 0 ? (
-          <div className="v3ib-collapsed-row">
-            <OwnershipTag cls="stakeholder" showLabel={false} />
-            <span className="v3ib-collapsed-l">In-flight · <b>0</b></span>
-            <span className="v3ib-collapsed-hint">assign an unowned question above and it lands here — awaiting its owner&apos;s response, with the three exits.</span>
-          </div>
-        ) : (<>
+        <>
           <header className="v3ib-h">
             <OwnershipTag cls="stakeholder" showLabel={false} />
             <span className="v3ib-verb">Owned &amp; in-flight</span>
@@ -379,8 +352,9 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit }: Prop
               );
             })}
           </ul>
-        </>)}
+        </>
       </section>
+      )}
 
       {/* DECIDED trace */}
       {ledger.decideFates.length ? (
