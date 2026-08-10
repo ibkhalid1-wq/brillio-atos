@@ -137,6 +137,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
   const chaseCount = asksNeedingChase(ledger.artifactAsks).length + (ledger.artifactAsks.unattributed.weight ? 1 : 0);
   const nothingToShow = unowned.length === 0 && sessionQueue.length === 0
     && ledger.conflicts.length === 0 && ledger.assignments.length === 0
+    && ledger.pinConflicts.length === 0
     && chaseCount === 0 && ledger.decideFates.length === 0;
   if (nothingToShow) return null;
 
@@ -149,6 +150,10 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
     ["ib-assign", unowned.length, "need an owner"],
     ["ib-sessions", sessionQueue.length, "awaiting a date"],
     ["ib-adjudicate", ledger.conflicts.length, "to adjudicate"],
+    // A DIFFERENT unit of decision from "in flight": these are pinned questions a
+    // re-derivation wants to move. Counted separately so neither number restates
+    // the other — the pin holds until the operator says otherwise.
+    ["ib-pinned", ledger.pinConflicts.length, "pinned — routing to decide"],
     ["ib-inflight", ledger.assignments.length, "in flight"],
   ] as const).filter(([, n]) => n > 0);
 
@@ -369,6 +374,51 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
       </section>
       )}
 
+      {/* 4 · PINNED IN FLIGHT → the routing DECISION. A link was sent carrying these
+          questions, so they are pinned to whoever received them. A later derivation (or
+          a bulk assign) now wants a different owner — and it does NOT get to move them.
+          The pin holds; the operator decides, one locus at a time:
+            · keep    → the recipient still answers what they were sent (pin stands)
+            · release → the pin is lifted and the standing owner takes over
+          There is no automatic sweep, and no silent re-attribution of a sent question.
+          EMPTY-STATE: 0 → section hidden, like every other section here. */}
+      {ledger.pinConflicts.length === 0 ? null : (
+      <section id="ib-pinned" className="v3ib-src">
+        <header className="v3ib-h">
+          <OwnershipTag cls="operator" showLabel={false} />
+          <span className="v3ib-verb">Pinned — in flight</span>
+          <span className="v3ib-lead">
+            <b>{ledger.pinConflicts.length}</b> question{ledger.pinConflicts.length === 1 ? "" : "s"} already <b>sent on a link</b> that a
+            fresh derivation would re-route. The link&apos;s recipient <b>keeps</b> them until you say otherwise — decide each one.
+          </span>
+        </header>
+        <ul className="v3ib-list">
+          {ledger.pinConflicts.map((c) => {
+            const sent = c.pin.sentAt ? c.pin.sentAt.slice(0, 10) : null;
+            return (
+              <li key={c.about} className="v3ib-row">
+                <span className="v3ib-row-h">
+                  <ClaimStatus state="open" showLabel={false} />
+                  <QLine about={c.about} tail={<span className="v3ib-owner">📌 {displayPersonLabel(c.pinned)}{sent ? ` · link sent ${sent}` : ""}</span>} />
+                </span>
+                <span className="v3ib-exits">
+                  <span className="v3ib-exits-l">re-derivation routes this to <b>{displayPersonLabel(c.derived)}</b> — nothing moved:</span>
+                  <button type="button" className="v3ib-btn ghost sm" disabled={busy === `pin:${c.about}`}
+                    onClick={() => void run(`pin:${c.about}`, { kind: "pin-resolve", about: c.about, decision: "keep", against: c.derived, by, at: nowISO() })}>
+                    keep with {displayPersonLabel(c.pinned)}
+                  </button>
+                  <button type="button" className="v3ib-btn ghost sm" disabled={busy === `pin:${c.about}`}
+                    onClick={() => void run(`pin:${c.about}`, { kind: "pin-resolve", about: c.about, decision: "release", against: c.derived, by, at: nowISO() })}>
+                    release → move to {displayPersonLabel(c.derived)}
+                  </button>
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+      )}
+
       {/* OWNED & IN-FLIGHT → reassign / unassign + the stakeholder's three exits */}
       {/* EMPTY-STATE: 0 in-flight → section HIDDEN (by request, 2026-08-10). */}
       {ledger.assignments.length === 0 ? null : (
@@ -385,11 +435,17 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
               const cap = ledger.captures.find((c) => c.about === a.about);
               const ref = ledger.redirects.find((r) => r.about === a.about && r.toOwner !== a.owner.label);
               const openExit = exit[a.about] ?? null;
+              // A locus already on a SENT link is pinned to its recipient — that pin,
+              // not this assignment, is who currently holds the question. Say so rather
+              // than printing an owner the fold doesn't honour.
+              const pin = ledger.pins.find((p) => p.about === a.about);
               return (
                 <li key={a.about} className="v3ib-row">
                   <span className="v3ib-row-h">
                     <ClaimStatus state="open" showLabel={false} />
-                    <QLine about={a.about} tail={<span className="v3ib-owner">→ {a.owner.label}</span>} />
+                    <QLine about={a.about} tail={pin
+                      ? <span className="v3ib-owner">📌 {displayPersonLabel(pin.owner.label)} <span className="v3ib-unit">(on a sent link — pinned)</span></span>
+                      : <span className="v3ib-owner">→ {a.owner.label}</span>} />
                     <span className="v3ib-reassign">
                       {cSelect(a.about, `re-${a.about}`, "Reassign to…")}
                       <button type="button" className="v3ib-btn ghost sm" disabled={busy === a.about || !pickedOwner(a.about)} onClick={() => void run(a.about, assignAction(a.about, pickedOwner(a.about)!))}>reassign</button>

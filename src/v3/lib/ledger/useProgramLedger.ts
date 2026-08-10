@@ -24,7 +24,7 @@ import { useMemo } from "react";
 import type { ProgramSummary } from "@/new/types";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
 import { readMovementInputs } from "@/v3/components/flow/flowShellData";
-import { migrate, migrationStats, type Snapshot, type MigrationStats } from "./migrate";
+import { migrate, migrationStats, ownerRoleLabelForArea, type Snapshot, type MigrationStats } from "./migrate";
 import {
   buildUnknownQueue, buildKitView, buildDeviationRegister, buildHeardRegister,
   buildOntologyView, buildAtlasView, openOwnerQuestions, dictionaryBucket,
@@ -39,9 +39,10 @@ import { parseDictionaryCsv, dictionaryToClaims, TYPING_SLOTS, type ParsedDictio
 import type { LedgerStore } from "./store";
 import { isLive, slotOf } from "./types";
 import {
-  readOperatorActions, foldOwnership, applyOwnership, activeAssignments, decidedFates,
+  readOperatorActions, foldOwnership, applyOwnership, activeAssignments, activePins,
+  decidedFates, derivePinConflicts, baselineOwnerLabels,
   type OperatorAction, type AssignAction, type ScheduleAction, type CaptureAction,
-  type DecideFateAction, type RedirectAction,
+  type DecideFateAction, type RedirectAction, type PinAction, type PinConflict,
 } from "./operatorActions";
 
 /** Ownership by SOURCE CLASS, the ledger's own encoding (not an invented taxonomy):
@@ -104,6 +105,16 @@ export interface ProgramLedger {
   redirects: RedirectAction[];
   /** loci the operator decided the fate of (out-of-scope / escalate). */
   decideFates: DecideFateAction[];
+  /** IN-FLIGHT PINS — loci a SENT stakeholder link carries. The ownership overlay
+   *  honours these over any fresh derivation and over any later assign, so a
+   *  question already on someone's link cannot change hands silently. */
+  pins: PinAction[];
+  /** the pinned loci, for a surface that wants to mark a row "on a sent link". */
+  pinnedAbouts: Set<string>;
+  /** The pin DECISIONS: open unknowns where a fresh derivation (or a later routing
+   *  action) wants a different owner than the person the question is in flight to.
+   *  The pin still holds — this is an operator decision queue, never a sweep. */
+  pinConflicts: PinConflict[];
   /** loci with an operator-entered capture — shown provisional, never counted as heard. */
   capturedAbouts: Set<string>;
   /** read-side conflicts: two live claims on one locus (freeze-and-adjudicate). */
@@ -192,10 +203,17 @@ export function useProgramLedger(program?: ProgramSummary): ProgramLedger {
     const captures = actions.filter((a): a is CaptureAction => a.kind === "capture");
     const redirects = actions.filter((a): a is RedirectAction => a.kind === "redirect");
     const fold = foldOwnership(actions);
+    // ── in-flight PINNING: the BASELINE owner per open locus, read ONCE off the
+    // pre-overlay claims — "who would own this if no link had gone out". It exists
+    // solely to DETECT a disagreement; the overlay below still hands the locus to the
+    // pinned recipient, and the disagreement goes to the operator as a decision.
+    const baselineOwner = baselineOwnerLabels(migrated.claims(), activeAssignments(actions));
+    const pinConflicts = derivePinConflicts(fold, (about) => baselineOwner.get(about) ?? "", ownerRoleLabelForArea);
     const store = fold.size
       ? buildReadModel(migrated.elements(), applyOwnership(migrated.claims(), fold))
       : migrated;
     const assignments = [...activeAssignments(actions).values()];
+    const pins = [...activePins(actions).values()];
     const decideFates = [...decidedFates(actions).values()];
 
     // read-side conflicts: precedence leaves two live claims on one locus. Computed
@@ -262,6 +280,9 @@ export function useProgramLedger(program?: ProgramSummary): ProgramLedger {
       captures,
       redirects,
       decideFates,
+      pins,
+      pinnedAbouts: new Set(pins.map((p) => p.about)),
+      pinConflicts,
       capturedAbouts: new Set(captures.map((c) => c.about)),
       conflicts,
       unownedOpen: assignQueue.length,   // burn-down "unowned" === inbox "need an owner" — ONE read

@@ -68,15 +68,46 @@ plus a **two-reads** split: engagement in-flight came from *a link pack existing
 - **Done here (locally verifiable):** `awaiting` now requires the pack to actually carry
   questions (`TheLine.tsx` row builder), so *in-flight with 0 sent questions is
   unrepresentable* — the stated invariant.
-- **Requires the live program (not reachable locally):** fully restoring the specific
-  questions that were owned by Anesthesiology at link-send time and reassigned afterward,
-  and the **pinning rule** — a question that is part of an in-flight link is PINNED as an
-  explicit owned assignment to its recipient (an explicit rule hit: a link was sent), so
-  re-routing can never silently move it; a routing change touching an in-flight link
-  surfaces as an operator decision, not an automatic sweep. This is a write-path change to
-  the send flow (send creates pinned assignments so in-flight and owned read from the same
-  source). It needs the Supabase-backed program to exercise and verify; the surgery/Laila
-  packs live in the DB, absent in this environment.
+- **Done (2026-08-10) — the PINNING RULE is built** (surface layer; frozen core untouched).
+  A question on a SENT link is PINNED to its recipient (an explicit rule hit: a link went
+  out, dated, to a named person), so re-derivation can never move it; a routing change that
+  would affect an in-flight link surfaces as an operator decision, never a sweep.
+
+  | piece | where |
+  |---|---|
+  | `pin` / `pin-resolve` verbs on the existing `_operatorActions` field | `operatorActions.ts` |
+  | send→pin derivation, ONE place (0 loci ⇒ 0 pins) | `pinsForSend` |
+  | fold: a pin ends only on release / unassign / decide-fate | `foldOwnership` |
+  | overlay: pin beats the derivation **and** a later assign | `applyOwnership` |
+  | baseline — "who would own it without the pin" | `baselineOwnerLabels` |
+  | disagreement test (name · role · seam party · function map) | `pinAgreesWith` / `derivePinConflicts` |
+  | the write, at the send moment, on the ONE operator path | `TheLine.tsx` `copyLink` → `useOperatorCommits` |
+  | the operator DECISION row (keep / release) | `OperatorInbox.tsx` §4 `ib-pinned` |
+
+  Proven by `src/v3/__tests__/inFlightPinning.test.ts` (23 cases) against a **real
+  re-derivation**: the same atlas re-migrated with a changed `workflow.owner` moves
+  `el:wf:…#phase` and `el:step:…#decision` between owners while the locus ids hold — the
+  exact shape of this bug. Without a pin they move; with one they do not, and each becomes
+  one inbox decision. Conservation re-checked at Laila scale (the four buckets sum to
+  total-open, identical before/after an 8-question send); heard total 0 either way.
+
+  **Judgment calls, recorded:**
+  1. A later **ASSIGN also loses to the pin** and surfaces as a decision. A bulk
+     "assign all N" is exactly the silent sweep the rule forbids, and the fold cannot tell
+     a deliberate per-locus reroute from a group action. Cost: confirming a stakeholder
+     REDIRECT on an in-flight locus is two taps (assign, then release).
+  2. A **KEEP is scoped to the owner it was taken against** (`ackAgainst`), so a *different*
+     later disagreement re-surfaces instead of being permanently waived.
+  3. **Pins are recorded, not derived from packs.** A pack looks like a send record but is
+     not a durable one — `mintInterviewPacks` drops `questionLoci` on an agenda refresh
+     (`flowPortal.ts:393`) and every follow-up/review mint replaces the standing ask. The
+     append-only action log is the honest record of what went out, to whom, when.
+
+- **Still requires the live program (not reachable locally):** restoring the *specific*
+  questions Anesthesiology held at link-send time in the existing Supabase blob. Packs
+  minted before this change carry no pins, so they pin on their **next** send; there is
+  deliberately no back-fill — inventing a send date and recipient for an old pack would be
+  a fabrication. The surgery/Laila packs live in the DB, absent in this environment.
 
 ## Remaining findings (not this bug's live path, flagged not patched)
 
