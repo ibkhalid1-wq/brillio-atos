@@ -80,6 +80,40 @@ function ownershipSummary(store: LedgerStore): OwnershipSummary {
   return out;
 }
 
+/** One frozen locus for the adjudicate queue: which locus, which slot, and how many
+ *  LIVE CLAIMS are standing on it. */
+export interface ConflictRead { about: string; slot: string; count: number }
+
+/**
+ * READ-SIDE CONFLICTS — the loci an operator has to adjudicate.
+ *
+ * A contradiction is stored as LINKS between claims, and `store.resolve` returns them
+ * as PAIRS, deduped by claim-pair key (store.ts conflictsFor). So two contradicting
+ * live claims — the ordinary case, produced by `store.assert` itself when it escalates
+ * or lets same-world claims coexist, with no explicit `contradict()` call anywhere —
+ * yield exactly ONE pair. The gate here read `> 1`, i.e. "more than one PAIR", which a
+ * locus only reaches at THREE mutually contradicting claims. Two execs disagreeing froze
+ * the element and then reached nobody: the adjudicate section and its stat never
+ * rendered and the rail badge never moved. The gate is the presence of a contradiction,
+ * so it is `> 0`.
+ *
+ * `count` is `live.length` — CLAIMS, not pairs — because the row it feeds reads
+ * "frozen · N live claims". Pairs would have printed "1 live claim" over two of them.
+ *
+ * Pure over the store's own reads (surface layer): the frozen core is untouched.
+ */
+export function readConflicts(store: LedgerStore): ConflictRead[] {
+  const out: ConflictRead[] = [];
+  const seenAbout = new Set<string>();
+  for (const c of store.claims()) {
+    if (!isLive(c) || seenAbout.has(c.about)) continue;
+    seenAbout.add(c.about);
+    const r = store.resolve(c.about);
+    if (r.conflicts && r.conflicts.length > 0) out.push({ about: c.about, slot: slotOf(c.about), count: r.live.length });
+  }
+  return out;
+}
+
 export interface ProgramLedger {
   store: LedgerStore;
   stats: MigrationStats;
@@ -125,8 +159,9 @@ export interface ProgramLedger {
   proposedAbouts: Set<string>;
   /** loci with an operator-entered capture — shown provisional, never counted as heard. */
   capturedAbouts: Set<string>;
-  /** read-side conflicts: two live claims on one locus (freeze-and-adjudicate). */
-  conflicts: Array<{ about: string; slot: string; count: number }>;
+  /** read-side conflicts: a locus frozen by contradicting live claims. `count` is
+   *  the LIVE CLAIMS on it — see readConflicts. */
+  conflicts: ConflictRead[];
   /** THE ONE unowned number — open-unknowns (open or blocked) nobody owns. Every
    *  surface that says "unowned" reads this, so the Work header and the goal strip
    *  can never diverge again (they read 6 vs 5 before). = queue.counts.unowned. */
@@ -232,16 +267,10 @@ export function useProgramLedger(program?: ProgramSummary): ProgramLedger {
     const pins = [...activePins(actions).values()];
     const decideFates = [...decidedFates(actions).values()];
 
-    // read-side conflicts: precedence leaves two live claims on one locus. Computed
-    // over the read model (surface layer) — the projections/store are untouched.
-    const conflicts: Array<{ about: string; slot: string; count: number }> = [];
-    const seenAbout = new Set<string>();
-    for (const c of store.claims()) {
-      if (!isLive(c) || seenAbout.has(c.about)) continue;
-      seenAbout.add(c.about);
-      const r = store.resolve(c.about);
-      if (r.conflicts && r.conflicts.length > 1) conflicts.push({ about: c.about, slot: slotOf(c.about), count: r.conflicts.length });
-    }
+    // read-side conflicts: precedence leaves contradicting live claims on one locus.
+    // ONE definition, above, over the read model (surface layer) — store/projections
+    // untouched.
+    const conflicts = readConflicts(store);
 
     const kit = buildKitView(store);
     const queue = buildUnknownQueue(store);
