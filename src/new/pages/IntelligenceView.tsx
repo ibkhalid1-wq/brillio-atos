@@ -427,6 +427,19 @@ type AISettingsTab = typeof TABS[number];
 type AIProviderId = "anthropic" | "openai" | "google";
 type AIProviderStatus = { configured: boolean; active: boolean; model: string | null; updatedAt: string | null };
 
+// PRESENTATION ONLY — this list is NOT a second model registry.
+// `supabase/functions/_shared/modelCatalog.ts` is the single source of truth for
+// which models exist, their tier, and their pricing; the ids below must be a
+// subset of it, and every current (non-legacy) Anthropic entry must appear here
+// or the picker silently hides a model the runtime supports. That is exactly the
+// drift that let this list rot: it carried its own Anthropic model array for
+// releases after the catalog moved on. The Deno boundary prevents importing the
+// catalog into the client bundle, so the invariant is enforced by
+// `src/v3/__tests__/modelCatalogLockstep.test.ts` — adding a model to the
+// catalog fails CI until it is added here too. Labels and copy live here; facts
+// live in the catalog.
+// Superseded ids are listed last and labelled, so a programme already pinned to
+// one renders honestly instead of silently displaying the current default.
 const AI_PROVIDERS: Array<{
   id: AIProviderId;
   label: string;
@@ -442,9 +455,13 @@ const AI_PROVIDERS: Array<{
     placeholder: "sk-ant-...",
     runtimeReady: true,
     models: [
-      { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6", description: "Best default for high-quality agent reasoning." },
-      { id: "claude-opus-4-1",   label: "Claude Opus 4.1",   description: "Highest reasoning depth for complex programme work." },
+      { id: "claude-sonnet-5",   label: "Claude Sonnet 5",   description: "Recommended default — the best balance of speed and depth for agent runs." },
+      { id: "claude-opus-4-8",   label: "Claude Opus 4.8",   description: "Highest autonomy for long-horizon programme work." },
+      { id: "claude-fable-5",    label: "Claude Fable 5",    description: "Most capable model, for the hardest reasoning. Highest cost per run." },
       { id: "claude-haiku-4-5",  label: "Claude Haiku 4.5",  description: "Faster, lower-cost runs for lightweight tasks." },
+      { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6 (superseded)", description: "Superseded by Sonnet 5. Kept selectable for programmes already pinned to it." },
+      { id: "claude-opus-4-1",   label: "Claude Opus 4.1 (superseded)",   description: "Superseded by Opus 4.8. Kept selectable for programmes already pinned to it." },
+      { id: "claude-3-5-haiku-latest", label: "Claude Haiku 3.5 (retired)", description: "Retired by Anthropic — new runs on this id will fail. Move to Haiku 4.5." },
     ],
   },
   {
@@ -487,7 +504,8 @@ export function IntelligenceView({ program, initialTab, onRunAgent }: Intelligen
 
   // Provider state
   const [selectedProvider, setSelectedProvider] = useState<AIProviderId>("anthropic");
-  const [selectedProviderModel, setSelectedProviderModel] = useState("claude-sonnet-4-6");
+  // Matches DEFAULT_BY_PROVIDER.anthropic in modelCatalog.ts (lockstep-tested).
+  const [selectedProviderModel, setSelectedProviderModel] = useState("claude-sonnet-5");
   const [providerApiKey, setProviderApiKey] = useState("");
   const [providerKeyVisible, setProviderKeyVisible] = useState(false);
   const [providerConfigured, setProviderConfigured] = useState(false);
