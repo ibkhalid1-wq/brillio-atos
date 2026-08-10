@@ -52,6 +52,14 @@ const ONE_SESSION: OperatorQueueReads = {
   ...NO_LEDGER_ITEMS,
   sessionQueue: [{ pair: "Sales ⋈ Finance", abouts: ["el:x#phase"], items: [] }] as OperatorQueueReads["sessionQueue"],
 };
+// The decided TRACE and nothing else — history the page draws, work nobody is waiting on.
+const DECIDED_ONLY: OperatorQueueReads = {
+  ...NO_LEDGER_ITEMS,
+  decideFates: [{
+    kind: "decide-fate", about: "el:x#phase", slot: "phase", decision: "out-of-scope",
+    reason: "not in this programme", by: "op", at: "2026-08-01T00:00:00Z",
+  }],
+};
 const prog = (data: Record<string, unknown> = {}): ProgramSummary =>
   ({ id: "p1", rawData: { data } } as unknown as ProgramSummary);
 const bare = prog();
@@ -80,8 +88,22 @@ describe("(c) the badge and the Inbox emptiness check are the same expression", 
       const items = programInboxItems(program);
       expect(inboxWaitingCountFrom(items, ledger) === 0).toBe(isEmpty);
       // and the ledger half's own null-render rule agrees on the ledger term
-      expect(operatorQueueCounts(ledger).total === 0).toBe(ledger === NO_LEDGER_ITEMS);
+      expect(operatorQueueCounts(ledger).rendered === 0).toBe(ledger === NO_LEDGER_ITEMS);
     }
+  });
+
+  it("the ONE deliberate divergence: the decided trace is drawn, and is not waiting", () => {
+    // `decided` counts rulings ALREADY made. It only grows, so summing it into the badge
+    // made the badge monotonic — see operatorQueue.ts. It is therefore in `rendered`
+    // (the page draws the trace) and out of `total` (the badge is what waits on you).
+    // This is a stated split between two named numbers, both written in one module —
+    // not a second spelling of one predicate, which is what invariant (c) forbids.
+    const c = operatorQueueCounts(DECIDED_ONLY);
+    expect(c.total).toBe(0);
+    expect(c.rendered).toBe(1);
+    expect(inboxWaitingCountFrom(programInboxItems(bare), DECIDED_ONLY)).toBe(0);
+    // and the page's own gate is the one that keeps the trace on screen
+    expect(src("v3/components/flow/OperatorInbox.tsx")).toContain("queue.rendered === 0");
   });
 
   it("SOURCE: FlowToday gates the quiet block on `waiting`, and no longer re-adds the ledger term", () => {

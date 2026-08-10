@@ -8,8 +8,10 @@
  * dictionary chase / decided) and counted for nothing.
  *
  * The fix is ONE definition per half, composed once:
- *   operatorQueueCounts (lib/ledger/operatorQueue.ts) — the ledger half, and the Inbox's
- *     own empty state (`total === 0` is when OperatorInbox renders nothing).
+ *   operatorQueueCounts (lib/ledger/operatorQueue.ts) — the ledger half (`total`, the
+ *     badge = what is WAITING) and the Inbox's own empty state (`rendered === 0` is when
+ *     OperatorInbox renders nothing — waiting plus the decided trace, which is history
+ *     the page shows and the badge does not count).
  *   programInboxItems   (components/flow/flowInbox.ts) — the record half, and the lists
  *     the page renders from.
  *   inboxWaitingCount   — the badge: the two halves added in one place.
@@ -86,7 +88,9 @@ describe("the ledger operator queue is part of the badge", () => {
 
   it("an empty programme yields 0 — the badge hides and the inbox renders nothing", () => {
     expect(inboxWaitingCount(bare, NO_LEDGER_ITEMS)).toBe(0);
-    // OperatorInbox returns null on exactly this condition, so 0 badge === no inbox.
+    // OperatorInbox returns null on `rendered === 0`; with no decided trace either,
+    // that is the same condition, so 0 badge === no inbox.
+    expect(operatorQueueCounts(NO_LEDGER_ITEMS).rendered).toBe(0);
     expect(operatorQueueCounts(NO_LEDGER_ITEMS).total).toBe(0);
   });
 
@@ -98,36 +102,57 @@ describe("the ledger operator queue is part of the badge", () => {
   });
 });
 
+const DECIDED_ONLY: OperatorQueueReads = {
+  ...NO_LEDGER_ITEMS,
+  decideFates: [{ kind: "decide-fate", about: "c", slot: "phase", decision: "out-of-scope", reason: "not in this programme", by: "op", at: AT }],
+};
+
 describe("operatorQueueCounts — every rendered section is a term", () => {
-  it("sessions and the dictionary chase both count (the reported pair)", () => {
+  it("sessions counts QUESTIONS, not seams — and the dictionary chase counts too", () => {
     const counts = operatorQueueCounts(SESSIONS_AND_ASKS);
     const chase = asksNeedingChase(artifactAsks).length + (artifactAsks.unattributed.weight ? 1 : 0);
+    const sessionQuestions = sessionQueue.reduce((n, s) => n + s.abouts.length, 0);
     expect(sessionQueue.length).toBeGreaterThan(0);
     expect(chase).toBeGreaterThan(0);
-    expect(counts.sessions).toBe(sessionQueue.length);
+    // The whole point of the rename: on Laila these are 49 and 11. The header stat is
+    // rendered under a "· questions" unit suffix, so it has to be the 49.
+    expect(sessionQuestions).toBeGreaterThan(sessionQueue.length);
+    expect(counts.sessionQuestions).toBe(sessionQuestions);
     expect(counts.chase).toBe(chase);
-    expect(counts.total).toBe(sessionQueue.length + chase);
+    expect(counts.total).toBe(sessionQuestions + chase);
   });
 
-  it("every section is wired: one item in any one of them lifts the badge off 0", () => {
+  it("every WAITING section is wired: one item in any one of them lifts the badge off 0", () => {
     // One item per section, each the shape that section renders from. Laila's own
     // assign queue is empty (its open unknowns are owned or typing), so the assign
-    // case borrows a real queue item rather than inventing one.
+    // case borrows a real queue item rather than inventing one. `decideFates` is NOT
+    // here — it is the decided TRACE, covered by its own test below.
     const cases: Array<[keyof OperatorQueueReads, OperatorQueueReads, keyof OperatorQueueCounts]> = [
       ["assignQueue", { ...NO_LEDGER_ITEMS, assignQueue: queue.items.slice(0, 1) }, "assign"],
-      ["sessionQueue", { ...NO_LEDGER_ITEMS, sessionQueue: sessionQueue.slice(0, 1) }, "sessions"],
+      ["sessionQueue", { ...NO_LEDGER_ITEMS, sessionQueue: sessionQueue.slice(0, 1) }, "sessionQuestions"],
       ["conflicts", { ...NO_LEDGER_ITEMS, conflicts: [{ about: "el:attr:case.status?dataType", slot: "dataType", count: 2 }] }, "adjudicate"],
       ["pinConflicts", { ...NO_LEDGER_ITEMS, pinConflicts: [{ about: "b", slot: "phase", pinned: "Ada", derived: "Ops", pin: { kind: "pin", about: "b", slot: "phase", owner: { label: "Ada", isRole: false }, sentAt: AT, by: "op", at: AT } }] }, "pinned"],
       ["assignments", { ...NO_LEDGER_ITEMS, assignments: [{ kind: "assign", about: "a", slot: "phase", owner: { label: "Ops", isRole: true }, by: "op", at: AT }] }, "inFlight"],
-      ["decideFates", { ...NO_LEDGER_ITEMS, decideFates: [{ kind: "decide-fate", about: "c", slot: "phase", decision: "out-of-scope", reason: "not in this programme", by: "op", at: AT }] }, "decided"],
       ["artifactAsks", { ...NO_LEDGER_ITEMS, artifactAsks }, "chase"],
     ];
     for (const [section, reads, field] of cases) {
       const c = operatorQueueCounts(reads);
       expect(c[field], `${String(section)} does not reach the badge`).toBeGreaterThan(0);
-      expect(c.total).toBe(c.assign + c.sessions + c.adjudicate + c.pinned + c.inFlight + c.chase + c.decided);
+      expect(c.total).toBe(c.assign + c.sessionQuestions + c.adjudicate + c.pinned + c.inFlight + c.chase);
+      expect(c.rendered).toBe(c.total + c.decided);
       expect(inboxWaitingCount(bare, reads)).toBe(c.total);
     }
+  });
+
+  it("the DECIDED trace is rendered but never waiting — the badge can return to 0", () => {
+    // decideFates only ever grows: it is the log of what the operator already ruled on.
+    // Summing it into the badge made "Nothing needs you right now" unreachable forever
+    // on any programme where a single unknown had been ruled out of scope.
+    const c = operatorQueueCounts(DECIDED_ONLY);
+    expect(c.decided).toBe(1);          // the trace section still has its item
+    expect(c.total).toBe(0);            // …and the badge is quiet
+    expect(c.rendered).toBe(1);         // …and the page still draws it
+    expect(inboxWaitingCount(bare, DECIDED_ONLY)).toBe(0);
   });
 });
 

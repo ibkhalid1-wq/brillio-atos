@@ -24,7 +24,7 @@ import { readableName } from "@/v3/lib/ledger/phrasing";
 import { renderQuestion } from "@/v3/lib/ledger/renderQuestion";
 import { ClaimStatus, OwnershipTag, ProvisionalMark, SourceTag } from "@/v3/components/flow/studio/ledgerPrimitives";
 import { asksNeedingChase, isSystemOwner, type ArtifactAskMark } from "@/v3/lib/ledger/artifactAsks";
-import { operatorQueueCounts } from "@/v3/lib/ledger/operatorQueue";
+import { operatorQueueCounts, sessionQuestionCount } from "@/v3/lib/ledger/operatorQueue";
 import { parseDictionaryCsv } from "@/v3/lib/ledger/dictionary";
 import { retractProposal } from "@/v3/lib/ledger/curation";
 import { displayPersonLabel } from "@/v3/components/flow/flowStakeholders";
@@ -62,9 +62,12 @@ const OTHER = "__other__";
  * expanded row below is unchanged.
  *
  * ONE READ, TWO READINGS: `sessionQueue` is the only array here. `seams` is its length,
- * `questions` is the sum of the per-pair `abouts` — the same per-pair number each expanded
- * row prints. Collapsed, the summary IS the rows added up; expanded, the rows ARE the
- * summary broken out. No second copy of either number is kept anywhere.
+ * `questions` is `sessionQuestionCount` — the SAME function the Inbox header's sessions
+ * stat is computed from, so the two numbers on this screen cannot say different things.
+ * (They did: the header read seams under a row-wide "· questions" suffix — "11 awaiting a
+ * date · questions" — fifteen lines above this line's "11 seams, 49 questions".)
+ * Collapsed, the summary IS the rows added up; expanded, the rows ARE the summary broken
+ * out. No second copy of either number is kept anywhere.
  *
  * UNIT IS QUESTIONS: a seam is a container, a question is the work. "8 seams" alone reads
  * like eight small things; "23 questions" is what those eight seams actually owe, and it
@@ -85,7 +88,7 @@ export function SessionsSection({ sessionQueue, plannedPairs, busy, onPropose }:
   // EMPTY-STATE: 0 seams → section HIDDEN (by request, 2026-08-10) — rule unchanged.
   if (sessionQueue.length === 0) return null;
   const seams = sessionQueue.length;
-  const questions = sessionQueue.reduce((n, s) => n + s.abouts.length, 0);
+  const questions = sessionQuestionCount(sessionQueue);   // === the header's sessions stat
   return (
     <section id="ib-sessions" className="v3ib-src">
       <header className="v3ib-h">
@@ -240,11 +243,14 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
   // WHOLE-INBOX empty state: when no section has anything, the inbox itself is
   // hidden (by request, 2026-08-10) — an empty queue is not a thing to read. The
   // burn-down above remains the goal; nothing here is lost, only unshown.
-  // The terms are NOT re-added here: operatorQueueCounts is the one place that sum is
+  // The terms are NOT re-added here: operatorQueueCounts is the one place either sum is
   // written, and the rail badge reads the identical function. An item on this page is
   // an item on the badge by construction, not by keeping two expressions in step.
+  // `rendered`, not `total`: the decided trace is history the page still shows after the
+  // badge has (correctly) gone quiet, so gating on the badge's number would have deleted
+  // the record of the ruling that emptied the queue.
   const queue = operatorQueueCounts(ledger);
-  if (queue.total === 0) return null;
+  if (queue.rendered === 0) return null;
 
   // ONE UNIT — QUESTIONS, the same unit the burn-down uses, so no reader reconciles
   // "12" against "18". A 0 section is hidden below (by request), so its 0 stat hides
@@ -253,7 +259,9 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
   // queue…" caption is chrome describing an empty thing, not information.
   const stats = ([
     ["ib-assign", queue.assign, "need an owner"],
-    ["ib-sessions", queue.sessions, "awaiting a date"],
+    // QUESTIONS, not seams — the same number the Sessions summary line prints, from the
+    // same function. The row's unit suffix (" · questions") is now true of every term.
+    ["ib-sessions", queue.sessionQuestions, "awaiting a date"],
     ["ib-adjudicate", queue.adjudicate, "to adjudicate"],
     // A DIFFERENT unit of decision from "in flight": these are pinned questions a
     // re-derivation wants to move. Counted separately so neither number restates
