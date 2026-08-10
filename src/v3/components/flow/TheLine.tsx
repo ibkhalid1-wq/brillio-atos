@@ -33,6 +33,8 @@ import { buildMeetingIcs, meetingKit, sponsorLinkQuestions } from "@/v3/componen
 import DiscoveryKitAlign from "@/v3/components/flow/DiscoveryKitAlign";
 import { supabase } from "@/integrations/supabase/client";
 import { useProgramLedger } from "@/v3/lib/ledger/useProgramLedger";
+import { useOperatorCommits } from "@/v3/lib/ledger/useOperatorCommits";
+import { pinsForSend } from "@/v3/lib/ledger/operatorActions";
 import { HeardReadout, ConvergenceReadout, ProvisionalMark, ClaimStatus, SourceTag } from "@/v3/components/flow/studio/ledgerPrimitives";
 import DesignLoopZones from "@/v3/components/flow/DesignLoopZones";
 import { ownerRoleLabelForArea } from "@/v3/lib/ledger/migrate";
@@ -311,6 +313,10 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
   const model = useMemo(() => buildLineModel(program), [program]);
   // The ONE in-browser ledger read every surface here shares (read-only migrate).
   const ledger = useProgramLedger(program);
+  // The ONE operator write path (`_operatorActions`, silent) — reused here, not cloned,
+  // so the SEND moment can record its in-flight PINS on the same channel the inbox
+  // writes assigns and fates to.
+  const commits = useOperatorCommits(program, onSaveInputs);
   const [gateFor, setGateFor] = useState<LineBand | null>(null);
   const [docFor, setDocFor] = useState<ArtifactCardModel | null>(null);
   // A section chip on the board deep-links into the studio at that section.
@@ -684,6 +690,21 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
           loci: ask.map((q) => q.about),
           captureField: row.captureField, unnamed: row.isRole,
         });
+        // THE SEND MOMENT. The link is out, so every LOCUS it carries is now PINNED to
+        // this recipient: a later re-derivation (or a bulk assign) cannot move it — it
+        // has to surface in the inbox as a decision. Written through the ONE operator
+        // write path, after the mint, so a pin never claims a link that wasn't created.
+        // A send carrying no loci (kit-script fallback) pins nothing — in-flight with 0
+        // sent questions stays unrepresentable.
+        if (url && commits.canWrite) {
+          const pins = pinsForSend({
+            abouts: ask.map((q) => q.about),
+            owner: { label: row.label, isRole: row.isRole },
+            ownerRole: row.role,
+            by: "operator", at: new Date().toISOString(),
+          });
+          if (pins.length) await commits.commitAction(pins, ledger.actions);
+        }
       }
       if (!url) { setNote(`No link handler available for ${row.label} in this view.`); return; }
       setLinkShown({ who: row.label, url });

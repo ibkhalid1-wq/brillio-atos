@@ -34,6 +34,9 @@ grep -qn 'ownerFor("sales ops")\|fallback: string' src/v3/lib/ledger/migrate.ts 
 run_tests "B3 partition + conservation" src/v3/__tests__/inboxReconciliation.test.ts
 # B4 — in-flight-with-0-sent unrepresentable (guard is in the row builder)
 grep -qn "questions.length > 0" src/v3/components/flow/TheLine.tsx && pass "B4 in-flight requires sent questions (guard present)" || fail "B4 guard missing in TheLine.tsx"
+# B5 — a SENT question is PINNED to its recipient: re-derivation (and a later assign)
+#      never moves it; a disagreement is an operator decision, never an automatic sweep.
+run_tests "B5 in-flight pinning (pin beats re-derivation; disagreement = a decision)" src/v3/__tests__/inFlightPinning.test.ts
 
 say "C. FRAME / DICTIONARY"
 run_tests "C1/C2 one ask per SoR, states, conservation" src/v3/__tests__/artifactAsks.test.ts
