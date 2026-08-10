@@ -211,3 +211,30 @@ the rest [reported]. No code changed. Recommended remedy for the Tier-1 items is
 each time — one shared definition, or (across the Deno boundary where sharing is impossible) a
 lockstep test in the `edgeLockstep`/`generationPrereqLockstep` idiom — but remedy is out of
 scope here.*
+
+---
+
+## Addendum 2026-08-10 — `labelIdentity` vs `personKey` are NOT a duplicate
+
+`src/v3/components/flow/flowStakeholders.ts` deliberately exports two
+similar-looking normalizers. They look like a Tier-1 duplicate and must not be
+consolidated:
+
+- **`labelIdentity(value)` — loose.** Identity of a ROLE / slot. Strips the
+  stored `— TBC` token, drops parentheticals, flattens slashes, collapses to
+  lowercase alphanumerics. Used for role stand-in collapsing and for the
+  "already surfaced somewhere" checks in `FlowPeople`.
+- **`personKey(value)` — strict.** Identity of a HUMAN. Lowercases, strips the
+  `— TBC` token, normalizes punctuation spacing, and **never discards words**.
+
+The asymmetry is the safety property. Keying people on the loose identity fuses
+humans: `"Sales Lead (Asha Rao)"` and `"Sales Lead (Prakash T M)"` both reduce
+to `sales lead`. Verified against `dedupePeopleRows` — a two-person roster
+collapsed to one row and Prakash T M was dropped entirely, i.e. a fabricated
+roster. That violates NO FABRICATION far more seriously than the duplicate row
+the dedup exists to remove.
+
+Rule: anything deciding *"are these two rows the same person?"* uses
+`personKey`. Anything deciding *"are these two labels the same role slot?"* uses
+`labelIdentity`. Guarded by `src/v3/__tests__/peopleDirectoryDedup.test.ts`
+(cases b2/b3 assert two different humans never merge).

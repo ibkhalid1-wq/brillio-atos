@@ -581,6 +581,152 @@ export function displayPersonLabel(label: string | null | undefined): string {
   return UNNAMED_SUFFIX_RE.test(raw) ? `${raw.replace(UNNAMED_SUFFIX_RE, "").trim()} — no one named yet` : raw;
 }
 
+/**
+ * ONE normalized identity for a ROLE or any free-text label — the key used to
+ * decide whether two labels name the same SLOT. Strips the stored "— TBC"
+ * placeholder token (so "End Patient — TBC" and "End Patient" are one slot),
+ * drops parentheticals as asides and flattens slashes, then collapses to
+ * lowercase alphanumerics — so "Sales / Head of Sales" and "sales head of
+ * sales" are one slot.
+ *
+ * DELIBERATELY NOT the identity of a HUMAN. Dropping parentheticals is safe for
+ * roles and unsafe for people: "Sales Lead (Asha Rao)" and "Sales Lead (Prakash
+ * T M)" both reduce to "sales lead", which would fuse two humans into one row.
+ * Use `personKey` for anything that decides whether two rows are the same
+ * person. (Verified: keying people on this collapsed a two-person roster to one
+ * row and dropped Prakash T M entirely.)
+ */
+export function labelIdentity(value: string): string {
+  return String(value ?? "").trim().toLowerCase()
+    .replace(UNNAMED_SUFFIX_RE, "")
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/[/|]+/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+/**
+ * ONE identity for a HUMAN — the key that decides whether two rows are the same
+ * person. Strict on purpose: it lowercases, strips the stored "— TBC"
+ * placeholder token (so "End Patient — TBC" and "End Patient" are one
+ * identity), and normalises whitespace/punctuation spacing, but it NEVER
+ * discards words. Everything the writer typed still has to match.
+ *
+ * The asymmetry with `labelIdentity` is the whole safety property: two
+ * DIFFERENT non-empty names can never collide here, so the worst case is one
+ * person listed twice (visible, fixable) rather than two people silently merged
+ * into one row (a fabricated person — the failure this module must not have).
+ */
+export function personKey(value: string): string {
+  return String(value ?? "").trim().toLowerCase()
+    .replace(UNNAMED_SUFFIX_RE, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+/** The shape the People page dedups on — every one of its source lists has these. */
+export interface PeopleDirectoryRow { name: string; role: string; isRole?: boolean }
+
+/** No person named yet: an unbound role placeholder. Keyed by ROLE — a role
+ * awaiting someone must still show, and two unfilled roles are two rows. */
+const isRolePlaceholder = (row: PeopleDirectoryRow): boolean =>
+  row.isRole === true || !personKey(row.name);
+/** The row's "name" is just its role repeated back. Two sources do this: the
+ * kit writes an interview with no `role` (the reader falls back to the
+ * stakeholder string, so a PERSON's name lands in both fields — see
+ * kitInterviews' roleLabel fallback), and kit reconciliation adds a persona as
+ * `{name: persona, role: persona}` (a ROLE in both fields). The echo alone
+ * can't tell you which one it is — `dedupePeopleRows` decides from the rest of
+ * the record. */
+const echoesRole = (row: PeopleDirectoryRow): boolean => {
+  const name = labelIdentity(row.name);
+  return !!name && name === labelIdentity(row.role);
+};
+
+/**
+ * Cross-source dedup for the People page: the same human appears ONCE, in
+ * their richest row, and a role awaiting a person still shows.
+ *
+ * Identity is the PERSON (`personKey` over the name) wherever a name exists,
+ * and falls back to the ROLE (`labelIdentity`) only for unnamed placeholders —
+ * so one human listed under two role spellings ("Head of Sales" and "Head of
+ * Sales, Markets") collapses, while two DIFFERENT people in one role stay two
+ * rows (multiple people per role is supported design, not a duplicate). Two
+ * rows with different non-empty names are NEVER merged: keying people on the
+ * loose label identity fused "Sales Lead (Asha Rao)" with "Sales Lead (Prakash
+ * T M)", which is worse than showing one person twice.
+ *
+ * Role spellings are matched EXACTLY (after normalization), never fuzzily — a
+ * genuinely unstaffed role must stay visible rather than be absorbed into a
+ * similarly-named one.
+ */
+export function dedupePeopleRows<R extends PeopleDirectoryRow, D extends PeopleDirectoryRow, A extends PeopleDirectoryRow>(
+  roster: R[], roles: D[], added: A[],
+): { rosterD: R[]; rolesD: D[]; addedD: A[] } {
+  const all: PeopleDirectoryRow[] = [...roster, ...roles, ...added];
+  // A row that names a real person AND states a different role is the only
+  // thing that PROVES a string is a human's name rather than a role label.
+  const humanNames = new Set<string>();
+  // Roles that already have such a named holder — their leftover stand-in rows
+  // are noise (people outrank roles).
+  const covered = new Set<string>();
+  for (const row of all) {
+    if (isRolePlaceholder(row) || echoesRole(row)) continue;
+    humanNames.add(personKey(row.name));
+    covered.add(labelIdentity(row.role));
+  }
+
+  const claimedPeople = new Set<string>();
+  const claimedRoles = new Set<string>();
+  // People are claimed on the STRICT key: two different names never collide, so
+  // this can drop a row only when the same human really is already shown.
+  const claimPerson = (name: string): boolean => {
+    const key = personKey(name);
+    if (!key) return true;
+    if (claimedPeople.has(key)) return false;
+    claimedPeople.add(key);
+    return true;
+  };
+  // Roles are claimed on the LOOSE key: keep at most ONE stand-in per role, and
+  // none once a real person holds it. Over-merging role stand-ins only hides a
+  // redundant placeholder, never a person.
+  const claimRole = (role: string): boolean => {
+    const key = labelIdentity(role);
+    if (!key || covered.has(key) || claimedRoles.has(key)) return false;
+    claimedRoles.add(key);
+    return true;
+  };
+
+  // An echo row is that PERSON when the record proves the string is a human's
+  // name somewhere else; otherwise it is a stand-in for the role.
+  const isPersonRow = (row: PeopleDirectoryRow): boolean =>
+    !isRolePlaceholder(row) && (!echoesRole(row) || humanNames.has(personKey(row.name)));
+
+  // Source order is the established render order (added → roster → roles); only
+  // the named/echo split below is new. Decisions are tracked per POSITION, not
+  // per object: two lists can legitimately hold the same row object, and a
+  // reference-keyed set would then keep it in both — the very duplicate this
+  // function exists to remove.
+  const lists: PeopleDirectoryRow[][] = [added, roster, roles];
+  const keep = lists.map((list) => list.map(() => false));
+  // Rows that state a real role are settled FIRST, so the row a human is kept
+  // in carries their actual role rather than their own name echoed back.
+  for (const pass of [1, 2] as const) {
+    lists.forEach((list, listIndex) => list.forEach((row, rowIndex) => {
+      const echo = echoesRole(row);
+      const person = isPersonRow(row);
+      if (pass === 1 ? echo || !person : !echo && person) return;
+      if (person ? claimPerson(row.name) : claimRole(row.role)) keep[listIndex][rowIndex] = true;
+    }));
+  }
+
+  return {
+    addedD: added.filter((_, i) => keep[0][i]),
+    rosterD: roster.filter((_, i) => keep[1][i]),
+    rolesD: roles.filter((_, i) => keep[2][i]),
+  };
+}
+
 export interface DirectoryPerson {
   id: string;
   name: string;
