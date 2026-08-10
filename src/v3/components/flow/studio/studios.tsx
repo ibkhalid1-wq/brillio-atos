@@ -23,6 +23,7 @@ import { FORMAL_ARTIFACT_FIELD_KEYS } from "@/v3/lib/formalArtifacts";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
 import { listenCoverageAreas, listenAreaCoverage, canonicalFrameArea } from "@/v3/components/flow/listenCoverage";
 import { stakeholderPrimaryArea } from "@/v3/components/flow/flowAreas";
+import { kitAgendaQuestions, demoteInterviewAgenda, KIT_AGENDA_CACHE_FIELD } from "@/v3/lib/ledger/kitAgendaCache";
 
 /* ── shared card-list scaffolding ─────────────────────────────────────────── */
 
@@ -130,9 +131,12 @@ const THIN_COVERAGE = "Thin — needs another voice";
  * editor is a roster on the left and ONE person's essentials on the right:
  * who they are, how to reach them, and the flat list of questions to ask.
  * The generator's agenda-block shape (topic/minutes/questions[]) is flattened
- * for editing and written back as a single block, so every downstream reader
- * (scripts, links, coverage) keeps working untouched. Personas, coverage and
- * gaps fold below — present, but never in the way of the main job.
+ * for editing and written back to the VERSIONED CACHE (`agendaCache`) — the
+ * strings are a cache of rendered question text, never the source (the ledger's
+ * open unknowns are), so editing here demotes them out of the field that reads
+ * like the plan. Downstream readers go through the one accessor and keep working
+ * untouched. Personas, coverage and gaps fold below — present, but never in the
+ * way of the main job.
  */
 function DiscoveryKitStudio({ doc, onChange, program }: StudioProps) {
   const locked = useStudioLocked();
@@ -150,11 +154,18 @@ function DiscoveryKitStudio({ doc, onChange, program }: StudioProps) {
     setSelected((sel) => (sel === index ? to : sel === to ? index : sel));
   };
 
-  const questionsOf = (interview: Record<string, unknown>): string[] =>
-    asArray(interview.agenda).map(asRecord).flatMap((block) => asStrings(block.questions));
+  const questionsOf = (interview: Record<string, unknown>): string[] => kitAgendaQuestions(interview);
+  // The write DEMOTES: strings land in the versioned cache, the agenda block keeps
+  // the part that really is a plan (topic + minutes). Readers are unaffected — they
+  // all go through readKitAgendaCache.
   const setQuestions = (index: number, next: string[]) => {
-    const first = asArray((interviews.items[index] as Record<string, unknown>).agenda).map(asRecord)[0] ?? {};
-    interviews.set(index, { agenda: [{ topic: asText(first.topic) || "Conversation", minutes: first.minutes ?? 45, questions: next }] });
+    const item = interviews.items[index] as Record<string, unknown>;
+    const first = asArray(item.agenda).map(asRecord)[0] ?? {};
+    const demoted = demoteInterviewAgenda(item, { questions: next });
+    interviews.set(index, {
+      agenda: [{ topic: asText(first.topic) || "Conversation", minutes: first.minutes ?? 45 }],
+      [KIT_AGENDA_CACHE_FIELD]: demoted[KIT_AGENDA_CACHE_FIELD],
+    });
   };
 
   const thinCount = asArray(doc.coverageMap).map(asRecord).filter((row) => row.thin === true).length;

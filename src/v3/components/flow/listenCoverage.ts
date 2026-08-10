@@ -15,6 +15,7 @@ import { programAreas, canonicalFrameArea, GENERAL_AREA, kitCoverageDomains, kit
 export { canonicalFrameArea };
 import { resolveMovementStakeholders, readDirectoryPeople, dismissedListenRoles, validateProgramRole, readListenPlan, listenPlanWrite, readListenPlanOrder, type ListenPlanOverlay, type ListenPlanOrder } from "@/v3/components/flow/flowStakeholders";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
+import { kitAgendaQuestions } from "@/v3/lib/ledger/kitAgendaCache";
 
 export interface CoverageRole { label: string; name?: string; added: boolean }
 export interface CoverageArea { label: string; added: boolean }
@@ -186,8 +187,11 @@ export function areaCoherence(
   const entities = recArr(readArtifactDoc(program, "domainOntology")?.entities);
   const workflows = liveWorkflows ?? recArr(readArtifactDoc(program, "currentStateAtlas")?.workflows);
   const interviews = recArr(readArtifactDoc(program, "discoveryKit")?.interviews);
+  // Agenda strings are a CACHE of rendered question text — read through the ONE
+  // accessor (versioned cache field, else the legacy inline blocks), never
+  // re-flattened here. See src/v3/lib/ledger/kitAgendaCache.ts.
   const questionsOf = (interview: Record<string, unknown>): string[] => [
-    ...recArr(interview.agenda).flatMap((block) => (Array.isArray(block.questions) ? block.questions.map(txt) : [])),
+    ...kitAgendaQuestions(interview),
     ...(Array.isArray(interview.questions) ? interview.questions.map(txt) : []),
   ];
   return areas.map((area) => {
