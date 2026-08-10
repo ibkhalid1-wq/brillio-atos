@@ -20,7 +20,7 @@ import {
   listFlowTracks, trackAcceptance, trackPace,
 } from "@/v3/components/flow/flowTracks";
 import { readFlowGovernance, flowAgentTier } from "@/v3/components/flow/flowGovernance";
-import { resolveMovementStakeholders, deliveryRoleDirectory, readDirectoryPeople, validateProgramRole, readRoleBindings, knownProgramRoles, unresolvedCoverageNames, kitPersonaDirectory, readSuggestedVoices, readListenPlan, listenPlanWrite, dismissedListenRoles } from "@/v3/components/flow/flowStakeholders";
+import { resolveMovementStakeholders, deliveryRoleDirectory, readDirectoryPeople, validateProgramRole, readRoleBindings, knownProgramRoles, unresolvedCoverageNames, kitPersonaDirectory, readSuggestedVoices, readListenPlan, listenPlanWrite, dismissedListenRoles, labelIdentity, dedupePeopleRows } from "@/v3/components/flow/flowStakeholders";
 import DiscoveryKitAlign from "@/v3/components/flow/DiscoveryKitAlign";
 import TheLine from "@/v3/components/flow/TheLine";
 import OperatorInbox from "@/v3/components/flow/OperatorInbox";
@@ -2134,18 +2134,9 @@ function FlowPortfolio({ programs, activeId, onSelectProgram, onHydratePrograms,
 /* ── Library: everything the programme knows ─────────────────────────────── */
 
 /* ── People — the programme-wide directory, its own destination ─────────── */
-/** One normalized identity for a person or role, used to dedup the People page
- * across its four sources. Strips a trailing "— TBC", parentheticals, and
- * slashes, then collapses to lowercase alphanumerics — so "Sales / Head of
- * Sales", "Sales (Head of Sales)" and "sales head of sales" are one identity,
- * and "Recruitment Ops — TBC" matches "Recruitment Ops". */
-const peopleIdentity = (value: string): string =>
-  value.trim().toLowerCase()
-    .replace(/\s*[—–−‑-]\s*tbc\s*$/i, "")
-    .replace(/\([^)]*\)/g, " ")
-    .replace(/[/|]+/g, " ")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
+/* Identity and cross-source dedup live in flowStakeholders (`labelIdentity`,
+ * `dedupePeopleRows`) — ONE definition, shared by every reader and tested in
+ * peopleDirectoryDedup.test.ts, so this page can never drift into a second one. */
 
 // Phase order for grouping delivery roles on the People page.
 function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { program: ProgramSummary; onSaveInputs?: FlowShellProps["onSaveInputs"]; onRenamePerson?: FlowShellProps["onRenamePerson"]; onGoInbox?: () => void }) {
@@ -2188,71 +2179,24 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
     // Enrollment" all collapse to a single row.
     const known = new Set<string>();
     for (const e of resolveMovementStakeholders(program, "listen")) {
-      if (e.role) known.add(peopleIdentity(e.role));
-      if (e.name) known.add(peopleIdentity(e.name));
+      if (e.role) known.add(labelIdentity(e.role));
+      if (e.name) known.add(labelIdentity(e.name));
     }
     for (const r of deliveryRoleDirectory(program)) {
-      known.add(peopleIdentity(r.role));
-      if (r.bound?.name) known.add(peopleIdentity(r.bound.name));
+      known.add(labelIdentity(r.role));
+      if (r.bound?.name) known.add(labelIdentity(r.bound.name));
     }
     for (const p of readDirectoryPeople(program)) {
-      if (p.role) known.add(peopleIdentity(p.role));
-      if (p.name) known.add(peopleIdentity(p.name));
+      if (p.role) known.add(labelIdentity(p.role));
+      if (p.name) known.add(labelIdentity(p.name));
     }
-    return kitPersonaDirectory(program).filter((persona) => !known.has(peopleIdentity(persona.name)));
+    return kitPersonaDirectory(program).filter((persona) => !known.has(labelIdentity(persona.name)));
   }, [program]);
-  // Cross-source dedup for NAMED people: the same person must appear once, in
-  // their richest row. The Listen roster (carries heard-state + email) outranks
-  // a delivery-role binding, which outranks an operator-added row. Role
-  // placeholders (no name) are never collapsed — a role awaiting a person still
-  // needs to show. This kills the "same person listed 2–4 times" class.
-  const dedup = useMemo(() => {
-    // A role STAND-IN is a row that names no real person: an unbound placeholder,
-    // or an entry whose "name" is just the role echoed back (an operator-added
-    // "GTM Sales" that stands for the role, not a person). People outrank roles —
-    // so once a role has a REAL named holder, its leftover stand-in rows are noise.
-    // Collapsing them kills the "same role listed twice" the People page showed
-    // (a named "Head of IT" beside an unbound "IT Architect"; "Prakash T M" beside
-    // a bare "GTM Sales") without ever hiding a genuine second person in that role.
-    const isStandIn = (name: string, role: string) => {
-      const n = peopleIdentity(name);
-      return !n || n === peopleIdentity(role);
-    };
-    const covered = new Set<string>();
-    for (const r of roster) if (!r.isRole && !isStandIn(r.name, r.role)) covered.add(peopleIdentity(r.role));
-    for (const r of roles) if (r.name && !isStandIn(r.name, r.role)) covered.add(peopleIdentity(r.role));
-    for (const p of added) if (!isStandIn(p.name, p.role)) covered.add(peopleIdentity(p.role));
-
-    const seen = new Set<string>();
-    const claim = (name: string) => {
-      const k = peopleIdentity(name);
-      if (!k) return true;
-      if (seen.has(k)) return false;
-      seen.add(k);
-      return true;
-    };
-    // Keep at most ONE stand-in per role, and none once a real person owns it.
-    // Evaluated in render order (added → roster → roles) so the first stand-in
-    // for a role wins and the rest — the second "Legal", the leftover unbound
-    // placeholder beside a bound person — drop.
-    const seenStandInRole = new Set<string>();
-    const keepStandIn = (role: string) => {
-      const rk = peopleIdentity(role);
-      if (!rk || covered.has(rk) || seenStandInRole.has(rk)) return false;
-      seenStandInRole.add(rk);
-      return true;
-    };
-    const addedD = added.filter((p) => (isStandIn(p.name, p.role) ? keepStandIn(p.role) : claim(p.name)));
-    const rosterD = roster.filter((r) => {
-      if (r.isRole || isStandIn(r.name, r.role)) return keepStandIn(r.role);
-      return claim(r.name);
-    });
-    const rolesD = roles.filter((r) => {
-      if (!r.name || isStandIn(r.name, r.role)) return keepStandIn(r.role);
-      return claim(r.name);
-    });
-    return { rosterD, addedD, rolesD };
-  }, [roster, added, roles]);
+  // Cross-source dedup: the same PERSON appears once, a role awaiting a person
+  // still shows, and two different people in one role stay two rows. The rule
+  // lives in ONE place (dedupePeopleRows) so the People page, its tests and any
+  // future reader can never disagree about who is who.
+  const dedup = useMemo(() => dedupePeopleRows(roster, roles, added), [roster, added, roles]);
   // Remove a ROLE from the cast (operator judgement, attested). Named people
   // are never removed this way — people outrank roles.
   const removeRole = async (role: string) => {
@@ -2314,21 +2258,21 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
       for (const iv of Array.isArray(k.interviews) ? k.interviews : []) {
         if (!iv || typeof iv !== "object") continue;
         const row = iv as Record<string, unknown>;
-        for (const v of [row.role, row.stakeholder]) { const id = peopleIdentity(String(v ?? "")); if (id) s.add(id); }
+        for (const v of [row.role, row.stakeholder]) { const id = labelIdentity(String(v ?? "")); if (id) s.add(id); }
       }
       for (const p of Array.isArray(k.personas) ? k.personas : []) {
         if (!p || typeof p !== "object") continue;
-        const id = peopleIdentity(String((p as Record<string, unknown>).name ?? "")); if (id) s.add(id);
+        const id = labelIdentity(String((p as Record<string, unknown>).name ?? "")); if (id) s.add(id);
       }
     }
     // People added on the kit's coverage matrix are part of the kit too.
-    for (const r of readListenPlan(program).roles) { const id = peopleIdentity(r); if (id) s.add(id); }
+    for (const r of readListenPlan(program).roles) { const id = labelIdentity(r); if (id) s.add(id); }
     return s;
   }, [program]);
   const reconcile = useMemo(() => ({
     toAdd: personas.filter((p) => p.kind !== "external"),
     toRemove: added.filter((p) => p.movementId === "listen"
-      && !kitIdentity.has(peopleIdentity(p.name)) && !kitIdentity.has(peopleIdentity(p.role))),
+      && !kitIdentity.has(labelIdentity(p.name)) && !kitIdentity.has(labelIdentity(p.role))),
   }), [personas, added, kitIdentity]);
   const [reconBusy, setReconBusy] = useState(false);
   const [reconNote, setReconNote] = useState<string | null>(null);
