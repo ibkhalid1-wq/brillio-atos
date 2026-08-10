@@ -24,6 +24,7 @@ import { readableName } from "@/v3/lib/ledger/phrasing";
 import { renderQuestion } from "@/v3/lib/ledger/renderQuestion";
 import { ClaimStatus, OwnershipTag, ProvisionalMark, SourceTag } from "@/v3/components/flow/studio/ledgerPrimitives";
 import { asksNeedingChase, isSystemOwner, type ArtifactAskMark } from "@/v3/lib/ledger/artifactAsks";
+import { operatorQueueCounts } from "@/v3/lib/ledger/operatorQueue";
 import { parseDictionaryCsv } from "@/v3/lib/ledger/dictionary";
 import { retractProposal } from "@/v3/lib/ledger/curation";
 import { displayPersonLabel } from "@/v3/components/flow/flowStakeholders";
@@ -153,12 +154,11 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
   // WHOLE-INBOX empty state: when no section has anything, the inbox itself is
   // hidden (by request, 2026-08-10) — an empty queue is not a thing to read. The
   // burn-down above remains the goal; nothing here is lost, only unshown.
-  const chaseCount = asksNeedingChase(ledger.artifactAsks).length + (ledger.artifactAsks.unattributed.weight ? 1 : 0);
-  const nothingToShow = unowned.length === 0 && sessionQueue.length === 0
-    && ledger.conflicts.length === 0 && ledger.assignments.length === 0
-    && ledger.pinConflicts.length === 0
-    && chaseCount === 0 && ledger.decideFates.length === 0;
-  if (nothingToShow) return null;
+  // The terms are NOT re-added here: operatorQueueCounts is the one place that sum is
+  // written, and the rail badge reads the identical function. An item on this page is
+  // an item on the badge by construction, not by keeping two expressions in step.
+  const queue = operatorQueueCounts(ledger);
+  if (queue.total === 0) return null;
 
   // ONE UNIT — QUESTIONS, the same unit the burn-down uses, so no reader reconciles
   // "12" against "18". A 0 section is hidden below (by request), so its 0 stat hides
@@ -166,14 +166,14 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
   // is countable the whole header goes with it: a bare "INBOX — the operator-decision
   // queue…" caption is chrome describing an empty thing, not information.
   const stats = ([
-    ["ib-assign", unowned.length, "need an owner"],
-    ["ib-sessions", sessionQueue.length, "awaiting a date"],
-    ["ib-adjudicate", ledger.conflicts.length, "to adjudicate"],
+    ["ib-assign", queue.assign, "need an owner"],
+    ["ib-sessions", queue.sessions, "awaiting a date"],
+    ["ib-adjudicate", queue.adjudicate, "to adjudicate"],
     // A DIFFERENT unit of decision from "in flight": these are pinned questions a
     // re-derivation wants to move. Counted separately so neither number restates
     // the other — the pin holds until the operator says otherwise.
-    ["ib-pinned", ledger.pinConflicts.length, "pinned — routing to decide"],
-    ["ib-inflight", ledger.assignments.length, "in flight"],
+    ["ib-pinned", queue.pinned, "pinned — routing to decide"],
+    ["ib-inflight", queue.inFlight, "in flight"],
   ] as const).filter(([, n]) => n > 0);
 
   return (
