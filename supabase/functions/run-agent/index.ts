@@ -5456,18 +5456,21 @@ function deriveFormalRunMode(
 /** Gap between consecutive downstream agent triggers, to smooth provider load. */
 const DOWNSTREAM_STAGGER_MS = 1500;
 
-/** True when a run-agent response indicates the AI provider is rate-limited. */
+/** True when a run-agent response indicates the AI provider is rate-limited.
+ *  NOT true for run-agent's OWN 429s (movement-cap / daily-budget governance) —
+ *  those carry a `governance`/budget body and are a deliberate spend decision,
+ *  not provider throttling; labeling them "rate-limited" misroutes the halt. */
 async function isProviderRateLimited(res: Response): Promise<boolean> {
-  if (res.status === 429) return true;
   if (res.ok) return false;
-  // The provider rate limit surfaces as a 500 with a rate-limit message in the body
-  // (the bare 429 from run-agent is the separate daily-token-budget guard).
   try {
-    const body = await res.clone().json() as { error?: string };
+    const body = await res.clone().json() as { error?: string; governance?: string };
+    if (body?.governance === "budget" || (typeof body?.error === "string" && /token budget/i.test(body.error))) return false;
+    if (res.status === 429) return true;
+    // The provider rate limit can also surface as a 500 with a rate-limit message.
     return typeof body?.error === "string"
       && /rate limit|temporarily busy|too many requests/i.test(body.error);
   } catch {
-    return false;
+    return res.status === 429;
   }
 }
 
