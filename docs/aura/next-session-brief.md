@@ -82,6 +82,32 @@ TheLine**, which builds its cast from Listen at `TheLine.tsx:403-414`.
 **2.5 The check count is 21.** Earlier docs say 17, then 18, then 19. Verified two ways
 (reading every call site, and counting `^PASS ` lines): **21 emitted checks, all PASS.**
 
+**2.6 "An unknown model inherits provider defaults and still runs (graceful degradation)
+rather than being rejected by an allowlist."** (`modelCatalog.ts:69-70`) — **True as a
+tolerance argument, false the moment a provider RETIRES a request field.** The premise
+assumes an inherited default is a neutral guess. When a field is removed provider-side it
+becomes affirmatively wrong, and the fallback stops being lenient and starts being the one
+setting that breaks the model.
+
+Concretely: `PROVIDER_DEFAULT_CAPABILITIES.anthropic` sets `acceptsTemperature: true`
+(`modelCatalog.ts:72`), and `claudeClient.ts:252` attaches `temperature: 0.2` on exactly
+that flag. Anthropic removed the sampling parameters in the 4.7-and-later generation —
+`temperature` returns a **400** on Sonnet 5, Opus 4.8 and Fable 5. All three were added
+this session inheriting that default, in the same change that made `claude-sonnet-5` the
+configured default (`DEFAULT_BY_PROVIDER`), and `run-agent` imports `claudeClient`. Not
+degradation: a guaranteed 400 on the primary path, on every call.
+
+**Fixed in `38a8adc`** — the three entries carry an explicit `ANTHROPIC_NO_SAMPLING_PARAMS`
+profile (`modelCatalog.ts:88, 106-108`); a data edit, still no branching on model name.
+Two sentries in `modelCatalogLockstep.test.ts` hold it: the profile must be attached, and
+`anthropicPayload` must keep gating on `caps.acceptsTemperature` (a decorative profile with
+an unconditional assignment would re-break it). Mutation-tested by reintroducing the bug on
+`claude-sonnet-5` alone — suite fails, restore passes.
+
+**The premise at `:69-70` is unchanged and still load-bearing for every future entry.**
+Prices in that table were checked against the published catalog and are correct; it was the
+*capability* column that was fabricated. Check both when adding a model.
+
 ---
 
 ## 3. STATE AT HANDOFF (2026-08-10)
@@ -220,6 +246,27 @@ override claim. Dormant (script-only, see §6). Fix: derive from the roster, or 
 parameter of `overridesToBatch` with no default. Note it is pinned by comment to
 `migrate`'s `ownerFor("sales")` — changing one without the other breaks the parity the
 `scripts/ledger/*.ts` comparison scripts assert.
+
+### W-8 · The picker offers a retired model as selectable — `IntelligenceView.tsx:463`
+`claude-opus-4-1` passed its retirement date on **2026-08-05**; runs on it now 404. The
+catalog marks it only `legacy: true` (`modelCatalog.ts:111`) and the picker tells the
+operator *"Superseded by Opus 4.8. Kept selectable for programmes already pinned to it."*
+— a promise the API will not keep. The neighbouring entry already models the honest
+treatment: `claude-3-5-haiku-latest` is labelled *"(retired) — new runs on this id will
+fail"* (`:464`). Same state, two different stories, one line apart.
+
+**Not urgent:** `modelForTier` excludes `legacy`, so nothing auto-routes there — the
+exposure is an operator manually selecting it and getting a 404 at run time.
+
+Fix is a choice, not a lookup. Either (a) relabel `:463` to match `:464` — smallest edit,
+but "retired" stays a labelling convention rather than an enforced field; or (b) add a
+`retired?: true` flag distinct from `legacy`, so the catalog can state it once and both the
+picker copy and any future guard read it. (b) is the shape the rest of this file uses.
+
+> Do **not** delete the entry either way. It must stay in the catalog so an already-pinned
+> programme still resolves its real price and renders honestly, instead of falling through
+> to provider-default pricing — the same reason `legacy` entries are kept at all
+> (`modelCatalog.ts:48-53`).
 
 ---
 
