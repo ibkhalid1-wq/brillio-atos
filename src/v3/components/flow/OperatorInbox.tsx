@@ -110,6 +110,15 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
     );
   };
 
+  // WHOLE-INBOX empty state: when no section has anything, the inbox itself is
+  // hidden (by request, 2026-08-10) — an empty queue is not a thing to read. The
+  // burn-down above remains the goal; nothing here is lost, only unshown.
+  const chaseCount = asksNeedingChase(ledger.artifactAsks).length + (ledger.artifactAsks.unattributed.weight ? 1 : 0);
+  const nothingToShow = unowned.length === 0 && sessionQueue.length === 0
+    && ledger.conflicts.length === 0 && ledger.assignments.length === 0
+    && chaseCount === 0 && ledger.decideFates.length === 0;
+  if (nothingToShow) return null;
+
   return (
     <div className="v3ib" aria-label="Operator inbox">
       <header className="v3ib-top">
@@ -128,7 +137,10 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
               ["ib-adjudicate", ledger.conflicts.length, "to adjudicate"],
               ["ib-inflight", ledger.assignments.length, "in flight"],
             ] as const).filter(([, n]) => n > 0);
-            if (!stats.length) return <span className="v3ib-unit">nothing needs the operator right now</span>;
+            // The whole inbox hides when EVERYTHING is empty, so reaching here means
+            // something below still needs attention (a dictionary chase, a decided
+            // trace) — say nothing rather than claim the queue is clear.
+            if (!stats.length) return null;
             return (<>
               {stats.map(([id, n, label], i) => (
                 <span key={id}>
