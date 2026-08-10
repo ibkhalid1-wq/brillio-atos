@@ -538,7 +538,12 @@ export default function FlowShell(props: FlowShellProps) {
   const coverageNameCount = useMemo(() => unresolvedCoverageNames(program).length, [program]);
   // Rebuilds owed do NOT count here: stale documents live on the ribbon (the
   // movement's "Regeneration required" bar + amber tabs), not in the Inbox.
-  const waitingCount = openDecisions.length + portalInbox.length + approvalResponseCount + openDisputeCount + unresolvedRoleCount + coverageNameCount;
+  // GOVERNED EXCEPTIONS were missing from this sum while the Inbox page itself
+  // renders them (its own empty-check and its "N items" header both include
+  // them) — so the dock badge could disagree with the page it points at. Same
+  // seven terms on both sides now: the page is the list, this is its count.
+  const exceptionCount = useMemo(() => governedExceptionsForInbox(program).length, [program]);
+  const waitingCount = openDecisions.length + portalInbox.length + approvalResponseCount + openDisputeCount + unresolvedRoleCount + coverageNameCount + exceptionCount;
   // "Where to go next" — the single rail item the operator should visit now.
   // Waiting decisions/inbox items pull them to the Inbox; otherwise the work
   // continues on Flow. The pointer is persistent (it always shows the next
