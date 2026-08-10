@@ -16,7 +16,7 @@
  * ticks heard. Assign, reassign, decide-fate, mark-session, redirect, release and
  * operator-captured entries never do — none is injected into the store heard reads.
  */
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import type { ProgramLedger } from "@/v3/lib/ledger/useProgramLedger";
 import type { OperatorAction } from "@/v3/lib/ledger/operatorActions";
 import { slotOf, elementIdOf } from "@/v3/lib/ledger/types";
@@ -24,6 +24,7 @@ import { readableName } from "@/v3/lib/ledger/phrasing";
 import { renderQuestion } from "@/v3/lib/ledger/renderQuestion";
 import { ClaimStatus, OwnershipTag, ProvisionalMark, SourceTag } from "@/v3/components/flow/studio/ledgerPrimitives";
 import { asksNeedingChase, isSystemOwner, type ArtifactAskMark } from "@/v3/lib/ledger/artifactAsks";
+import { parseDictionaryCsv } from "@/v3/lib/ledger/dictionary";
 
 interface Candidate { label: string; role: string }
 interface Props {
@@ -34,12 +35,31 @@ interface Props {
   /** Record an artifact-ask mark (requested / has-none) — the `_artifactAsks`
    *  underscore-field write, same silent-save channel as operator actions. */
   onAskMark?: (mark: ArtifactAskMark) => void;
+  /** Attach the client's data dictionary (CSV text) — the WRITE half of the SoR
+   *  ask. Without it the inbox asks for an upload with no door to open. */
+  onDictionary?: (csv: string) => void | Promise<void>;
 }
 
 const nowISO = () => new Date().toISOString();
 const OTHER = "__other__";
 
-export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskMark }: Props) {
+export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskMark, onDictionary }: Props) {
+  // The dictionary upload — parsed for a HONEST preview before it is committed:
+  // the operator sees how many fields parsed and how many open questions this
+  // file would actually close, not a promise.
+  const dictRef = useRef<HTMLInputElement>(null);
+  const [dictPreview, setDictPreview] = useState<{ name: string; fields: number; closes: number; csv: string } | null>(null);
+  const readDictionaryFile = async (file: File) => {
+    const csv = await file.text();
+    const parsed = parseDictionaryCsv(csv, file.name.replace(/\.[^.]+$/, ""));
+    const typingByKey = new Set(ledger.typingLoci.map((i) => elementIdOf(i.about)));
+    // How many OPEN typing loci this dictionary actually names — a real read.
+    const closes = parsed.fields.reduce((n, f) => {
+      const id = `el:attr:${f.entity.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-")}.${f.field.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+      return n + (typingByKey.has(id) ? 1 : 0);
+    }, 0);
+    setDictPreview({ name: parsed.name, fields: parsed.fields.length, closes, csv });
+  };
   const [sel, setSel] = useState<Record<string, string>>({});
   const [other, setOther] = useState<Record<string, string>>({});
   const [fate, setFate] = useState<Record<string, boolean>>({});
@@ -209,6 +229,30 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
               <div className="v3ib-dict-ask">
                 <span className="v3ib-dict-to"><b>{unattributed.weight}</b> typing question{unattributed.weight === 1 ? "" : "s"} on entities with <b>no system of record named</b></span>
                 <span className="v3ib-dict-msg">a Frame gap, not an ask — name the SoR and these attach to its ask.</span>
+              </div>
+            ) : null}
+            {/* THE UPLOAD — the write half of the ask. Parsed first so the operator
+                sees what this file actually closes before committing it. */}
+            {onDictionary ? (
+              <div className="v3ib-dict-up">
+                <input ref={dictRef} type="file" accept=".csv,.tsv,.txt" className="v3ib-sr"
+                  onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void readDictionaryFile(f); }} />
+                {dictPreview ? (
+                  <>
+                    <span className="v3ib-dict-prev">
+                      <b>{dictPreview.name}</b> · {dictPreview.fields} field{dictPreview.fields === 1 ? "" : "s"} parsed ·
+                      {" "}<b>{dictPreview.closes}</b> of the {ledger.typingLoci.length} open typing question{ledger.typingLoci.length === 1 ? "" : "s"} match
+                      {dictPreview.closes === 0 ? " — nothing here matches an open locus; check the entity/field columns" : ""}
+                    </span>
+                    <button type="button" className="v3ib-btn" disabled={busy === "dict"}
+                      onClick={() => { setBusy("dict"); void Promise.resolve(onDictionary(dictPreview.csv)).finally(() => { setBusy(null); setDictPreview(null); }); }}>
+                      {busy === "dict" ? "attaching…" : "attach this dictionary"}
+                    </button>
+                    <button type="button" className="v3ib-btn ghost sm" onClick={() => setDictPreview(null)}>discard</button>
+                  </>
+                ) : (
+                  <button type="button" className="v3ib-btn ghost" onClick={() => dictRef.current?.click()}>⬆ upload a data dictionary (CSV/TSV)</button>
+                )}
               </div>
             ) : null}
           </section>
