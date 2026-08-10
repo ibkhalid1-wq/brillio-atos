@@ -24,7 +24,7 @@ import { useMemo, useState } from "react";
 import type { LineBand, LineStation } from "@/v3/lib/lineModel";
 import type { ArtifactCardModel } from "@/v3/components/flow/flowShellData";
 import type { ProgramLedger } from "@/v3/lib/ledger/useProgramLedger";
-import { questionForLocus } from "@/v3/lib/ledger/phrasing";
+import { renderQuestion } from "@/v3/lib/ledger/renderQuestion";
 import type { Routing } from "@/v3/lib/ledger/projections";
 import {
   OwnershipTag, HeardReadout, ConvergenceReadout, ProvisionalMark,
@@ -135,13 +135,12 @@ export default function DesignLoopZones({ band, ledger, onOpen, onRegen, onGener
   // (the role-owned open set); each segment filters to its routing set. Filtered off
   // the one queue projection, phrased plain-language. ──
   const [drill, setDrill] = useState<null | "owned" | Routing>(null);
-  const nameOf = useMemo(() => new Map(ledger.store.elements().map((e) => [e.id, e.name] as const)), [ledger.store]);
   const drillItems = useMemo(() => {
     if (!drill) return [];
     const match = (r: Routing) => drill === "owned" ? (r === "blocking" || r === "answerable-without-a-meeting") : r === drill;
     return ledger.queue.items.filter((i) => match(i.routing) && i.owner.kind === "role")
-      .map((i) => ({ ...i, ...questionForLocus(i.about, (id) => nameOf.get(id)) }));
-  }, [drill, ledger.queue.items, nameOf]);
+      .map((i) => { const r = renderQuestion(ledger.store, i.about, "operator"); return { ...i, question: r.question, typeTag: r.label, name: r.elementName }; });
+  }, [drill, ledger.queue.items, ledger.store]);
   const DrillBtn = ({ k, n, label }: { k: "owned" | Routing; n: number; label: string }) => (
     <button type="button" className={`v3dl-drillbtn${drill === k ? " on" : ""}`} aria-pressed={drill === k}
       disabled={n === 0}

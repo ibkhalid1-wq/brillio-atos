@@ -38,7 +38,7 @@ import OperatorInbox from "@/v3/components/flow/OperatorInbox";
 import { serializeOperatorActions, OPERATOR_ACTIONS_FIELD, type OperatorAction } from "@/v3/lib/ledger/operatorActions";
 import { ownerRoleLabelForArea } from "@/v3/lib/ledger/migrate";
 import type { ArtifactAskMark } from "@/v3/lib/ledger/artifactAsks";
-import { questionForLocus } from "@/v3/lib/ledger/phrasing";
+import { renderQuestion } from "@/v3/lib/ledger/renderQuestion";
 import "./theLine.css";
 
 const FlowArtifactStudio = lazy(() => import("./studio/FlowArtifactStudio"));
@@ -457,7 +457,6 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
   // one soloByOwner projection. Seams are excluded by construction (joint owners are
   // never in soloByOwner) — they live in the session queue, not on an async list.
   const ownedQuestionsFor = useMemo(() => {
-    const nameOf = new Map(ledger.store.elements().map((e) => [e.id, e.name] as const));
     const m = new Map<string, Array<{ about: string; question: string; typeTag: string }>>();
     for (const row of cast) {
       const seen = new Set<string>();
@@ -465,8 +464,8 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
       for (const label of ownerLabelsFor.get(row.label) ?? []) {
         for (const it of ledger.soloByOwner.get(label) ?? []) {
           if (seen.has(it.about)) continue; seen.add(it.about);
-          const p = questionForLocus(it.about, (id) => nameOf.get(id));
-          out.push({ about: it.about, question: p.question, typeTag: p.typeTag });
+          const r = renderQuestion(ledger.store, it.about, "operator");   // the ONE renderer
+          out.push({ about: it.about, question: r.question, typeTag: r.label });
         }
       }
       m.set(row.label, out);
