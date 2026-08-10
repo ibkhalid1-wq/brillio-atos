@@ -383,3 +383,132 @@ both must be fixed together, in that order.
 - The two untracked files `docs/aura/followup-workflow.js` and
   `docs/aura/next-session-brief.md` pre-date this backlog and are deliberately
   left untracked by every agent, including this one.
+
+---
+
+# FINAL GATE II — the INBOX badge + the Sessions collapse (2026-08-10, later)
+
+Scope: the two tasks that landed after the gate above — `fd1cec7` (INBOX badge
+counts the whole Inbox page) and `e579ea8` (Sessions collapses to one line). Run
+hostile: assume both broke something, and re-check the three invariants by
+**reading the shipped source**, not by trusting the commit messages.
+
+## Verdicts
+
+| Task | Verdict | Evidence |
+| --- | --- | --- |
+| `fd1cec7` INBOX badge counts the whole Inbox page | **DONE, with one defect found and fixed here** | badge and page both read `flowInbox`; but the page's *emptiness check* was a second spelling of the badge predicate — fixed below |
+| `e579ea8` Sessions collapses to one line | **DONE, clean** | `ledger.sessionQueue` is the only array read (`OperatorInbox.tsx:86-88`); `seams` = its length, `questions` = Σ of the per-pair `abouts` the expanded rows print. No second copy of either number. |
+
+Nothing was reverted. The frozen core is untouched by both commits
+(`git diff --stat 83451d5..HEAD -- store.ts types.ts precedence.ts projections.ts`
+is empty), `renderQuestion.ts` is untouched, and both commits changed 8 files total.
+
+## Numbers at this gate
+
+Before this gate's own edits (the branch as the two agents left it):
+
+- `npx tsc --noEmit` → **exit 0, 0 errors**
+- `npm run lint` (eslint src, `--max-warnings 0`) → **exit 0, 0 problems**
+- `npx vitest run` → **101 files, 1434 tests, all passed**
+- `bash scripts/validate-pipeline.sh` → **exit 0, 18 checks, 18 PASS / 0 FAIL**
+
+After this gate's edits:
+
+- `npx tsc --noEmit` → **exit 0**
+- `npm run lint` → **exit 0**
+- `npx vitest run` → **102 files, 1446 tests, all passed** (+12: the new gate test)
+- `bash scripts/validate-pipeline.sh` → **exit 0, 19 checks, 19 PASS / 0 FAIL** (+`F5`)
+
+## What this gate CHANGED
+
+**(c) — FIXED. The badge and the Inbox's empty state were two expressions.**
+The badge read `inboxWaitingCount(program, ledger)`. FlowToday asked the same
+question a different way: `items.total === 0` and then, nested inside it, a second
+read of the ledger half. Arithmetically identical *today*; structurally a copy. A
+third term added to the badge would have been invisible to the quiet block, which
+would then print "Nothing needs you right now" over a populated page — precisely
+the bug `fd1cec7` had just fixed, one layer down. Now `flowInbox.ts` exports
+`inboxWaitingCountFrom(items, ledger)`, `inboxWaitingCount` delegates to it, and
+FlowToday holds `waiting = inboxWaitingCountFrom(items, ledger)` and gates the
+quiet block on it. `FlowShell.tsx` no longer imports the ledger-half counter at
+all, so it *cannot* re-add the terms. Behaviour is unchanged (both terms are
+non-negative, so `a === 0 && b === 0` ⟺ `a + b === 0`).
+
+**(b) — FIXED (this supersedes F-2 above).** `src/v3/lib/ledger/adapters.ts:19`
+stamped one constant CRM sales-operations role on **every** claim from **both**
+import adapters, so `fhirToClaims` attributed clinical attributes of a FHIR
+`StructureDefinition` to a CRM sales function. It is `{ kind: "unowned" }` now —
+every claim these adapters mint is born `closed` (or `weak`, for a non-required
+binding) by an import, so nothing is ever "owned while open" and there is no owner
+to know. `curation.ts:181` already used exactly this shape for the same reason.
+The earlier gate declined this fix as "no live benefit"; the reason it is safe is
+the same reason it was low-priority — `salesforceToClaims` / `fhirToClaims` have
+**zero non-test callers**, so there is no live behaviour to change. Both adapter
+tests still pass unmodified (they never asserted the owner).
+
+**(a) — no change needed.** Question text still has one producer for the ledger
+path. `TheLine`, `OperatorInbox`, `DesignLoopZones` and `kitProjection` all import
+`renderQuestion`; none of them assigns a question string of its own;
+`kitAgendaCache.ts` keeps the stored agenda strings honestly labelled as a cache.
+
+**New sentry `F5`.** `scripts/validate-pipeline.sh` now runs
+`src/v3/__tests__/finalGateInvariants.test.ts` (12 tests) which checks all three
+invariants **against the shipped source read off disk**:
+- badge ⟺ page: `inboxWaitingCountFrom(items, ledger) === inboxWaitingCount(...)`
+  over 4 programme×ledger combinations; the empty state true in exactly one of
+  them; and source sentries that FlowShell gates on `waiting` and contains no
+  second read of the ledger half.
+- owners: a FHIR import stamps no role on any claim; a Salesforce import likewise;
+  no imported claim is `open`; and a **scan of 12 ledger modules for
+  `role: "<literal>"`** with an allowlist of exactly one (see below). This is the
+  answer to F-3: rather than broaden the `F4` grep to a second fixed string, the
+  check now enumerates literals, so a *new* constant owner spelled any way fails.
+- producers: the four question surfaces import the renderer and assign no question
+  literal of their own.
+
+## Outstanding — recorded, not fixed, with the blocker for each
+
+1. **`dictionary.ts:24` keeps a constant owner: `System Owner`.** Allowlisted in
+   the F5 scan. Blocker: unlike the adapters' case it is a deliberate, documented,
+   domain-neutral provenance band ("this came from a system, not a person"), it is
+   the only such literal, and its claims are all `weak` — so it cannot route work
+   either. Changing it is a naming decision, not a defect fix.
+2. **`migrate.ts:206,207,211` call `ownerFor("sales")` on the override-log path**
+   (removed / edited entities). Inert: F5 pins that every one of those lines mints
+   `status: "weak"`, and `buildUnknownQueue` admits only `open`/`blocked`. Blocker:
+   the edge mirrors it (`supabase/functions/_shared/overrideAdapter.ts:13`,
+   `OP_OWNER = "Sales Leaders" // matches migrate's ownerFor("sales")`), so this is
+   a client+edge lockstep change and the edge cannot be deployed or verified from
+   this sandbox.
+3. **The Copilot sidebar counts a rival "actions awaiting review".**
+   `AppShellV3.tsx:1541` sums 3 of the 7 record-half terms (decisions + portal +
+   exceptions) and renders it as "N actions awaiting review"
+   (`CoPilotSidebar.tsx:417`). Pre-existing; it is a different surface with a
+   different label, but it is a second count of an overlapping population and it
+   will disagree with the rail badge. Blocker: none technical — it is out of this
+   gate's scope and needs a product decision about what the copilot chip means.
+4. **The "Across the portfolio" chips still count other programmes with 2 terms**
+   (`FlowShell.tsx:1133, 1827-1828, 2769, 3028`: decisions + portal). Carried over
+   unchanged from `fd1cec7`'s own UNVERIFIED note. Blocker: other programmes'
+   ledgers are not hydrated in the browser and a hook cannot loop over them.
+5. **The Inbox header prints SEAMS under a "· questions" unit.**
+   `operatorQueueCounts.sessions` is `sessionQueue.length` (seams), and the header
+   stats row suffixes every stat with "questions". Pre-existing (present at
+   `83451d5`), but `e579ea8` made it visible by printing "11 seams, 49 questions"
+   on the section line right below it. Not fixed: the suffix is shared by five
+   stats, so making it honest is a copy change across the row, not a one-liner.
+6. **The badge counts 11 session rows while the collapsed section shows 1 line.**
+   Judged CORRECT and left alone: the rows still exist behind a disclosure, and
+   disclosure state is transient UI, not a change to what is on the page.
+7. **F-1 above still stands** — `flowStakeholders.ts` holds ~40 hardcoded
+   role-keyed agenda prompts, and `flowMeetings.ts:437-443` holds 5 more
+   (`GAP_REPHRASE`). Both are artifact-gap / meeting-agenda text, not ledger-locus
+   question text; invariant 3 holds for the ledger path, not absolutely.
+
+## Standing blockers unchanged
+
+No DB access, no edge deploy, no browser click-through at this gate — every number
+above comes from the toolchain or from the committed Laila snapshot. The two
+untracked files (`docs/aura/followup-workflow.js`, `docs/aura/next-session-brief.md`)
+are left untracked, as every prior agent left them.

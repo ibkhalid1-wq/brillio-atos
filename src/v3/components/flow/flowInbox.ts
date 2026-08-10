@@ -59,7 +59,15 @@ export function programInboxItems(program: ProgramSummary): ProgramInboxItems {
   };
 }
 
+/** THE rail-badge number, from an ALREADY-BUILT record half. The Inbox page holds
+ *  `programInboxItems` to render from, so it asks the same question with the same
+ *  expression the badge uses instead of re-stating it as
+ *  `items.total === 0 && operatorQueueCount(ledger) === 0` — two spellings of one
+ *  predicate that a third term added to the badge would silently break apart. */
+export const inboxWaitingCountFrom = (items: ProgramInboxItems, ledger: OperatorQueueReads): number =>
+  items.total + operatorQueueCount(ledger);
+
 /** THE rail-badge number: the programme-blob queue plus the ledger operator queue.
  *  0 means the Inbox page has nothing on it, which is exactly when the badge hides. */
 export const inboxWaitingCount = (program: ProgramSummary, ledger: OperatorQueueReads): number =>
-  programInboxItems(program).total + operatorQueueCount(ledger);
+  inboxWaitingCountFrom(programInboxItems(program), ledger);
