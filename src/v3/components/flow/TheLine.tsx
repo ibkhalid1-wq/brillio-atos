@@ -27,6 +27,12 @@ import {
 import { resolveMovementStakeholders, type MovementStakeholder } from "@/v3/components/flow/flowStakeholders";
 import { listInterviewPacks, portalLinkFor } from "@/v3/components/flow/flowPortal";
 import { stakeholderCollection } from "@/v3/components/flow/CollectBoard";
+// Recording → reviewable text, in the capture dialog. TranscribeButton's only
+// other render site sits inside CollectBoard's IntervieweeDiscovery, which
+// nothing has imported since the classic-canvas sunset (564cd3d), so this mount
+// is what makes recording ingestion reachable at all. The control self-hides
+// when flow-transcribe answers 501 (no OPENAI_API_KEY on the project).
+import { TranscribeButton } from "@/v3/components/flow/flowCapture";
 import { listenCoverageAreas, listenAreaCoverage } from "@/v3/components/flow/listenCoverage";
 import { canonicalFrameArea, stakeholderPrimaryArea } from "@/v3/components/flow/flowAreas";
 import { buildMeetingIcs, meetingKit, sponsorLinkQuestions } from "@/v3/components/flow/flowMeetings";
@@ -1373,10 +1379,14 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                 <textarea rows={7} value={capText} onChange={(e) => setCapText(e.target.value)}
                   placeholder="Paste a transcript, meeting notes, an email thread…" />
               </label>
+              {/* Appends, never overwrites: a transcript joins whatever the
+                  operator has already typed or pasted, and stays editable —
+                  nothing becomes evidence until Capture is pressed. */}
+              <TranscribeButton onText={(transcript) => setCapText((current) => (current.trim() ? `${current.trim()}\n\n${transcript}` : transcript))} />
               <div className="v3ln-cap-bar">
                 <button type="button" className="v3ln-btn" disabled={!capText.trim() || !capWho}
                   onClick={() => void saveCapture()}>Capture</button>
-                <span>Lands as “— Name, Role, Date —” evidence and refreshes what depends on it. To attach a file instead, use Library → Evidence → Attach.</span>
+                <span>Lands as “— Name, Role, Date —” evidence and refreshes what depends on it. To attach a document instead, use Library → Evidence → Attach.</span>
               </div>
             </div>
           </div>
