@@ -1,6 +1,5 @@
 import React, { Fragment, Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import type { ProgramSummary } from "@/new/types";
-import FlowCanvas from "@/v3/components/flow/FlowCanvas";
 import FlowGrounding from "@/v3/components/flow/FlowGrounding";
 import BrilioLogo from "@/v3/components/BrilioLogo";
 import { AttachFileButton, copyTextFromAction } from "@/v3/components/flow/flowCapture";
@@ -137,24 +136,10 @@ interface FlowShellProps {
   jumpToFlowNonce?: number;
 }
 
-type FlowView = "today" | "flow" | "library" | "people" | "pulse" | "mission" | "grounding" | "portfolio" | "line";
-
-/** The Line — the DEFAULT chrome, running beside the classic one: same live
- * record, read-only projection, so the two can never disagree. Classic stays
- * one toggle away (`?ui=classic`, or the persisted "off" the appbar toggle
- * writes) — deliberately NOT a rail tile, because the Line is a sibling
- * chrome for the whole programme, not an eighth view within this one. */
-const lineViewPreferred = (): boolean => {
-  try {
-    const ui = new URLSearchParams(window.location.search).get("ui");
-    if (ui === "line") return true;
-    if (ui === "classic") return false;
-    return localStorage.getItem("atos.lineView") !== "off";
-  } catch { return true; }
-};
-const rememberLineView = (on: boolean): void => {
-  try { localStorage.setItem("atos.lineView", on ? "on" : "off"); } catch { /* private mode — fine */ }
-};
+/** "flow" IS the Line — one Flow view, no toggle, no second chrome. The classic
+ * canvas was retired (2026-08-10) and its component deleted, so there is exactly
+ * one rail id for the work and exactly one component behind it. */
+type FlowView = "today" | "flow" | "library" | "people" | "pulse" | "mission" | "grounding" | "portfolio";
 
 /** The rail is programme-scoped: the work, then the system. App-global actions
  * (Search, Portfolio, Copilot, Help) live in the top bar instead — the rail
@@ -171,14 +156,13 @@ const DOCK_ORDER: FlowView[] = DOCK_ZONES.flat().map(([id]) => id);
  * could be mistaken for a count. The keyboard shortcut stays in aria-label. */
 const DOCK_TIPS: Record<FlowView, string> = {
   today: "Inbox — responses and decisions waiting on you",
-  flow: "Flow — the live programme, movement by movement",
+  flow: "Flow — the production line: the live programme, movement by movement",
   library: "Library — every conversation and artifact",
   people: "People — everyone the programme collects from, with contact state",
   pulse: "Pulse — the steering-meeting view",
   mission: "Control — agents, governance and settings",
   grounding: "Grounding — the standards the ontology is grounded in, plus the client vocabulary",
   portfolio: "Portfolio — every programme and its engagements",
-  line: "The Line — the production-line view of this programme (read-only projection)",
 };
 
 /** One stroke weight, currentColor — the rail's icons stop being a font-glyph grab bag. */
@@ -498,18 +482,19 @@ function FlowDrillWizard({ program, onCreate, onClose }: {
 export default function FlowShell(props: FlowShellProps) {
   const { program } = props;
   // Land where the work is: Today only when something waits on the user's
-  // judgment (decisions / quarantined evidence); the canvas otherwise, where
-  // the spine pointer takes over. Today stays one badge-tap away.
-  const [view, setView] = useState<FlowView>(() => {
-    if (lineViewPreferred()) return "line";
-    return listOpenFlowDecisions(program).length + listPortalInbox(program).length + governedExceptionsForInbox(program).length > 0 ? "today" : "flow";
-  });
+  // judgment (decisions / quarantined evidence); Flow (the Line) otherwise,
+  // where the spine pointer takes over. Today stays one badge-tap away.
+  // (The Line flag used to short-circuit this rule and always land on the Line;
+  // with one Flow view the documented landing rule applies again.)
+  const [view, setView] = useState<FlowView>(() =>
+    listOpenFlowDecisions(program).length + listPortalInbox(program).length + governedExceptionsForInbox(program).length > 0 ? "today" : "flow",
+  );
   // A freshly-created programme should open on the work — the shell bumps this
-  // nonce after setup saves so we jump to the canvas regardless of the view the
+  // nonce after setup saves so we jump to Flow regardless of the view the
   // operator was on (typically Portfolio, where they clicked "New programme").
   const jumpNonce = props.jumpToFlowNonce ?? 0;
   useEffect(() => {
-    if (jumpNonce > 0) { setView(lineViewPreferred() ? "line" : "flow"); window.scrollTo({ top: 0 }); }
+    if (jumpNonce > 0) { setView("flow"); window.scrollTo({ top: 0 }); }
   }, [jumpNonce]);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -554,9 +539,9 @@ export default function FlowShell(props: FlowShellProps) {
   // so it guides without nagging.
   const nextId: FlowView = waitingCount > 0 ? "today" : "flow";
   const nextHint = nextId === "today" ? `${waitingCount} waiting` : "Continue";
-  // Already on the next stop? Flow renders as the Line, so "line" counts as being
-  // on flow — otherwise the pointer never quiets once the operator arrives there.
-  const atNext = view === nextId || (nextId === "flow" && view === "line");
+  // Already on the next stop? One id per view now, so this is a plain equality —
+  // the pointer quiets the moment the operator arrives.
+  const atNext = view === nextId;
 
   // The switcher dismisses like a menu should: backdrop click or Escape.
   useEffect(() => {
@@ -583,9 +568,7 @@ export default function FlowShell(props: FlowShellProps) {
       const index = Number.parseInt(event.key, 10) - 1;
       const id = DOCK_ORDER[index];
       if (!Number.isNaN(index) && id) {
-        // "Flow" means whichever chrome is active — the Line unless the
-        // operator toggled Classic.
-        setView(id === "flow" && lineViewPreferred() ? "line" : id);
+        setView(id);
         window.scrollTo({ top: 0 });
       }
     };
@@ -651,14 +634,14 @@ export default function FlowShell(props: FlowShellProps) {
               const shortcut = DOCK_ORDER.indexOf(id) + 1;
               const isNext = id === nextId && !atNext;
               return (
-                <button key={id} type="button" className={`${view === id || (id === "flow" && view === "line") ? "on" : ""}${isNext ? " v3fs-dock-next" : ""}`.trim()}
+                <button key={id} type="button" className={`${view === id ? "on" : ""}${isNext ? " v3fs-dock-next" : ""}`.trim()}
                   data-tip={DOCK_TIPS[id]}
                   aria-label={`${label} (shortcut ${shortcut})${isNext ? " — go here next" : ""}`}
                   onClick={() => {
                     // Navigating dismisses whatever overlay is up — the rail is
                     // always an exit, never dead under a modal.
                     setSearchOpen(false); setHelpOpen(false); setDrillOpen(false);
-                    setView(id === "flow" && lineViewPreferred() ? "line" : id);
+                    setView(id);
                     window.scrollTo({ top: 0 });
                   }}>
                   {id === "today" && waitingCount > 0 ? <span className="v3fs-dock-n">{waitingCount}</span> : null}
@@ -732,17 +715,8 @@ export default function FlowShell(props: FlowShellProps) {
           <kbd>⌘K</kbd>
         </button>
         <div className="v3fs-appbar-r">
-          <button type="button" className="v3fs-appbar-nav"
-            title={view === "line" ? "Back to the classic chrome — same record, nothing lost" : "The Line — the production-line view of this programme (read-only projection; runs beside the classic chrome)"}
-            aria-label={view === "line" ? "Switch to the classic chrome" : "Switch to the Line view"}
-            aria-pressed={view === "line"}
-            onClick={() => {
-              const next = view === "line" ? "flow" : "line";
-              rememberLineView(next === "line");
-              setView(next); window.scrollTo({ top: 0 });
-            }}>
-            <DockIcon id="flow" /><span>{view === "line" ? "Classic" : "Line"}</span>
-          </button>
+          {/* The Line/Classic toggle is GONE (2026-08-10): Flow is the Line, and
+              a toggle to a chrome that no longer exists is a trap. */}
           <button type="button" className="v3fs-appbar-nav" title="Help — how AURA Flow works" aria-label="Help"
             onClick={() => setHelpOpen(true)}>
             <DockIcon id="help" /><span>Help</span>
@@ -845,14 +819,18 @@ export default function FlowShell(props: FlowShellProps) {
         {view === "today" ? (
           <FlowToday program={program} programs={props.programs} onSelectProgram={props.onSelectProgram} onResolveDecision={props.onResolveDecision} onSaveInputs={props.onSaveInputs}
             onIngestPortalItem={props.onIngestPortalItem} onDismissPortalItem={props.onDismissPortalItem} onRecordApproval={props.onRecordApproval}
-            onGoFlow={() => { setView(lineViewPreferred() ? "line" : "flow"); window.scrollTo({ top: 0 }); }} />
+            onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} />
         ) : view === "flow" ? (
-          <FlowCanvas program={program} programs={props.programs} runningAgentIds={props.runningAgentIds} regenActiveIds={props.regenActiveIds} onEnqueueRegen={props.onEnqueueRegen} agentErrors={props.agentErrors} relatedPrograms={[...(drillParent ? [drillParent] : []), ...listChildDrilldowns(program, props.programs).map((c) => c.child)]} onSelectProgram={props.onSelectProgram} onComment={props.onComment} onRunAgent={props.onRunAgent} onSaveInputs={props.onSaveInputs} onMintPacks={props.onMintPacks} onMintDemoInvites={props.onMintDemoInvites} onCompileShipLanes={props.onCompileShipLanes} onToggleShipItem={props.onToggleShipItem} onSetShipLane={props.onSetShipLane} onScheduleFollowUp={props.onScheduleFollowUp} onMintFollowUp={props.onMintFollowUp} onMintReview={props.onMintReview} onRecordShowPass={props.onRecordShowPass} onSaveArtifactDoc={props.onSaveArtifactDoc} onRecordGate={props.onRecordGate} onReopenGate={props.onReopenGate} onRunAgentAndWait={props.onRunAgentAndWait} onSendForApproval={props.onSendForApproval} onRenamePerson={props.onRenamePerson} onRenameRole={props.onRenameRole} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }}
-          />
+          <TheLine program={program} onSaveInputs={props.onSaveInputs}
+            onRenamePerson={props.onRenamePerson} onRenameRole={props.onRenameRole}
+            onMintFollowUp={props.onMintFollowUp} onScheduleFollowUp={props.onScheduleFollowUp}
+            onRunAgent={props.onRunAgent}
+            onRecordGate={props.onRecordGate} onReopenGate={props.onReopenGate}
+            onSendForApproval={props.onSendForApproval} />
         ) : view === "people" ? (
           <FlowPeople program={program} onSaveInputs={props.onSaveInputs} onRenamePerson={props.onRenamePerson} onGoInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }} />
         ) : view === "library" ? (
-          <FlowLibrary program={program} programs={props.programs} onSelectProgram={props.onSelectProgram} onSaveInputs={props.onSaveInputs} onTagClaim={props.onTagClaim} onComment={props.onComment} onSaveArtifactDoc={props.onSaveArtifactDoc} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }} onGoFlow={() => { setView(lineViewPreferred() ? "line" : "flow"); window.scrollTo({ top: 0 }); }} onRenamePerson={props.onRenamePerson} onRenameRole={props.onRenameRole} />
+          <FlowLibrary program={program} programs={props.programs} onSelectProgram={props.onSelectProgram} onSaveInputs={props.onSaveInputs} onTagClaim={props.onTagClaim} onComment={props.onComment} onSaveArtifactDoc={props.onSaveArtifactDoc} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }} onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} onRenamePerson={props.onRenamePerson} onRenameRole={props.onRenameRole} />
         ) : view === "mission" ? (
           <FlowMission
             aiStatus={props.aiStatus}
@@ -869,20 +847,13 @@ export default function FlowShell(props: FlowShellProps) {
           />
         ) : view === "grounding" ? (
           <FlowGrounding program={program} onSaveInputs={props.onSaveInputs} />
-        ) : view === "line" ? (
-          <TheLine program={program} onSaveInputs={props.onSaveInputs}
-            onRenamePerson={props.onRenamePerson} onRenameRole={props.onRenameRole}
-            onMintFollowUp={props.onMintFollowUp} onScheduleFollowUp={props.onScheduleFollowUp}
-            onRunAgent={props.onRunAgent}
-            onRecordGate={props.onRecordGate} onReopenGate={props.onReopenGate}
-            onSendForApproval={props.onSendForApproval} />
         ) : view === "portfolio" ? (
           <FlowPortfolio
             onDeleteProgram={props.onDeleteProgram}
             onRenameProgram={props.onRenameProgram}
             programs={props.programs}
             activeId={program.id}
-            onSelectProgram={(id) => { props.onSelectProgram(id); setView(lineViewPreferred() ? "line" : "flow"); window.scrollTo({ top: 0 }); }}
+            onSelectProgram={(id) => { props.onSelectProgram(id); setView("flow"); window.scrollTo({ top: 0 }); }}
             onHydratePrograms={props.onHydratePrograms}
           />
         ) : (
