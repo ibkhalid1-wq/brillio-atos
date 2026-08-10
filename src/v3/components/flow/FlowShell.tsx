@@ -9,7 +9,7 @@ import FlowBoardPack from "@/v3/components/flow/FlowBoardPack";
 import EvidenceReader from "@/v3/components/flow/EvidenceReader";
 import {
   flowMovements, movementEvidence, movementArtifacts, gateChecklist, gateReadiness, listenCoverage,
-  demoAcceptance, daysToFirstDemo, wordsOfEvidence, readContradictions, parseGridRows, readMovementInputs,
+  demoAcceptance, daysToFirstDemo, wordsOfEvidence, parseGridRows, readMovementInputs,
   contradictionLogWithout, autoBuildEnabled, spineLabel,
 } from "@/v3/components/flow/flowShellData";
 import {
@@ -20,19 +20,21 @@ import {
   listFlowTracks, trackAcceptance, trackPace,
 } from "@/v3/components/flow/flowTracks";
 import { readFlowGovernance, flowAgentTier } from "@/v3/components/flow/flowGovernance";
-import { resolveMovementStakeholders, deliveryRoleDirectory, readDirectoryPeople, validateProgramRole, readRoleBindings, knownProgramRoles, unresolvedCoverageNames, kitPersonaDirectory, readSuggestedVoices, readListenPlan, listenPlanWrite, dismissedListenRoles, labelIdentity, dedupePeopleRows } from "@/v3/components/flow/flowStakeholders";
+import { resolveMovementStakeholders, deliveryRoleDirectory, readDirectoryPeople, validateProgramRole, readRoleBindings, knownProgramRoles, kitPersonaDirectory, readSuggestedVoices, readListenPlan, listenPlanWrite, dismissedListenRoles, labelIdentity, dedupePeopleRows } from "@/v3/components/flow/flowStakeholders";
 import DiscoveryKitAlign from "@/v3/components/flow/DiscoveryKitAlign";
 import TheLine from "@/v3/components/flow/TheLine";
 import OperatorInbox from "@/v3/components/flow/OperatorInbox";
-import { useProgramLedger } from "@/v3/lib/ledger/useProgramLedger";
+import { programInboxItems, inboxWaitingCount } from "@/v3/components/flow/flowInbox";
+import { operatorQueueCount } from "@/v3/lib/ledger/operatorQueue";
+import { useProgramLedger, type ProgramLedger } from "@/v3/lib/ledger/useProgramLedger";
 import { useOperatorCommits } from "@/v3/lib/ledger/useOperatorCommits";
 import { stakeholderEmail } from "@/v3/components/flow/flowMeetings";
 import { readMetricRegistry, metricConsistency } from "@/v3/components/flow/flowMetricRegistry";
 import { routeAttachedDocument, buildRoutedBlocks, type DocRoute } from "@/v3/components/flow/flowDocRouting";
 import { listPortalInbox, movementValidationCoverage, listInterviewPacks } from "@/v3/components/flow/flowPortal";
 import { stakeholderCollection } from "@/v3/components/flow/CollectBoard";
-import { governedExceptionsForInbox, readGovernedExceptions, withResolvedException } from "@/v3/components/flow/flowExceptions";
-import { approvalEvidenceEntries, listApprovalResponses } from "@/v3/components/flow/flowApprovals";
+import { readGovernedExceptions, withResolvedException } from "@/v3/components/flow/flowExceptions";
+import { approvalEvidenceEntries } from "@/v3/components/flow/flowApprovals";
 import { listSnapshots, type BlobSnapshot } from "@/v3/lib/blobSnapshots";
 import { supabase } from "@/integrations/supabase/client";
 import { getProgramState } from "@/new/lib/programState";
@@ -481,14 +483,18 @@ function FlowDrillWizard({ program, onCreate, onClose }: {
  */
 export default function FlowShell(props: FlowShellProps) {
   const { program } = props;
+  // The ledger is built HERE, once, and handed to the Inbox view: the rail badge
+  // needs it on every view (it counts the ledger operator queue), and one build
+  // per programme means the badge and the page read the same object, not two
+  // migrations of it. Must precede the landing rule below — it feeds it.
+  const ledger = useProgramLedger(program);
   // Land where the work is: Today only when something waits on the user's
-  // judgment (decisions / quarantined evidence); Flow (the Line) otherwise,
-  // where the spine pointer takes over. Today stays one badge-tap away.
+  // judgment; Flow (the Line) otherwise, where the spine pointer takes over.
+  // Today stays one badge-tap away. The rule reads the SAME count as the badge,
+  // so we never land on Flow while the Inbox icon is carrying a number.
   // (The Line flag used to short-circuit this rule and always land on the Line;
   // with one Flow view the documented landing rule applies again.)
-  const [view, setView] = useState<FlowView>(() =>
-    listOpenFlowDecisions(program).length + listPortalInbox(program).length + governedExceptionsForInbox(program).length > 0 ? "today" : "flow",
-  );
+  const [view, setView] = useState<FlowView>(() => (inboxWaitingCount(program, ledger) > 0 ? "today" : "flow"));
   // A freshly-created programme should open on the work — the shell bumps this
   // nonce after setup saves so we jump to Flow regardless of the view the
   // operator was on (typically Portfolio, where they clicked "New programme").
@@ -515,23 +521,16 @@ export default function FlowShell(props: FlowShellProps) {
   const drillAnchor = readDrillAnchor(program);
   const drillParentId = readParentId(program);
   const drillParent = drillParentId ? props.programs.find((p) => p.id === drillParentId) : undefined;
-  const openDecisions = listOpenFlowDecisions(program);
-  const portalInbox = listPortalInbox(program);
-  const approvalResponseCount = listApprovalResponses(program).length;
   // "Start here" — one prominent pointer at the right entry: Today when
   // anything waits on the user, the canvas otherwise. Dismissed for the
   // session the moment they go there.
-  const openDisputeCount = useMemo(() => readContradictions(program, true).length, [program]);
-  const unresolvedRoleCount = useMemo(() => readDirectoryPeople(program).filter((entry) => !entry.roleResolved).length, [program]);
-  const coverageNameCount = useMemo(() => unresolvedCoverageNames(program).length, [program]);
-  // Rebuilds owed do NOT count here: stale documents live on the ribbon (the
-  // movement's "Regeneration required" bar + amber tabs), not in the Inbox.
-  // GOVERNED EXCEPTIONS were missing from this sum while the Inbox page itself
-  // renders them (its own empty-check and its "N items" header both include
-  // them) — so the dock badge could disagree with the page it points at. Same
-  // seven terms on both sides now: the page is the list, this is its count.
-  const exceptionCount = useMemo(() => governedExceptionsForInbox(program).length, [program]);
-  const waitingCount = openDecisions.length + portalInbox.length + approvalResponseCount + openDisputeCount + unresolvedRoleCount + coverageNameCount + exceptionCount;
+  //
+  // THE BADGE NUMBER. No terms are added up here: inboxWaitingCount (flowInbox.ts)
+  // is the whole Inbox page in one integer — the record's own queue PLUS the
+  // ledger operator queue, which moved onto this page and used to count for
+  // nothing, leaving a bare icon over an Inbox holding sessions and dictionary
+  // asks. The page renders from the same two functions, so it cannot disagree.
+  const waitingCount = useMemo(() => inboxWaitingCount(program, ledger), [program, ledger]);
   // "Where to go next" — the single rail item the operator should visit now.
   // Waiting decisions/inbox items pull them to the Inbox; otherwise the work
   // continues on Flow. The pointer is persistent (it always shows the next
@@ -817,7 +816,7 @@ export default function FlowShell(props: FlowShellProps) {
 
         <ViewBoundary view={view}>
         {view === "today" ? (
-          <FlowToday program={program} programs={props.programs} onSelectProgram={props.onSelectProgram} onResolveDecision={props.onResolveDecision} onSaveInputs={props.onSaveInputs}
+          <FlowToday program={program} ledger={ledger} programs={props.programs} onSelectProgram={props.onSelectProgram} onResolveDecision={props.onResolveDecision} onSaveInputs={props.onSaveInputs}
             onIngestPortalItem={props.onIngestPortalItem} onDismissPortalItem={props.onDismissPortalItem} onRecordApproval={props.onRecordApproval}
             onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} />
         ) : view === "flow" ? (
@@ -955,8 +954,11 @@ function DecisionCard({ program, decision, movementLabel, busy, onResolve }: {
   );
 }
 
-function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIngestPortalItem, onDismissPortalItem, onRecordApproval, onGoFlow, onSaveInputs }: {
+function FlowToday({ program, ledger, programs, onSelectProgram, onResolveDecision, onIngestPortalItem, onDismissPortalItem, onRecordApproval, onGoFlow, onSaveInputs }: {
   program: ProgramSummary;
+  /** Built once by the shell (the rail badge needs it too) and handed down, so the
+   *  page and its badge read one ledger rather than two migrations of it. */
+  ledger: ProgramLedger;
   programs?: ProgramSummary[];
   onSelectProgram?: (id: string) => void;
   onResolveDecision: FlowShellProps["onResolveDecision"];
@@ -968,24 +970,19 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
 }) {
   const movements = useMemo(() => flowMovements(), []);
   // THE LEDGER OPERATOR QUEUE — assign / sessions / adjudicate / in-flight / the
-  // dictionary ask. It lives HERE (2026-08-10, by request): Discover shows who to
-  // engage and their questions; everything the OPERATOR must resolve is the Inbox.
-  const ledger = useProgramLedger(program);
+  // dictionary ask — renders below via OperatorInbox. It lives HERE (2026-08-10, by
+  // request): Discover shows who to engage and their questions; everything the
+  // OPERATOR must resolve is the Inbox.
   const commits = useOperatorCommits(program, onSaveInputs);
-  const open = listOpenFlowDecisions(program);
+  // Every record-side item this page lists, from the ONE reader the rail badge
+  // counts with (flowInbox.ts): open decisions, quarantined portal evidence,
+  // approval replies, open disputes, unresolved roles, coverage names, and logged
+  // exceptions standing open. The lists below are its fields — nothing re-read,
+  // nothing re-counted.
+  const items = useMemo(() => programInboxItems(program), [program]);
+  const { decisions: open, portal: inbox, approvals, disputes, unresolvedRoles, coverageNames, exceptions } = items;
   const feed = listFlowAttestations(program);
-  const inbox = listPortalInbox(program);
-  const approvals = listApprovalResponses(program);
   const [busyId, setBusyId] = useState<string | null>(null);
-  // Open disputes queue HERE for the operator to ROUTE (to the person who can
-  // settle it) or RESOLVE. Resolving writes the resolution to the record as
-  // EVIDENCE and deletes the rows — there is no standing resolution log.
-  const disputes = useMemo(() => readContradictions(program, true), [program]);
-  // Open governed exceptions that require operator interaction now — a logged
-  // deviation is a standing decision to revisit, so it queues HERE (not buried
-  // in a per-movement Collect panel) until it's resolved or a future review
-  // date defers it. Resolving marks it closed on the record.
-  const exceptions = useMemo(() => governedExceptionsForInbox(program), [program]);
   const resolveException = async (movementId: string, id: string) => {
     if (!onSaveInputs) return;
     const next = withResolvedException(readGovernedExceptions(program, movementId), id, "", "you");
@@ -1020,11 +1017,10 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
       }, { attest: { action: "Dispute resolved — resolution recorded as evidence", detail: statement.slice(0, 140) } });
     } finally { setDisputeBusy(null); }
   };
-  // Roles the operator added that the programme doesn't yet recognise. Like
-  // disputes, these are DERIVED from the record — the clarify card is present
-  // exactly while a role is unresolved, so it keeps clarifying until the
+  // Roles the operator added that the programme doesn't yet recognise (items.unresolvedRoles
+  // above). Like disputes, these are DERIVED from the record — the clarify card is
+  // present exactly while a role is unresolved, so it keeps clarifying until the
   // operator maps it (or accepts it as a new programme role) right here.
-  const unresolvedRoles = useMemo(() => readDirectoryPeople(program).filter((entry) => !entry.roleResolved), [program]);
   const roleOptions = useMemo(() => knownProgramRoles(program).sort((a, b) => a.localeCompare(b)), [program]);
   // Resolving who Listen will hear is PLAN-level scope, not just a directory
   // patch. Every resolution rides the same fingerprinted `listenPlan` write the
@@ -1078,10 +1074,9 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
   };
 
   // Names written into the kit coverage map that aren't people on the
-  // programme — an Inbox item to resolve. Adding routes them into the
-  // directory (role clarified there if unfamiliar); "not a person" records a
-  // dismissal so a team/function label stops prompting.
-  const coverageNames = useMemo(() => unresolvedCoverageNames(program), [program]);
+  // programme — an Inbox item to resolve (items.coverageNames above). Adding
+  // routes them into the directory (role clarified there if unfamiliar); "not a
+  // person" records a dismissal so a team/function label stops prompting.
   const addCoverageName = async (name: string, domain: string) => {
     if (!onSaveInputs) return;
     const role = domain || "Contributor";
@@ -1254,7 +1249,12 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
         onCommit={(a) => commits.commitAction(a, ledger.actions)}
         onAskMark={(m) => { void commits.commitAskMark(m); }}
         onDictionary={(csv, sor) => commits.commitDictionary(csv, sor)} />
-      {open.length === 0 && inbox.length === 0 && approvals.length === 0 && disputes.length === 0 && unresolvedRoles.length === 0 && coverageNames.length === 0 && exceptions.length === 0 ? (
+      {items.total === 0 ? (
+        // The record's queue is empty — but the LEDGER operator queue above may not
+        // be. "Nothing needs you right now" over an inbox listing sessions and
+        // dictionary asks is simply false, so the quiet copy only earns the page
+        // when the rail badge is also at 0.
+        operatorQueueCount(ledger) > 0 ? null : (
         <div className="v3fs-quiet">
           <div className="v3fs-quiet-mark" aria-hidden="true">◈</div>
           {attention.length ? (
@@ -1278,11 +1278,12 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
             </>
           )}
         </div>
+        )
       ) : (
         <section className="v3fs-inbox" aria-label="Waiting on you" ref={inboxRef}>
           <div className="v3fs-ph">
             <h3>Waiting on you</h3>
-            <span>{(() => { const n = open.length + inbox.length + approvals.length + disputes.length + unresolvedRoles.length + coverageNames.length + exceptions.length; return `${n} item${n === 1 ? "" : "s"}`; })()}</span>
+            <span>{items.total} item{items.total === 1 ? "" : "s"}</span>
           </div>
           {open.map((decision) => (
             <DecisionCard key={decision.id} program={program} decision={decision} movementLabel={label(decision.movementId)}
