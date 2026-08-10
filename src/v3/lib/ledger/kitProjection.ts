@@ -14,16 +14,17 @@
  * nothing is a FINDING (the kit caught something the ontology missed), never dropped.
  *
  * Surface/read-model only — no core touched. The projection reads `buildUnknownQueue`
- * and phrases via `questionForLocus`; nothing here mutates the store.
+ * and phrases via the ONE renderer (`renderQuestion`); nothing here mutates the store.
  */
 import type { LedgerStore } from "./store";
 import { elementIdOf, slotOf } from "./types";
 import { buildUnknownQueue } from "./projections";
-import { questionForLocus, makeNameOf } from "./phrasing";
+import { renderQuestion, type AnswerAffordance } from "./renderQuestion";
 
 /** A kit question that IS a projection of a ledger locus. `about` is the locus it
- *  closes; `question` is the human phrasing; `locusName` is the element it's about;
- *  `ownerLabel` scopes it to the person who owns it (their kit). */
+ *  closes; `question` is the ONE renderer's stakeholder phrasing (full, untruncated);
+ *  `ownerLabel` scopes it to the person who owns it (their kit); `affordance` is the
+ *  kind-specific answer control (chips / pickers / free text). */
 export interface KitQuestion {
   about: string;
   question: string;
@@ -31,21 +32,21 @@ export interface KitQuestion {
   locusName: string;
   slot: string;
   ownerLabel: string;
+  affordance: AnswerAffordance;
 }
 
 /**
- * THE kit projection: every open unknown, phrased for a human, mapped to the locus it
- * closes. Identical source to the operator queue (`buildUnknownQueue`) — one list.
- * Scope to a stakeholder by filtering on `ownerLabel`.
+ * THE kit projection: every open unknown, phrased for a human through the ONE
+ * renderer, mapped to the locus it closes. Identical source to the operator queue
+ * (`buildUnknownQueue`) — one list. Scope to a stakeholder by `ownerLabel`.
  */
 export function projectKitQuestions(store: LedgerStore): KitQuestion[] {
   const q = buildUnknownQueue(store);
-  const nameOf = makeNameOf(store.elements());
   return q.items
     .filter((i) => i.status === "open")
     .map((i) => {
-      const p = questionForLocus(i.about, nameOf);
-      return { about: i.about, question: p.question, typeTag: p.typeTag, locusName: p.name, slot: i.slot, ownerLabel: i.ownerLabel };
+      const r = renderQuestion(store, i.about, "stakeholder");
+      return { about: i.about, question: r.question, typeTag: r.label, locusName: r.elementName, slot: i.slot, ownerLabel: i.ownerLabel, affordance: r.affordance };
     });
 }
 
@@ -96,7 +97,6 @@ const SLOT_INTENT: Record<string, RegExp> = {
 export function reconcileKit(kitQuestions: readonly string[], store: LedgerStore): KitReconciliation {
   const q = buildUnknownQueue(store);
   const open = q.items.filter((i) => i.status === "open");
-  const nameOf = makeNameOf(store.elements());
   // element id → its display name tokens, and its open loci
   const elements = store.elements();
   const nameById = new Map(elements.map((e) => [e.id, e.name] as const));
@@ -127,7 +127,7 @@ export function reconcileKit(kitQuestions: readonly string[], store: LedgerStore
     const loci = openByElement.get(el.id) ?? [];
     const hit = loci.find((l) => SLOT_INTENT[l.slot]?.test(kit));
     if (hit) {
-      matched.push({ kit, about: hit.about, question: questionForLocus(hit.about, nameOf).question });
+      matched.push({ kit, about: hit.about, question: renderQuestion(store, hit.about, "stakeholder").question });
       matchedAbouts.add(hit.about);
     } else {
       unmatched.push({ kit, reason: "stale", implies: `"${el.name}" is modelled but this asks no open locus — already closed/covered, or needs a new slot (curation path)` });

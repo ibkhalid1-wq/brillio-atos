@@ -20,7 +20,8 @@ import { useState, type ReactNode } from "react";
 import type { ProgramLedger } from "@/v3/lib/ledger/useProgramLedger";
 import type { OperatorAction } from "@/v3/lib/ledger/operatorActions";
 import { slotOf, elementIdOf } from "@/v3/lib/ledger/types";
-import { questionForLocus, readableName, makeNameOf } from "@/v3/lib/ledger/phrasing";
+import { readableName } from "@/v3/lib/ledger/phrasing";
+import { renderQuestion } from "@/v3/lib/ledger/renderQuestion";
 import { ClaimStatus, OwnershipTag, ProvisionalMark, SourceTag } from "@/v3/components/flow/studio/ledgerPrimitives";
 import { asksNeedingChase, isSystemOwner, type ArtifactAskMark } from "@/v3/lib/ledger/artifactAsks";
 
@@ -51,10 +52,8 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
   const elements = ledger.store.elements();
   const nameOf = new Map(elements.map((e) => [e.id, e.name] as const));
   const elOf = new Map(elements.map((e) => [e.id, e] as const));
-  // Qualified names — "Appointment.status", not a bare "status" — so every question is
-  // self-descriptive and two same-slot rows on different elements never look identical.
-  const qualifiedName = makeNameOf(elements);
-  const Q = (about: string) => questionForLocus(about, qualifiedName);
+  // THE one renderer — full data, qualified names, original casing, no truncation.
+  const Q = (about: string) => { const r = renderQuestion(ledger.store, about, "operator"); return { question: r.question, typeTag: r.label, name: r.elementName }; };
   const groupOf = (about: string) => {
     const el = elOf.get(elementIdOf(about));
     if (el?.of) return nameOf.get(el.of) || readableName(undefined, el.of);
