@@ -68,6 +68,14 @@ run_tests "F5 final-gate invariants (one producer, no constant owner, one inbox 
 #      scanned, and a "System Owner" exempted on the string alone. A sentry nobody has
 #      shown to fail is not a sentry, so F5's predicates are themselves under test.
 run_tests "F6 the F5 guards catch their own bypasses" src/v3/__tests__/sourceGuards.test.ts
+# F7 — the one invariant F5 could never actually check: THE BADGE IS THE PAGE. F5's
+#      headline (c) compared inboxWaitingCount against its own definition and so could
+#      not fail for any input; the claim "the rail badge equals what the Inbox renders"
+#      was asserted nowhere. F7 MOUNTS FlowShell over four programme shapes (empty /
+#      ledger-only / mixed / with a ruling), reads the badge off the dock and counts the
+#      rows on the page. The two documented divergences — the collapsed Sessions line and
+#      the decided trace — are named expectations here, not weakened assertions.
+run_tests "F7 the badge equals the rendered Inbox page (DOM)" src/v3/__tests__/inboxBadgeIsThePage.test.ts
 
 say "G. FABRIC -> MERIDIAN"
 # G1 — assembler reachable from the studio; no model call in the render path

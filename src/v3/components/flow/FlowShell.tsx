@@ -123,8 +123,17 @@ interface FlowShellProps {
   onMintBrief: () => Promise<string | null>;
   /** Send an artifact to a chosen approver — mints a no-login link, returns it. */
   onSendForApproval?: (input: { artifactId: string; movementId: string; artifactTitle: string; approver: { name: string; role: string; email?: string }; snapshot?: string }) => Promise<string | null>;
-  /** Record an approver's verdict from the Inbox (flips the artifact, logs evidence). */
-  onRecordApproval?: (itemId: string) => Promise<void>;
+  /** Record an approver's verdict from the Inbox (flips the artifact, logs evidence).
+   *
+   *  REQUIRED, and it has to stay required. `programInboxItems` counts every approval
+   *  response into `items.total` UNCONDITIONALLY, so an approval reply is on the rail
+   *  badge whether or not this handler exists. While the prop was optional the Inbox
+   *  drew those rows only `onRecordApproval ? … : null` — so a mount site that left it
+   *  off got a badge over a page missing exactly that many rows. AppShellV3 always
+   *  passed it, which is the only reason the defect never showed; optionality kept the
+   *  trap loaded for the next mount site. Required deletes the whole class: the badge
+   *  term and the rendered row now have no way to disagree. */
+  onRecordApproval: (itemId: string) => Promise<void>;
   /** Record an in-room demonstration pass against a track (Show). */
   onRecordShowPass: (trackId: string, pass: { stakeholder?: string; verdict: "accepted" | "accepted-with-changes" | "rework"; stableDiff?: boolean }) => Promise<void>;
   /** Persist a studio edit to an artifact document (attested). */
@@ -963,7 +972,9 @@ function FlowToday({ program, ledger, programs, onSelectProgram, onResolveDecisi
   onResolveDecision: FlowShellProps["onResolveDecision"];
   onIngestPortalItem: FlowShellProps["onIngestPortalItem"];
   onDismissPortalItem: FlowShellProps["onDismissPortalItem"];
-  onRecordApproval?: FlowShellProps["onRecordApproval"];
+  /** REQUIRED — see FlowShellProps.onRecordApproval. The approval rows are counted
+   *  into the badge unconditionally, so they must render unconditionally. */
+  onRecordApproval: FlowShellProps["onRecordApproval"];
   onGoFlow: () => void;
   onSaveInputs?: FlowShellProps["onSaveInputs"];
 }) {
@@ -1337,7 +1348,11 @@ function FlowToday({ program, ledger, programs, onSelectProgram, onResolveDecisi
               </div>
             </article>
           ))}
-          {onRecordApproval ? approvals.map((item, ai) => {
+          {/* UNCONDITIONAL, like every other list on this page. `items.approvals` is a
+              term of `items.total` — the "N items" header AND the rail badge — so a
+              handler-gated render put the badge over a page missing these rows. The
+              handler is a required prop now, so there is nothing left to gate on. */}
+          {approvals.map((item, ai) => {
             const id = String(item.id ?? "") || `appr-${ai}`;
             const approver = (item.approver && typeof item.approver === "object" ? item.approver : {}) as { name?: string; role?: string };
             const verdict = item.verdict === "approved" ? "approved" : "changes";
@@ -1365,7 +1380,7 @@ function FlowToday({ program, ledger, programs, onSelectProgram, onResolveDecisi
                 </div>
               </article>
             );
-          }) : null}
+          })}
           {disputes.map((row, i) => (
             <article key={`disp-${i}`} className="v3fs-dec">
               <div className="v3fs-dec-top">

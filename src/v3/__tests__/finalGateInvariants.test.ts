@@ -35,7 +35,10 @@ import {
   type SfCustomObject, type FhirStructureDefinition,
 } from "@/v3/lib/ledger/adapters";
 import { operatorQueueCounts, type OperatorQueueReads } from "@/v3/lib/ledger/operatorQueue";
-import { programInboxItems, inboxWaitingCount, inboxWaitingCountFrom } from "@/v3/components/flow/flowInbox";
+// `inboxWaitingCount` is deliberately NOT imported: comparing it to its own definition is
+// the tautology this file used to call its headline invariant. The badge's real number is
+// asserted where it is rendered — inboxBadgeIsThePage.test.ts.
+import { programInboxItems, inboxWaitingCountFrom } from "@/v3/components/flow/flowInbox";
 import { importsModule, ledgerFilesToScan, literalRoleOwners, constOwnerIsInert } from "./helpers/sourceGuards";
 
 const src = (rel: string) => readFileSync(resolve(__dirname, "../..", rel), "utf8");
@@ -68,14 +71,22 @@ const withRecordItem = prog({
 });
 
 describe("(c) the badge and the Inbox emptiness check are the same expression", () => {
-  it("inboxWaitingCountFrom over the page's own lists === the badge's inboxWaitingCount", () => {
-    for (const program of [bare, withRecordItem]) {
-      for (const ledger of [NO_LEDGER_ITEMS, ONE_SESSION]) {
-        expect(inboxWaitingCountFrom(programInboxItems(program), ledger))
-          .toBe(inboxWaitingCount(program, ledger));
-      }
-    }
-  });
+  // THE HEADLINE ASSERTION OF (c) — "the badge equals what the Inbox page renders" — is
+  // NOT here. It cannot be: nothing in this file has ever looked at the page.
+  //
+  // What used to stand in its place was
+  //     inboxWaitingCountFrom(programInboxItems(p), l) === inboxWaitingCount(p, l)
+  // and flowInbox.ts DEFINES the right side as the left side. No input could fail it. It
+  // read like the strongest test on the branch and was worth exactly nothing — worse than
+  // nothing, because its presence is why nobody wrote the real one for so long.
+  //
+  // The real one is inboxBadgeIsThePage.test.ts: it MOUNTS FlowShell over four programme
+  // shapes, reads the integer off the rail badge, counts the rows on the Inbox page, and
+  // asserts they are equal. It caught D1 (approvals counted into the badge, drawn only
+  // when an OPTIONAL handler happened to be passed) the moment it existed.
+  //
+  // What stays here is what this file is actually for: SHAPE. That the two surfaces reach
+  // the count through one module, and that the empty state is that count's own zero.
 
   it("the page is empty in exactly the cases the badge reads 0 — no third state", () => {
     const cases: Array<[ProgramSummary, OperatorQueueReads, boolean]> = [
