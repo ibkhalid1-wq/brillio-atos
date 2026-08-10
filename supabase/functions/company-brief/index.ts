@@ -11,16 +11,25 @@
  * made directly here.
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.8";
+import { defaultModelForProvider } from "../_shared/modelCatalog.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
 /** Both Anthropic (messages + web_search_20250305) and OpenAI (responses +
  * web_search) can ground the brief. Resolve whichever key exists — env first,
- * then adam_ai_provider_settings rows, anthropic preferred. */
+ * then adam_ai_provider_settings rows, anthropic preferred.
+ *
+ * The Anthropic model comes from the catalog's `defaultModelForProvider`, never
+ * a literal here: this file used to pin its own `claude-sonnet-4-6` and so went
+ * stale the moment the catalog default moved. KNOWN GAP: `gpt-4.1` below is
+ * still a local pin and does NOT match the catalog's OpenAI default (`gpt-4o`).
+ * It was left untouched on purpose — whether that pin is intentional or is just
+ * more of the same drift has not been checked, and swapping the OpenAI model is
+ * a behaviour change this edit had no basis to make. */
 async function searchProvider(): Promise<{ provider: "anthropic" | "openai"; key: string; model: string } | null> {
   const envAnthropic = Deno.env.get("ANTHROPIC_API_KEY") || "";
-  if (envAnthropic) return { provider: "anthropic", key: envAnthropic, model: "claude-sonnet-4-6" };
+  if (envAnthropic) return { provider: "anthropic", key: envAnthropic, model: defaultModelForProvider("anthropic") };
   const envOpenAi = Deno.env.get("OPENAI_API_KEY") || "";
   if (envOpenAi) return { provider: "openai", key: envOpenAi, model: "gpt-4.1" };
   const response = await fetch(
@@ -32,7 +41,7 @@ async function searchProvider(): Promise<{ provider: "anthropic" | "openai"; key
   const byProvider = (name: string) => rows.find((row) =>
     (row.provider || "").trim().toLowerCase() === name && row.api_key);
   const anthropic = byProvider("anthropic");
-  if (anthropic?.api_key) return { provider: "anthropic", key: anthropic.api_key, model: "claude-sonnet-4-6" };
+  if (anthropic?.api_key) return { provider: "anthropic", key: anthropic.api_key, model: defaultModelForProvider("anthropic") };
   const openai = byProvider("openai");
   if (openai?.api_key) return { provider: "openai", key: openai.api_key, model: "gpt-4.1" };
   return null;

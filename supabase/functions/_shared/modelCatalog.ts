@@ -45,6 +45,24 @@ export interface ModelCatalogEntry {
   outputPricePerM: number;
   /** Relative cost multiplier vs the tier2 baseline, for quick routing math. */
   costMultiplier: number;
+  /**
+   * Superseded by a newer model. Still SELECTABLE — an already-configured
+   * programme keeps resolving its real pricing and capabilities — but never an
+   * auto-routing target: `modelForTier` skips these. Retiring a model is
+   * therefore a one-field edit, not a deletion that would silently strand
+   * existing configurations on provider-default pricing.
+   */
+  legacy?: true;
+  /**
+   * This entry's list price is PROVISIONAL — the numbers below are real
+   * published list prices (never placeholders, so tier and routing math stay
+   * sound), but they are not what a call actually bills right now, e.g. a
+   * time-boxed introductory rate is in force. Any surface that reports DOLLARS
+   * derived from this entry — today that is the run-agent cost ledger, which
+   * writes `costUsd` into its `response_received` observation payload — must
+   * present that figure as provisional, not as billed spend.
+   */
+  priceUnverified?: true;
   capabilities: ModelCapabilityProfile;
 }
 
@@ -56,14 +74,42 @@ const PROVIDER_DEFAULT_CAPABILITIES: Record<AIProvider, ModelCapabilityProfile> 
   google: { promptCaching: false, jsonMode: false, fileInput: true, acceptsTemperature: true, tokenParam: "maxOutputTokens" },
 };
 
+// Anthropic's 4.7-and-later generation REMOVED the sampling parameters: sending
+// `temperature` to Fable 5, Opus 4.8, or Sonnet 5 is rejected with a 400. For
+// those models the provider-level fallback above is not the safe default it is
+// everywhere else — it is the single setting that breaks them, on every call.
+// So they carry an EXPLICIT profile: the graceful-degradation rule ("an unknown
+// model inherits provider defaults and still runs") inverts the moment a
+// provider retires a request field, because the inherited value stops being a
+// neutral guess and becomes affirmatively wrong.
+// `claudeClient.ts` consults only `acceptsTemperature` when deciding whether to
+// attach the field, so clearing it here is the entire fix — still no branching
+// on model name anywhere in the runtime.
+const ANTHROPIC_NO_SAMPLING_PARAMS: ModelCapabilityProfile = {
+  ...PROVIDER_DEFAULT_CAPABILITIES.anthropic,
+  acceptsTemperature: false,
+};
+
 // The known catalog. Pricing in USD/1M tokens (list prices; cache/discount math
-// lives in the ledger). costMultiplier is relative to the tier2 anchor (Sonnet).
+// lives in the ledger). costMultiplier is relative to the tier2 anchor (Sonnet)
+// and is exactly inputPricePerM / 3 for every entry — one rule, no hand-tuning.
+//
+// PRICING PROVENANCE: Anthropic rows carry published list prices. Where the
+// price in force differs from list (claude-sonnet-5 is under a time-boxed
+// introductory rate), the entry is flagged `priceUnverified` and keeps its LIST
+// price — a real number, so routing stays sound, with the caveat carried on the
+// entry rather than papered over. Never invent a price to fill a row: an
+// unpriced model must be left out, not guessed at.
 export const MODEL_CATALOG: ModelCatalogEntry[] = [
-  // ── Anthropic ──
+  // ── Anthropic ── (current; list prices per the Anthropic model catalog)
   { id: "claude-haiku-4-5", provider: "anthropic", tier: "tier1", inputPricePerM: 1, outputPricePerM: 5, costMultiplier: 0.33, capabilities: PROVIDER_DEFAULT_CAPABILITIES.anthropic },
-  { id: "claude-3-5-haiku-latest", provider: "anthropic", tier: "tier1", inputPricePerM: 0.8, outputPricePerM: 4, costMultiplier: 0.27, capabilities: PROVIDER_DEFAULT_CAPABILITIES.anthropic },
-  { id: "claude-sonnet-4-6", provider: "anthropic", tier: "tier2", inputPricePerM: 3, outputPricePerM: 15, costMultiplier: 1, capabilities: PROVIDER_DEFAULT_CAPABILITIES.anthropic },
-  { id: "claude-opus-4-1", provider: "anthropic", tier: "tier3", inputPricePerM: 15, outputPricePerM: 75, costMultiplier: 5, capabilities: PROVIDER_DEFAULT_CAPABILITIES.anthropic },
+  { id: "claude-sonnet-5", provider: "anthropic", tier: "tier2", inputPricePerM: 3, outputPricePerM: 15, costMultiplier: 1, priceUnverified: true, capabilities: ANTHROPIC_NO_SAMPLING_PARAMS },
+  { id: "claude-fable-5", provider: "anthropic", tier: "tier2", inputPricePerM: 10, outputPricePerM: 50, costMultiplier: 3.33, capabilities: ANTHROPIC_NO_SAMPLING_PARAMS },
+  { id: "claude-opus-4-8", provider: "anthropic", tier: "tier3", inputPricePerM: 5, outputPricePerM: 25, costMultiplier: 1.67, capabilities: ANTHROPIC_NO_SAMPLING_PARAMS },
+  // ── Anthropic (superseded) ── selectable, priced, but never auto-routed.
+  { id: "claude-sonnet-4-6", provider: "anthropic", tier: "tier2", inputPricePerM: 3, outputPricePerM: 15, costMultiplier: 1, legacy: true, capabilities: PROVIDER_DEFAULT_CAPABILITIES.anthropic },
+  { id: "claude-opus-4-1", provider: "anthropic", tier: "tier3", inputPricePerM: 15, outputPricePerM: 75, costMultiplier: 5, legacy: true, capabilities: PROVIDER_DEFAULT_CAPABILITIES.anthropic },
+  { id: "claude-3-5-haiku-latest", provider: "anthropic", tier: "tier1", inputPricePerM: 0.8, outputPricePerM: 4, costMultiplier: 0.27, legacy: true, capabilities: PROVIDER_DEFAULT_CAPABILITIES.anthropic },
   // ── OpenAI ──
   { id: "gpt-4o-mini", provider: "openai", tier: "tier1", inputPricePerM: 0.15, outputPricePerM: 0.6, costMultiplier: 0.05, capabilities: PROVIDER_DEFAULT_CAPABILITIES.openai },
   { id: "gpt-4o", provider: "openai", tier: "tier2", inputPricePerM: 2.5, outputPricePerM: 10, costMultiplier: 0.83, capabilities: PROVIDER_DEFAULT_CAPABILITIES.openai },
@@ -76,10 +122,10 @@ export const MODEL_CATALOG: ModelCatalogEntry[] = [
 
 const CATALOG_BY_ID = new Map(MODEL_CATALOG.map((entry) => [entry.id, entry]));
 
-// Default model per provider, derived from the catalog (the tier2 entry, or the
-// first listed). No hardcoded constants scattered elsewhere.
+// Default model per provider, derived from the catalog (the current non-legacy
+// tier2 entry, or the first listed). No hardcoded constants scattered elsewhere.
 const DEFAULT_BY_PROVIDER: Record<AIProvider, string> = {
-  anthropic: "claude-sonnet-4-6",
+  anthropic: "claude-sonnet-5",
   openai: "gpt-4o",
   google: "gemini-1.5-pro",
 };
@@ -115,13 +161,16 @@ export function modelsForProvider(provider: AIProvider): ModelCatalogEntry[] {
 
 /**
  * Concrete model id for a provider at a given tier — the routing target. Picks
- * the cheapest catalog entry for that provider+tier (so tier1 lands on the
- * smallest model). Returns undefined when the provider has no model at that tier,
- * letting the caller fall back to the configured default.
+ * the cheapest NON-LEGACY catalog entry for that provider+tier (so tier1 lands
+ * on the smallest current model). Legacy entries are excluded outright rather
+ * than merely deprioritised: a superseded model stays selectable by an operator
+ * but must never be reached by automatic routing. Returns undefined when the
+ * provider has no current model at that tier, letting the caller fall back to
+ * the configured default — a visible miss, not a silent hop onto old hardware.
  */
 export function modelForTier(provider: AIProvider, tier: ModelTier): string | undefined {
   const candidates = MODEL_CATALOG
-    .filter((entry) => entry.provider === provider && entry.tier === tier)
+    .filter((entry) => entry.provider === provider && entry.tier === tier && !entry.legacy)
     .sort((a, b) => a.costMultiplier - b.costMultiplier);
   return candidates[0]?.id;
 }
