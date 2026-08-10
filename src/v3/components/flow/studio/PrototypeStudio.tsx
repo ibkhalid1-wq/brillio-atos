@@ -6,9 +6,10 @@
  * edit mode to refine it — edits propose a change, they never silently
  * overwrite the record. Show demonstrates this same built prototype to clients.
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { asArray, asRecord, asStrings, asText, type StudioProps } from "./StudioKit";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
+import { assemblePrototype } from "@/v3/lib/prototypeAssembly";
 import { buildPrototypeProject, downloadPrototypeZip, importPrototypeProject, projectSlug } from "./prototypeExport";
 import PrototypeCommandBar from "@/v3/components/flow/PrototypeCommandBar";
 
@@ -44,6 +45,23 @@ export default function PrototypeStudio({ doc, onChange, program, onRefineProtot
   const [draft, setDraft] = useState(html);
   const importRef = useRef<HTMLInputElement>(null);
 
+  // THE FABRIC PATH — the deterministic assembly (fabric → semantic roles →
+  // Meridian → seed data), derived from the committed ontology + atlas with ZERO
+  // model tokens for structure. This is the default render; the model-authored
+  // build (when present) is the refined layer behind an explicit toggle.
+  const assembled = useMemo(() => {
+    if (!program) return null;
+    try {
+      const ontology = readArtifactDoc(program, "domainOntology");
+      const atlas = readArtifactDoc(program, "currentStateAtlas");
+      if (!ontology || !atlas) return null;
+      return assemblePrototype(ontology, atlas).html;
+    } catch { return null; }
+  }, [program]);
+  const [view, setView] = useState<"fabric" | "build">("fabric");
+  // fabric is the default; fall through honestly when one side is missing
+  const effectiveView: "fabric" | "build" = assembled && (view === "fabric" || !html) ? "fabric" : "build";
+
   // Re-seed the editor when the underlying build changes (a rebuild lands, or
   // a proposed edit is confirmed and flows back into the doc).
   useEffect(() => { setDraft(html); }, [html]);
@@ -62,19 +80,23 @@ export default function PrototypeStudio({ doc, onChange, program, onRefineProtot
     }
   };
 
-  if (!html) {
+  if (!html && !assembled) {
     return (
       <div className="v3fs-proto empty">
         <div className="v3fs-emptc">
           <span className="v3fs-emptc-i" aria-hidden="true">🖥</span>
-          <b className="v3fs-emptc-t">No prototype built yet</b>
-          <p className="v3fs-emptc-h">The Prototype Build assembles the Experience Design, the Blueprint&rsquo;s agents and the seed fixtures into a clickable app. Use <em>Rebuild</em> above to build it — then the Experience Designer can refine it here.</p>
+          <b className="v3fs-emptc-t">No prototype yet</b>
+          <p className="v3fs-emptc-h">Once the ontology and atlas exist, the prototype assembles from them deterministically (fabric → Meridian). Use <em>Rebuild</em> above for the model-refined layer on top.</p>
         </div>
       </div>
     );
   }
 
-  const source = mode === "edit" ? draft : html;
+  // What the preview shows: the fabric assembly by default (deterministic,
+  // Meridian-styled), the stored model-refined build behind the toggle. The
+  // editor always edits the STORED build — the assembly has no stored source.
+  const shown = effectiveView === "fabric" && assembled ? assembled : html;
+  const source = mode === "edit" ? draft : shown;
   const dirty = draft !== html;
 
   return (
@@ -84,14 +106,21 @@ export default function PrototypeStudio({ doc, onChange, program, onRefineProtot
             labels that did nothing. Navigation lives inside the running prototype. */}
         <div className="v3fs-proto-modes" role="group" aria-label="Prototype mode">
           <button type="button" className={mode === "preview" ? "on" : ""} onClick={() => setMode("preview")}>▶ Run it</button>
-          <button type="button" className={mode === "edit" ? "on" : ""} onClick={() => setMode("edit")}>✎ Experience Designer</button>
+          {html ? <button type="button" className={mode === "edit" ? "on" : ""} onClick={() => setMode("edit")}>✎ Experience Designer</button> : null}
+          {/* Fabric vs refined build — the fabric assembly is the deterministic
+              default (0 model tokens for structure); the model-refined build is
+              the layer on top, reachable when it exists. */}
+          {assembled && html ? (<>
+            <button type="button" className={effectiveView === "fabric" ? "on" : ""} title="Deterministic assembly from the ontology + atlas — fabric → semantic roles → Meridian → seed data" onClick={() => { setView("fabric"); setMode("preview"); }}>◇ Assembled (fabric)</button>
+            <button type="button" className={effectiveView === "build" ? "on" : ""} title="The model-refined build stored on the record" onClick={() => setView("build")}>✦ Refined build</button>
+          </>) : null}
           {/* Open the running prototype in a real browser tab (its own URL), so it
               can be walked full-screen, shared, or opened on another device. */}
-          <button type="button" title="Open the running prototype in a new browser tab" onClick={() => openPrototypeInBrowser(mode === "edit" ? draft : html)}>↗ Open in browser</button>
+          <button type="button" title="Open the running prototype in a new browser tab" onClick={() => openPrototypeInBrowser(mode === "edit" ? draft : shown)}>↗ Open in browser</button>
           {/* External build: the prototype is self-contained, so it runs anywhere —
               download it to open standalone, share, or hand to a build team. */}
           <button type="button" title="Download the self-contained prototype as a single HTML file — runs in any browser" onClick={() => {
-            const blob = new Blob([mode === "edit" ? draft : html], { type: "text/html" });
+            const blob = new Blob([mode === "edit" ? draft : shown], { type: "text/html" });
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url; a.download = "prototype.html"; a.click();
@@ -102,7 +131,7 @@ export default function PrototypeStudio({ doc, onChange, program, onRefineProtot
               zipped — so a build team or a coding agent can work in it. */}
           <button type="button" title="Download as an editable project (.zip) — separate HTML/CSS/JS + fixtures, tokens and a README, for a build team or coding agent" onClick={async () => {
             const project = buildPrototypeProject({
-              html: mode === "edit" ? draft : html,
+              html: mode === "edit" ? draft : shown,
               title: asText(doc.title),
               programName: program?.name,
               screens,
