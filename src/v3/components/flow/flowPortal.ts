@@ -16,6 +16,7 @@ import type { ProgramSummary } from "@/new/types";
 import { FLOW_ATTESTATION_CAP } from "@/v3/lib/blobGuard";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
 import { parseBeatRecords } from "@/v3/components/flow/flowDemoRun";
+import { kitAgendaQuestions } from "@/v3/lib/ledger/kitAgendaCache";
 
 export interface FlowInterviewPack {
   id: string;
@@ -362,11 +363,13 @@ export function mintInterviewPacks(program: ProgramSummary, actor: string): Reco
     }
     answeredBy.set(key, set);
   }
+  // The kit's agenda strings are a CACHE of rendered question text — read through
+  // the ONE accessor (versioned cache field, else the legacy inline blocks). A pack
+  // that carries LOCI renders through renderQuestion on the linked page; these
+  // strings are what a pack without them falls back to.
   const agendaQuestions = (interview: Record<string, unknown>): string[] => {
     const answered = answeredBy.get(String(interview.stakeholder ?? "").trim().toLowerCase());
-    return (Array.isArray(interview.agenda) ? interview.agenda.filter(isRecord) : [])
-      .flatMap((slot) => (Array.isArray((slot as Record<string, unknown>).questions) ? ((slot as Record<string, unknown>).questions as unknown[]).map(String) : []))
-      .filter(Boolean)
+    return kitAgendaQuestions(interview)
       .filter((question) => !answered?.has(normalise(question)))
       .slice(0, 12);
   };

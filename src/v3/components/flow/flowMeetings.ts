@@ -12,6 +12,7 @@ import { getProgramState, wrapProgramState } from "@/new/lib/programState";
 import { flowMovements, movementArtifacts, movementOpenIssues, kitPersonas, gateChecklist, readMovementInputs, parseGridRows, readContradictions, falsifiedGap, frameFactOnRecord, deferredAsks } from "@/v3/components/flow/flowShellData";
 import { FORMAL_ARTIFACT_FIELD_KEYS, FORMAL_ARTIFACT_PHASES } from "@/v3/lib/formalArtifacts";
 import { getPhaseDefinition } from "@/v3/lib/methodology";
+import { kitAgendaQuestions } from "@/v3/lib/ledger/kitAgendaCache";
 
 // stakeholderEmail moved to flowShellData (the gate checklist needs it); the
 // meeting-kit surface keeps importing it from here.
@@ -112,8 +113,9 @@ function baseMeetingKit(program: ProgramSummary, movementId: string): Omit<Meeti
     const next = interviews.find((entry) => !heard.has(String(entry.stakeholder ?? "").trim().toLowerCase()));
     const done = !next;
     const target = next ?? interviews[0];
-    const agenda = Array.isArray(target.agenda) ? target.agenda.filter(isRecord) : [];
-    const questions = agenda.flatMap((slot) => (Array.isArray(slot.questions) ? slot.questions.map(String) : [])).filter(Boolean).slice(0, 10);
+    // Agenda strings are a CACHE of rendered question text — one accessor, which
+    // prefers the versioned cache and falls back to the legacy inline blocks.
+    const questions = kitAgendaQuestions(target).slice(0, 10);
     const objectives = Array.isArray(target.objectives) ? target.objectives.map(String).filter(Boolean) : [];
     const who = [String(target.stakeholder ?? "Stakeholder"), String(target.role ?? "")].filter(Boolean).join(", ");
     return {

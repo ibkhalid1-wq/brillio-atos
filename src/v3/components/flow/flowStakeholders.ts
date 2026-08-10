@@ -13,6 +13,7 @@ import { getProgramState, wrapProgramState } from "@/new/lib/programState";
 import { meetingKit, askableMovementGaps, sponsorLinkQuestions } from "@/v3/components/flow/flowMeetings";
 import { readContradictions, flowMovements, movementEvidence, readMovementInputs, parseGridRows, deferredAsks } from "@/v3/components/flow/flowShellData";
 import { stakeholderPrimaryArea, areaHasEvidence, areaHasModel } from "@/v3/components/flow/flowAreas";
+import { kitAgendaQuestions } from "@/v3/lib/ledger/kitAgendaCache";
 
 export interface MovementStakeholder {
   /** Stable key for React + pack matching. */
@@ -361,9 +362,10 @@ function kitInterviews(program: ProgramSummary): MovementStakeholder[] {
     };
   });
   const interviewCards = interviews.map((interview, index) => {
-    const agenda = (Array.isArray(interview.agenda) ? interview.agenda : [])
-      .flatMap((slot) => (isRecord(slot) && Array.isArray(slot.questions) ? slot.questions.map(String) : []))
-      .filter(Boolean);
+    // The kit's agenda strings are a CACHE of rendered question text (the ledger's
+    // open unknowns are the source) — read through the ONE accessor, which prefers
+    // the versioned cache and falls back to the legacy inline blocks.
+    const agenda = kitAgendaQuestions(interview);
     // A kit entry is a ROLE PLACEHOLDER when the stakeholder is empty OR uses
     // the "Role — TBC" convention the generator is instructed to emit. Its
     // label is the role awaiting a person, never someone's name.
