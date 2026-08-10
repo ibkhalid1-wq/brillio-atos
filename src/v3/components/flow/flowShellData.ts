@@ -13,6 +13,7 @@ import { getPhaseArtifactDefs } from "@/v3/lib/phaseArtifacts";
 import { getFormalArtifactContent, getFormalArtifactConfidence, FORMAL_ARTIFACT_FIELD_KEYS } from "@/v3/lib/formalArtifacts";
 import { listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
 import { stakeholderPrimaryArea, GENERAL_AREA } from "@/v3/components/flow/flowAreas";
+import { frameSorReadiness, type ArtifactAskMark } from "@/v3/lib/ledger/artifactAsks";
 
 /**
  * Find a quoted claim inside a source transcript, tolerantly: curly quotes
@@ -870,6 +871,24 @@ export function gateChecklist(program: ProgramSummary, movement: PhaseDefinition
         label: has("_listenCoverageConfirmed") ? "Listen plan confirmed" : "Confirm the Listen plan — who we'll hear and the areas we'll cover",
         done: has("_listenCoverageConfirmed"),
       });
+    }
+    // PREVENTIVE dictionary ask: naming a system of record and creating its artifact
+    // ask are ONE act — a named SoR with the ask neither provided, requested, nor
+    // marked has-none is an incomplete Frame item (docs/aura/data-dictionary-import.md).
+    if (inner.domainOntology) {
+      const listenIn = readMovementInputs(program, "listen") as Record<string, unknown>;
+      const askMarks = Array.isArray(listenIn._artifactAsks)
+        ? (listenIn._artifactAsks as ArtifactAskMark[]).filter((m) => m && typeof m.sor === "string") : [];
+      const sor = frameSorReadiness(inner.domainOntology, askMarks, !!listenIn._dataDictionary);
+      if (sor.named.length) {
+        items.push({
+          id: "sor-dictionary",
+          label: sor.complete
+            ? `Dictionary ask handled for ${sor.named.length} system${sor.named.length === 1 ? "" : "s"} of record`
+            : `Dictionary ask open for ${sor.unhandled.length} of ${sor.named.length} system${sor.named.length === 1 ? "" : "s"} of record — provide, request, or mark has-none (${sor.unhandled.join(", ")})`,
+          done: sor.complete,
+        });
+      }
     }
   } else if (movement.id === "listen") {
     const coverage = listenCoverage(program);

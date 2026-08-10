@@ -33,6 +33,7 @@ import {
 } from "./projections";
 import { buildReadModel } from "./readModel";
 import { projectKitQuestions, type KitQuestion } from "./kitProjection";
+import { deriveArtifactAsks, type ArtifactAskMark, type ArtifactAskView } from "./artifactAsks";
 import { reconcile } from "./merge";
 import { parseDictionaryCsv, dictionaryToClaims, TYPING_SLOTS, type ParsedDictionary } from "./dictionary";
 import type { LedgerStore } from "./store";
@@ -82,6 +83,8 @@ export interface ProgramLedger {
   stats: MigrationStats;
   queue: UnknownQueue;
   kit: KitView;
+  /** One dictionary ask per system of record — Frame-born, inbox only while unprovided. */
+  artifactAsks: ArtifactAskView;
   devs: Deviation[];
   heard: HeardRegister;
   ontology: OntologyElementView[];
@@ -170,6 +173,16 @@ export function useProgramLedger(program?: ProgramSummary): ProgramLedger {
       }
     }
 
+    // ── artifact-ask marks (preventive dictionary ask, one per SoR) — same
+    //    fingerprint-safe underscore pattern as the dictionary itself ──
+    const askMarksRaw = (listenInputs as Record<string, unknown> | undefined)?._artifactAsks;
+    const askMarksArr = typeof askMarksRaw === "string"
+      ? (() => { try { return JSON.parse(askMarksRaw) as unknown; } catch { return []; } })()
+      : askMarksRaw;
+    const askMarks: ArtifactAskMark[] = Array.isArray(askMarksArr)
+      ? (askMarksArr.filter((m): m is ArtifactAskMark => !!m && typeof m === "object" && typeof (m as ArtifactAskMark).sor === "string"))
+      : [];
+
     // ── operator verbs, applied as a surface overlay over the read model ──
     // ASSIGN re-derives ownership (unowned → owned-and-open) by re-pointing the open
     // claim's owner; the projections below then read the assigned state. buildReadModel
@@ -198,6 +211,9 @@ export function useProgramLedger(program?: ProgramSummary): ProgramLedger {
 
     const kit = buildKitView(store);
     const queue = buildUnknownQueue(store);
+    // ONE ask per system of record, born at SoR identification (derivation) — the
+    // preventive dictionary ask, projected to Frame readiness, Discover, and the inbox.
+    const artifactAsks = deriveArtifactAsks(store, { marks: askMarks, dictionaryName });
     // Kit questions ARE the open unknowns, phrased for humans — the SAME source the
     // operator queue reads (buildUnknownQueue), never a separately-generated list. One
     // list, so the stakeholder's kit and the operator's queue can't drift.
@@ -232,6 +248,7 @@ export function useProgramLedger(program?: ProgramSummary): ProgramLedger {
       queue,
       kit,
       kitQuestions,   // the one projection: open unknowns phrased for humans (kit === queue)
+      artifactAsks,   // one dictionary ask per SoR — Frame-born, inbox only while unprovided
       devs: buildDeviationRegister(store),
       heard: buildHeardRegister(store),
       ontology: buildOntologyView(store),
