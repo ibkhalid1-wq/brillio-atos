@@ -34,10 +34,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useProgramLedger } from "@/v3/lib/ledger/useProgramLedger";
 import { HeardReadout, ConvergenceReadout, ProvisionalMark, ClaimStatus, SourceTag } from "@/v3/components/flow/studio/ledgerPrimitives";
 import DesignLoopZones from "@/v3/components/flow/DesignLoopZones";
-import OperatorInbox from "@/v3/components/flow/OperatorInbox";
-import { serializeOperatorActions, OPERATOR_ACTIONS_FIELD, type OperatorAction } from "@/v3/lib/ledger/operatorActions";
 import { ownerRoleLabelForArea } from "@/v3/lib/ledger/migrate";
-import type { ArtifactAskMark } from "@/v3/lib/ledger/artifactAsks";
 import { renderQuestion } from "@/v3/lib/ledger/renderQuestion";
 import "./theLine.css";
 
@@ -839,44 +836,9 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
   // ── operator verbs (Assign / Schedule / Respond): append an action through the
   // fingerprint-safe Listen field; useProgramLedger re-derives ownership on the next
   // render. Candidate owners are the people the kit already knows.
-  const verbCandidates = useMemo(() => {
-    const seen = new Set<string>();
-    const out: Array<{ label: string; role: string }> = [];
-    for (const r of cast) { if (seen.has(r.label)) continue; seen.add(r.label); out.push({ label: r.label, role: r.role }); }
-    return out;
-  }, [cast]);
-  const commitOperatorAction = async (action: OperatorAction | OperatorAction[]) => {
-    if (!onSaveInputs) { setNote("No write handler available in this view."); window.setTimeout(() => setNote(null), 5000); return; }
-    const added = Array.isArray(action) ? action : [action];
-    const next = [...ledger.actions, ...added];
-    await onSaveInputs("listen", { [OPERATOR_ACTIONS_FIELD]: serializeOperatorActions(next) }, { silent: true });
-    const a = added[0];
-    setNote(Array.isArray(action) ? `Assigned ${added.length} question${added.length === 1 ? "" : "s"} — owned-and-open now (not counted as heard).`
-      : a.kind === "assign" ? `Assigned to ${a.owner.label} — owned-and-open now (not closed, not counted as heard).`
-      : a.kind === "schedule" ? `Marked for a joint session — ${a.pair} (${a.abouts.length} question${a.abouts.length === 1 ? "" : "s"}). No date yet — scheduling is gated.`
-      : a.kind === "decide-fate" ? `Recorded — ${a.decision === "escalate" ? "escalated" : "out-of-scope"} (not an answer, not counted as heard).`
-      : a.kind === "unassign" ? `Returned to unowned — ${a.reason === "release" ? "released by the holder" : "you unassigned it"} (not counted as heard).`
-      : a.kind === "redirect" ? `Referral recorded — confirm it to reassign (not counted as heard).`
-      : `Captured via the team — recorded, provisional, not counted as heard.`);
-    window.setTimeout(() => setNote(null), 6000);
-  };
 
   // Artifact-ask marks (requested / has-none) — appended to the fingerprint-safe
   // `_artifactAsks` field via the SAME silent-save channel as operator actions.
-  const commitAskMark = (mark: ArtifactAskMark) => {
-    if (!onSaveInputs) { setNote("No write handler available in this view."); window.setTimeout(() => setNote(null), 5000); return; }
-    const next = [...readAskMarks(), mark];
-    void onSaveInputs("listen", { _artifactAsks: JSON.stringify(next) }, { silent: true });
-    setNote(mark.mark === "requested"
-      ? `Requested — the ${mark.sor} dictionary ask is now operator-tracked (ages until provided).`
-      : `Recorded — ${mark.sor} has no dictionary; the Frame item is complete.`);
-    window.setTimeout(() => setNote(null), 6000);
-  };
-  const readAskMarks = (): ArtifactAskMark[] => {
-    const raw = (readMovementInputs(program, "listen") as Record<string, unknown> | undefined)?._artifactAsks;
-    const arr = typeof raw === "string" ? (() => { try { return JSON.parse(raw) as unknown; } catch { return []; } })() : raw;
-    return Array.isArray(arr) ? (arr.filter((m): m is ArtifactAskMark => !!m && typeof m === "object" && typeof (m as ArtifactAskMark).sor === "string")) : [];
-  };
 
   return (
     <div className="v3ln">
@@ -1029,9 +991,10 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
             <ConvergenceReadout burnDown={ledger.kit.burnDown} />
             <span className="v3ln-goal-heard"><HeardReadout heard={ledger.heard} /></span>
           </div>
-          {/* The operator inbox: the actionable subset — assign / decide-fate / schedule /
-              adjudicate, reassignment, and the stakeholder exits (interim). */}
-          <OperatorInbox ledger={ledger} candidates={verbCandidates} by="operator" onCommit={commitOperatorAction} onAskMark={commitAskMark} />
+          {/* The operator inbox moved to the INBOX view (2026-08-10, by request):
+              Discover shows WHO TO ENGAGE and their questions; everything the
+              OPERATOR must resolve — assign / sessions / adjudicate / in-flight /
+              the dictionary ask — is the Inbox's job. One "Inbox", one meaning. */}
           {/* Discover as an engagement dashboard: who needs attention and why, sorted by
               state. Ageing on in-flight is operator-tracked until the link is live. */}
           <div className="v3ln-engbar" role="note" aria-label="Engagement — who needs attention">

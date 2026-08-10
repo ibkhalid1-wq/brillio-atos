@@ -24,6 +24,9 @@ import { readFlowGovernance, flowAgentTier } from "@/v3/components/flow/flowGove
 import { resolveMovementStakeholders, deliveryRoleDirectory, readDirectoryPeople, validateProgramRole, readRoleBindings, knownProgramRoles, unresolvedCoverageNames, kitPersonaDirectory, readSuggestedVoices, readListenPlan, listenPlanWrite, dismissedListenRoles } from "@/v3/components/flow/flowStakeholders";
 import DiscoveryKitAlign from "@/v3/components/flow/DiscoveryKitAlign";
 import TheLine from "@/v3/components/flow/TheLine";
+import OperatorInbox from "@/v3/components/flow/OperatorInbox";
+import { useProgramLedger } from "@/v3/lib/ledger/useProgramLedger";
+import { useOperatorCommits } from "@/v3/lib/ledger/useOperatorCommits";
 import { stakeholderEmail } from "@/v3/components/flow/flowMeetings";
 import { readMetricRegistry, metricConsistency } from "@/v3/components/flow/flowMetricRegistry";
 import { routeAttachedDocument, buildRoutedBlocks, type DocRoute } from "@/v3/components/flow/flowDocRouting";
@@ -993,6 +996,11 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
   onSaveInputs?: FlowShellProps["onSaveInputs"];
 }) {
   const movements = useMemo(() => flowMovements(), []);
+  // THE LEDGER OPERATOR QUEUE — assign / sessions / adjudicate / in-flight / the
+  // dictionary ask. It lives HERE (2026-08-10, by request): Discover shows who to
+  // engage and their questions; everything the OPERATOR must resolve is the Inbox.
+  const ledger = useProgramLedger(program);
+  const commits = useOperatorCommits(program, onSaveInputs);
   const open = listOpenFlowDecisions(program);
   const feed = listFlowAttestations(program);
   const inbox = listPortalInbox(program);
@@ -1271,6 +1279,10 @@ function FlowToday({ program, programs, onSelectProgram, onResolveDecision, onIn
           ))}
         </div>
       ) : null}
+      <OperatorInbox ledger={ledger} candidates={commits.candidates} by="operator"
+        onCommit={(a) => commits.commitAction(a, ledger.actions)}
+        onAskMark={(m) => { void commits.commitAskMark(m); }}
+        onDictionary={(csv) => commits.commitDictionary(csv)} />
       {open.length === 0 && inbox.length === 0 && approvals.length === 0 && disputes.length === 0 && unresolvedRoles.length === 0 && coverageNames.length === 0 && exceptions.length === 0 ? (
         <div className="v3fs-quiet">
           <div className="v3fs-quiet-mark" aria-hidden="true">◈</div>
