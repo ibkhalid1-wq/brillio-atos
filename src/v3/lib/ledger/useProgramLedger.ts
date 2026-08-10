@@ -44,6 +44,7 @@ import {
   type OperatorAction, type AssignAction, type ScheduleAction, type CaptureAction,
   type DecideFateAction, type RedirectAction, type PinAction, type PinConflict,
 } from "./operatorActions";
+import { proposalOverlay, type MintedProposal } from "./curation";
 
 /** Ownership by SOURCE CLASS, the ledger's own encoding (not an invented taxonomy):
  *  operator = decision/dispositioned · stakeholder = asserted · joint = a locus with
@@ -115,6 +116,13 @@ export interface ProgramLedger {
    *  action) wants a different owner than the person the question is in flight to.
    *  The pin still holds — this is an operator decision queue, never a sweep. */
   pinConflicts: PinConflict[];
+  /** CURATION — elements PROPOSED from ontology-gap kit questions (curation.ts). Each
+   *  standing proposal contributed exactly one open `?unknown` to the read model above,
+   *  overlaid, never written to the store. A proposal whose concept the ontology already
+   *  holds minted nothing and carries `alreadyModelled` instead. */
+  proposals: MintedProposal[];
+  /** the proposed loci — a surface marks a row PROPOSED from this, never re-deriving. */
+  proposedAbouts: Set<string>;
   /** loci with an operator-entered capture — shown provisional, never counted as heard. */
   capturedAbouts: Set<string>;
   /** read-side conflicts: two live claims on one locus (freeze-and-adjudicate). */
@@ -203,14 +211,21 @@ export function useProgramLedger(program?: ProgramSummary): ProgramLedger {
     const captures = actions.filter((a): a is CaptureAction => a.kind === "capture");
     const redirects = actions.filter((a): a is RedirectAction => a.kind === "redirect");
     const fold = foldOwnership(actions);
+    // ── CURATION overlay: elements PROPOSED from ontology-gap kit questions, each with
+    // the one `?unknown` it opens. Same shape as the ownership overlay — appended to what
+    // buildReadModel is handed, never written into the frozen store. Provisional (id
+    // prefix `el:proposed:`), attributed (who/which question/when), reversible
+    // (`retract-mint`), and never minted over a concept the ontology already holds.
+    const curation = proposalOverlay(actions, migrated.elements());
+    const withProposals = curation.claims.length ? [...migrated.claims(), ...curation.claims] : migrated.claims();
     // ── in-flight PINNING: the BASELINE owner per open locus, read ONCE off the
     // pre-overlay claims — "who would own this if no link had gone out". It exists
     // solely to DETECT a disagreement; the overlay below still hands the locus to the
     // pinned recipient, and the disagreement goes to the operator as a decision.
-    const baselineOwner = baselineOwnerLabels(migrated.claims(), activeAssignments(actions));
+    const baselineOwner = baselineOwnerLabels(withProposals, activeAssignments(actions));
     const pinConflicts = derivePinConflicts(fold, (about) => baselineOwner.get(about) ?? "", ownerRoleLabelForArea);
-    const store = fold.size
-      ? buildReadModel(migrated.elements(), applyOwnership(migrated.claims(), fold))
+    const store = fold.size || curation.elements.length
+      ? buildReadModel([...migrated.elements(), ...curation.elements], applyOwnership(withProposals, fold))
       : migrated;
     const assignments = [...activeAssignments(actions).values()];
     const pins = [...activePins(actions).values()];
@@ -283,6 +298,8 @@ export function useProgramLedger(program?: ProgramSummary): ProgramLedger {
       pins,
       pinnedAbouts: new Set(pins.map((p) => p.about)),
       pinConflicts,
+      proposals: curation.proposals,
+      proposedAbouts: curation.abouts,
       capturedAbouts: new Set(captures.map((c) => c.about)),
       conflicts,
       unownedOpen: assignQueue.length,   // burn-down "unowned" === inbox "need an owner" — ONE read

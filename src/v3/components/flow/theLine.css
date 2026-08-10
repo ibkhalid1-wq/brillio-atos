@@ -553,6 +553,9 @@
 .v3ib-onplan{font-size:11px;color:#5a4fa0;font-weight:650}
 /* blocked-unowned tag in the assign list */
 .v3ib-blk{font-size:10px;font-weight:700;letter-spacing:.02em;text-transform:uppercase;color:var(--v3-amber);border:1px solid color-mix(in srgb,var(--v3-amber) 45%,transparent);border-radius:4px;padding:0 4px;margin-left:4px}
+/* PROPOSED — a curated element minted from an ontology-gap kit question. Dashed border
+   (not solid) so a proposal never reads as an evidence-grounded element at a glance. */
+.v3ib-prop{font-size:10px;font-weight:700;letter-spacing:.02em;text-transform:uppercase;color:#5a4fa0;border:1px dashed color-mix(in srgb,#6C5FAE 55%,transparent);border-radius:4px;padding:0 4px;margin-left:4px}
 /* owned-question list in the roster expansion */
 .v3ln-cr-qs.owned li{display:flex;gap:6px;align-items:baseline}
 .v3ln-cr-qtype{font-size:9px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--v3-accent-2);flex-shrink:0}
