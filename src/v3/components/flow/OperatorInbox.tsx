@@ -216,9 +216,15 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
               return (
                 <div key={ask.sor} className="v3ib-dict-ask">
                   <span className="v3ib-dict-to">
-                    <b>{ask.sor}</b> <span className="v3ib-unit">({ask.entityCount} entit{ask.entityCount === 1 ? "y" : "ies"})</span>
+                    <b>{ask.sor}</b>{" "}
+                    {/* A SoR the sponsor named in Frame has no entities yet — say that,
+                        rather than print a "0 entities · closes 0 questions" that reads
+                        like the ask is worthless. The weight is unknown, not zero. */}
+                    <span className="v3ib-unit">
+                      {ask.entityCount === 0 ? "(named in Frame — nothing modelled against it yet)" : `(${ask.entityCount} entit${ask.entityCount === 1 ? "y" : "ies"})`}
+                    </span>
                     {" "}→ <b>{owner ?? "no one named yet"}</b>{owner && ownerRole && ownerRole !== owner ? ` · ${ownerRole}` : ""}
-                    {" "}· <b>closes {ask.weight}</b> open question{ask.weight === 1 ? "" : "s"}
+                    {ask.entityCount === 0 ? null : <>{" "}· <b>closes {ask.weight}</b> open question{ask.weight === 1 ? "" : "s"}</>}
                   </span>
                   <span className="v3ib-dict-msg">
                     {ask.state === "reopened" ? (

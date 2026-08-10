@@ -49,11 +49,22 @@ running program + export — the state machine is proven on the migrated ledgers
 
 ## Findings (reported, not silently done)
 
-- **No Frame SoR input field exists.** SoR identification happens in the ontology
-  (`entities[].systemOfRecord`), generated in Listen — there is no Frame fact field
-  where a sponsor NAMES the systems. The gate item honestly reflects the named set
-  wherever it originates; a first-class Frame "systems of record" input (naming a SoR
-  before any ontology exists) is a generator/inputs change.
+- ~~**No Frame SoR input field exists.**~~ **BUILT (2026-08-10).** The Flow Frame
+  phase now carries a first-class `systemsOfRecord` input (`methodology.ts`), parsed by
+  the ONE parser `parseDeclaredSors`. `deriveArtifactAsks({declaredSors})` mints the ask
+  from it — **so the ask is born at Frame time, before any ontology exists** — and
+  `frameSorReadiness(ontology, marks, dictProvided, declared)` reads both sources for
+  the `sor-dictionary` gate item, which is now live at Frame and reports its provenance
+  (`N on the ontology · N named in Frame only`). The two sources merge
+  **case-insensitively**, the modelled spelling winning, so **one system is never two
+  asks**; `ask.source` is `frame` / `ontology` / `both`, never inferred. A declared-only
+  ask has `entityCount 0` and honestly carries **no weight** (nothing is modelled
+  against it yet) — `asksNeedingChase` keeps it visible on that basis rather than
+  hiding it for weighing zero. Conservation is unchanged (asserted). **Gated
+  remainder:** feeding the declared systems into the `domain-ontology` /
+  `current-state-atlas` prompts so the generator aligns `entities[].systemOfRecord`
+  with the sponsor's naming is an EDGE change (`supabase/functions/run-agent`) — the
+  field is wired to `usedByArtifacts` but the prompt is not changed, not deployed.
 - **The kit artifact schema has no asks section** (`discoveryKit` = interviews /
   personas / coverageMap). Projecting the artifact ask into the GENERATED kit document
   needs a schema + generator change (edge). The read model already carries the asks, so

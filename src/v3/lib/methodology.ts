@@ -1241,6 +1241,14 @@ export const ATOS_FLOW: MethodologyDefinition = {
         { id: "companyBrief", label: "Company brief", type: "textarea", required: false, usedByArtifacts: ["charter", "discovery-kit", "domain-ontology", "current-state-atlas"], placeholder: "What the company does — market, customers, products, scale.", hint: "Grounds the charter, kit, ontology and atlas in who the client IS. Fetch a web-grounded draft (the Line's Frame band → Company brief) or write your own — the operator's save is the write, and captured evidence still outranks it." },
         { id: "sponsorConversation", label: "Sponsor conversation transcript", type: "transcript", required: false, usedByArtifacts: ["charter", "discovery-kit"], hint: "Paste the recorded sponsor conversation (or reference the uploaded document). The charter and the discovery kit draft themselves from it — you confirm rather than author." },
         { id: "successMetric", label: "Primary success metric", type: "text", role: "measure", readOnlyProjection: true, placeholder: "KPI name, e.g. Quote turnaround time", required: true, example: "Quote turnaround time", validationRule: "A single measurable KPI name — baselines are captured from the discovery conversations." },
+        // The sponsor NAMES the systems of record here. Naming a system and creating
+        // its data-dictionary ask are ONE act, so this field is what lets that ask be
+        // born at Frame time instead of waiting for Listen to generate an ontology
+        // (docs/aura/artifact-asks.md). One per line; the Frame gate item
+        // 'sor-dictionary' and the inbox chase both read it through parseDeclaredSors,
+        // merged case-insensitively with the ontology's own systemOfRecord entries so
+        // one system is never two asks.
+        { id: "systemsOfRecord", label: "Systems of record", type: "textarea", required: false, usedByArtifacts: ["domain-ontology", "current-state-atlas"], placeholder: "One per line — e.g.\nSalesforce CRM\nSAP Finance\nWorkday", example: "Salesforce CRM", hint: "The systems the business actually runs on — where the records live. Naming one opens its data-dictionary ask (one upload closes a wall of typing questions), so it can be chased from Frame rather than after the ontology lands. The ontology's own systems merge with these, never duplicate them." },
         {
           // Same field id as the stage-gate spine so KPI consumers (benefits
           // tracking, the Program Graph's measured-by chain) read Flow programmes
