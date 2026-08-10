@@ -21,7 +21,7 @@ import { listApprovalResponses } from "@/v3/components/flow/flowApprovals";
 import { readContradictions } from "@/v3/components/flow/flowShellData";
 import { readDirectoryPeople, unresolvedCoverageNames } from "@/v3/components/flow/flowStakeholders";
 import { governedExceptionsForInbox } from "@/v3/components/flow/flowExceptions";
-import { operatorQueueCount, type OperatorQueueReads } from "@/v3/lib/ledger/operatorQueue";
+import { operatorQueueCount, operatorQueueCounts, type OperatorQueueReads } from "@/v3/lib/ledger/operatorQueue";
 
 export interface ProgramInboxItems {
   /** open flow decisions awaiting a confirm / decline */
@@ -68,6 +68,28 @@ export const inboxWaitingCountFrom = (items: ProgramInboxItems, ledger: Operator
   items.total + operatorQueueCount(ledger);
 
 /** THE rail-badge number: the programme-blob queue plus the ledger operator queue.
- *  0 means the Inbox page has nothing on it, which is exactly when the badge hides. */
+ *  0 means nothing is WAITING on the operator, which is exactly when the badge hides. */
 export const inboxWaitingCount = (program: ProgramSummary, ledger: OperatorQueueReads): number =>
   inboxWaitingCountFrom(programInboxItems(program), ledger);
+
+/**
+ * THE OTHER number: EVERYTHING THE INBOX PAGE DRAWS, the decided trace included.
+ *
+ * The badge and the page stopped being the same integer the moment `decided` left the
+ * badge (45cfa62, correctly — decideFates only ever grows, so a badge carrying it could
+ * never return to zero). `operatorQueueCounts` split into `total` (waiting) and
+ * `rendered` (drawn) for exactly that reason, and OperatorInbox's own null-render moved
+ * to `rendered`. FlowShell's quiet block did NOT move: it still asked `waiting`, so a
+ * programme whose only operator action is one `decide-fate` measured
+ *
+ *     { badge: 0, decidedRows: 1, inboxSections: 1,
+ *       quietBlocks: 1, quietHeadline: "Nothing needs you right now." }
+ *
+ * — the operator rules the last unknown out of scope and lands on a page reading
+ * "Decided — 1 unknown the operator ruled on" directly above "Nothing needs you right
+ * now". Emptiness is a question about what is DRAWN, so it reads this; the badge stays
+ * `inboxWaitingCount`. Two named numbers, each written once, neither re-derived at a
+ * call site.
+ */
+export const inboxRenderedCountFrom = (items: ProgramInboxItems, ledger: OperatorQueueReads): number =>
+  items.total + operatorQueueCounts(ledger).rendered;

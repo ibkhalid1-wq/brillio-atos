@@ -38,8 +38,8 @@ import { operatorQueueCounts, type OperatorQueueReads } from "@/v3/lib/ledger/op
 // `inboxWaitingCount` is deliberately NOT imported: comparing it to its own definition is
 // the tautology this file used to call its headline invariant. The badge's real number is
 // asserted where it is rendered — inboxBadgeIsThePage.test.ts.
-import { programInboxItems, inboxWaitingCountFrom } from "@/v3/components/flow/flowInbox";
-import { importsModule, ledgerFilesToScan, literalRoleOwners, constOwnerIsInert } from "./helpers/sourceGuards";
+import { programInboxItems, inboxWaitingCountFrom, inboxRenderedCountFrom } from "@/v3/components/flow/flowInbox";
+import { importsModule, ledgerFilesToScan, literalRoleOwners, constOwnerIsInert, codeOnly } from "./helpers/sourceGuards";
 
 const src = (rel: string) => readFileSync(resolve(__dirname, "../..", rel), "utf8");
 const LEDGER_DIR = resolve(__dirname, "../lib/ledger");
@@ -88,16 +88,20 @@ describe("(c) the badge and the Inbox emptiness check are the same expression", 
   // What stays here is what this file is actually for: SHAPE. That the two surfaces reach
   // the count through one module, and that the empty state is that count's own zero.
 
-  it("the page is empty in exactly the cases the badge reads 0 — no third state", () => {
+  it("the page is empty in exactly the cases NOTHING IS DRAWN — no third state", () => {
+    // The predicate is `rendered`, not the badge. The two were the same integer until
+    // `decided` left the badge; the DECIDED_ONLY row is the case where they part, and
+    // gating on the badge there put "Nothing needs you right now" over the trace.
     const cases: Array<[ProgramSummary, OperatorQueueReads, boolean]> = [
       [bare, NO_LEDGER_ITEMS, true],            // nothing at all -> quiet block earns the page
       [bare, ONE_SESSION, false],               // ledger half only -> quiet block must NOT show
       [withRecordItem, NO_LEDGER_ITEMS, false], // record half only
       [withRecordItem, ONE_SESSION, false],     // both
+      [bare, DECIDED_ONLY, false],              // trace only -> DRAWN, so not empty (badge is 0)
     ];
     for (const [program, ledger, isEmpty] of cases) {
       const items = programInboxItems(program);
-      expect(inboxWaitingCountFrom(items, ledger) === 0).toBe(isEmpty);
+      expect(inboxRenderedCountFrom(items, ledger) === 0).toBe(isEmpty);
       // and the ledger half's own null-render rule agrees on the ledger term
       expect(operatorQueueCounts(ledger).rendered === 0).toBe(ledger === NO_LEDGER_ITEMS);
     }
@@ -117,10 +121,13 @@ describe("(c) the badge and the Inbox emptiness check are the same expression", 
     expect(src("v3/components/flow/OperatorInbox.tsx")).toContain("queue.rendered === 0");
   });
 
-  it("SOURCE: FlowToday gates the quiet block on `waiting`, and no longer re-adds the ledger term", () => {
+  it("SOURCE: FlowToday gates the quiet block on `rendered`, and no longer re-adds the ledger term", () => {
     const shell = src("v3/components/flow/FlowShell.tsx");
-    expect(shell).toContain("inboxWaitingCountFrom(items, ledger)");
-    expect(shell).toContain("waiting > 0 ? null :");
+    // `rendered`, NOT `waiting`: the quiet block asks "is anything on the screen", and
+    // the decided trace is on the screen while the badge (correctly) reads 0.
+    expect(shell).toContain("inboxRenderedCountFrom(items, ledger)");
+    expect(shell).toContain("rendered > 0 ? null :");
+    expect(codeOnly(shell)).not.toMatch(/waiting > 0 \? null :/);
     // The second spelling is gone. The guard used to be `not.toContain("operatorQueueCount(")`,
     // which does NOT match the exported PLURAL `operatorQueueCounts(` — the one spelling a
     // developer would actually reach for, so the guard was bypassable by its likeliest bypass.
@@ -234,6 +241,25 @@ describe("(b) the import adapters invent no owner", () => {
 });
 
 // ── (a) one producer of question text ───────────────────────────────────────────────
+/** Every non-test module under src/v3 that names `renderQuestion` — the renderer itself
+ *  excluded, since it is the one place allowed to write the words. Read off disk so a
+ *  module added tomorrow is scanned the day it lands. */
+const renderQuestionTouchers = (): string[] => {
+  const out: string[] = [];
+  const walk = (dir: string, rel: string) => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      if (e.name === "__tests__" || e.name === "node_modules") continue;
+      const abs = resolve(dir, e.name);
+      const r = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory()) { walk(abs, r); continue; }
+      if (!/\.tsx?$/.test(e.name) || e.name === "renderQuestion.ts") continue;
+      if (readFileSync(abs, "utf8").includes("renderQuestion")) out.push(`v3/${r}`);
+    }
+  };
+  walk(resolve(__dirname, ".."), "");
+  return out.sort();
+};
+
 describe("(a) question text comes only from renderQuestion.ts", () => {
   it("SOURCE: every ledger question surface renders through the one producer", () => {
     for (const f of ["v3/components/flow/TheLine.tsx", "v3/components/flow/OperatorInbox.tsx", "v3/components/flow/DesignLoopZones.tsx"]) {
@@ -242,13 +268,28 @@ describe("(a) question text comes only from renderQuestion.ts", () => {
     expect(src("v3/lib/ledger/kitProjection.ts")).toContain('from "./renderQuestion"');
   });
 
-  it("SOURCE: none of those surfaces assigns a question STRING of its own", () => {
+  it("SOURCE: NO module that touches renderQuestion assigns a question STRING of its own", () => {
     // `question: r.question` (a rendering) is fine; `question: "…"` (a literal) is a
     // second producer. Only the renderer may write the words.
-    for (const f of ["v3/components/flow/TheLine.tsx", "v3/components/flow/OperatorInbox.tsx",
-      "v3/components/flow/DesignLoopZones.tsx", "v3/lib/ledger/kitProjection.ts"]) {
-      expect(src(f)).not.toMatch(/question:\s*["`]/);
+    //
+    // THE SCAN IS THE DIRECTORY, not a list. It used to name four files by hand while SIX
+    // more modules import renderQuestion — portalQuestionModel, flowPortal, FlowRespond,
+    // PortalQuestions, kitAgendaCache, phrasing — and none of them was subject to this
+    // check. That is the same list-shaped guard the owner scan had before ledgerFilesToScan,
+    // and validate-pipeline's A1 backstop is a grep for four fixed sentence fragments, so a
+    // new template worded differently walked past both. The invariant DOES hold today; the
+    // guard just wasn't shaped to keep holding it.
+    const scanned = renderQuestionTouchers();
+    for (const f of scanned) expect(src(f)).not.toMatch(/question:\s*["`]/);
+
+    // the ratchet: it must never shrink back to a hand-kept list, and the six modules the
+    // old list omitted are named so a regression is legible rather than a count going down
+    for (const f of ["v3/components/flow/portalQuestionModel.ts", "v3/components/flow/flowPortal.ts",
+      "v3/components/flow/FlowRespond.tsx", "v3/components/flow/PortalQuestions.tsx",
+      "v3/lib/ledger/kitAgendaCache.ts", "v3/lib/ledger/phrasing.ts"]) {
+      expect(scanned).toContain(f);
     }
+    expect(scanned.length).toBeGreaterThanOrEqual(10);
   });
 
   it("SOURCE: the kit agenda's stored strings are a CACHE, and are read through one accessor", () => {

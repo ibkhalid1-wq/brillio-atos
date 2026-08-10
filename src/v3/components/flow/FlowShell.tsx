@@ -24,7 +24,7 @@ import { resolveMovementStakeholders, deliveryRoleDirectory, readDirectoryPeople
 import DiscoveryKitAlign from "@/v3/components/flow/DiscoveryKitAlign";
 import TheLine from "@/v3/components/flow/TheLine";
 import OperatorInbox from "@/v3/components/flow/OperatorInbox";
-import { programInboxItems, inboxWaitingCount, inboxWaitingCountFrom } from "@/v3/components/flow/flowInbox";
+import { programInboxItems, inboxWaitingCount, inboxRenderedCountFrom } from "@/v3/components/flow/flowInbox";
 import { useProgramLedger, type ProgramLedger } from "@/v3/lib/ledger/useProgramLedger";
 import { useOperatorCommits } from "@/v3/lib/ledger/useOperatorCommits";
 import { stakeholderEmail } from "@/v3/components/flow/flowMeetings";
@@ -990,12 +990,19 @@ function FlowToday({ program, ledger, programs, onSelectProgram, onResolveDecisi
   // exceptions standing open. The lists below are its fields — nothing re-read,
   // nothing re-counted.
   const items = useMemo(() => programInboxItems(program), [program]);
-  // THE SAME INTEGER THE RAIL BADGE SHOWS, from the lists this page already holds.
+  // EVERYTHING THIS PAGE DRAWS, in one integer, from the lists it already holds — the
+  // number the quiet block below is gated on.
+  //
   // It used to be asked here as "record half empty AND ledger half empty" — a second
-  // spelling of the badge's predicate, which a third term added to the badge would
-  // have left behind, printing the quiet block over a populated page. One definition,
-  // two readers: the badge and this page's emptiness check. 0 is when the badge hides.
-  const waiting = useMemo(() => inboxWaitingCountFrom(items, ledger), [items, ledger]);
+  // spelling of a predicate, which a new term would have left behind. Then it read
+  // `waiting`, the BADGE's number, which was the same integer until `decided` left the
+  // badge: decideFates only ever grows, so a badge carrying it could never return to
+  // zero. From that moment the badge answered "what is waiting on you" and the page
+  // answered "what is on the screen", and the quiet block was asking the wrong one —
+  // drawing "Nothing needs you right now" directly under the decided trace.
+  // Emptiness is a question about what is DRAWN, so it reads `rendered`. The badge
+  // (line ~541) still reads `inboxWaitingCount`. One definition each, both in flowInbox.
+  const rendered = useMemo(() => inboxRenderedCountFrom(items, ledger), [items, ledger]);
   const { decisions: open, portal: inbox, approvals, disputes, unresolvedRoles, coverageNames, exceptions } = items;
   const feed = listFlowAttestations(program);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -1267,11 +1274,12 @@ function FlowToday({ program, ledger, programs, onSelectProgram, onResolveDecisi
         onDictionary={(csv, sor) => commits.commitDictionary(csv, sor)} />
       {items.total === 0 ? (
         // The record's queue is empty — but the LEDGER operator queue above may not
-        // be. "Nothing needs you right now" over an inbox listing sessions and
-        // dictionary asks is simply false, so the quiet copy only earns the page
-        // when the rail badge is also at 0 — read from `waiting`, the badge's own
-        // number, never re-derived here.
-        waiting > 0 ? null : (
+        // be. "Nothing needs you right now" over an inbox listing sessions, dictionary
+        // asks OR THE DECIDED TRACE is simply false, so the quiet copy only earns the
+        // page when the whole page is blank. That is `rendered` — what OperatorInbox
+        // itself null-renders on — not `waiting`, which the badge shows and which
+        // excludes `decided` on purpose. Never re-derived here.
+        rendered > 0 ? null : (
         <div className="v3fs-quiet">
           <div className="v3fs-quiet-mark" aria-hidden="true">◈</div>
           {attention.length ? (
@@ -1297,9 +1305,16 @@ function FlowToday({ program, ledger, programs, onSelectProgram, onResolveDecisi
         </div>
         )
       ) : (
-        <section className="v3fs-inbox" aria-label="Waiting on you" ref={inboxRef}>
+        // NAMES ITS HALF, not the whole page. This heading read "Waiting on you" over
+        // `items.total` — the RECORD half only — while the rail item for this same page
+        // is labelled "Inbox — responses and decisions waiting on you" and carries
+        // items.total + the ledger queue. On a mixed programme that put a badge of 58
+        // above a section headed "Waiting on you — 3 items", with nothing on screen to
+        // say the other 55 were the ledger half rendered above under its own heading.
+        // A label, not an arithmetic change: both numbers stay exactly as computed.
+        <section className="v3fs-inbox" aria-label="From the record" ref={inboxRef}>
           <div className="v3fs-ph">
-            <h3>Waiting on you</h3>
+            <h3>From the record</h3>
             <span>{items.total} item{items.total === 1 ? "" : "s"}</span>
           </div>
           {open.map((decision) => (

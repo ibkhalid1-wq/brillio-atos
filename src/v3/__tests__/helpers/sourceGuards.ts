@@ -41,12 +41,54 @@ export const filesToScan = (entries: string[]): string[] =>
 export const ledgerFilesToScan = (dir: string): string[] => filesToScan(readdirSync(dir));
 
 /**
- * Every LITERAL role-owner in a source file. A literal owner is `role: "Something"` —
- * a constant somebody typed. Derived owners (`role: fn`, `role: a.owner.label`) are
+ * Every CONSTANT role-owner in a source file. A constant owner is a role string somebody
+ * typed, however it is spelled. Derived owners (`role: fn(x)`, `role: a.owner.label`) are
  * computed from the record and are deliberately not matched.
+ *
+ * ONE LEVEL OF CONST INDIRECTION IS RESOLVED, because the previous spelling —
+ * `/role:\s*"([^"]+)"/` — was defeated by it completely. Planted on the LIVE path
+ * (useProgramLedger.ts):
+ *
+ *     const FALLBACK_ROLE = "Sales Ops";
+ *     const PLANTED_OWNER = { kind: "role", role: FALLBACK_ROLE };
+ *
+ * the whole (b) invariant stayed GREEN — finalGateInvariants 13/13, sourceGuards 19/19,
+ * and validate-pipeline printed PASS F4, F5 and F6. The identical hole swallowed
+ * `'Sales Ops'` (single quotes), `` `Sales Ops` `` (template) and the object shorthand
+ * `{ kind: "role", role }`. That is the exact defect 0a023c9 fixed in adapters.ts, and
+ * this file's own thesis — a sentry is only proven by feeding it its bypass — had never
+ * been applied to THIS predicate: it was tested only against the inline double-quoted
+ * literals it already matched. See sourceGuards.test.ts "H6".
+ *
+ * An identifier is reported ONLY when the same file binds it to a string literal, so
+ * `role: someComputedLabel` stays unmatched: what is reported is a typed constant, never
+ * a name. Chains deeper than one hop (const → const → role) remain invisible; a real
+ * binding resolver is an AST job (H2), recorded as outstanding rather than faked here.
  */
-export const literalRoleOwners = (source: string): string[] =>
-  [...source.matchAll(/role:\s*"([^"]+)"/g)].map((m) => m[1]);
+const QUOTED = "[\"'`]([^\"'`]+)[\"'`]";
+
+const constStringValue = (source: string, name: string): string | null => {
+  const m = new RegExp(`(?:const|let|var)\\s+${name}\\s*(?::[^=\\n]+)?=\\s*${QUOTED}`).exec(source);
+  return m ? m[1] : null;
+};
+
+export const literalRoleOwners = (source: string): string[] => {
+  const out: string[] = [];
+  // `role: "X"` / `role: 'X'` / role: `X` — the typed literal, any quote.
+  for (const m of source.matchAll(new RegExp(`role:\\s*${QUOTED}`, "g"))) out.push(m[1]);
+  // `role: NAME` — one const hop. The lookahead stops at `,` `}` or end-of-line, so
+  // `role: fn(x)` and `role: a.owner.label` (a `(` or `.` follows) are never candidates.
+  for (const m of source.matchAll(/role:\s*([A-Za-z_$][\w$]*)\s*(?=[,}\r\n])/g)) {
+    const v = constStringValue(source, m[1]);
+    if (v !== null) out.push(v);
+  }
+  // `{ kind: "role", role }` — object shorthand, same one hop.
+  for (const m of source.matchAll(/[{,]\s*(role)\s*(?=[,}])/g)) {
+    const v = constStringValue(source, m[1]);
+    if (v !== null) out.push(v);
+  }
+  return out;
+};
 
 /**
  * Is a constant owner literal INERT — i.e. can it only ever land on a claim that is
@@ -68,7 +110,9 @@ export const literalRoleOwners = (source: string): string[] =>
  * several lines turns this red rather than green: the fail-safe direction.
  */
 export const constOwnerIsInert = (source: string, role: string): boolean => {
-  const decl = new RegExp(`const\\s+(\\w+)\\s*:\\s*Owner\\s*=\\s*\\{[^}]*role:\\s*"${role}"[^}]*\\}`).exec(source);
+  // Any quote style, matching literalRoleOwners: a single-quoted band must be judged on
+  // the same terms as a double-quoted one, not silently fail the exemption and go red.
+  const decl = new RegExp(`const\\s+(\\w+)\\s*:\\s*Owner\\s*=\\s*\\{[^}]*role:\\s*["'\`]${escapeRe(role)}["'\`][^}]*\\}`).exec(source);
   if (!decl) return false;                                   // (1) inline literal, or no binding
   const name = decl[1];
   const uses = source.split("\n").filter((l) => l.includes(`ownerWhileOpen: ${name}`));
