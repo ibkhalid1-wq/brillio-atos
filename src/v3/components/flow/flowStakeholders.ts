@@ -567,6 +567,20 @@ export interface DeliveryRoleEntry {
  * role the programme already recognises resolves on add; an unfamiliar one
  * stays unresolved and surfaces in the Inbox to clarify.
  */
+/**
+ * The STORED placeholder convention is "<Domain> SME — TBC" — a machine token the
+ * kit generator emits and several readers detect/strip. "TBC" is trade jargon
+ * though, so it is never what a person should READ: this is the one display
+ * translation, so the stored token stays stable while the UI says it plainly.
+ */
+export const UNNAMED_SUFFIX_RE = /\s*[—–−‑-]\s*TBC\s*$/i;
+/** Human-facing label for a possibly-unnamed voice: "Fulfilment SME — no one named yet". */
+export function displayPersonLabel(label: string | null | undefined): string {
+  const raw = String(label ?? "").trim();
+  if (!raw) return "";
+  return UNNAMED_SUFFIX_RE.test(raw) ? `${raw.replace(UNNAMED_SUFFIX_RE, "").trim()} — no one named yet` : raw;
+}
+
 export interface DirectoryPerson {
   id: string;
   name: string;
