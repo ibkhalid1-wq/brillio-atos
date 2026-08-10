@@ -1,16 +1,17 @@
 /**
- * The Line — the production-line home view, mounted BESIDE the classic Flow
- * chrome as a flag-gated sibling (appbar toggle · `?ui=line` · localStorage).
+ * The Line — the production-line home view, and since 2026-08-10 the ONLY Flow
+ * view: the classic canvas was deleted and the appbar toggle with it, so the
+ * rail's "Flow" tile renders this component and nothing else.
  *
- * A projection with exactly three write affordances, every one of them the
- * classic chrome's own handler passed through untouched:
+ * A projection with exactly three write affordances, each one a shell handler
+ * passed straight through, unwrapped:
  *   - the Discovery Kit matrix (coverage edits via onSaveInputs),
- *   - the capture dialog (attributed evidence appended via onSaveInputs,
- *     byte-identical to the classic collection card's format),
+ *   - the capture dialog (attributed evidence appended via onSaveInputs, in the
+ *     same stored format the collection card has always written),
  *   - per-person durable links (onMintFollowUp — which RETURNS the URL, so
  *     mint-and-copy is one click with no stale-closure read-back).
- * One write path, two skins: the chromes can run at the same time and can
- * never disagree, because there is nothing here to disagree with.
+ * One write path, one view: nothing renders a second copy of these numbers, so
+ * there is nothing left for a second surface to disagree with.
  */
 import { Fragment, Suspense, lazy, useEffect, useMemo, useState, type ComponentProps } from "react";
 import type { ProgramSummary } from "@/new/types";
@@ -297,7 +298,7 @@ function GateSheet({ band, approved, onClose, onRecord, onReopen }: {
   );
 }
 
-/** Same matching classic uses: newest pack whose stakeholder name matches,
+/** Pack matching: newest pack whose stakeholder name matches,
  * scoped to Listen (durable kit links carry no movementId). */
 function packFor(program: ProgramSummary, who: string, movementId: "frame" | "listen") {
   const key = who.trim().toLowerCase();
@@ -316,10 +317,9 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
   const [docSection, setDocSection] = useState<string | undefined>(undefined);
   const openStation = (card: ArtifactCardModel, section?: string) => { setDocSection(section); setDocFor(card); };
   // Two projections of the one record: the WORK board (where the programme
-  // is) and DISCOVERY (who it runs through — links, capture, invites; named
-  // to match the classic chrome's Discovery tab). The surface itself stays
-  // load-bearing past Listen — the same people carry demo verdicts and
-  // sign-offs later, and they land here.
+  // is) and DISCOVERY (who it runs through — links, capture, invites). The
+  // surface itself stays load-bearing past Listen — the same people carry demo
+  // verdicts and sign-offs later, and they land here.
   const [tab, setTab] = useState<"work" | "discovery" | "record">("work");
   const [reading, setReading] = useState<EvidenceEntry | null>(null);
   // Discover's area filter — narrows the roster to one lane ("" = all).
@@ -714,9 +714,9 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
     window.setTimeout(() => setNote(null), 6000);
   };
 
-  // AUTO-ACCEPT heard voices — classic runs this on canvas mount; without it
-  // a Line-only session never marks evidence-backed voices Heard. Identical
-  // write, idempotent: attestHeardRoster returns null once settled.
+  // AUTO-ACCEPT heard voices on mount — the retired canvas used to do this, and
+  // without it no session ever marks evidence-backed voices Heard. Idempotent:
+  // attestHeardRoster returns null once settled.
   useEffect(() => {
     if (!onSaveInputs) return;
     const listen = flowMovements().find((m) => m.id === "listen");
@@ -808,7 +808,7 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
     window.setTimeout(() => setNote(null), 6000);
   };
 
-  // ── capture: append attributed evidence, byte-identical to classic.
+  // ── capture: append attributed evidence in the one stored evidence format.
   const [capFor, setCapFor] = useState<CastRow | "open" | null>(null);
   const [capWho, setCapWho] = useState<string>("");
   const [capText, setCapText] = useState("");
@@ -1344,7 +1344,7 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
               <div className="v3ln-cap-bar">
                 <button type="button" className="v3ln-btn" disabled={!capText.trim() || !capWho}
                   onClick={() => void saveCapture()}>Capture</button>
-                <span>Lands as “— Name, Role, Date —” evidence and refreshes what depends on it. To record live or attach files, use the classic Listen board — same record.</span>
+                <span>Lands as “— Name, Role, Date —” evidence and refreshes what depends on it. To attach a file instead, use Library → Evidence → Attach.</span>
               </div>
             </div>
           </div>

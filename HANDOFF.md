@@ -61,22 +61,23 @@ src/v3/components/flow/
   FlowShell.tsx                 dock (views: Inbox/Flow/Library/Pulse/Control/Portfolio),
                                 hero, switcher, Today/Inbox surface, Library (facets,
                                 person-grouped evidence, artifact ledger), Pulse, Control
-  FlowCanvas.tsx                the phases (Envision+Show fold into one Prototype loop),
-                                each rendered as the loop's three
-                                STAGES — Collect → Paper → Gate — under a header carrying
-                                the gate gauge, the movement brief, and the ranked
-                                "Up next" queue; [ ] cycles stages
-  flowStages.ts                 the stage model: MovementTab, captions, lead stage
-  flowUpNext.tsx                the Up-next queue: ranked frontier verbs, two-step
-                                confirm items, spine regeneration with live progress
-                                (module-level run store survives remounts)
-  CollectBoard.tsx              the Collect stage's status board (Heard/Waiting/To reach),
-                                one card per person: script, channels, feedback trail,
-                                capture box, transcript speaker-mapping
-  MeetingKitCard.tsx            the movement kit for roster-less movements: script,
-                                channels, capture, contradiction resolve/file flags
+  TheLine.tsx                   THE Flow view (the rail's "Flow" tile): the board —
+                                bands, stations, gates — plus Discover (people, durable
+                                links, capture) and Record. Read-only projection of the
+                                live record with three write paths, all shell handlers.
+                                The classic canvas (FlowCanvas.tsx) and the chrome only
+                                it mounted — the four cockpits, MeetingKitCard,
+                                OntologyAtlasModal, ExternalBuildPanel, flowStages.ts,
+                                flowUpNext.tsx, flowPatterns.ts — were DELETED 2026-08-10
+                                when the Line/Classic toggle was retired. Recover from
+                                git history if a capability needs re-homing.
+  CollectBoard.tsx              still imported for `stakeholderCollection` (the per-person
+                                collection state TheLine reads); its own board component
+                                is no longer mounted anywhere.
   flowCapture.tsx               attach-a-file (extract → review → evidence) and
-                                transcribe-a-recording, shared across all capture points
+                                transcribe-a-recording. Only the attach half is still
+                                mounted (Library evidence, studio copilot cards);
+                                TranscribeButton lost its last mount with the canvas.
   flowShellData.ts              ALL derivations: gates, checklists, staleness, open issues,
                                 spine plan, evidence ids/stamps/excerpts, roster
                                 attestation proposals, locateQuote (span grounding)
