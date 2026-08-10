@@ -16,7 +16,17 @@ import type { LedgerStore } from "./store";
 import { aboutOf, type ClaimValue, type Owner } from "./types";
 
 const slug = (s: unknown): string => String(s ?? "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "x";
-const OWNER: Owner = { kind: "role", role: "Sales Ops" };
+/**
+ * NO OWNER IS INVENTED HERE. Every claim these adapters mint is born closed by an
+ * IMPORT (or weak, for a non-required binding) — it is never an open question, so
+ * nothing is ever "owned while open" and there is no owner to know. What this replaces
+ * was a constant CRM sales-operations role, applied to BOTH adapters — so a FHIR
+ * StructureDefinition (the healthcare path) stamped a CRM sales function onto
+ * clinical attributes. That is fabricated turf: no line of the imported file says it,
+ * and outside CRM it is simply false. `unowned` is what an import actually knows, and
+ * it is the shape curation.ts already uses for a thing nobody owns.
+ */
+const OWNER: Owner = { kind: "unowned" };
 
 // ── Salesforce Metadata (CustomObject / picklists) → as-is configuration claims ──
 export interface SfPicklistValue { fullName: string }

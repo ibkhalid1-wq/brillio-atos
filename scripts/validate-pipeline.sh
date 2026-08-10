@@ -56,6 +56,12 @@ grep -qn "v3ib-collapsed-row" src/v3/components/flow/OperatorInbox.tsx && fail "
 # F4 — fabrication grep: constant owners in live ledger paths
 FAB=$(grep -rn 'ownerFor("sales ops")' src/v3/lib/ledger/ supabase/functions/_shared/ledgerGenerator.ts 2>/dev/null || true)
 [ -z "$FAB" ] && pass "F4 no constant-owner fabrication in ledger paths" || fail "F4 fabrication: $FAB"
+# F5 — the FINAL GATE's three invariants, checked against the shipped source: one
+#      question-text producer, no constant role-owner literal in the ledger (allowlist
+#      of one, the dictionary's neutral band), and ONE expression behind both the rail
+#      badge and the Inbox page's empty state. This grep-of-4-phrases (A1) is why F5
+#      exists: it reads the files, so a rename cannot slip past a fixed string.
+run_tests "F5 final-gate invariants (one producer, no constant owner, one inbox count)" src/v3/__tests__/finalGateInvariants.test.ts
 
 say "G. FABRIC -> MERIDIAN"
 # G1 — assembler reachable from the studio; no model call in the render path
