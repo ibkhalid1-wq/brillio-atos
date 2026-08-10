@@ -33,7 +33,7 @@ import {
 } from "./projections";
 import { buildReadModel } from "./readModel";
 import { projectKitQuestions, type KitQuestion } from "./kitProjection";
-import { deriveArtifactAsks, type ArtifactAskMark, type ArtifactAskView } from "./artifactAsks";
+import { deriveArtifactAsks, parseDeclaredSors, type ArtifactAskMark, type ArtifactAskView } from "./artifactAsks";
 import { reconcile } from "./merge";
 import { parseDictionaryCsv, dictionaryToClaims, TYPING_SLOTS, type ParsedDictionary } from "./dictionary";
 import type { LedgerStore } from "./store";
@@ -246,7 +246,13 @@ export function useProgramLedger(program?: ProgramSummary): ProgramLedger {
     const queue = buildUnknownQueue(store);
     // ONE ask per system of record, born at SoR identification (derivation) — the
     // preventive dictionary ask, projected to Frame readiness, Discover, and the inbox.
-    const artifactAsks = deriveArtifactAsks(store, { marks: askMarks, dictionaryName });
+    // Identification happens on EITHER surface: the sponsor's Frame input names systems
+    // before any ontology exists, and the ontology's entities carry them afterwards.
+    // Merged case-insensitively inside the derivation — one system, one ask, always.
+    const declaredSors = parseDeclaredSors(
+      (program ? readMovementInputs(program, "frame") : undefined)?.systemsOfRecord,
+    );
+    const artifactAsks = deriveArtifactAsks(store, { marks: askMarks, dictionaryName, declaredSors });
     // Kit questions ARE the open unknowns, phrased for humans — the SAME source the
     // operator queue reads (buildUnknownQueue), never a separately-generated list. One
     // list, so the stakeholder's kit and the operator's queue can't drift.

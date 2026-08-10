@@ -13,7 +13,7 @@ import { getPhaseArtifactDefs } from "@/v3/lib/phaseArtifacts";
 import { getFormalArtifactContent, getFormalArtifactConfidence, FORMAL_ARTIFACT_FIELD_KEYS } from "@/v3/lib/formalArtifacts";
 import { listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
 import { stakeholderPrimaryArea, GENERAL_AREA } from "@/v3/components/flow/flowAreas";
-import { frameSorReadiness, type ArtifactAskMark } from "@/v3/lib/ledger/artifactAsks";
+import { frameSorReadiness, parseDeclaredSors, type ArtifactAskMark } from "@/v3/lib/ledger/artifactAsks";
 
 /**
  * Find a quoted claim inside a source transcript, tolerantly: curly quotes
@@ -875,18 +875,31 @@ export function gateChecklist(program: ProgramSummary, movement: PhaseDefinition
     // PREVENTIVE dictionary ask: naming a system of record and creating its artifact
     // ask are ONE act — a named SoR with the ask neither provided, requested, nor
     // marked has-none is an incomplete Frame item (docs/aura/data-dictionary-import.md).
-    if (inner.domainOntology) {
+    // The sponsor names systems in the Frame input `systemsOfRecord`, so the item is
+    // live from Frame — it no longer waits for an ontology to exist. Both sources
+    // merge case-insensitively (frameSorReadiness), so one system is never two rows.
+    const declaredSors = parseDeclaredSors(inputs.systemsOfRecord);
+    if (inner.domainOntology || declaredSors.length) {
       const listenIn = readMovementInputs(program, "listen") as Record<string, unknown>;
       const askMarks = Array.isArray(listenIn._artifactAsks)
         ? (listenIn._artifactAsks as ArtifactAskMark[]).filter((m) => m && typeof m.sor === "string") : [];
-      const sor = frameSorReadiness(inner.domainOntology, askMarks, !!listenIn._dataDictionary);
+      const sor = frameSorReadiness(inner.domainOntology, askMarks, !!listenIn._dataDictionary, declaredSors);
       if (sor.named.length) {
+        // Where the names came from — the operator can see whether the ontology has
+        // caught up with the sponsor's list, or the sponsor with the ontology's.
+        const onlyFrame = sor.fromFrame.filter((s) => !sor.fromOntology.some((o) => o.toLowerCase() === s.toLowerCase()));
+        const provenance = [
+          sor.fromOntology.length ? `${sor.fromOntology.length} on the ontology` : "",
+          onlyFrame.length ? `${onlyFrame.length} named in Frame only` : "",
+        ].filter(Boolean).join(" · ");
         items.push({
           id: "sor-dictionary",
           label: sor.complete
             ? `Dictionary ask handled for ${sor.named.length} system${sor.named.length === 1 ? "" : "s"} of record`
             : `Dictionary ask open for ${sor.unhandled.length} of ${sor.named.length} system${sor.named.length === 1 ? "" : "s"} of record — provide, request, or mark has-none (${sor.unhandled.join(", ")})`,
           done: sor.complete,
+          anchor: "input:systemsOfRecord",
+          why: provenance || undefined,
         });
       }
     }

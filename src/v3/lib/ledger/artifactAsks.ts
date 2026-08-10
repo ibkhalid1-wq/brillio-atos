@@ -7,6 +7,14 @@
  * Discover card, the kit artifact-ask section, and the operator inbox — which shows
  * it only while unprovided (self-clearing on import).
  *
+ * A SoR is named on either of TWO surfaces, and one system is never two asks:
+ *  · the SPONSOR's Frame input `systemsOfRecord` (`parseDeclaredSors`) — so the ask
+ *    is born at Frame time, before any ontology exists, which is when the dictionary
+ *    is cheapest to ask for;
+ *  · the ontology's `entities[].systemOfRecord`, generated in Listen.
+ * They merge CASE-INSENSITIVELY, the modelled spelling winning where both hold it
+ * (it is the one the entity claims carry). `ask.source` says which — never inferred.
+ *
  * States (honest, never fabricated):
  *  · unrequested — SoR named, nothing done yet. A Frame-incomplete signal.
  *  · requested   — operator asked the system owner (persisted, aged from that moment
@@ -42,6 +50,10 @@ export interface ArtifactAsk {
   abouts: string[];            // the loci behind the weight (the one count, traceable)
   entityCount: number;         // entities recorded against this SoR
   requestedAt: string | null;  // ageing anchor — set only by the explicit request mark
+  /** Where the SoR was named. `frame` = the sponsor's Frame input only (no ontology
+   *  models it yet — the ask is born at Frame time); `ontology` = entities carry it;
+   *  `both` = the sponsor named it AND the model holds it. Never inferred. */
+  source: "frame" | "ontology" | "both";
 }
 
 export interface ArtifactAskView {
@@ -57,6 +69,27 @@ export const isSystemOwner = (label: string, role: string): boolean =>
   /\b(it|ehr|emr|system|systems|admin|data|platform|technolog|salesforce|crm)\b/i.test(`${label} ${role}`);
 
 /**
+ * The ONE parse of the Frame "systems of record" input — the field where a sponsor
+ * NAMES the systems, before any ontology exists. Free text, one per line or
+ * separated by commas/semicolons; list bullets tolerated. Deduped CASE-INSENSITIVELY
+ * (first spelling wins) because two spellings of one system would otherwise mint two
+ * asks, and one-ask-per-SoR is the invariant this whole model rests on.
+ */
+export const parseDeclaredSors = (raw: unknown): string[] => {
+  if (typeof raw !== "string") return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const part of raw.split(/[\n,;]+/)) {
+    const name = part.replace(/^[\s\-•*•]+/, "").trim();
+    const key = name.toLowerCase();
+    if (!name || seen.has(key)) continue;
+    seen.add(key);
+    out.push(name);
+  }
+  return out;
+};
+
+/**
  * Derive the artifact asks from the ledger + roster + persisted marks.
  * `dictionaryName` is the currently-imported dictionary (null when none).
  */
@@ -66,9 +99,13 @@ export function deriveArtifactAsks(
     roster?: ReadonlyArray<{ label: string; role: string }>;
     marks?: ReadonlyArray<ArtifactAskMark>;
     dictionaryName?: string | null;
+    /** Systems of record the SPONSOR named in Frame (`parseDeclaredSors` of the
+     *  Frame input). An ask is born here too, before any ontology exists — naming
+     *  a SoR and creating its ask are one act whichever surface the name arrives on. */
+    declaredSors?: readonly string[];
   } = {},
 ): ArtifactAskView {
-  const { roster = [], marks = [], dictionaryName = null } = opts;
+  const { roster = [], marks = [], dictionaryName = null, declaredSors = [] } = opts;
 
   // ── SoR per entity, from the RESOLVED live claim (asserted beats generated) ──
   const sorByEntity = new Map<string, string>();
@@ -111,7 +148,23 @@ export function deriveArtifactAsks(
   const systemOwner = roster.find((r) => isSystemOwner(r.label, r.role)) ?? null;
   const markBySor = new Map(marks.map((m) => [m.sor.trim().toLowerCase(), m] as const));
 
-  const asks: ArtifactAsk[] = [...entityCountBySor.entries()].map(([sor, entityCount]) => {
+  // ── the SoR set: the ontology's + the sponsor's Frame declaration, merged
+  //    CASE-INSENSITIVELY so one system can never become two asks. The MODELLED
+  //    spelling wins where both exist — it is the one the entity claims carry, and
+  //    the weight/entityCount hang off it. ──
+  const bySor = new Map<string, { sor: string; entityCount: number; source: ArtifactAsk["source"] }>();
+  for (const [sor, entityCount] of entityCountBySor) {
+    bySor.set(sor.trim().toLowerCase(), { sor, entityCount, source: "ontology" });
+  }
+  for (const declared of declaredSors) {
+    const key = declared.trim().toLowerCase();
+    if (!key) continue;
+    const held = bySor.get(key);
+    if (held) held.source = "both";
+    else bySor.set(key, { sor: declared.trim(), entityCount: 0, source: "frame" });
+  }
+
+  const asks: ArtifactAsk[] = [...bySor.values()].map(({ sor, entityCount, source }) => {
     const abouts = aboutsBySor.get(sor) ?? [];
     const mark = markBySor.get(sor.trim().toLowerCase());
     const state: ArtifactAskState =
@@ -125,6 +178,7 @@ export function deriveArtifactAsks(
       ownerRole: systemOwner?.role ?? null,
       weight: abouts.length, abouts, entityCount,
       requestedAt: mark?.mark === "requested" ? mark.at : null,
+      source,
     };
   }).sort((a, b) => b.weight - a.weight || a.sor.localeCompare(b.sor));
 
@@ -132,28 +186,48 @@ export function deriveArtifactAsks(
   return { asks, unattributed: { weight: unattributed.length, abouts: unattributed }, frameComplete };
 }
 
-/** The inbox shows an ask ONLY while unprovided and carrying weight (self-clearing). */
+/**
+ * The inbox shows an ask ONLY while unprovided and carrying weight (self-clearing) —
+ * PLUS the Frame-time case: a SoR the sponsor named that no entity models yet has
+ * nothing to weigh, and dropping it would make the preventive ask invisible exactly
+ * when it is cheapest to satisfy. Weight 0 with entities modelled means there is
+ * genuinely nothing left for a dictionary to close: no chase.
+ */
 export const asksNeedingChase = (view: ArtifactAskView): ArtifactAsk[] =>
-  view.asks.filter((a) => (a.state === "unrequested" || a.state === "requested" || a.state === "reopened") && a.weight > 0);
+  view.asks.filter((a) => (a.state === "unrequested" || a.state === "requested" || a.state === "reopened")
+    && (a.weight > 0 || a.entityCount === 0));
 
 /**
- * The FRAME-side readiness check, pure over the committed ontology doc (no store) —
- * naming a SoR and creating its ask are one act, so a named SoR with the ask neither
- * provided, requested, nor marked has-none is an INCOMPLETE Frame item. Used by the
- * Frame gate checklist; the ledger derivation above is the full view (they agree —
- * asserted in tests).
+ * The FRAME-side readiness check, pure over the sponsor's declaration + the committed
+ * ontology doc (no store) — naming a SoR and creating its ask are one act, so a named
+ * SoR with the ask neither provided, requested, nor marked has-none is an INCOMPLETE
+ * Frame item. Used by the Frame gate checklist; the ledger derivation above is the
+ * full view (they agree — asserted in tests).
+ *
+ * `declared` is the Frame input where the sponsor NAMES the systems, so the ask can
+ * be born at Frame time — before any ontology exists. Optional and last, so the
+ * ontology-only callers that predate the field are unchanged.
  */
 export function frameSorReadiness(
   ontology: unknown,
   marks: ReadonlyArray<ArtifactAskMark>,
   dictionaryProvided: boolean,
-): { named: string[]; unhandled: string[]; complete: boolean } {
+  declared: readonly string[] = [],
+): { named: string[]; unhandled: string[]; complete: boolean; fromFrame: string[]; fromOntology: string[] } {
   const entities = ontology && typeof ontology === "object" && Array.isArray((ontology as { entities?: unknown }).entities)
     ? ((ontology as { entities: unknown[] }).entities) : [];
-  const named = [...new Set(entities
+  const fromOntology = [...new Set(entities
     .map((e) => String((e as { systemOfRecord?: unknown })?.systemOfRecord ?? "").trim())
     .filter(Boolean))].sort();
+  const fromFrame = declared.map((s) => s.trim()).filter(Boolean);
+  // ONE name per system: merged case-insensitively, the modelled spelling winning
+  // where both exist — the same rule deriveArtifactAsks applies, so the gate item
+  // and the inbox can never disagree about how many systems there are.
+  const byKey = new Map<string, string>();
+  for (const sor of fromOntology) byKey.set(sor.toLowerCase(), sor);
+  for (const sor of fromFrame) if (!byKey.has(sor.toLowerCase())) byKey.set(sor.toLowerCase(), sor);
+  const named = [...byKey.values()].sort();
   const marked = new Set(marks.map((m) => m.sor.trim().toLowerCase()));
   const unhandled = dictionaryProvided ? [] : named.filter((sor) => !marked.has(sor.trim().toLowerCase()));
-  return { named, unhandled, complete: unhandled.length === 0 };
+  return { named, unhandled, complete: unhandled.length === 0, fromFrame, fromOntology };
 }

@@ -11,9 +11,13 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import type { ProgramSummary } from "@/new/types";
 import { migrate, type Snapshot } from "@/v3/lib/ledger/migrate";
 import { buildUnknownQueue, dictionaryBucket } from "@/v3/lib/ledger/projections";
-import { deriveArtifactAsks, asksNeedingChase } from "@/v3/lib/ledger/artifactAsks";
+import {
+  deriveArtifactAsks, asksNeedingChase, frameSorReadiness, parseDeclaredSors,
+} from "@/v3/lib/ledger/artifactAsks";
+import { flowMovements, gateChecklist } from "@/v3/components/flow/flowShellData";
 
 const snap = (f: string) => JSON.parse(readFileSync(resolve(__dirname, `../../../docs/laila/snapshot-2026-08-07/${f}`), "utf8"));
 const laila = () => migrate({ ontology: snap("domain-ontology.json"), atlas: snap("current-state-atlas.json"), overrides: snap("operator-overrides.json") } as Snapshot);
@@ -123,5 +127,109 @@ describe("state machine — request, provide (self-clear), reopen (never a secon
     expect(v.asks[0].state).toBe("has-none");
     expect(asksNeedingChase(v)).toHaveLength(0);
     expect(v.frameComplete).toBe(true);
+  });
+});
+
+/**
+ * BORN AT FRAME TIME — the sponsor's `systemsOfRecord` input.
+ *
+ * Until now a SoR could only be named by the ontology (entities[].systemOfRecord),
+ * generated in Listen — so the preventive ask could not exist before an ontology did,
+ * which is precisely when the dictionary is cheapest to ask for. The Frame input is
+ * the first-class place the sponsor NAMES the systems; the two sources merge
+ * case-insensitively so ONE system is never TWO asks.
+ */
+describe("Frame SoR input — the ask is born when the sponsor names the system", () => {
+  const empty: Snapshot = { ontology: { entities: [], relations: [] }, atlas: { workflows: [] }, overrides: [] };
+
+  it("parseDeclaredSors: lines, commas, bullets — and ONE ask per system (case-insensitive dedupe)", () => {
+    expect(parseDeclaredSors("Salesforce CRM\n- SAP Finance\nWorkday, Salesforce crm"))
+      .toEqual(["Salesforce CRM", "SAP Finance", "Workday"]);
+    expect(parseDeclaredSors(undefined)).toEqual([]);
+    expect(parseDeclaredSors("   ")).toEqual([]);
+  });
+
+  it("declared with NO ontology: the ask exists, unrequested, and CHASES (nothing modelled to weigh yet)", () => {
+    const v = deriveArtifactAsks(migrate(empty), { declaredSors: ["Salesforce CRM"] });
+    expect(v.asks.map((a) => a.sor)).toEqual(["Salesforce CRM"]);
+    expect(v.asks[0].state).toBe("unrequested");
+    expect(v.asks[0].source).toBe("frame");
+    expect(v.asks[0].entityCount).toBe(0);
+    expect(v.asks[0].weight).toBe(0);          // honest: nothing modelled against it yet
+    expect(v.asks[0].owner).toBeNull();        // TBC, never fabricated
+    expect(v.frameComplete).toBe(false);       // an incomplete Frame item, as it should be
+    expect(asksNeedingChase(v).map((a) => a.sor)).toEqual(["Salesforce CRM"]);
+  });
+
+  it("ONE ASK PER SoR holds across the two sources: a differently-cased declaration does NOT mint a second", () => {
+    const v = deriveArtifactAsks(migrate(surgery), { roster: surgeryRoster, declaredSors: ["ehr", "Billing"] });
+    expect(v.asks.filter((a) => a.sor.toLowerCase() === "ehr")).toHaveLength(1);
+    const ehr = v.asks.find((a) => a.sor.toLowerCase() === "ehr")!;
+    expect(ehr.sor).toBe("EHR");        // the MODELLED spelling wins — it carries the entities
+    expect(ehr.source).toBe("both");
+    expect(ehr.entityCount).toBe(2);
+    expect(ehr.weight).toBeGreaterThan(0);
+    // the declared-only one is its own ask, born at Frame
+    expect(v.asks.find((a) => a.sor === "Billing")?.source).toBe("frame");
+  });
+
+  it("CONSERVATION survives the new source: Σ weights + unattributed === the dictionary bucket", () => {
+    const store = migrate(surgery);
+    const bucket = dictionaryBucket(buildUnknownQueue(store)).length;
+    const v = deriveArtifactAsks(store, { declaredSors: ["EHR", "Billing", "Scheduling"] });
+    const sum = v.asks.reduce((n, a) => n + a.weight, 0) + v.unattributed.weight;
+    expect(sum).toBe(bucket);   // declared-only asks add names, never phantom weight
+  });
+
+  it("a requested/has-none mark completes the Frame item for a declared-only SoR", () => {
+    const marked = deriveArtifactAsks(migrate(empty), {
+      declaredSors: ["Salesforce CRM"],
+      marks: [{ sor: "salesforce crm", mark: "requested", at: "2026-08-01T00:00:00Z" }],
+    });
+    expect(marked.asks[0].state).toBe("requested");   // marks match case-insensitively
+    expect(marked.frameComplete).toBe(true);
+  });
+
+  it("frameSorReadiness reads BOTH sources and reports which is which", () => {
+    const ontology = { entities: [{ name: "Case", systemOfRecord: "EHR" }] };
+    const r = frameSorReadiness(ontology, [], false, ["ehr", "Billing"]);
+    expect(r.named).toEqual(["Billing", "EHR"]);      // merged, one per system
+    expect(r.fromOntology).toEqual(["EHR"]);
+    expect(r.fromFrame).toEqual(["ehr", "Billing"]);
+    expect(r.complete).toBe(false);
+    // the ontology-only call site that predates the field is unchanged
+    expect(frameSorReadiness(ontology, [], false).named).toEqual(["EHR"]);
+  });
+});
+
+describe("the Frame GATE surfaces the sponsor's declaration — before any ontology exists", () => {
+  const programme = (frameInputs: Record<string, unknown>, inner: Record<string, unknown> = {}): ProgramSummary => ({
+    id: "p1", name: "SoR", client: "", methodology: "atos-flow",
+    rawData: { data: { phaseInputs: { frame: frameInputs }, ...inner } }, updatedAt: "2026-08-10",
+  } as unknown as ProgramSummary);
+  const frame = () => flowMovements().find((m) => m.id === "frame")!;
+  const sorItem = (p: ProgramSummary) => gateChecklist(p, frame(), []).find((c) => c.id === "sor-dictionary");
+
+  it("no ontology, no declaration → no item (we do not invent an obligation)", () => {
+    expect(sorItem(programme({ sponsor: "Sarah" }))).toBeUndefined();
+  });
+
+  it("no ontology, sponsor named two systems → the item is LIVE and incomplete at Frame", () => {
+    const item = sorItem(programme({ systemsOfRecord: "Salesforce CRM\nSAP Finance" }));
+    expect(item).toBeDefined();
+    expect(item!.done).toBe(false);
+    expect(item!.label).toContain("2 of 2 systems of record");
+    expect(item!.label).toContain("Salesforce CRM");
+    expect(item!.why).toBe("2 named in Frame only");
+    expect(item!.anchor).toBe("input:systemsOfRecord");
+  });
+
+  it("ontology + declaration of the SAME system → ONE row, and the item says where the names came from", () => {
+    const item = sorItem(programme(
+      { systemsOfRecord: "ehr, Billing" },
+      { domainOntology: { entities: [{ name: "Case", systemOfRecord: "EHR" }] } },
+    ));
+    expect(item!.label).toContain("2 of 2 systems of record");   // EHR + Billing, not 3
+    expect(item!.why).toBe("1 on the ontology · 1 named in Frame only");
   });
 });
