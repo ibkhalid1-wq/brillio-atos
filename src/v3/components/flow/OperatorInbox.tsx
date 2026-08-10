@@ -47,6 +47,90 @@ interface Props {
 const nowISO = () => new Date().toISOString();
 const OTHER = "__other__";
 
+/**
+ * SESSIONS — the seam queue, collapsed to ONE line by default.
+ *
+ * WHY THE SECTION EXISTS AT ALL: a seam locus is JOINTLY owned, and useProgramLedger
+ * excludes joint owners from `soloByOwner` (the joint branch pushes to sessionMap and
+ * continues), so a seam question appears on NO individual's Discover list. This panel is
+ * its only home. It is never deleted and its count never goes dark.
+ *
+ * WHY IT COLLAPSES: on Laila it rendered 8 pair cards whose single control is "propose a
+ * time", and scheduling is GATED — that button records intent and books nothing. Eight
+ * cards of a verb that cannot complete out-shouted the sections an operator can actually
+ * finish. The problem was presentation only, so presentation is the whole fix; every
+ * expanded row below is unchanged.
+ *
+ * ONE READ, TWO READINGS: `sessionQueue` is the only array here. `seams` is its length,
+ * `questions` is the sum of the per-pair `abouts` — the same per-pair number each expanded
+ * row prints. Collapsed, the summary IS the rows added up; expanded, the rows ARE the
+ * summary broken out. No second copy of either number is kept anywhere.
+ *
+ * UNIT IS QUESTIONS: a seam is a container, a question is the work. "8 seams" alone reads
+ * like eight small things; "23 questions" is what those eight seams actually owe, and it
+ * is the unit the inbox header and the burn-down already speak in.
+ *
+ * COLLAPSED BY DEFAULT, NOT PERSISTED: a presentation default, not an operator preference
+ * — re-collapsing on reload loses nothing, because both numbers stay on the summary line.
+ * A real <button> with aria-expanded carries the disclosure, so the keyboard reaches the
+ * rows exactly the way the mouse does.
+ */
+export function SessionsSection({ sessionQueue, plannedPairs, busy, onPropose }: {
+  sessionQueue: ProgramLedger["sessionQueue"];
+  plannedPairs: ReadonlySet<string>;
+  busy: string | null;
+  onPropose: (pair: string, abouts: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  // EMPTY-STATE: 0 seams → section HIDDEN (by request, 2026-08-10) — rule unchanged.
+  if (sessionQueue.length === 0) return null;
+  const seams = sessionQueue.length;
+  const questions = sessionQueue.reduce((n, s) => n + s.abouts.length, 0);
+  return (
+    <section id="ib-sessions" className="v3ib-src">
+      <header className="v3ib-h">
+        <button type="button" className="v3ib-disc" aria-expanded={open}
+          aria-controls={open ? "ib-sessions-rows" : undefined}
+          title={open ? "Hide the pairs" : "Show the pairs"}
+          onClick={() => setOpen((v) => !v)}>
+          <span className="v3ib-disc-c" aria-hidden="true">{open ? "▾" : "▸"}</span>
+          <OwnershipTag cls="joint" showLabel={false} />
+          <span className="v3ib-verb">Sessions</span>
+          <span className="v3ib-lead">
+            <span className="v3ib-disc-sep" aria-hidden="true">· </span>
+            <b>{seams}</b> seam{seams === 1 ? "" : "s"}, <b>{questions}</b> question{questions === 1 ? "" : "s"}
+            {" — need a joint conversation; scheduling gated"}
+          </span>
+        </button>
+        <ProvisionalMark what="scheduling a real date is a gated write — 'propose a time' records the intent only" />
+      </header>
+      {/* Expanded: today's per-pair rows, unchanged — pair, joint-question count,
+          awaiting-a-date, propose-a-time. Joint ownership is AUTO-SET at seam detection
+          (migrate: jointOrOwner), so there is nothing to "mark"; the only pending thing
+          is a DATE, which is gated. */}
+      {open ? (
+        <ul id="ib-sessions-rows" className="v3ib-seams">
+          {sessionQueue.map(({ pair, abouts }) => {
+            const planned = plannedPairs.has(pair);
+            return (
+              <li key={pair} className={`v3ib-seam${planned ? " planned" : ""}`}>
+                <span className="v3ib-seam-h"><span aria-hidden="true">⋈</span> {pair}</span>
+                <span className="v3ib-seam-n">{abouts.length} joint question{abouts.length === 1 ? "" : "s"} · <span className="v3ib-nodate">⏳ awaiting a date</span></span>
+                {planned ? (
+                  <span className="v3ib-onplan">on the session plan · no date yet (gated)</span>
+                ) : (
+                  <button type="button" className="v3ib-btn ghost" disabled={busy === pair}
+                    onClick={() => onPropose(pair, abouts)}>{busy === pair ? "…" : "propose a time"}</button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+    </section>
+  );
+}
+
 export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskMark, onDictionary }: Props) {
   // The dictionary upload — parsed for a HONEST preview before it is committed:
   // the operator sees how many fields parsed and how many open questions this
@@ -105,8 +189,10 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
   // jointly owned, grouped by function pair. Never recomputed here.
   const sessionQueue = ledger.sessionQueue;
   // A "schedule" action = the seam is on the session plan (intent). It carries NO
-  // date — scheduling is gated — so the open item on every seam is a DATE.
-  const onPlan = new Map(ledger.schedules.map((s) => [s.pair, s] as const));
+  // date — scheduling is gated — so the open item on every seam is a DATE. Only the
+  // pair is needed downstream (planned or not), so the section takes the set, not the
+  // actions: a row shows an intent was recorded, never a time it does not have.
+  const plannedPairs = new Set(ledger.schedules.map((s) => s.pair));
 
   const run = async (key: string, action: OperatorAction | OperatorAction[]) => {
     setBusy(key); try { await onCommit(action); } finally { setBusy(null); }
@@ -376,41 +462,13 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
       </section>
       )}
 
-      {/* 2 · SEAMS → the session queue. Joint ownership is AUTO-SET at seam detection
-          (migrate: jointOrOwner), so there is nothing to "mark" — the seam is already
-          jointly owned and its questions grouped. The only pending thing is a DATE, which
-          is gated. So a seam is either AWAITING-A-DATE or (once scheduling lands) BOOKED —
-          no no-op "marked" state that confirms a thing already true. */}
-      {/* EMPTY-STATE: 0 seams → section HIDDEN (by request, 2026-08-10). */}
-      {sessionQueue.length === 0 ? null : (
-      <section id="ib-sessions" className="v3ib-src">
-        <>
-          <header className="v3ib-h">
-            <OwnershipTag cls="joint" showLabel={false} />
-            <span className="v3ib-verb">Sessions</span>
-            <span className="v3ib-lead"><b>{sessionQueue.length}</b> seam{sessionQueue.length === 1 ? "" : "s"} — <b>already jointly owned</b> (auto-set at detection). Each is a joint session; the open item is a <b>date</b>, which is gated.</span>
-            <ProvisionalMark what="scheduling a real date is a gated write — 'propose a time' records the intent only" />
-          </header>
-          <ul className="v3ib-seams">
-            {sessionQueue.map(({ pair, abouts }) => {
-              const planned = onPlan.get(pair);
-              return (
-                <li key={pair} className={`v3ib-seam${planned ? " planned" : ""}`}>
-                  <span className="v3ib-seam-h"><span aria-hidden="true">⋈</span> {pair}</span>
-                  <span className="v3ib-seam-n">{abouts.length} joint question{abouts.length === 1 ? "" : "s"} · <span className="v3ib-nodate">⏳ awaiting a date</span></span>
-                  {planned ? (
-                    <span className="v3ib-onplan">on the session plan · no date yet (gated)</span>
-                  ) : (
-                    <button type="button" className="v3ib-btn ghost" disabled={busy === pair}
-                      onClick={() => void run(pair, { kind: "schedule", pair, parties: pair.split("⋈").map((s) => s.trim()) as [string, string], abouts, by, at: nowISO() })}>{busy === pair ? "…" : "propose a time"}</button>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </>
-      </section>
-      )}
+      {/* 2 · SEAMS → the session queue. One summary line, expandable (see SessionsSection). */}
+      <SessionsSection
+        sessionQueue={sessionQueue}
+        plannedPairs={plannedPairs}
+        busy={busy}
+        onPropose={(pair, abouts) => void run(pair, { kind: "schedule", pair, parties: pair.split("⋈").map((s) => s.trim()) as [string, string], abouts, by, at: nowISO() })}
+      />
 
       {/* 3 · CONFLICTS → ADJUDICATE (read-side; resolution gated) */}
       {/* EMPTY-STATE: 0 conflicts → section HIDDEN (by request, 2026-08-10; the earlier
