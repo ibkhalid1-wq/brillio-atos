@@ -26,7 +26,7 @@
  * SHAPE (which function is called, which literals exist), because that is what drifts.
  */
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import type { ProgramSummary } from "@/new/types";
 import { createLedgerStore } from "@/v3/lib/ledger/store";
@@ -36,8 +36,10 @@ import {
 } from "@/v3/lib/ledger/adapters";
 import { operatorQueueCounts, type OperatorQueueReads } from "@/v3/lib/ledger/operatorQueue";
 import { programInboxItems, inboxWaitingCount, inboxWaitingCountFrom } from "@/v3/components/flow/flowInbox";
+import { importsModule, ledgerFilesToScan, literalRoleOwners, constOwnerIsInert } from "./helpers/sourceGuards";
 
 const src = (rel: string) => readFileSync(resolve(__dirname, "../..", rel), "utf8");
+const LEDGER_DIR = resolve(__dirname, "../lib/ledger");
 
 // ── (c) ONE definition, one expression: the badge and the page's empty state ────────
 const NO_LEDGER_ITEMS: OperatorQueueReads = {
@@ -86,9 +88,15 @@ describe("(c) the badge and the Inbox emptiness check are the same expression", 
     const shell = src("v3/components/flow/FlowShell.tsx");
     expect(shell).toContain("inboxWaitingCountFrom(items, ledger)");
     expect(shell).toContain("waiting > 0 ? null :");
-    // The second spelling is gone: FlowShell reaches the ledger half only THROUGH
-    // flowInbox, so a new term in the badge reaches the empty state for free.
-    expect(shell).not.toContain("operatorQueueCount(");
+    // The second spelling is gone. The guard used to be `not.toContain("operatorQueueCount(")`,
+    // which does NOT match the exported PLURAL `operatorQueueCounts(` — the one spelling a
+    // developer would actually reach for, so the guard was bypassable by its likeliest bypass.
+    // Forbid the MODULE, not one arrangement of letters: FlowShell reaches the ledger half
+    // only THROUGH flowInbox, so a new term in the badge reaches the empty state for free.
+    expect(importsModule(shell, "@/v3/lib/ledger/operatorQueue")).toBe(false);
+    expect(importsModule(shell, "../../lib/ledger/operatorQueue")).toBe(false);
+    // and belt-and-braces on the call itself, both spellings this time
+    expect(shell).not.toMatch(/operatorQueueCounts?\(/);
   });
 
   it("SOURCE: the badge itself still reads the one helper", () => {
@@ -136,18 +144,45 @@ describe("(b) the import adapters invent no owner", () => {
     for (const c of s.claims()) expect(["closed", "weak"]).toContain(c.status);
   });
 
+  it("SOURCE: the scan covers every non-frozen ledger module, not a hand-kept list", () => {
+    // The scan used to iterate a HARDCODED 12-file array while the directory held 20,
+    // so kitAgendaCache / pgStore / readModel / useOperatorCommits were never read —
+    // and readModel is on the live path (useProgramLedger and pgStore both import it).
+    // It reads the directory now. This test is the ratchet: it must never shrink back.
+    const scanned = ledgerFilesToScan(LEDGER_DIR);
+    for (const f of ["readModel.ts", "pgStore.ts", "kitAgendaCache.ts", "useOperatorCommits.ts"]) {
+      expect(scanned).toContain(f);
+    }
+    // exactly the four frozen-core files are out (see FROZEN_CORE for why each is safe)
+    for (const f of ["store.ts", "types.ts", "precedence.ts", "projections.ts"]) {
+      expect(scanned).not.toContain(f);
+    }
+    expect(scanned.length).toBe(readdirSync(LEDGER_DIR).filter((f) => f.endsWith(".ts")).length - 4);
+  });
+
   it("SOURCE: the only constant role-owner literal left in src/v3/lib/ledger is the dictionary's neutral band", () => {
     // A literal owner is `role: "Something"`. Derived owners (`role: fn`,
-    // `role: a.owner.label`) are not literals and are not matched. The allowlist is
-    // the exception list — anything NEW shows up here as a failure with its file.
-    const ALLOWED = new Map([["dictionary.ts", "System Owner"]]);
-    const files = ["adapters.ts", "dictionary.ts", "migrate.ts", "curation.ts", "operatorActions.ts", "operatorQueue.ts",
-      "artifactAsks.ts", "kitProjection.ts", "renderQuestion.ts", "useProgramLedger.ts", "phrasing.ts", "merge.ts"];
+    // `role: a.owner.label`) are not literals and are not matched.
+    //
+    // ONE exemption, and it is CONDITIONAL. dictionary.ts's neutral "System Owner" band
+    // used to be exempt on the string alone, unconditionally — so if dictionary.ts ever
+    // stamped it on an OPEN claim the scan would have stayed green. It now has to earn
+    // the exemption the same way migrate.ts's `ownerFor("sales")` does below: the literal
+    // may only reach claims born weak/closed, where ownerWhileOpen routes work to nobody.
+    const dictionary = src("v3/lib/ledger/dictionary.ts");
+    const dictionaryInert = constOwnerIsInert(dictionary, "System Owner");
+    if (literalRoleOwners(dictionary).includes("System Owner")) {
+      // If this fails, the band is no longer inert — fix dictionary.ts, do NOT widen the
+      // exemption. Cause is one of: the literal went inline, an `ownerWhileOpen: OWNER`
+      // site lost its weak/closed status, or a second path started spending the binding.
+      expect(dictionaryInert).toBe(true);
+    }
+
     const found: string[] = [];
-    for (const f of files) {
-      for (const m of src(`v3/lib/ledger/${f}`).matchAll(/role:\s*"([^"]+)"/g)) {
-        if (ALLOWED.get(f) === m[1]) continue;
-        found.push(`${f}: ${m[1]}`);
+    for (const f of ledgerFilesToScan(LEDGER_DIR)) {
+      for (const role of literalRoleOwners(src(`v3/lib/ledger/${f}`))) {
+        if (f === "dictionary.ts" && role === "System Owner" && dictionaryInert) continue;
+        found.push(`${f}: ${role}`);
       }
     }
     expect(found).toEqual([]);
