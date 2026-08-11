@@ -370,8 +370,8 @@ function kitInterviews(program: ProgramSummary): MovementStakeholder[] {
     // the "Role — TBC" convention the generator is instructed to emit. Its
     // label is the role awaiting a person, never someone's name.
     const rawName = String(interview.stakeholder ?? "").trim();
-    const tbc = /\s*[—–−‑-]\s*TBC\s*$/i.test(rawName);
-    const roleLabel = String(interview.role ?? "").trim() || rawName.replace(/\s*[—–−‑-]\s*TBC\s*$/i, "").trim();
+    const tbc = UNNAMED_SUFFIX_RE.test(rawName);
+    const roleLabel = String(interview.role ?? "").trim() || rawName.replace(UNNAMED_SUFFIX_RE, "").trim();
     const placeholder = !rawName || tbc;
     const bound = placeholder && roleLabel ? listenBindings[roleLabel] : undefined;
     const name = placeholder ? (bound?.name ?? directoryNameForRole(roleLabel)) : rawName;

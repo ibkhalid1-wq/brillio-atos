@@ -13,6 +13,7 @@
  * Unknown or stale tokens 404 without confirming whether the programme exists.
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.8";
+import { stripUnnamedSuffix } from "../_shared/unnamedSuffix.ts";
 import { extractDocumentText, extractRelevant } from "../_shared/extractText.ts";
 import { completeClaudeText } from "../_shared/claudeClient.ts";
 
@@ -416,7 +417,7 @@ Deno.serve(async (req: Request) => {
       const roster = (kitRecord && Array.isArray(kitRecord.interviews) ? kitRecord.interviews : [])
         .filter(isRecord)
         .map((interview) => ({
-          name: String(interview.stakeholder ?? "").replace(/\s*[—–−‑-]\s*TBC\s*$/i, "").trim(),
+          name: stripUnnamedSuffix(String(interview.stakeholder ?? "")),
           role: String(interview.role ?? "").trim(),
         }))
         .filter((person) => person.name && person.name.toLowerCase() !== selfKey)
@@ -473,7 +474,7 @@ Deno.serve(async (req: Request) => {
         ? ((kitRecord && Array.isArray(kitRecord.interviews) ? kitRecord.interviews : [])
             .filter(isRecord)
             .map((iv) => ({
-              name: String(iv.stakeholder ?? "").replace(/\s*[—–−‑-]\s*TBC\s*$/i, "").trim().toLowerCase(),
+              name: stripUnnamedSuffix(String(iv.stakeholder ?? "")).toLowerCase(),
               role: String(iv.role ?? "").trim(),
             }))
             .find((p) => p.name && (p.name === selfKey || p.name.split(/\s+/)[0] === selfKey.split(/\s+/)[0]))?.role ?? "")
