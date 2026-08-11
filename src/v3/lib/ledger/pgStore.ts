@@ -17,22 +17,18 @@ import { type Claim, type ClaimValue, contentId, isLive, type LedgerElement, nor
 // buildReadModel lives in a pg-free module so the client never bundles this persistence
 // layer (which sets aura.intent); PgLedger.loadReadModel reuses it here.
 import { buildReadModel } from "./readModel";
+// THE MERGE RULES ARE NOT DEFINED HERE. `mergeRules.ts` is the one definition, shared with
+// the in-memory `merge.ts`; this file is the persisted MECHANISM (locked transactions,
+// `update … set superseded_by`) and asks that module what every claim means. It used to
+// carry its own copy of the recency rule and none of N-4/N-5/N-11 at all, so the two
+// ledgers disagreed about what a re-uploaded dictionary meant. `mergeRulesLockstep.test.ts`
+// fails if either side grows a private copy again.
+import {
+  ATTRIBUTED, type MergeReport, collapseDecision, deviates, emptyMergeReport,
+  isAttributedClosure, recencyKind, recencySupersedes, substantive, valueConflicts, valueEq,
+} from "./mergeRules";
 
-const substantive = (v: ClaimValue): boolean => v.kind !== "unknown" && v.kind !== "na";
-// Order-independent canonical form: sorts object keys recursively (arrays keep their
-// order — significant for ref-list). Values written by the batch and read back from
-// Postgres jsonb differ only in object-key ordering (jsonb reorders keys by length),
-// so a naive JSON.stringify falsely reports identical ref/ref-list/unresolved-ref
-// values as different, which spuriously fires reconcile's recency rule.
-const canonical = (v: unknown): string => {
-  if (v === null || typeof v !== "object") return JSON.stringify(v) ?? "null";
-  if (Array.isArray(v)) return `[${v.map(canonical).join(",")}]`;
-  return `{${Object.keys(v as Record<string, unknown>).sort().map((k) => `${JSON.stringify(k)}:${canonical((v as Record<string, unknown>)[k])}`).join(",")}}`;
-};
-const valueEq = (a: ClaimValue, b: ClaimValue): boolean => canonical(a) === canonical(b);
-const valueConflicts = (a: ClaimValue, b: ClaimValue): boolean => substantive(a) && substantive(b) && !valueEq(a, b);
-const ATTRIBUTED = new Set(["asserted", "dispositioned", "document", "regulation", "precedent"]);
-const isAttributedClosure = (c: Claim): boolean => ATTRIBUTED.has(c.source) && (c.status === "closed" || c.status === "weak");
+export type { MergeReport } from "./mergeRules";
 
 const rowToClaim = (r: Record<string, unknown>): Claim => ({
   id: r.id as string, about: r.about as string, value: r.value as ClaimValue, world: r.world as Claim["world"],
@@ -50,11 +46,6 @@ const rowToClaim = (r: Record<string, unknown>): Claim => ({
   contradicts: (r.contradicts ?? []) as string[], escalateTo: (r.escalate_to ?? undefined) as Claim["escalateTo"],
   blockedReason: (r.blocked_reason ?? undefined) as string | undefined,
 });
-
-export interface MergeReport {
-  applied: number; preservedClosures: number; supersededGenerated: number; filledUnknowns: number;
-  newClaims: number; orphanedClosures: Array<{ about: string; by: string }>;
-}
 
 export class PgLedger {
   constructor(private pool: Pool, private programId: string, private actor = "ledger-service") {}
@@ -150,25 +141,71 @@ export class PgLedger {
     } catch (e) { await c.query("rollback").catch(() => {}); throw e; } finally { c.release(); }
   }
 
-  /** Reconcile a regeneration batch into the stored ledger (recency + orphan flag); the
-   *  element table is maintained to match the batch (added/changed upserted, dropped marked). */
+  /**
+   * Reconcile a regeneration batch into the stored ledger. STEP FOR STEP the same merge as
+   * `merge.reconcile`, taking every decision through `mergeRules`; only the mechanism
+   * differs (a locked transaction and `update … set superseded_by` where the in-memory path
+   * mutates an object). Three rules were absent here entirely until 2026-08-11 —
+   * same-provenance re-import correction (N-4), the agreeing-duplicate collapse (N-5) and
+   * the deviation count (N-11) — so the persisted ledger and the in-memory one gave
+   * different answers, and the persisted `MergeReport` had no field in which to say so.
+   *
+   * The element table is maintained to match the batch (added/changed upserted, dropped
+   * marked), and orphaned closures are reported, never deleted.
+   */
   async reconcile(incoming: AssertInput[], incomingElements: LedgerElement[]): Promise<MergeReport> {
     const incomingElementIds = new Set(incomingElements.map((e) => e.id));
-    const rep: MergeReport = { applied: 0, preservedClosures: 0, supersededGenerated: 0, filledUnknowns: 0, newClaims: 0, orphanedClosures: [] };
+    const rep = emptyMergeReport();
     for (const input of incoming) {
+      // The id `assert` will mint for this input — content-derived, so it is known before
+      // the write and a recency loser can be pointed at its winner in the same transaction.
+      const winnerId = contentId("cl", input.about, input.world, input.source, JSON.stringify(input.value));
       await this.withLockedTxn(input.about, async (c) => {
-        const live = await this.liveOnLocus(c, input.about);
-        if (input.source === "generated" && substantive(input.value)) {
-          for (const x of live) if (x.source === "generated" && substantive(x.value) && x.world === input.world && !valueEq(x.value, input.value)) {
-            await this.patch(c, x.id, { supersededBy: contentId("cl", input.about, input.world, input.source, JSON.stringify(input.value)) }); rep.supersededGenerated += 1;
+        // Same-world only, exactly as `merge.reconcile` filters `liveBefore`: an unknown in
+        // the OTHER world is not this claim's unknown to fill.
+        const live = (await this.liveOnLocus(c, input.about)).filter((x) => x.world === input.world);
+        // Recency rules 1 AND 2 — one shared predicate. This used to be an inline
+        // `generated`-only test, so a corrected re-upload from the same system coexisted
+        // here while the in-memory ledger superseded it (N-4 — and unreachable on this path
+        // in any case while `rowToClaim` was dropping the `closedBy` provenance is read from).
+        for (const x of live) {
+          if (!recencySupersedes(x, input)) continue;
+          await this.patch(c, x.id, { supersededBy: winnerId });
+          rep[recencyKind(input)] += 1;
+        }
+        const conflictingClosure = live.find((x) => isAttributedClosure(x) && substantive(x.value) && !valueEq(x.value, input.value));
+        const filledU = live.some((x) => x.value.kind === "unknown");
+        // `merge.reconcile` counts a new claim only when the assert actually ADDED a row
+        // (`added > 0`); an identical re-import returns the existing claim and adds none.
+        // The equivalent question here is whether the id already exists.
+        const exists = (await c.query("select 1 from ledger_claims where program_id=$1 and id=$2", [this.programId, winnerId])).rows.length > 0;
+        if (conflictingClosure) rep.preservedClosures += 1;
+        else if (filledU) rep.filledUnknowns += 1;
+        else if (!exists) rep.newClaims += 1;
+      });
+      const asserted = await this.assert(input); // precedence guarantees a generated claim cannot supersede an attributed closure
+      rep.applied += 1;
+
+      // N-5 and N-11, after the row is written and under the locus lock again. Both read
+      // the live set the way `merge.reconcile` reads `store.liveClaimsAbout` after `assert`.
+      await this.withLockedTxn(input.about, async (c) => {
+        let live = await this.liveOnLocus(c, input.about);
+        let assertedLive = live.some((x) => x.id === asserted.id);
+        if (assertedLive) {
+          for (const x of live) {
+            if (x.id === asserted.id) continue;
+            const d = collapseDecision(asserted, x);
+            if (d === "none") continue;
+            if (d === "incoming-supersedes-live") await this.patch(c, x.id, { supersededBy: asserted.id });
+            else { await this.patch(c, asserted.id, { supersededBy: x.id }); assertedLive = false; }
+            rep.collapsedDuplicates += 1;
+            if (!assertedLive) break;
           }
         }
-        const conflictingClosure = live.find((x) => isAttributedClosure(x) && substantive(x.value) && !valueEq(x.value, input.value) && x.world === input.world);
-        const filledU = live.some((x) => x.value.kind === "unknown");
-        if (conflictingClosure) rep.preservedClosures += 1; else if (filledU) rep.filledUnknowns += 1; else rep.newClaims += 1;
+        if (!assertedLive) return;                       // a superseded row deviates from nothing
+        live = await this.liveOnLocus(c, input.about);   // re-read: the collapse may have retired rows
+        if (deviates(asserted, live)) rep.deviations += 1;
       });
-      await this.assert(input); // precedence guarantees a generated claim cannot supersede an attributed closure
-      rep.applied += 1;
     }
     await this.maintainElements(incomingElements); // element table catches up to what the claim path already did
     // orphans: attributed closures about elements the regeneration no longer produces

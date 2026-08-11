@@ -251,7 +251,9 @@ as the current code does.
 
 ## What the merge report states (and what it used to lie about)
 
-`MergeReport` is the caller's only evidence of what a reconcile actually did:
+`MergeReport` is the caller's only evidence of what a reconcile actually did. It is **one type**
+(`mergeRules.ts`), filled by both `merge.reconcile` and `PgLedger.reconcile`, so a field cannot exist on
+one runtime and be silently absent on the other — which is precisely what F4 turned out to be:
 
 | Field | Means |
 |---|---|
@@ -301,7 +303,11 @@ if (valueEq(x.value, claim.value)) {
 }
 ```
 
-Same change in `pgStore.ts:98` (`PgLedger.assert`), which mirrors this loop for the persisted path.
+Same change in `PgLedger.assert`, which mirrors this loop for the persisted path. **It must land on
+both at once.** `pgStore.ts` is not frozen and the edit could be made there alone today — which is
+exactly what would recreate F4: `assert` would collapse an agreeing pair in Postgres and not in memory,
+and the two ledgers would again disagree about a number. The two `assert`s are a matched pair; F1 waits
+for the core to open.
 
 **F2 · `projections.ts:179-188` — count answers, not rows.** F1 is the better fix (prevent the row); if
 instead the counting is to be made defensive, the burn-down must de-duplicate by locus before counting:
@@ -330,19 +336,64 @@ there, and `migrate.ts` writes `prototype` for every system it merges. The durab
 system-of-record id set by each adapter. `importProvenance()` in `merge.ts` would then read that field
 and fall back to `closedBy.by` for rows written before it.
 
-**F4 · `pgStore.ts:40` — `closedBy` is swallowed by a comment (unrelated, but load-bearing for N-4).**
+**F4 · `pgStore.ts` — the persisted path had a different merge. ~~Reported.~~ CLOSED 2026-08-11.**
+
+F4 was raised as one line: `closedBy` sat *inside* a trailing `//` comment in `rowToClaim`, so every
+claim rehydrated from Postgres came back with `closedBy === undefined` — and because N-4 reads provenance
+out of `closedBy.by`, **the correction rule could not fire on the persisted path at all**. That one-liner
+was fixed and pinned by `pgRowToClaimComplete.test.ts` (a source-level scan: if the row carries it, the
+claim must carry it back).
+
+Fixing it exposed the larger finding underneath. `PgLedger.reconcile` was a **second, independent merge
+implementation** carrying its own recency rule and **none of N-4, N-5 or N-11** — its `MergeReport` did
+not even declare `correctedReimports`, `collapsedDuplicates` or `deviations`. So the in-memory ledger and
+the persisted ledger disagreed about what a re-uploaded dictionary *means*: one definition per number,
+violated across a runtime boundary rather than within a file, which is the place no gate was looking.
+
+**The fix is not a second copy of the rules — it is one copy.** `mergeRules.ts` now holds every merge
+DECISION as a pure, synchronous, `pg`-free predicate (`recencySupersedes`, `recencyKind`,
+`collapseDecision`, `deviates`, `valueEq`/`substantive`, `isAttributedClosure`, and the single
+`MergeReport` shape). `merge.ts` and `pgStore.ts` keep only what genuinely differs — sync object mutation
+vs a locked transaction and `update … set superseded_by` — and ask that module what every claim means.
+Two consequences worth stating:
+
+- the persisted path's decisions became **testable without a database**, which matters because this repo
+  has never had one in its suite;
+- three counting divergences unrelated to the named rules fell out with them: `pgStore` tested
+  `filledUnknowns` against the whole locus rather than the input's world, counted every applied input as
+  a `newClaim` even when `assert` added no row, and compared values with a different equality than
+  `merge.ts` did (see F5).
+
+Pinned three ways by `mergeRulesLockstep.test.ts`: the predicates called directly; a **source lockstep**
+that fails if either file re-declares a rule or stops *calling* one (absence, not wrongness, was the
+original defect); and an end-to-end run of `PgLedger.reconcile` against a query shim, compared
+field-for-field with `merge.reconcile` over a 9-locus batch. **What that shim does not prove is stated in
+its header** — it models `superseded_by` liveness, `coalesce` patch semantics and jsonb key reordering,
+and throws on any SQL it does not recognise, but it is not Postgres: locking, transaction isolation, the
+`aura.intent` audit trigger and FK behaviour remain unverified here and are **not** claimed otherwise.
+
+**F5 · `store.ts:18` / `projections.ts:246,253` — value equality is `JSON.stringify`, which is
+order-dependent.** Postgres `jsonb` stores object keys by (length, bytewise), not insertion order, so the
+same value read back from the database and the same value straight from a batch stringify differently.
+`mergeRules.valueEq` is therefore order-independent (`canonical`), and both merges now use it. The frozen
+core still uses the bare compare in two places:
 
 ```ts
-ownerWhileOpen: normalizeOwner(r.owner),   // rows written before Owner.parties carry {a,b} closedBy: (r.closed_by ?? undefined) as Claim["closedBy"],
+// store.ts:18 — proposed
+import { valueEq } from "./mergeRules";        // delete the local const
+
+// projections.ts:246,253 — proposed: the same import, then
+const asIsVals = new Set(asIs.map((c) => canonical(c.value)));
+…
+if (asIsVals.has(canonical(t.value))) continue;
 ```
 
-The `closedBy:` assignment sits **inside the trailing line comment**, so `rowToClaim` never populates it
-and every claim rehydrated from Postgres comes back with `closedBy === undefined`. Consequences: the
-attribution of a closure (`who`, `verbatim`, `when`) is invisible to any reader that goes through
-`rowToClaim`, and — because provenance is read from `closedBy.by` — **the N-4 correction rule cannot fire
-on the persisted path at all**; a re-upload there still coexists. The fix is to move the assignment onto
-its own line. `pgStore.ts` is not frozen but is outside this session's ownership, so it is reported, not
-edited. **This should be verified against live data before anything else here is scheduled.**
+Where the two spellings disagree, `canonical` is correct and `JSON.stringify` is the false negative —
+never the reverse — so the divergence can only under-report agreement (a spurious conflict, a spurious
+deviation), never invent it. It is latent today because in-memory values are built at construction sites
+with stable key order; it becomes reachable the moment a projection is run over a ledger loaded through
+`PgLedger.loadReadModel`. `MergeReport.deviations` is pinned equal to `buildDeviationRegister(store)`, so
+if this is left unfixed while a projection reads persisted rows, that identity is where it will show.
 
 ## The single case neither option handles cleanly
 
