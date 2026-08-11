@@ -155,7 +155,7 @@ const PAIRS: Pair[] = [
   { what: "secondary text on an inset row", where: ".v3ib-captured-body on .v3ib-row", fg: "var(--v3-text-secondary)", bg: SURF2, px: 11, bold: false, kind: "text" },
   { what: "muted text on a card", where: ".v3ib-of, .v3dl-tile-sub, .v3lc-sub", fg: "var(--v3-text-muted)", bg: CARD, px: 11, bold: false, kind: "text" },
   { what: "muted text on the canvas", where: ".v3dl-zone-d, .v3ln-sl", fg: "var(--v3-text-muted)", bg: CANVAS, px: 10, bold: false, kind: "text" },
-  { what: "muted text on an inset row", where: ".v3ib-grp-c, .v3dl-queue-sub", fg: "var(--v3-text-muted)", bg: SURF2, px: 10.5, bold: false, kind: "text" },
+  { what: "muted text on an inset row", where: ".v3ib-grp-c, .v3dl-quiet", fg: "var(--v3-text-muted)", bg: SURF2, px: 10.5, bold: false, kind: "text" },
   { what: "muted text on the deepest inset", where: ".v3ib-btn:disabled (background:var(--v3-surface-3))", fg: "var(--v3-text-muted)", bg: SURF3, px: 11, bold: true, kind: "text" },
 
   // ── status / semantic ink: chips, badges, pills, state lines ──────────────────
@@ -175,8 +175,8 @@ const PAIRS: Pair[] = [
   { what: "seam ink (joint ownership)", where: ".v3ib-seam-h, .v3ib-onplan, .v3ib-prop", fg: "var(--v3-seam-ink)", bg: CARD, px: 12, bold: true, kind: "text" },
 
   // ── links / link-like buttons ────────────────────────────────────────────────
-  { what: "the accent link colour", where: ".v3dl-drillbtn, .v3ib-owner, .v3fs-a", fg: "var(--v3-accent-2)", bg: CARD, px: 11, bold: true, kind: "text" },
-  { what: "the accent link on an inset row", where: ".v3dl-drillbtn inside .v3dl-queue", fg: "var(--v3-accent-2)", bg: SURF2, px: 10.5, bold: false, kind: "text" },
+  { what: "the accent link colour", where: ".v3ib-owner, .v3fs-a", fg: "var(--v3-accent-2)", bg: CARD, px: 11, bold: true, kind: "text" },
+  { what: "the accent link on an inset row", where: ".v3dl-golink inside .v3dl-elsewhere", fg: "var(--v3-accent-2)", bg: SURF2, px: 10.5, bold: false, kind: "text" },
   { what: "the Inbox title", where: ".v3ib-title over the 5%-accent header wash", fg: "var(--v3-accent-2)", bg: mixOver(light("var(--v3-accent-2)"), 5, light(CARD)), px: 13, bold: true, kind: "text", themes: ["light"] },
   { what: "an underlined goal link", where: ".v3dl-goal-open", fg: "var(--v3-text-secondary)", bg: CARD, px: 11.5, bold: false, kind: "text" },
 
@@ -193,7 +193,7 @@ const PAIRS: Pair[] = [
   { what: "the global focus ring on the canvas", where: ":focus-visible", fg: "var(--v3-focus-ring)", bg: CANVAS, px: 2, bold: false, kind: "ui" },
   { what: "the global focus ring on an inset row", where: "[tabindex]:focus-visible on .v3ib-row", fg: "var(--v3-focus-ring)", bg: SURF2, px: 2, bold: false, kind: "ui" },
   { what: "the focus ring on a card (namespaced rules)", where: ".v3ib-btn:focus-visible { outline:2px solid var(--v3-accent-2) }", fg: "var(--v3-accent-2)", bg: CARD, px: 2, bold: false, kind: "ui" },
-  { what: "the focus ring on the canvas", where: ".v3ib-btn:focus-visible, .v3dl-drillbtn:focus-visible", fg: "var(--v3-accent-2)", bg: CANVAS, px: 2, bold: false, kind: "ui" },
+  { what: "the focus ring on the canvas", where: ".v3ib-btn:focus-visible, .v3dl-golink:focus-visible", fg: "var(--v3-accent-2)", bg: CANVAS, px: 2, bold: false, kind: "ui" },
   { what: "the focus ring on an inset row", where: ".v3ib-tab:focus-visible inside .v3ib-row", fg: "var(--v3-accent-2)", bg: SURF2, px: 2, bold: false, kind: "ui" },
   { what: "the goal-link focus ring", where: ".v3dl-goal-open:focus-visible { outline:2px solid var(--v3-positive) }", fg: "var(--v3-positive)", bg: CARD, px: 2, bold: false, kind: "ui" },
   { what: "the convergence bar's filled segment", where: ".v3lc-conv-bar > span (a graphical object carrying the %)", fg: "var(--v3-accent-2)", bg: SURF2, px: 6, bold: false, kind: "ui" },

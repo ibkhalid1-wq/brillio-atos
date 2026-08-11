@@ -111,6 +111,9 @@ describe("the navigation is ordered by the ontology, not by seed volume", () => 
     expect(seed.counts["Practice Forecast Split"]).toBeGreaterThan(seed.counts.Account);
     expect(items[0], "the nav still leads with the biggest table").not.toBe(biggest.toLowerCase().replace(/[^a-z0-9]+/g, "-"));
     expect(items[0]).not.toBe("practice-forecast-split");
+    // and the full listing is the graph's own order, top to bottom
+    const tail = navItems(html.slice(html.indexOf(">All records<")));
+    expect(tail).toEqual(g.navOrder.map((n) => n.toLowerCase().replace(/[^a-z0-9]+/g, "-")));
     expect(items[0]).toBe("account");
     expect(items.indexOf("account")).toBeLessThan(items.indexOf("practice-forecast-split"));
     expect(items.indexOf("opportunity")).toBeLessThan(items.indexOf("practice-forecast-split"));
@@ -174,6 +177,17 @@ describe("children are rendered under their parent", () => {
       const slug = p.toLowerCase().replace(/[^a-z0-9]+/g, "-");
       expect(fabric.nodes.some((n) => n.id === `region:${slug}:invoice`), `${p} lost its Invoice collection`).toBe(true);
     }
+  });
+
+  it("an N:1 relation puts the collection and the back-link on the right sides", () => {
+    // "Contact is part of Account" [N:1]. Read as written, the parent got a
+    // parent-ref nav TO ITS OWN CHILD and no collection at all: Account's detail
+    // listed no contacts while claiming to belong to one.
+    const fabric = deriveFabric(ontology, atlas);
+    const has = (id: string) => fabric.nodes.some((n) => n.id === id);
+    expect(has("region:account:contact"), "Account's detail has no Contacts collection").toBe(true);
+    expect(has("nav:contact:account"), "a Contact does not link back to its Account").toBe(true);
+    expect(has("nav:account:contact"), "Account claims to be the child of its own child").toBe(false);
   });
 
   it("a relation CYCLE still gives every entity exactly one home", () => {
