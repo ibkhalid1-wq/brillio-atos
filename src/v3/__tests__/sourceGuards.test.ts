@@ -26,7 +26,7 @@
 import { describe, it, expect } from "vitest";
 import { resolve } from "node:path";
 import { readdirSync } from "node:fs";
-import { importsModule, literalRoleOwners, constOwnerIsInert, filesToScan, FROZEN_CORE } from "./helpers/sourceGuards";
+import { importsModule, literalRoleOwners, constOwnerIsInert, filesToScan, FROZEN_CORE, enclosingExport } from "./helpers/sourceGuards";
 
 const LEDGER_DIR = resolve(__dirname, "../lib/ledger");
 
@@ -197,5 +197,145 @@ describe("literalRoleOwners matches constants only", () => {
       `const OWNER: Owner = { kind: "role", role: 'System Owner' };`,
       `push({ about, ownerWhileOpen: OWNER, status: "weak" });`,
     ].join("\n"), "System Owner")).toBe(true);
+  });
+});
+
+// ── H7 · the bypasses the one-hop regex could not see, fed to the predicate ──────────
+/**
+ * Every string below is a CONSTANT role owner — a role somebody typed — reaching a claim.
+ * Each walked past the previous spelling of this guard, so F5/F6 printed PASS over the
+ * exact defect 0a023c9 fixed. They are resolved now by parsing rather than matching.
+ *
+ * The last case runs the other way: a guard that fires on the COMMENT explaining it is a
+ * guard nobody can live with, and in this codebase the fix and its rationale sit side by
+ * side, so that collision is the normal case rather than a corner one.
+ */
+describe("H7 — constants that reached a claim through more than one hop", () => {
+  it("H7a: TWO const hops — the chain the old note recorded as invisible", () => {
+    expect(literalRoleOwners([
+      `const BASE = "Sales Ops";`,
+      `const FALLBACK = BASE;`,
+      `const O = { kind: "role", role: FALLBACK };`,
+    ].join("\n"))).toEqual(["Sales Ops"]);
+  });
+
+  it("H7b: an `as` cast — the lookahead stopped at the cast and saw nothing", () => {
+    expect(literalRoleOwners([
+      `const FALLBACK = "Sales Ops";`,
+      `const O = { kind: "role", role: FALLBACK as string };`,
+    ].join("\n"))).toEqual(["Sales Ops"]);
+  });
+
+  it("H7c: a trailing comment — same lookahead, same blindness", () => {
+    expect(literalRoleOwners([
+      `const FALLBACK = "Sales Ops";`,
+      `const O = { kind: "role", role: FALLBACK /* why */ };`,
+    ].join("\n"))).toEqual(["Sales Ops"]);
+  });
+
+  it("H7d: a lookup into a constant table, by member AND by index", () => {
+    const table = `const OWNERS = { sales: "Sales Ops", finance: "Finance" };`;
+    expect(literalRoleOwners([table, `const O = { kind: "role", role: OWNERS.sales };`].join("\n")))
+      .toEqual(["Sales Ops"]);
+    expect(literalRoleOwners([table, `const O = { kind: "role", role: OWNERS["finance"] };`].join("\n")))
+      .toEqual(["Finance"]);
+  });
+
+  it("H7e: a constant imported from another module, once the scan can read modules", () => {
+    const source = [
+      `import { FALLBACK_ROLE } from "./roles";`,
+      `const O = { kind: "role", role: FALLBACK_ROLE };`,
+    ].join("\n");
+    // without a reader the identifier is unknowable, so it stays unreported — the guard
+    // does not invent a finding it cannot substantiate
+    expect(literalRoleOwners(source)).toEqual([]);
+    expect(literalRoleOwners(source, {
+      readModule: (spec) => spec === "./roles" ? `export const FALLBACK_ROLE = "Sales Ops";` : null,
+    })).toEqual(["Sales Ops"]);
+  });
+
+  it("H7f: a derivation is still not a fabrication, however it is spelled", () => {
+    expect(literalRoleOwners([
+      `const OWNERS = { sales: computeLabel() };`,
+      `const A = { kind: "role", role: OWNERS.sales };`,   // table entry is a call
+      `const B = { kind: "role", role: lookup(id) as string };`,
+      `const C = { kind: "role", role: rec.owner.label };`,
+    ].join("\n"))).toEqual([]);
+  });
+
+  it("H7g: a cyclic binding terminates instead of hanging", () => {
+    expect(literalRoleOwners([
+      `const a = b;`, `const b = a;`, `const O = { kind: "role", role: a };`,
+    ].join("\n"))).toEqual([]);
+  });
+
+  it("H7h: THE OTHER DIRECTION — a comment quoting the pattern must not trip the guard", () => {
+    // finalGateInvariants (b) scanned raw source, so documenting the fix in prose turned
+    // F5 red for a comment. Parsing never sees comments; the regex pass is fed codeOnly.
+    expect(literalRoleOwners(`// the old bug stamped role: "Sales Ops" on every claim`)).toEqual([]);
+    expect(literalRoleOwners(`/* a constant owner, e.g. role: "Finance", is a fabrication */`)).toEqual([]);
+    // …but the same text as CODE is still caught
+    expect(literalRoleOwners(`const O = { kind: "role", role: "Finance" };`)).toEqual(["Finance"]);
+  });
+});
+
+// ── H8 · enclosingExport — the two shapes that orphaned a control silently ───────────
+/**
+ * ed82514's defect was a capture control rendered inside a local nobody calls. The guard
+ * that exists to catch it asked "which exported symbol holds this offset?" with a
+ * column-zero regex bound to `function|const|class`, which fails OPEN twice over.
+ */
+describe("H8 — which exported symbol holds an offset", () => {
+  const at = (src: string, needle: string) => enclosingExport(src, src.indexOf(needle));
+
+  it("H8a: an exported host is found, however deeply the site is nested inside it", () => {
+    const src = [
+      `export default function TheLine() {`,
+      `  const inner = () => {`,
+      `    return <TranscribeButton />;`,
+      `  };`,
+      `  return inner();`,
+      `}`,
+    ].join("\n");
+    expect(at(src, "<TranscribeButton")).toEqual({ name: "TheLine", isDefault: true });
+  });
+
+  it("H8b: a `let` local host closes the export — the alternation missed this entirely", () => {
+    const src = [
+      `export default function TheLine() { return null; }`,
+      `let CaptureDialog = () => <TranscribeButton />;`,
+    ].join("\n");
+    // the old regex knew only function|const|class, so this local never closed TheLine
+    // and the orphaned control was credited to it
+    expect(at(src, "<TranscribeButton")).toBeNull();
+  });
+
+  it("H8c: an INDENTED local host closes it too — column zero was never the real rule", () => {
+    const src = [
+      `export default function TheLine() { return null; }`,
+      `if (flag) {`,
+      `  function CaptureDialog() { return <TranscribeButton />; }`,
+      `}`,
+    ].join("\n");
+    expect(at(src, "<TranscribeButton")).toBeNull();
+  });
+
+  it("H8d: …and the recorded interim would have gone RED on correct code", () => {
+    // The note proposed relaxing `^` to `^[ \t]*`. Under that rule the ordinary indented
+    // `const` below is a declaration that is not exported, so it would close its OWN
+    // export and a live render site would resolve to null. It must not.
+    const src = [
+      `export default function TheLine() {`,
+      `  const label = "hi";`,
+      `  return <TranscribeButton title={label} />;`,
+      `}`,
+    ].join("\n");
+    expect(at(src, "<TranscribeButton")).toEqual({ name: "TheLine", isDefault: true });
+  });
+
+  it("H8e: a named export and a non-default one are distinguished", () => {
+    expect(at(`export const Panel = () => <TranscribeButton />;`, "<Transcribe"))
+      .toEqual({ name: "Panel", isDefault: false });
+    expect(at(`function Local() { return <TranscribeButton />; }`, "<Transcribe")).toBeNull();
   });
 });

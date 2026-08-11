@@ -11,6 +11,7 @@
  * cannot change app behaviour.
  */
 import { readdirSync } from "node:fs";
+import ts from "typescript";
 
 // ── (b) which ledger modules the fabricated-owner scan covers ───────────────────────
 /**
@@ -72,22 +73,175 @@ const constStringValue = (source: string, name: string): string | null => {
   return m ? m[1] : null;
 };
 
-export const literalRoleOwners = (source: string): string[] => {
+/**
+ * AST PASS — the real binding resolver the note above records as outstanding (H2).
+ *
+ * The regex pass is bounded to ONE const hop and is defeated by five ordinary spellings,
+ * each of which walks the 0a023c9 defect back in with the whole harness green: a second
+ * hop (`const A = "X"; const B = A; role: B`), an `as` cast (`role: NAME as string`), a
+ * trailing comment (`role: NAME // why`), a member or index lookup into a local table
+ * (`role: OWNERS.sales`, `role: OWNERS["sales"]`), and an identifier imported from
+ * another module.
+ *
+ * Parsing also removes a false POSITIVE, in the opposite direction: comments are trivia,
+ * never nodes, so a comment QUOTING `role: "Sales Ops"` — which is exactly how this
+ * codebase documents its own fixes — cannot trip the scan. (The regex pass is fed
+ * `codeOnly(source)` for the same reason; that is why invariant (b) needs no wrap at its
+ * call site.)
+ *
+ * What is deliberately NOT resolved stays unreported, because a guard that fires on every
+ * honest derivation gets switched off: a call (`role: fn(x)`), or an identifier with no
+ * constant string behind it, is computed from the record and is not a fabrication.
+ */
+const unwrap = (e: ts.Expression): ts.Expression =>
+  ts.isParenthesizedExpression(e) || ts.isAsExpression(e) || ts.isNonNullExpression(e)
+    ? unwrap(e.expression) : e;
+
+/** Every `const|let|var NAME = <expr>` in the file, by name. */
+const bindingsOf = (file: ts.SourceFile): Map<string, ts.Expression> => {
+  const binds = new Map<string, ts.Expression>();
+  const visit = (node: ts.Node): void => {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer
+        && !binds.has(node.name.text)) binds.set(node.name.text, node.initializer);
+    ts.forEachChild(node, visit);
+  };
+  ts.forEachChild(file, visit);
+  return binds;
+};
+
+/** Local name → module specifier, for `import { X } from "…"` and `import X from "…"`. */
+const importsOf = (file: ts.SourceFile): Map<string, string> => {
+  const out = new Map<string, string>();
+  for (const st of file.statements) {
+    if (!ts.isImportDeclaration(st) || !ts.isStringLiteral(st.moduleSpecifier)) continue;
+    const spec = st.moduleSpecifier.text;
+    if (st.importClause?.name) out.set(st.importClause.name.text, spec);
+    const named = st.importClause?.namedBindings;
+    if (named && ts.isNamedImports(named)) for (const el of named.elements) out.set(el.name.text, spec);
+  }
+  return out;
+};
+
+/**
+ * How to read another module's source, so a cross-module constant can be followed.
+ *
+ * `ownerShapeOnly` narrows the scan to the OWNER discriminant — a `role` sitting in an
+ * object that also says `kind: "role"`. It exists because "role" is an overloaded word:
+ * on the Deno mirror, `{ role: "user" }` and `{ role: "system" }` are LLM chat-message
+ * roles in a wire payload (claudeClient.ts, extractText.ts, types.ts), nothing to do with
+ * who owns a question. Scanning those modules on the bare key reports four owners that do
+ * not exist, and a guard that cries wolf is a guard someone deletes. Keyed on `kind`, the
+ * same modules are silent while a real `{ kind: "role", role: "Sales Leaders" }` is still
+ * caught. The loose regex pass is skipped under this flag, because it cannot see the
+ * sibling property that carries the discriminant.
+ */
+export interface RoleOwnerScanOpts {
+  readModule?: (spec: string) => string | null;
+  ownerShapeOnly?: boolean;
+}
+
+/** Does the object literal holding this property also carry `kind: "role"`? */
+const inOwnerShape = (node: ts.Node): boolean => {
+  const obj = node.parent;
+  if (!obj || !ts.isObjectLiteralExpression(obj)) return false;
+  return obj.properties.some((p) =>
+    ts.isPropertyAssignment(p)
+    && (ts.isIdentifier(p.name) || ts.isStringLiteral(p.name)) && p.name.text === "kind"
+    && (ts.isStringLiteral(p.initializer) || ts.isNoSubstitutionTemplateLiteral(p.initializer))
+    && p.initializer.text === "role");
+};
+
+/** Resolve an expression to a constant string, or null if it is derived / unknowable. */
+const constStringOf = (
+  expr: ts.Expression, binds: Map<string, ts.Expression>, file: ts.SourceFile,
+  opts: RoleOwnerScanOpts, seen: Set<string>,
+): string | null => {
+  const e = unwrap(expr);
+  if (ts.isStringLiteral(e) || ts.isNoSubstitutionTemplateLiteral(e)) return e.text;
+  if (ts.isIdentifier(e)) {
+    if (seen.has(e.text)) return null;                       // cycle: `const a = b; const b = a;`
+    seen.add(e.text);
+    const local = binds.get(e.text);
+    if (local) return constStringOf(local, binds, file, opts, seen);
+    const spec = importsOf(file).get(e.text);                // not bound here — follow the import
+    const text = spec && opts.readModule ? opts.readModule(spec) : null;
+    if (text == null) return null;
+    const mod = ts.createSourceFile("m.ts", text, ts.ScriptTarget.Latest, true);
+    const bound = bindingsOf(mod).get(e.text);
+    return bound ? constStringOf(bound, bindingsOf(mod), mod, opts, seen) : null;
+  }
+  // `OWNERS.sales` / `OWNERS["sales"]` — a lookup into a constant table in this file.
+  if (ts.isPropertyAccessExpression(e) || ts.isElementAccessExpression(e)) {
+    const objExpr = unwrap(e.expression);
+    if (!ts.isIdentifier(objExpr)) return null;
+    const obj = binds.get(objExpr.text);
+    if (!obj) return null;
+    const lit = unwrap(obj);
+    if (!ts.isObjectLiteralExpression(lit)) return null;
+    const key = ts.isPropertyAccessExpression(e) ? e.name.text
+      : (ts.isStringLiteral(e.argumentExpression) ? e.argumentExpression.text : null);
+    if (key == null) return null;
+    for (const p of lit.properties) {
+      if (ts.isPropertyAssignment(p) && (ts.isIdentifier(p.name) || ts.isStringLiteral(p.name))
+          && p.name.text === key) return constStringOf(p.initializer, binds, file, opts, seen);
+    }
+  }
+  return null;                                               // calls and anything else: derived
+};
+
+const astRoleOwners = (source: string, opts: RoleOwnerScanOpts): string[] => {
+  const file = ts.createSourceFile("s.ts", source, ts.ScriptTarget.Latest, true);
+  const binds = bindingsOf(file);
   const out: string[] = [];
+  const visit = (node: ts.Node): void => {
+    const shapeOk = (n: ts.Node): boolean => !opts.ownerShapeOnly || inOwnerShape(n);
+    if (ts.isPropertyAssignment(node) && (ts.isIdentifier(node.name) || ts.isStringLiteral(node.name))
+        && node.name.text === "role" && shapeOk(node)) {
+      const v = constStringOf(node.initializer, binds, file, opts, new Set());
+      if (v !== null) out.push(v);
+    }
+    // `{ kind: "role", role }` — shorthand resolves the binding of that same name.
+    if (ts.isShorthandPropertyAssignment(node) && node.name.text === "role" && shapeOk(node)) {
+      const v = constStringOf(node.name, binds, file, opts, new Set());
+      if (v !== null) out.push(v);
+    }
+    ts.forEachChild(node, visit);
+  };
+  ts.forEachChild(file, visit);
+  return out;
+};
+
+/**
+ * UNION OF THE TWO PASSES, deduped — each covers the other's blind spot.
+ *
+ * The AST pass cannot read a bare FRAGMENT: `role:"Finance"` at statement position is a
+ * labelled statement, not a property, and `{ kind: "role", role: "X" }` is a block. Those
+ * are the shapes this predicate is exercised with, and they are real — a planted line,
+ * quoted into a test, looks exactly like that. The regex pass reads them. The regex pass
+ * in turn cannot follow a binding past one hop. So: union, which is the fail-safe
+ * direction — a guard may over-report and be argued with; under-reporting is silent.
+ * Deduped, because both passes see the ordinary inline literal.
+ */
+export const literalRoleOwners = (source: string, opts: RoleOwnerScanOpts = {}): string[] => {
+  const out: string[] = astRoleOwners(source, opts);
+  // The regex pass cannot see the sibling `kind` that carries the Owner discriminant, so
+  // it is skipped when the caller asked for owner-shaped matches only.
+  if (opts.ownerShapeOnly) return [...new Set(out)];
+  const code = codeOnly(source);   // comments explain the guard; they must not trip it
   // `role: "X"` / `role: 'X'` / role: `X` — the typed literal, any quote.
-  for (const m of source.matchAll(new RegExp(`role:\\s*${QUOTED}`, "g"))) out.push(m[1]);
+  for (const m of code.matchAll(new RegExp(`role:\\s*${QUOTED}`, "g"))) out.push(m[1]);
   // `role: NAME` — one const hop. The lookahead stops at `,` `}` or end-of-line, so
   // `role: fn(x)` and `role: a.owner.label` (a `(` or `.` follows) are never candidates.
-  for (const m of source.matchAll(/role:\s*([A-Za-z_$][\w$]*)\s*(?=[,}\r\n])/g)) {
-    const v = constStringValue(source, m[1]);
+  for (const m of code.matchAll(/role:\s*([A-Za-z_$][\w$]*)\s*(?=[,}\r\n])/g)) {
+    const v = constStringValue(code, m[1]);
     if (v !== null) out.push(v);
   }
   // `{ kind: "role", role }` — object shorthand, same one hop.
-  for (const m of source.matchAll(/[{,]\s*(role)\s*(?=[,}])/g)) {
-    const v = constStringValue(source, m[1]);
+  for (const m of code.matchAll(/[{,]\s*(role)\s*(?=[,}])/g)) {
+    const v = constStringValue(code, m[1]);
     if (v !== null) out.push(v);
   }
-  return out;
+  return [...new Set(out)];
 };
 
 /**
@@ -150,3 +304,52 @@ export const codeOnly = (source: string): string =>
 
 export const importsModule = (source: string, spec: string): boolean =>
   new RegExp(`from\\s+["']${escapeRe(spec)}["']`).test(source);
+
+/**
+ * The EXPORTED symbol that holds a given source offset, or null if nothing exported does.
+ *
+ * Used by captureControlsReachable to answer "is this control actually reachable, or is it
+ * rendered inside a local nobody calls?" — the ed82514 defect, where a control was orphaned
+ * and the guard stayed green.
+ *
+ * The previous spelling was a column-zero regex bound to `function|const|class`:
+ *
+ *     /^(export\s+)?(default\s+)?(?:async\s+)?(?:function|const|class)\s+(\w+)/gm
+ *
+ * It fails OPEN in two ordinary shapes. A local host declared `let CaptureDialog = …` is
+ * not in the alternation, so it never CLOSES the exported declaration above it and the
+ * site is still credited to that export. A local host that is INDENTED is not at column
+ * zero, with the same result. Either way the control is orphaned and the guard passes.
+ *
+ * The recorded interim — add `let|var`, relax `^` to `^[ \t]*` — cannot be taken: relaxing
+ * the anchor makes every ordinary indented `const` inside an exported component close its
+ * own export, so live render sites resolve to null and the guard goes red on correct code.
+ * The distinction the regex cannot draw is structural, so this walks the tree instead:
+ * find the TOP-LEVEL statement containing the offset (the one whose parent is the file)
+ * and ask whether that statement is exported. JSX inside a non-exported top-level local
+ * answers null; JSX nested any number of functions deep inside an exported one answers
+ * that export, because it genuinely is reachable through it.
+ */
+export const enclosingExport = (
+  src: string, offset: number,
+): { name: string; isDefault: boolean } | null => {
+  const file = ts.createSourceFile("s.tsx", src, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  for (const st of file.statements) {
+    if (offset < st.getStart(file) || offset >= st.getEnd()) continue;
+    const mods = ts.canHaveModifiers(st) ? (ts.getModifiers(st) ?? []) : [];
+    const isExport = mods.some((m) => m.kind === ts.SyntaxKind.ExportKeyword);
+    if (!isExport) return null;                       // a local host — the fail-safe answer
+    const isDefault = mods.some((m) => m.kind === ts.SyntaxKind.DefaultKeyword);
+    if ((ts.isFunctionDeclaration(st) || ts.isClassDeclaration(st)) && st.name) {
+      return { name: st.name.text, isDefault };
+    }
+    if (ts.isVariableStatement(st)) {
+      const d = st.declarationList.declarations[0];
+      if (d && ts.isIdentifier(d.name)) return { name: d.name.text, isDefault };
+    }
+    // `export default <expr>` — anonymous, but still an export
+    if (ts.isExportAssignment(st)) return { name: "default", isDefault: true };
+    return null;
+  }
+  return null;
+};
