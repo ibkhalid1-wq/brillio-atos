@@ -10,6 +10,8 @@ type ParsedAttachment = {
   text: string;
   wordCount: number;
   truncated: boolean;
+  /** Why extraction failed, when it did. Present ⇒ this file contributes NO text. */
+  error?: string;
 };
 
 interface CoPilotSidebarProps {
@@ -460,9 +462,15 @@ export default function CoPilotSidebar({
                         {f.name}
                       </div>
                       {parsed && (
-                        <div style={{ fontSize: 10, color: "var(--v3-accent)", marginTop: 1 }}>
-                          {parsed.wordCount.toLocaleString()} words extracted{parsed.truncated ? " (truncated)" : ""}
-                        </div>
+                        parsed.error ? (
+                          <div style={{ fontSize: 10, color: "var(--v3-danger, #d9534f)", marginTop: 1 }} role="alert">
+                            Not read — {parsed.error}
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: 10, color: "var(--v3-accent)", marginTop: 1 }}>
+                            {parsed.wordCount.toLocaleString()} words extracted{parsed.truncated ? " (truncated)" : ""}
+                          </div>
+                        )
                       )}
                     </div>
                     <button
@@ -520,6 +528,13 @@ export default function CoPilotSidebar({
                         text,
                         wordCount: result.ok ? (result.wordCount ?? 0) : 0,
                         truncated: text.length > MAX_ATTACHMENT_CHARS,
+                        // `parseDocumentToText` returns an ACTIONABLE reason on failure
+                        // ("Legacy .doc format could not be parsed. Please save as
+                        // .docx and re-upload."). Dropping it left the chip reading
+                        // "0 words extracted" in the success style while `handleSend`
+                        // silently filtered the document out of the prompt — the file
+                        // looked attached and reached the model as nothing at all.
+                        error: result.ok ? undefined : result.error,
                       };
                     }),
                   );
