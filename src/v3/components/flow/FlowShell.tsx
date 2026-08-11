@@ -1495,7 +1495,7 @@ function FlowToday({ program, ledger, programs, onSelectProgram, onResolveDecisi
                   recognise Finance" while five open questions sit with Finance
                   is the app contradicting itself, so the message names the list
                   the role is actually missing from. */}
-              <p className="v3fs-dec-s">&ldquo;{person.role}&rdquo; isn&rsquo;t a role this programme recognises. Map it to a known role, or accept it as a new one.</p>
+              <p className="v3fs-dec-s">&ldquo;{person.role}&rdquo; isn&rsquo;t in the Discovery Kit&rsquo;s cast for this programme, so coverage has nowhere to put them. Map it to a role the kit already casts, or accept it as a new one — either settles it.</p>
               <div className="v3fs-dec-rec-b">mapping or accepting resolves it; it keeps clarifying until you do</div>
               <div className="v3fs-dec-cta">
                 {onSaveInputs ? (
