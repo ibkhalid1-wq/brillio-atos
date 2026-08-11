@@ -37,11 +37,14 @@ const SECTION_COPILOT_PLACEHOLDER: Record<string, string> = {
 };
 /**
  * Artifacts whose studio draws something the prose CANNOT carry — the ontology
- * graph, the atlas swimlanes. For these the export leads with the picture and
+ * graph, the workflow swimlanes. For these the export leads with the picture and
  * follows with the document; everywhere else the studio is a form, and a form
  * on paper is just greyed-out boxes, so only the document prints.
+ *
+ * The swimlanes travelled with the workflows: AGENTIFY draws them now, and the
+ * Current-State Atlas tab is registers — a form, which would print as boxes.
  */
-const PRINT_GRAPHIC_ARTIFACTS = ["domain-ontology", "current-state-atlas"];
+const PRINT_GRAPHIC_ARTIFACTS = ["domain-ontology", "agentify"];
 
 import DocumentView from "./DocumentView";
 import EvidenceReader from "@/v3/components/flow/EvidenceReader";
@@ -109,7 +112,10 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
   // The graph-first documents open straight into their studio — the diagram
   // IS the document there, so the graphical view leads. Prose-first
   // documents keep the typeset reading view as the default.
-  const GRAPH_FIRST = ["domain-ontology", "current-state-atlas", "architecture-strategy", "agentic-blueprint", "experience-design", "prototype-build"];
+  // (The atlas left this list with its workflows: its tab is now the registers,
+  // which read better typeset. Agentify took its place — the swimlane IS the
+  // document there, and the call on each step is made on the diagram.)
+  const GRAPH_FIRST = ["domain-ontology", "agentify", "architecture-strategy", "agentic-blueprint", "experience-design", "prototype-build"];
   const graphFirst = GRAPH_FIRST.includes(artifact.id);
   const [editing, setEditing] = useState(graphFirst);
 

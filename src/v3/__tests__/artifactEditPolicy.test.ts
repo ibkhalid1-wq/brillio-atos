@@ -14,8 +14,8 @@ describe("artifact edit policy — three tiers of ownership", () => {
     }
   });
 
-  it("ontology + atlas are curatable: editable but NOT authorable", () => {
-    expect(CURATABLE_ARTIFACTS).toEqual(["domain-ontology", "current-state-atlas"]);
+  it("ontology + atlas + agentify are curatable: editable but NOT authorable", () => {
+    expect(CURATABLE_ARTIFACTS).toEqual(["domain-ontology", "current-state-atlas", "agentify"]);
     for (const id of CURATABLE_ARTIFACTS) {
       expect(artifactEditTier(id)).toBe("curatable");
       expect(isArtifactEditable(id)).toBe(true);  // rename/relate/dismiss

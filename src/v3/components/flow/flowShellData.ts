@@ -1193,14 +1193,23 @@ export function gateReadiness(
     // "Out of date" is reserved for documents that EXIST and trail their
     // evidence — a document never generated is simply not written yet.
     const trailing = artifacts.some((artifact) => artifact.present && artifact.stale);
-    const missing = artifacts.some((artifact) => !artifact.present);
+    // NAME the documents that do not exist. A movement can gain a new required
+    // deliverable (Listen gained Agentify), and every programme that predates it
+    // then holds an unmet criterion. "A document has not been generated yet" left
+    // the operator to guess WHICH — an unexplained amber reads as breakage. The
+    // artifact's own title is the answer, and the artifact is genuinely absent:
+    // nothing is fabricated to soften it.
+    const missing = artifacts.filter((artifact) => !artifact.present);
     const asking = checks.some((item) => !item.done && item.id === "issues");
     return trailing
       ? { tone: "amber", kind: "trails", headline: counts, detail: "Documents are out of date — evidence changed" }
       : asking
         ? { tone: "amber", kind: "gaps", headline: counts, detail: "The documents still have open questions" }
-        : missing
-          ? { tone: "amber", kind: "gaps", headline: counts, detail: "A document has not been generated yet" }
+        : missing.length
+          ? {
+            tone: "amber", kind: "gaps", headline: counts,
+            detail: `Not generated yet: ${missing.map((artifact) => artifact.title).join(" · ")}`,
+          }
           : {
             tone: "amber", kind: "gaps", headline: counts,
             // Name the row that is actually open — "emails missing" must

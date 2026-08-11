@@ -1,5 +1,5 @@
 /**
- * The Current-State Atlas's workflows as a swimlane diagram: PERSONAS are
+ * AGENTIFY's workflows as a swimlane diagram: PERSONAS are
  * rows, the workflow overlays them left-to-right — each step tile sits in
  * the lane of the actor who performs it, at its position in the sequence.
  * Tiles carry the step's system, duration, the ontology's entity chips, and
@@ -16,8 +16,17 @@
  * inspector inline underneath it (handed to AtlasSeamView as
  * `renderWorkflowDetail`, so the diagram and the inspector are moved, not
  * reimplemented). Picking a workflow in the lifecycle grid opens the same row.
- * The registers (events · pain · systems) are document-level, not
- * workflow-level, so they stay in their own card below.
+ *
+ * WHERE THIS SURFACE NOW LIVES. The workflows moved OUT of the Current-State
+ * Atlas tab and into Listen's third artifact, AGENTIFY — the home of the
+ * per-step automate / assist / keep-manual decision (`FutureMode` in
+ * flowFutureState). The diagram is the natural place to make that call, so the
+ * step inspector carries it and each tile wears the mode it was given. The
+ * registers (events · pain · systems) are properties of the ATLAS document, not
+ * of a workflow, so they stayed behind on the Atlas tab — exported below as
+ * `AtlasRegisters` and rendered there. This component reads them through
+ * `registerDoc` so the swimlane's pain shading and event chips still come from
+ * the atlas while the workflows come from Agentify.
  */
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -77,6 +86,16 @@ function eventsForStep(step: Record<string, unknown>, events: Array<Record<strin
     })
     .map((event) => asText(event.name));
   return [...explicit, ...matched];
+}
+
+/** The business-event register: the atlas document's own events, plus any still
+ * sitting on a legacy ontology doc that predates the move. One reader, so the
+ * swimlane's chips and the Atlas tab's events table can never disagree. */
+function atlasEvents(atlasDoc: Record<string, unknown>, program?: StudioProps["program"]): Array<Record<string, unknown>> {
+  const own = asArray(atlasDoc.events).map(asRecord);
+  const legacy = program ? asArray(readArtifactDoc(program, "domainOntology")?.events).map(asRecord) : [];
+  const seen = new Set(own.map((event) => asText(event.name).toLowerCase()));
+  return [...own, ...legacy.filter((event) => !seen.has(asText(event.name).toLowerCase()))];
 }
 
 /** Deterministic pain↔step match: a heatmap entry lands on a step when a
@@ -166,6 +185,12 @@ function PrintWorkflowDiagram({ workflow, pains, ontoEvents, area }: {
                         <span className="v3fs-swim-n" aria-hidden="true">{index + 1}</span>
                         <span className="v3fs-swim-action">{asText(step.action) || "—"}</span>
                         <span className="v3fs-swim-meta">
+                          {/* The agentification call, where one has been made. An
+                              undecided step shows NOTHING — never a default mode
+                              dressed up as a decision. */}
+                          {stepMode(step)
+                            ? <span className={`v3fs-wf-mode ${stepMode(step)}`}>{AGENTIFY_MODE_LABEL[stepMode(step)]}</span>
+                            : null}
                           {asText(step.system) ? <span className="v3fs-wf-system">{asText(step.system)}</span> : null}
                           {asText(step.duration) ? <span className="v3fs-wf-dur">{asText(step.duration)}</span> : null}
                         </span>
@@ -189,14 +214,39 @@ function PrintWorkflowDiagram({ workflow, pains, ontoEvents, area }: {
   );
 }
 
-export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program, onFocus }: StudioProps & {
+/** The agentification call on one step — the same three modes flowFutureState
+ * projects, now RECORDED rather than only inferred. */
+export const AGENTIFY_MODES = ["agentify", "assist", "keep"] as const;
+export const AGENTIFY_MODE_LABEL: Record<string, string> = {
+  agentify: "Agentify", assist: "Assist", keep: "Keep manual",
+};
+const AGENTIFY_MODE_HINT: Record<string, string> = {
+  agentify: "An agent runs this step end to end.",
+  assist: "An agent prepares it; a human still decides.",
+  keep: "This step stays a human judgement.",
+};
+/** The recorded mode on a step, or "" when nobody has decided yet. NEVER guessed
+ * here — an undecided step reads undecided, and the Envision projection falls
+ * back to its own heuristic rather than this surface inventing one. */
+export const stepMode = (step: Record<string, unknown>): string => {
+  const value = asText(step.mode).trim().toLowerCase();
+  return (AGENTIFY_MODES as readonly string[]).includes(value) ? value : "";
+};
+
+export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program, onFocus, registerDoc }: StudioProps & {
   onFocus?: (focus: AtlasFocus | null) => void;
+  /** Where the pain heatmap and the business-event register live. Agentify owns
+   * the workflows; those two registers stayed on the Current-State Atlas, so the
+   * swimlane reads them from there. Defaults to `doc` for any caller that still
+   * holds both in one document. */
+  registerDoc?: Record<string, unknown>;
 }) {
   const locked = useStudioLocked();
   const authoring = useStudioAuthoring();
   const printing = useStudioPrinting();
+  const regDoc = registerDoc ?? doc;
   const workflows = useMemo(() => asArray(doc.workflows).map(asRecord), [doc.workflows]);
-  const pains = useMemo(() => asArray(doc.painHeatmap).map(asRecord), [doc.painHeatmap]);
+  const pains = useMemo(() => asArray(regDoc.painHeatmap).map(asRecord), [regDoc.painHeatmap]);
   // `active` is now the workflow OPENED INLINE in the seam view — null when none
   // is open (there is no separate editor below to keep pointed at something).
   const [active, setActive] = useState<number | null>(null);
@@ -231,15 +281,9 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program,
   };
   // Business events woven into the diagram: an event chip on the step that
   // raises it, and the workflow's trigger named as an event where one starts
-  // it. Events LIVE on this document now (the atlas's own events table below
-  // the diagram); ontology-doc events are read through for legacy programmes
-  // that predate the move.
-  const ontoEvents = useMemo(() => {
-    const own = asArray(doc.events).map(asRecord);
-    const legacy = program ? asArray(readArtifactDoc(program, "domainOntology")?.events).map(asRecord) : [];
-    const seen = new Set(own.map((event) => asText(event.name).toLowerCase()));
-    return [...own, ...legacy.filter((event) => !seen.has(asText(event.name).toLowerCase()))];
-  }, [doc.events, program]);
+  // it. Events live on the ATLAS document (its own events register), which is
+  // what `registerDoc` points at when the workflows are Agentify's.
+  const ontoEvents = useMemo(() => atlasEvents(regDoc, program), [regDoc, program]);
   const triggerEvent = useMemo(() => {
     const trigger = asText(workflow?.trigger).toLowerCase();
     if (!trigger) return null;
@@ -349,19 +393,10 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program,
     };
   }, [workflow, steps, selected, ontoEvents, pains, systems, lanes, triggerEvent]);
   useEffect(() => { onFocus?.(focus); }, [onFocus, focus]);
-  // Registers inside the combined card: filtered read-only to the focus by
-  // default (editing a filtered table would drop hidden rows); one toggle
-  // opens the full editors.
-  const [showAllReg, setShowAllReg] = useState(false);
-  const regFiltering = !!focus && !showAllReg;
-  const regHit = (value: string, list: string[]) => {
-    const needle = value.trim().toLowerCase();
-    if (!needle) return false;
-    return list.some((entry) => {
-      const hay = entry.trim().toLowerCase();
-      return hay === needle || hay.includes(needle) || needle.includes(hay);
-    });
-  };
+  // (The registers that used to sit under the diagram now live on the Current-
+  // State Atlas tab — see AtlasRegisters below. The focus they were scoped to is
+  // still published through onFocus, which is what scopes THIS artifact's own
+  // open questions and gaps.)
 
   const writeWorkflows = useCallback((next: Array<Record<string, unknown>>) => {
     onChange({ ...doc, workflows: next });
@@ -539,6 +574,12 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program,
                         {pain ? <span className={`v3fs-swim-paindot ${pain.severity}`} aria-label={`${pain.severity} pain: ${pain.pain}`} role="img" /> : null}
                         <span className="v3fs-swim-action">{asText(step.action) || "—"}</span>
                         <span className="v3fs-swim-meta">
+                          {/* The agentification call, where one has been made. An
+                              undecided step shows NOTHING — never a default mode
+                              dressed up as a decision. */}
+                          {stepMode(step)
+                            ? <span className={`v3fs-wf-mode ${stepMode(step)}`}>{AGENTIFY_MODE_LABEL[stepMode(step)]}</span>
+                            : null}
                           {asText(step.system) ? <span className="v3fs-wf-system">{asText(step.system)}</span> : null}
                           {asText(step.duration) ? <span className="v3fs-wf-dur">{asText(step.duration)}</span> : null}
                         </span>
@@ -625,6 +666,32 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program,
                 </div>
               );
             })()}
+            {/* THE AGENTIFICATION CALL. This is what the artifact is for: the
+                step is drawn here, so the decision about it is made here. Three
+                exclusive modes, and a fourth state that is not a mode — nobody
+                has decided. Clicking the active mode again clears it back to
+                undecided rather than leaving a call no one made. */}
+            <div className="v3fs-wf-modebar">
+              <span className="v3fs-wf-modebar-l">What should happen to this step?</span>
+              <span className="v3fs-wf-modebar-b">
+                {AGENTIFY_MODES.map((mode) => {
+                  const on = stepMode(steps[selected!]) === mode;
+                  return (
+                    <button key={mode} type="button" disabled={locked} aria-pressed={on}
+                      className={`v3fs-wf-agentify${on ? " on" : ""}`} title={AGENTIFY_MODE_HINT[mode]}
+                      onClick={() => patchStep(selected!, { mode: on ? "" : mode })}>
+                      {AGENTIFY_MODE_LABEL[mode]}
+                    </button>
+                  );
+                })}
+              </span>
+              {stepMode(steps[selected]) ? null : <span className="v3fs-wf-modebar-n">Not decided yet</span>}
+            </div>
+            {stepMode(steps[selected]) ? (
+              <TextField label="Why — the reason this call was made"
+                value={asText(steps[selected].modeRationale)}
+                onChange={(next) => patchStep(selected, { modeRationale: next })} />
+            ) : null}
             <TextField label="Action — what happens in this step" value={asText(steps[selected].action)} onChange={(next) => patchStep(selected, { action: next })} />
             <div className="v3fs-stu-grid3">
               <TextField label="Persona (lane)" value={asText(steps[selected].actor)} onChange={(next) => patchStep(selected, { actor: next })} />
@@ -673,9 +740,65 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program,
       <CollapsibleCard label="Ledger lens — one claims ledger, migrated from these artifacts (read-only)" defaultOpen={false}>
         <LedgerLensPanel program={program} />
       </CollapsibleCard>
-      {/* The three registers (events / pain / systems) are the DOCUMENT's, not a
-          workflow's — so they stay here, scoped to whatever the opened workflow
-          or selected step focuses, with the shared "Show all & edit" escape. */}
+      {/* Hover evidence peek — the step's verbatim grounding without a
+          click. Fixed-position and pointer-transparent (same pattern as
+          the kit matrix and gap peeks). */}
+      {peek && steps[peek.index] ? (() => {
+        const step = steps[peek.index];
+        const pain = painForStep(step, pains);
+        const stepEvents = eventsForStep(step, ontoEvents);
+        const entities = asStrings(step.entities);
+        return (
+          <div className="v3fs-wf-peek" role="presentation" style={{ left: peek.x, top: peek.y }}>
+            <div className="pk-t">{peek.index + 1}. {asText(step.action) || "—"}</div>
+            <div className="pk-r">{asText(step.actor) || "Unassigned"}{asText(step.system) ? ` · ${asText(step.system)}` : ""}{asText(step.duration) ? ` · ${asText(step.duration)}` : ""}</div>
+            {asText(step.evidence) ? <blockquote className="pk-q">{asText(step.evidence)}</blockquote> : null}
+            {pain ? <div className={`pk-pain ${pain.severity}`}>{pain.pain}{pain.quote ? ` — “${pain.quote}”` : ""}</div> : null}
+            {entities.length || stepEvents.length ? (
+              <div className="pk-chips">
+                {entities.slice(0, 4).map((entity) => <span key={entity} className="v3fs-wf-ent">{entity}</span>)}
+                {stepEvents.slice(0, 2).map((name) => <span key={name} className="v3fs-wf-evt">⚡{name}</span>)}
+              </div>
+            ) : null}
+          </div>
+        );
+      })() : null}
+    </div>
+  );
+}
+
+/**
+ * THE ATLAS TAB'S REGISTERS — events · pain · systems.
+ *
+ * They are properties of the Current-State Atlas DOCUMENT, not of a workflow, so
+ * when the workflows moved to Agentify these stayed behind. Lifted out of
+ * WorkflowStudio unchanged, `focus` and all: the scoping is still here for any
+ * caller that has a selected workflow to scope to, and the Atlas tab — which no
+ * longer draws workflows — passes `focus={null}` and gets the full editors.
+ * Filtered views stay READ-ONLY on purpose (editing a filtered table would
+ * silently drop the hidden rows); "Show all & edit" is the escape.
+ */
+export function AtlasRegisters({ doc, onChange, program, focus }: {
+  doc: Record<string, unknown>;
+  onChange: (next: Record<string, unknown>) => void;
+  program?: StudioProps["program"];
+  focus: AtlasFocus | null;
+}) {
+  const locked = useStudioLocked();
+  const authoring = useStudioAuthoring();
+  const pains = useMemo(() => asArray(doc.painHeatmap).map(asRecord), [doc.painHeatmap]);
+  const ontoEvents = useMemo(() => atlasEvents(doc, program), [doc, program]);
+  const [showAllReg, setShowAllReg] = useState(false);
+  const regFiltering = !!focus && !showAllReg;
+  const regHit = (value: string, list: string[]) => {
+    const needle = value.trim().toLowerCase();
+    if (!needle) return false;
+    return list.some((entry) => {
+      const hay = entry.trim().toLowerCase();
+      return hay === needle || hay.includes(needle) || needle.includes(hay);
+    });
+  };
+  return (
       <CollapsibleCard defaultOpen label="Registers — events · pain · systems"
         hint={focus ? `scoped to ${focus.label}` : undefined}>
         {focus && showAllReg ? (
@@ -787,30 +910,5 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program,
           );
         })()}
       </CollapsibleCard>
-
-          {/* Hover evidence peek — the step's verbatim grounding without a
-              click. Fixed-position and pointer-transparent (same pattern as
-              the kit matrix and gap peeks). */}
-          {peek && steps[peek.index] ? (() => {
-            const step = steps[peek.index];
-            const pain = painForStep(step, pains);
-            const stepEvents = eventsForStep(step, ontoEvents);
-            const entities = asStrings(step.entities);
-            return (
-              <div className="v3fs-wf-peek" role="presentation" style={{ left: peek.x, top: peek.y }}>
-                <div className="pk-t">{peek.index + 1}. {asText(step.action) || "—"}</div>
-                <div className="pk-r">{asText(step.actor) || "Unassigned"}{asText(step.system) ? ` · ${asText(step.system)}` : ""}{asText(step.duration) ? ` · ${asText(step.duration)}` : ""}</div>
-                {asText(step.evidence) ? <blockquote className="pk-q">{asText(step.evidence)}</blockquote> : null}
-                {pain ? <div className={`pk-pain ${pain.severity}`}>{pain.pain}{pain.quote ? ` — “${pain.quote}”` : ""}</div> : null}
-                {entities.length || stepEvents.length ? (
-                  <div className="pk-chips">
-                    {entities.slice(0, 4).map((entity) => <span key={entity} className="v3fs-wf-ent">{entity}</span>)}
-                    {stepEvents.slice(0, 2).map((name) => <span key={name} className="v3fs-wf-evt">⚡{name}</span>)}
-                  </div>
-                ) : null}
-              </div>
-            );
-          })() : null}
-    </div>
   );
 }

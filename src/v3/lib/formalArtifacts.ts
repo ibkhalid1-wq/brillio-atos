@@ -28,6 +28,11 @@ export const FORMAL_ARTIFACT_FIELD_KEYS: Record<string, string> = {
   // AURA Flow movement generators
   "discovery-kit": "discoveryKit",
   "current-state-atlas": "currentStateAtlas",
+  // Its OWN top-level document, not a second view of currentStateAtlas: the
+  // artifact must be able to read "not generated yet" for the 11 programmes that
+  // predate it, and sharing the atlas's key would have made it present the
+  // instant an atlas existed — a gate satisfied by something nobody decided.
+  "agentify": "agentify",
   "domain-ontology": "domainOntology",
   "architecture-strategy": "architectureStrategy",
   "agentic-blueprint": "agenticBlueprint",
@@ -64,6 +69,7 @@ export const FORMAL_ARTIFACT_PHASES: Record<string, string> = {
   // through requiredArtifacts directly, so no second home is needed here.
   "discovery-kit": "frame",
   "current-state-atlas": "listen",
+  "agentify": "listen",
   "domain-ontology": "listen",
   "architecture-strategy": "envision",
   "agentic-blueprint": "envision",
