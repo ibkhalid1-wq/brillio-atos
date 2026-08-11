@@ -19,6 +19,36 @@ const esc = (s: unknown) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&
 const slug = (s: unknown) => String(s ?? "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "x";
 const money = (n: unknown) => (typeof n === "number" ? `$${n.toLocaleString("en-US")}` : esc(n));
 
+/**
+ * An ontology attribute as a human-readable label — the ONE definition, used
+ * by every place a field name is shown to a person (column heads, detail
+ * terms, form labels).
+ *
+ * The ontology stores field names the way a schema does (`buyingRole`,
+ * `close_date`), and the design system upper-cases table heads, so rendering
+ * the raw key printed `BUYINGROLE` at the top of a client-facing demo — a
+ * database column showing through the product. Splitting camelCase and
+ * snake_case first gives `Buying Role`, which upper-cases legibly and reads
+ * correctly everywhere else.
+ */
+export function humanizeField(name: unknown): string {
+  const raw = String(name ?? "").trim();
+  if (!raw) return "";
+  const words = raw
+    .replace(/[_-]+/g, " ")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")     // camelCase → camel Case
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")  // ACRONYMWord → ACRONYM Word
+    .replace(/\s+/g, " ")
+    .trim();
+  // A single schema-shaped token becomes a proper label ("close_date" → "Close
+  // Date"); anything the ontology already wrote as a phrase is left as its
+  // author wrote it, so "Number of employees" doesn't become "Number Of
+  // Employees". Existing capitals are never lowered — acronyms survive.
+  return /\s/.test(raw)
+    ? words.replace(/^./, (c) => c.toUpperCase())
+    : words.replace(/(^|\s)(\S)/g, (_m, lead: string, c: string) => `${lead}${c.toUpperCase()}`);
+}
+
 /** Render one value by its semantic role — the role→component map, applied. */
 function renderCell(role: ValueRole | undefined, value: unknown): string {
   if (value == null || value === "") return `<span class="m-cell-sub">—</span>`;
@@ -28,7 +58,7 @@ function renderCell(role: ValueRole | undefined, value: unknown): string {
     case "status": return `<span class="m-badge">${esc(value)}</span>`;
     case "health": case "priority": return `<span class="m-pill m-pill--warn"><span class="m-dot m-dot--warn"></span>${esc(value)}</span>`;
     case "boolean": return value ? `<span class="m-dot m-dot--good"></span> Yes` : `<span class="m-dot"></span> No`;
-    case "parent-ref": case "cross-ref": return `<span class="m-chip">${esc(value)}</span>`;
+    case "parent-ref": case "cross-ref": case "person-ref": return `<span class="m-chip">${esc(value)}</span>`;
     default: return esc(value);
   }
 }
@@ -54,8 +84,15 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
 
   // ── one list screen per entity ──
   const listScreen = (name: string): string => {
-    const s = es.get(name)!; const rows = seed.records[name] ?? []; const cols = attrsOf(name).slice(0, 5);
-    const head = cols.map((c) => `<th class="m-th-sort${c === cols[0] ? " is-desc" : ""}">${esc(c)}</th>`).join("") + `<th style="text-align:right">Actions</th>`;
+    const s = es.get(name)!; const rows = seed.records[name] ?? [];
+    // Lead with the entity's TITLE attribute, not with whatever the ontology
+    // happened to list first. The first column renders as the row's headline
+    // (with the record id beneath it), so a positional pick put Contact's
+    // `buyingRole` where the contact's name belongs.
+    const all = attrsOf(name);
+    const titleAttr = all.find((a) => roleOf.get(`${name} ${a}`) === "title");
+    const cols = (titleAttr ? [titleAttr, ...all.filter((a) => a !== titleAttr)] : all).slice(0, 5);
+    const head = cols.map((c) => `<th class="m-th-sort${c === cols[0] ? " is-desc" : ""}">${esc(humanizeField(c))}</th>`).join("") + `<th style="text-align:right">Actions</th>`;
     const body = rows.length ? rows.slice(0, 24).map((r) => {
       const flagged = Object.values(r).some((v) => v === null);
       return `<tr${flagged ? ' class="is-flagged"' : ""}>` + cols.map((c, i) => i === 0
@@ -77,7 +114,7 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
   const detailScreen = (name: string): string => {
     const s = es.get(name)!; const rows = seed.records[name] ?? []; const r = rows[0]; const attrs = attrsOf(name);
     if (!r) return "";
-    const dl = attrs.map((a) => `<div><dt>${esc(a)}</dt><dd>${renderCell(roleOf.get(`${name} ${a}`), r[a])}</dd></div>`).join("");
+    const dl = attrs.map((a) => `<div><dt>${esc(humanizeField(a))}</dt><dd>${renderCell(roleOf.get(`${name} ${a}`), r[a])}</dd></div>`).join("");
     // child collections from the fabric (region:{s}:{child})
     const childRegions = fabric.nodes.filter((n) => n.kind === "region" && n.id.startsWith(`region:${s}:`) && n.id !== `region:${s}:summary`);
     const children = childRegions.map((n) => {
@@ -101,9 +138,9 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
       const role = roleOf.get(`${name} ${a}`);
       const req = role === "identifier" || role === "title" ? ` <span class="m-req">*</span>` : "";
       const input = role === "status" ? `<select class="m-select"><option>Open</option><option>In progress</option><option>Closed</option></select>`
-        : role === "boolean" ? `<label class="m-checkbox"><input type="checkbox" /> ${esc(a)}</label>`
-          : `<input class="m-input" placeholder="${esc(a)}" />`;
-      return region(`field:${s}:${slug(a)}`, `<div class="m-field"><label class="m-label">${esc(a)}${req}</label>${input}</div>`);
+        : role === "boolean" ? `<label class="m-checkbox"><input type="checkbox" /> ${esc(humanizeField(a))}</label>`
+          : `<input class="m-input" placeholder="${esc(humanizeField(a))}" />`;
+      return region(`field:${s}:${slug(a)}`, `<div class="m-field"><label class="m-label">${esc(humanizeField(a))}${req}</label>${input}</div>`);
     }).join("");
     return `<section class="m-screen" data-screen="form-${s}" hidden>
       <div class="m-crumbs"><a href="#" onclick="show('list-${s}')">${esc(name)}</a> / <span>New</span></div>

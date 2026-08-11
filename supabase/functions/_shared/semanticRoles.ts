@@ -16,7 +16,7 @@ export type ValueRole =
   | "identifier" | "title" | "description"
   | "monetary" | "date" | "quantity" | "code" | "free-text" | "boolean"
   | "status" | "health" | "priority"
-  | "parent-ref" | "cross-ref";
+  | "parent-ref" | "person-ref" | "cross-ref";
 export type RelationshipRole = "collection" | "parent-ref" | "multi-select";
 export type RoleMethod = "derived" | "heuristic";
 
@@ -58,13 +58,19 @@ const VALUE_HEURISTICS: Array<{ re: RegExp; role: ValueRole; confidence: number 
   { re: /(^|_)(health|rag)($|_)/i, role: "health", confidence: 0.75 },
   { re: /(^|_)(priority|severity|urgency)($|_)/i, role: "priority", confidence: 0.75 },
   { re: /(^|_)(is|has|can|should|active|enabled|flag)($|_|[a-z])/i, role: "boolean", confidence: 0.6 },
-  { re: /(^|_)(owner|manager|rep|assignee|account|parent|lead|contact)($|_)/i, role: "parent-ref", confidence: 0.55 },
+  // A person-shaped reference and an entity-shaped one are NOT the same column.
+  // They used to share one role, and because the seed generator had no branch
+  // for it at all, an "owner" field rendered as "Northwind onboarding" — an
+  // engagement sitting in the Owner column of a demo. Split them so the value
+  // generator can shape each correctly.
+  { re: /(^|_)(owner|manager|rep|assignee|approver|requester|contact)($|_)/i, role: "person-ref", confidence: 0.55 },
+  { re: /(^|_)(account|parent|lead)($|_)/i, role: "parent-ref", confidence: 0.55 },
   { re: /(^|_)(type|category|segment|tier|region|industry|code|source|channel)($|_)/i, role: "code", confidence: 0.6 },
 ];
 
 /** Read an ontology's attribute `type` if present; otherwise fall to the name
  * heuristic. The identifier/title attribute (the entity's name field) is derived. */
-function roleForAttribute(entity: string, attr: unknown, index: number): AttributeRole {
+function roleForAttribute(entity: string, attr: unknown, index: number, titleIndex: number): AttributeRole {
   const name = attrName(attr);
   const t = norm(attrType(attr));
   // If the ontology ever grows a real type field, use it — that is DERIVED.
@@ -77,9 +83,16 @@ function roleForAttribute(entity: string, attr: unknown, index: number): Attribu
     text: "free-text", string: "free-text",
   };
   if (t && typed[t]) return { entity, attribute: name, role: typed[t], method: "derived", confidence: 1 };
-  // First attribute of an entity is conventionally its identifier/title.
-  if (index === 0 || /(^|_)(name|title|label|id)($|_)/i.test(name)) {
-    return { entity, attribute: name, role: index === 0 ? "title" : "identifier", method: "heuristic", confidence: 0.65 };
+  // The entity's TITLE is the attribute actually named like one; position is
+  // only the fallback when no attribute says so. Treating "first attribute" as
+  // the title unconditionally made Contact's `buyingRole` the title AND
+  // `title` the identifier — and since both roles generated the same synthetic
+  // string, the demo's first two columns were literally identical values.
+  if (index === titleIndex) {
+    return { entity, attribute: name, role: "title", method: "heuristic", confidence: titleIndex === 0 ? 0.65 : 0.8 };
+  }
+  if (/(^|_)(name|title|label|id)($|_)/i.test(name)) {
+    return { entity, attribute: name, role: "identifier", method: "heuristic", confidence: 0.65 };
   }
   for (const h of VALUE_HEURISTICS) if (h.re.test(name)) {
     return { entity, attribute: name, role: h.role, method: "heuristic", confidence: h.confidence };
@@ -107,7 +120,12 @@ export function deriveRoles(ontology: Record<string, unknown>): OntologyRoles {
   for (const e of entities) {
     const name = String((e as { name?: unknown })?.name ?? "");
     const attrs = Array.isArray((e as { attributes?: unknown }).attributes) ? (e as { attributes: unknown[] }).attributes : [];
-    attrs.forEach((a, i) => attributeRoles.push(roleForAttribute(name, a, i)));
+    // Which attribute is this entity's title: the first one named like one,
+    // else the first attribute. Decided ONCE per entity so exactly one
+    // attribute can hold the role.
+    const named = attrs.findIndex((a) => /(^|_)(name|title|label)($|_)/i.test(attrName(a)));
+    const titleIndex = named >= 0 ? named : 0;
+    attrs.forEach((a, i) => attributeRoles.push(roleForAttribute(name, a, i, titleIndex)));
   }
   const relationRoles = relations.map((r) => {
     const rr = r as { from?: unknown; to?: unknown; cardinality?: unknown };

@@ -116,6 +116,17 @@ export function validateProgramBlob(inner: Record<string, unknown>): BlobIssue[]
 }
 
 /**
+ * The issues as readable lines — the ONE definition of how a blob issue is
+ * written down, so the toast's promise ("details are in the console") is
+ * actually kept. Logging the raw array put `[object Object]` in front of the
+ * operator: the toast named a place to look, and the place held nothing
+ * legible. Each line names the key and the first failing path.
+ */
+export function formatBlobIssues(issues: readonly BlobIssue[]): string {
+  return issues.map((issue) => `  • ${issue.key} — ${issue.reason}`).join("\n");
+}
+
+/**
  * Ordered migrations, applied once each on read when the blob's stamped
  * version is behind BLOB_VERSION. Each entry receives the inner root and
  * returns the migrated root. v1 is the baseline — no transforms yet; the
