@@ -1,5 +1,59 @@
 # Next-session brief — Aura / brillio-atos
 
+> ## STATUS 2026-08-11 — readiness validation done, all findings fixed
+>
+> A full enterprise-readiness validation ran on 2026-08-11 (scenario: a 12,000-person
+> 3-CRM consolidation, driven through the live UI and the DEPLOYED edge functions as
+> both operator and stakeholder, against a deliberately messy seeded programme).
+> 17 findings, 4 High. **All 17 are closed** in `3e3a513 → 0a1857b` (4 commits,
+> unpushed). Suite 1601 → **1699 tests / 121 files**; validate-pipeline all checks
+> pass; tsc, eslint and the production build are clean.
+>
+> **Report:** https://claude.ai/code/artifact/a63742d1-9433-4bd2-84ff-4ea6c8d84e49
+>
+> ### The four High findings and their fixes
+> 1. **Ingest ignored the auto-build opt-in** — one Inbox click fired 3 agent runs and
+>    replaced 2 artifacts on a programme whose Control screen states the opposite.
+>    Gated at the list in `AppShellV3.tsx`; the contradiction sweep stays unconditional
+>    by decision and Control's copy now discloses it.
+> 2. **Same-name people vanished** — `dedupePeopleRows` keyed identity on name alone.
+>    Now role-aware WITHIN a source list, while the cross-source merge still merges.
+> 3. **The stakeholder link burned on first submit** — `_shared/portalLinkState.ts` is
+>    the new state machine; a send is partial unless the person says otherwise.
+> 4. **Kit-reconcile offered to delete real humans** — no bundled removal list exists
+>    any more; absences are individually-armed, individually-attested.
+>
+> ### THINGS ONLY YOU CAN DO
+> - **Deploy `flow-portal`.** Finding 3 lives on the edge. Until deployed, the client
+>   sends `final: false` and the deployed function still 409s the second send.
+> - **Rotate the service-role key** pasted into the 2026-08-10 session.
+> - **Decide on migration `20260807_audit_events.sql`** (still unapplied; verified
+>   genuinely unapplied, unlike the 24 filename-convention false positives).
+>
+> ### A CORRECTION TO THE VALIDATION REPORT ITSELF
+> The reported "10 owned questions vs 9 open on loci they own" contradiction is **not
+> reproducible** — both figures read the same map. The real divergence is card-vs-link
+> (the pack's silent 8-cap) plus blocked and dictionary-routed loci dropped from the
+> card. `src/v3/lib/ledger/ownedLoad.ts` now defines the one partition:
+> `owned = onLink + nextLink + blocked + toDictionary`. Expect headline counts to RISE
+> on real programmes — the dropped buckets stopped being invisible.
+>
+> ### CARRIED FORWARD, recorded not fixed
+> - The 8-question link cap is hard-coded twice in `flowPortal.ts`, held by a lockstep
+>   source test. Export it and import it — one definition instead of a lockstep.
+> - No operator-side "close this link" action; the edge honours `closedAt`, nothing sets it.
+> - `visibleLinks` groups on `respondedAt`, so a partial link reads as "answered".
+> - Two genuine namesakes split across two source lists still merge — needs a person id.
+> - A default token cap belongs in the DATA layer (`readFlowGovernance` + the edge's
+>   `?? 0`), not the view. The UI now proposes from measured spend; it does not impose.
+>
+> ### METHOD NOTE THAT EARNED ITS KEEP
+> Every fix was mutation-proved: the line reverted, the test confirmed RED, then
+> restored. Four of my own assertions passed against un-fixed code on the first
+> attempt and were rewritten until they bit. A test written alongside a fix and assumed
+> to bite is not proof.
+
+
 Every file:line below was verified against `d9113e1` on 2026-08-10 by opening the file,
 not by copying a previous doc. Where an older doc disagrees, this one is right and the
 disagreement is called out in **§2 Corrections** — read that section before trusting
