@@ -79,6 +79,15 @@ export interface FlowInterviewPack {
   submissions?: FlowPackSubmission[];
   /** The movement whose ask this link currently carries. */
   movementId?: string;
+  /** The DESIGN REVIEW ROUND this ask belongs to (`flowDesignRound.ts`).
+   *
+   * A round asks N stakeholders about ONE design version at the same time, and what
+   * comes back has to be attributable to that round — not merely to a person. Stamping
+   * the round on the link carries that attribution, which is why a round hands out this
+   * same durable link rather than inventing a second link type. Always SET by both
+   * mints (the `questionLoci` idiom), so a later follow-up ask can never be read as an
+   * answer to a round it was not part of. */
+  designRoundId?: string;
   /** The recipient's business area (stamped on area-scoped review links). */
   recipientArea?: string;
   /** Link engagement — where the demo/review loses people: when it was first
@@ -306,6 +315,11 @@ function askSignature(pack: Record<string, unknown>): string {
     questionLoci: Array.isArray(pack.questionLoci) ? pack.questionLoci.map(String) : [],
     reviewKind: String(pack.reviewKind ?? ""),
     movementId: String(pack.movementId ?? ""),
+    // A NEW design review round is a new ask even when the words are identical: the
+    // answer has to attribute to round 2, not to round 1. Without this, re-sharing the
+    // same review for the next round would be a no-op and the link would keep pointing
+    // at the superseded round.
+    designRoundId: String(pack.designRoundId ?? ""),
     review: pack.review ?? null,
   });
 }
@@ -613,6 +627,10 @@ export function mintFollowUpPack(
     captureField: input.captureField,
     reviewKind: undefined,
     review: undefined,
+    // Always SET, same reason as `reviewKind`/`review`: a follow-up is NOT part of a
+    // design review round, so the round stamp must be cleared off the durable link
+    // rather than left behind for an unrelated answer to be attributed to.
+    designRoundId: undefined,
     unnamed: input.unnamed || undefined,
     // Always SET, for the same reason as `questionLoci`: a later locus-backed ask
     // on the same durable token must CLEAR the scripted mark rather than leave the
@@ -673,7 +691,10 @@ export function mintReviewPack(
   program: ProgramSummary,
   input: { movementId: string; who: string; role: string; captureField: string; reviewKind: string; review: unknown; questions: string[]; intro: string; unnamed?: boolean;
     /** Ledger loci behind `questions`, index-aligned — optional and additive. */
-    loci?: string[] },
+    loci?: string[];
+    /** The design review round this share belongs to (`flowDesignRound.ts`). Additive:
+     * every other review share passes nothing and stores nothing. */
+    designRoundId?: string },
   actor: string,
 ): Record<string, unknown> | null {
   if (!input.who.trim() || !input.review) return null;
@@ -702,6 +723,10 @@ export function mintReviewPack(
     captureField: input.captureField,
     reviewKind: input.reviewKind,
     recipientArea: recipientArea ?? undefined,
+    // Always SET (the `questionLoci` idiom): a plain review share CLEARS any round
+    // stamp a previous share left on this durable link, so an answer is only ever
+    // attributed to a round the person is currently being asked about.
+    designRoundId: input.designRoundId || undefined,
     review: input.review,
     // A link minted for an UNBOUND role placeholder greets nobody by name.
     unnamed: input.unnamed || undefined,

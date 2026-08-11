@@ -12,6 +12,10 @@ import { getMethodology, getPhaseDefinition, type PhaseDefinition } from "@/v3/l
 import { getPhaseArtifactDefs } from "@/v3/lib/phaseArtifacts";
 import { getFormalArtifactContent, getFormalArtifactConfidence, FORMAL_ARTIFACT_FIELD_KEYS } from "@/v3/lib/formalArtifacts";
 import { listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
+// THE Design Loop's gate. `envision`/`show` no longer close on documents EXISTING —
+// they close when the stakeholders in the current design review round have approved.
+// One-directional import: flowDesignRound.ts imports no runtime from this file.
+import { designRoundGate, isDesignLoopMovement } from "@/v3/components/flow/flowDesignRound";
 import { stakeholderPrimaryArea, GENERAL_AREA } from "@/v3/components/flow/flowAreas";
 import { frameSorReadiness, parseDeclaredSors, type ArtifactAskMark } from "@/v3/lib/ledger/artifactAsks";
 import { readDictionarySources } from "@/v3/lib/ledger/dictionary";
@@ -773,14 +777,12 @@ export function gateSignal(program: ProgramSummary, movement: PhaseDefinition, a
       ? { tone: "amber", text: `${total - done} of ${total} roster voices still to attest heard` }
       : { tone: "green", text: `All ${total} roster voices attested heard or waived` };
   }
-  if (movement.id === "show") {
-    const { accepted, total } = demoAcceptance(program);
-    if (total === 0) return { tone: "dim", text: "The demo tour ledger is empty" };
-    // Convergence is sponsor + majority; short of it, report progress.
-    const majority = accepted * 2 >= total;
-    return majority
-      ? { tone: "green", text: `Sponsor + majority approved (${accepted}/${total})` }
-      : { tone: "amber", text: `${accepted}/${total} approved — need a majority` };
+  // The Design Loop's one-liner is the ROUND, for both of its movements — the same
+  // truth the checklist and readiness read. Reporting the demo tour's majority here
+  // while the gate waits on the round would be two readings of "approved".
+  if (isDesignLoopMovement(movement.id)) {
+    const gate = designRoundGate(program);
+    return { tone: gate.tone, text: gate.label };
   }
   if (movement.id === "ship") {
     const lanes = listShipLanes(program);
@@ -809,8 +811,10 @@ export interface GateCheckItem {
    * Readiness, the gate gauge and the write-time check all ignore advisory
    * rows; only the structural criteria block. */
   advisory?: boolean;
-  /** Which facet of readiness the row belongs to; evidence when absent. */
-  group?: "evidence" | "record" | "judgment";
+  /** Which facet of readiness the row belongs to; evidence when absent.
+   * "approval" is the Design Loop's closing facet — the stakeholders' own verdicts on
+   * the design review round, which is what closes `envision`/`show`. */
+  group?: "evidence" | "record" | "judgment" | "approval";
   /** Editor field to land on when the item is worked (input:<fieldId>). */
   anchor?: string;
   /** Record rows: the artifact the row reads — click opens the document. */
@@ -847,6 +851,8 @@ export function gateChecklist(program: ProgramSummary, movement: PhaseDefinition
   const has = (fieldId: string) => typeof inputs[fieldId] === "string" && (inputs[fieldId] as string).trim().length > 0;
   const inner = dataRoot(program);
   const items: GateCheckItem[] = [];
+  // The Design Loop's closing criterion, read once for both of its movements.
+  const roundGate = isDesignLoopMovement(movement.id) ? designRoundGate(program) : null;
   const artifactItems = () => artifacts.map((artifact) => ({
     id: `art-${artifact.id}`,
     label: artifact.stale ? `${artifact.title} — evidence changed since generation` : `${artifact.title} generated`,
@@ -958,11 +964,13 @@ export function gateChecklist(program: ProgramSummary, movement: PhaseDefinition
       { id: "direction", label: "Direction chosen on the record", done: has("directionDecision") || has("steeringConversation"), anchor: "input:directionDecision", why: whyFromValue(inputs.directionDecision) ?? whyFromTranscript(inputs.steeringConversation) },
       { id: "tracks", label: "Track plan adopted", done: Array.isArray(inner.tracks) && (inner.tracks as unknown[]).length > 0, why: Array.isArray(inner.tracks) && (inner.tracks as unknown[]).length ? `${(inner.tracks as unknown[]).length} tracks, confirmed by you` : undefined },
     );
-    // Envision's job is to DESIGN and BUILD the prototype — the delivery team's
-    // deliverable. Client validation happens in Show, not here. The gate checks
-    // the design is complete and the prototype is built and ready to demonstrate.
+    // Envision DESIGNS and BUILDS the prototype; the design review round (below, and
+    // shared with Show — they are one Design Loop band) is what ACCEPTS it. These two
+    // rows read existence and say so: "on record", not "accepted". The old label
+    // "Experience design accepted" claimed a judgment nobody had made — a document
+    // existing is not a person approving.
     items.push(
-      { id: "design", label: "Experience design accepted", done: Boolean(inner.experienceDesign), why: inner.experienceDesign ? "screens + flows on record" : undefined },
+      { id: "design", label: "Experience design on record", done: Boolean(inner.experienceDesign), why: inner.experienceDesign ? "screens + flows on record" : undefined },
       { id: "prototype-built", label: "Prototype built and ready to show", done: Boolean(inner.prototypeBuild || inner.prototypePack), why: (inner.prototypeBuild || inner.prototypePack) ? "runnable prototype assembled from the design" : undefined },
     );
   } else if (movement.id === "show") {
@@ -1012,6 +1020,14 @@ export function gateChecklist(program: ProgramSummary, movement: PhaseDefinition
         id: "verdicts",
         label: areaList.length ? `Every area approved + sponsor (${areasOk}/${areaList.length} areas)` : "Every area approved + sponsor",
         done: converged,
+        // Once a design review ROUND exists, the tour ledger stops being the gate and
+        // becomes the operator's own working note. It is a hand-typed grid — an
+        // operator writing "Accepted" beside a name is not that person approving, and
+        // a per-area MAJORITY is weaker than the round's unanimous, attributed,
+        // per-person verdict. Advisory here is not a weakening: the round row below
+        // blocks in its place and is strictly stricter. With no round, this still
+        // gates exactly as it did.
+        advisory: Boolean(roundGate?.rollup.round),
         anchor: "input:demoTour",
         why: !areaList.length ? undefined
           : openAreas.length ? `still open: ${openAreas.slice(0, 2).join(", ")}${openAreas.length > 2 ? "…" : ""}`
@@ -1119,6 +1135,18 @@ export function gateChecklist(program: ProgramSummary, movement: PhaseDefinition
           ? `${openIssues[0].text.slice(0, 70)}${openIssues.length > 1 ? ` · +${openIssues.length - 1} more` : ""} — asked in the follow-up; regenerate after capturing`
           : undefined,
       }] : []),
+      // THE DESIGN LOOP'S GATE. `envision` and `show` are one band, and the band
+      // closes when the STAKEHOLDERS have approved the design — not when the
+      // documents exist. The row degrades honestly: with no round opened it reads
+      // "not opened" and is never done, so a programme that has asked nobody can
+      // never be complete; with a round in flight it names who is still outstanding.
+      ...(roundGate ? [{
+        id: "design-approval",
+        group: "approval" as const,
+        label: roundGate.label,
+        done: roundGate.done,
+        why: roundGate.detail,
+      }] : []),
       (() => {
         const waiting = openDecisionCount(program, movement.id);
         return {
@@ -1153,7 +1181,7 @@ function openDecisionCount(program: ProgramSummary, movementId: string): number 
 export interface GateReadiness {
   tone: "green" | "amber" | "dim";
   /** Which state the gate is in — drives glyph and styling. */
-  kind: "demonstrated" | "open" | "trails" | "gaps" | "judgment" | "ready" | "signal";
+  kind: "demonstrated" | "open" | "trails" | "gaps" | "approvals" | "judgment" | "ready" | "signal";
   headline: string;
   detail?: string;
 }
@@ -1217,6 +1245,20 @@ export function gateReadiness(
             detail: checks.find((item) => !item.done && (item.group ?? "evidence") === "record")?.label
               ?? "A document still lists open gaps",
           };
+  }
+  // APPROVAL comes after the record: you cannot ask anyone to approve a design that
+  // has not been written down. The row's own label already names WHO is outstanding
+  // (or that no round has been opened), so it is carried through verbatim rather than
+  // flattened to a bare amber.
+  if (openIn("approval")) {
+    const row = checks.find((item) => !item.done && item.group === "approval");
+    const started = /^Round /.test(row?.label ?? "");
+    return {
+      tone: started ? "amber" : "dim",
+      kind: "approvals",
+      headline: counts,
+      detail: row?.label ?? "The design has not been approved by its stakeholders",
+    };
   }
   if (openIn("judgment")) {
     return { tone: "amber", kind: "judgment", headline: counts, detail: "A decision is waiting in the Inbox" };
