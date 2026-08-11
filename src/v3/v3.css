@@ -10,13 +10,35 @@
   --color-primary-glow: rgba(100, 85, 184, 0.2);
   --color-success: #2cc84d;
   --color-warning: #f59e0b;
-  --color-danger: #ef4444;
+  /* Lightened from #ef4444 (hue and saturation held, lightness 60% → 70%) so
+     danger ink clears AA on the ELEVATED dark surfaces too: it was 3.97:1 on
+     #22263a and 3.47:1 on #293047. See __tests__/a11yContrast.test.ts. */
+  --color-danger: #f37272;
   --color-info: #6455b8;
   --color-text-primary: #f1f5f9;
   --color-text-secondary: #94a3b8;
   /* Lightened from #7a8fa8 so muted text clears WCAG AA (4.5:1) even on the
      most-elevated dark surface (#22263a), where the old value sat at ~4.49:1. */
   --color-text-muted: #869ab1;
+
+  /* ── contrast-audited additions (2026-08-11) ────────────────────────────────
+     Four of these did not exist at all. `--v3-positive` was referenced by twelve
+     rules with a hard-coded #3f9d6b fallback and defined NOWHERE, so every one of
+     them silently drew that 3.36:1 literal. The `--v3-on-*` inks exist because a
+     status colour cannot be both readable AS ink on a dark surface and readable
+     UNDER white text: on this theme the badge fill needs a DARK label, on the
+     light theme it needs a white one. Measured in a11yContrast.test.ts. */
+  --v3-positive: #4fbf85;      /* decided / booked / signed-off — 5.67:1 worst case */
+  --v3-seam-ink: #a99ae8;      /* joint (seam) ownership — was a theme-blind #5a4fa0 */
+  --v3-control-line: #767a8f;  /* form-control boundary, SC 1.4.11 — 3.08:1 worst case */
+  --v3-on-accent: #211747;     /* label on an --v3-accent-2 fill */
+  --v3-on-success: #0f1117;    /* label on a --v3-green fill */
+  --v3-on-warning: #0f1117;    /* label on a --v3-amber fill (the rail badge) */
+  --v3-on-danger: #0f1117;     /* label on a --v3-red fill */
+  /* The focus ring was --v3-accent, which on this theme is #6455b8 — 2.83:1 against
+     --v3-surface, below the 3:1 SC 1.4.11 needs of a focus indicator. The lighter
+     accent clears it at 4.94:1 without changing the ring's hue. */
+  --v3-focus-ring: var(--v3-accent-2);
   --radius-sm: 4px;
   --radius-md: 8px;
   --radius-lg: 12px;
@@ -194,16 +216,34 @@ textarea:-webkit-autofill {
   --color-primary-dim: #160f30;
   --color-primary-glow: rgba(33, 23, 71, 0.14);
 
-  /* Supporting palette */
-  --color-success: #2cc84d;
-  --color-warning: #d97706;
-  --color-danger:  #dc2626;
+  /* Supporting palette — CONTRAST-AUDITED (2026-08-11).
+     Each of the three was darkened by LIGHTNESS ONLY: the HSL hue and saturation
+     are byte-identical to the values they replace, so the palette still reads as
+     itself; it is the luminance that moves. What they were, on white:
+       success #2cc84d  2.22:1  (and 2.22:1 under the white label of a green fill)
+       warning #d97706  3.19:1  (the rail's waiting badge — white on amber)
+       danger  #dc2626  4.83:1 on white but 4.26:1 on --v3-surface-2
+     Brillio's brand green --br-green stays #2cc84d: it marks the brand, it is not
+     status ink. Every pair is measured in __tests__/a11yContrast.test.ts. */
+  --color-success: #1b792f;   /* hsl(133,64%,47.8% → 29%) — 4.85:1 worst case */
+  --color-warning: #9f5704;   /* hsl(32,95%,44% → 32%)    — 4.83:1 worst case */
+  --color-danger:  #ca2121;   /* hsl(0,72%,50% → 46%)     — 4.94:1 worst case */
   --color-info:    #3b2f72;
 
   /* Text */
   --color-text-primary:   #101828;
   --color-text-secondary: #344054;
   --color-text-muted:     #52607a;
+
+  /* ── contrast-audited additions — see the :root block for why these exist ── */
+  --v3-positive:      #2f744f;   /* hsl(148,43%,45% → 32%), from the old undefined-var fallback #3f9d6b */
+  --v3-seam-ink:      #5a4fa0;   /* joint (seam) ownership — 6.05:1 worst case */
+  --v3-control-line:  #7a819f;   /* form-control boundary, SC 1.4.11 — 3.39:1 on a row */
+  --v3-on-accent:     #ffffff;
+  --v3-on-success:    #ffffff;
+  --v3-on-warning:    #ffffff;
+  --v3-on-danger:     #ffffff;
+  --v3-focus-ring:    var(--v3-accent);   /* #211747 — 16.4:1 on white, unchanged */
 
   /* Brillio brand colours */
   --br-indigo:      #211747;
@@ -287,15 +327,25 @@ textarea:-webkit-autofill {
     --color-primary:     #211747;
     --color-primary-dim: #160f30;
     --color-primary-glow: rgba(33, 23, 71, 0.14);
-    /* Supporting palette */
-    --color-success: #2cc84d;
-    --color-warning: #d97706;
-    --color-danger:  #dc2626;
+    /* Supporting palette — contrast-audited; MUST mirror [data-theme="light"]
+       exactly (a11yContrast.test.ts asserts the two copies agree). */
+    --color-success: #1b792f;
+    --color-warning: #9f5704;
+    --color-danger:  #ca2121;
     --color-info:    #3b2f72;
     /* Text */
     --color-text-primary:   #101828;
     --color-text-secondary: #344054;
     --color-text-muted:     #52607a;
+    /* contrast-audited additions */
+    --v3-positive:      #2f744f;
+    --v3-seam-ink:      #5a4fa0;
+    --v3-control-line:  #7a819f;
+    --v3-on-accent:     #ffffff;
+    --v3-on-success:    #ffffff;
+    --v3-on-warning:    #ffffff;
+    --v3-on-danger:     #ffffff;
+    --v3-focus-ring:    var(--v3-accent);
     /* Brillio brand colours — dark indigo for rail, not light purple */
     --br-indigo:      #211747;
     --br-indigo-deep: #160f30;
@@ -3497,7 +3547,7 @@ input:focus-visible,
 textarea:focus-visible,
 select:focus-visible,
 [role="button"]:focus-visible {
-  outline: 2px solid var(--v3-accent);
+  outline: 2px solid var(--v3-focus-ring);
   outline-offset: 2px;
 }
 
@@ -4387,12 +4437,12 @@ button, [role="button"] {
 
 /* ─── Focus ring system — keyboard nav accessibility ───────────────────────  */
 :focus-visible {
-  outline: 2px solid var(--v3-accent);
+  outline: 2px solid var(--v3-focus-ring);
   outline-offset: 2px;
   border-radius: var(--v3-radius-sm);
 }
 button:focus-visible, a:focus-visible, [tabindex]:focus-visible {
-  outline: 2px solid var(--v3-accent);
+  outline: 2px solid var(--v3-focus-ring);
   outline-offset: 2px;
 }
 
@@ -4997,7 +5047,10 @@ html:not([data-theme="light"]) .v3fs-node {border-top-color:var(--v3-border-top)
 button.v3fs-stale-tag {font-family:inherit;border:none;cursor:pointer}
 .v3fs-panel {background:var(--fs-card);border:1px solid var(--fs-line);border-radius:16px;padding:20px 24px;box-shadow:var(--fs-shadow);min-width:0}
 .v3fs-ph {display:flex;align-items:baseline;gap:12px;margin-bottom:14px}
-.v3fs-ph h3 {font-size:16px;font-weight:600;letter-spacing:-.01em;margin:0}
+/* h2, not h3: these panel headings sit directly under the view's <h1>, and an
+   h1 → h3 jump is a skipped level (a screen-reader user navigating by heading
+   hears a missing rung). The type scale is unchanged — only the level moved. */
+.v3fs-ph h2, .v3fs-ph h3 {font-size:16px;font-weight:600;letter-spacing:-.01em;margin:0}
 .v3fs-ph span {font-size:11.5px;color:var(--v3-text-muted)}
 .v3fs-row {display:flex;align-items:center;gap:12px;padding:9px 2px;border-bottom:1px solid var(--fs-line);font-size:13px}
 .v3fs-row:last-child {border-bottom:none}
@@ -5074,7 +5127,7 @@ button.v3fs-stale-tag {font-family:inherit;border:none;cursor:pointer}
 
 /* Today: the decision inbox, the attestation log, the moments ahead. */
 .v3fs-dock button {position:relative}
-.v3fs-dock-n {position:absolute;top:4px;right:4px;min-width:16px;height:16px;padding:0 4px;border-radius:99px;background:var(--v3-amber);color:#fff;font-size:9.5px;font-weight:800;line-height:16px;text-align:center;font-variant-numeric:tabular-nums}
+.v3fs-dock-n {position:absolute;top:4px;right:4px;min-width:16px;height:16px;padding:0 4px;border-radius:99px;background:var(--v3-amber);color:var(--v3-on-warning);font-size:9.5px;font-weight:800;line-height:16px;text-align:center;font-variant-numeric:tabular-nums}
 .v3fs-today {display:flex;flex-direction:column;gap:22px;margin-top:30px}
 .v3fs-quiet {background:var(--fs-card);border:1px solid var(--fs-line);border-radius:22px;box-shadow:var(--v3-shadow-md);padding:56px 36px;text-align:center;margin-top:28px}
 .v3fs-quiet-mark {display:grid;place-items:center;width:58px;height:58px;margin:0 auto 20px;border-radius:50%;
@@ -5473,7 +5526,7 @@ button.v3fs-stale-tag {font-family:inherit;border:none;cursor:pointer}
   background:var(--fs-card);border:1px solid var(--fs-line);border-left:3px solid var(--v3-amber);border-radius:14px;padding:12px 16px;box-shadow:var(--fs-shadow)}
 .v3fs-wait:hover .v3fs-wait-go {text-decoration:underline;text-underline-offset:3px}
 .v3fs-wait:focus-visible {outline:2px solid var(--v3-accent-2);outline-offset:2px}
-.v3fs-wait-n {min-width:22px;height:22px;border-radius:99px;background:var(--v3-amber);color:#fff;font-size:11px;font-weight:800;display:grid;place-items:center;padding:0 6px;font-variant-numeric:tabular-nums;flex-shrink:0}
+.v3fs-wait-n {min-width:22px;height:22px;border-radius:99px;background:var(--v3-amber);color:var(--v3-on-warning);font-size:11px;font-weight:800;display:grid;place-items:center;padding:0 6px;font-variant-numeric:tabular-nums;flex-shrink:0}
 .v3fs-wait-t {flex:1;min-width:0;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--v3-text-primary)}
 .v3fs-wait-go {font-size:12px;font-weight:700;color:var(--v3-accent-2);flex-shrink:0}
 .v3fs-portal {max-width:640px}
@@ -5512,7 +5565,7 @@ button.v3fs-stale-tag {font-family:inherit;border:none;cursor:pointer}
 .v3fs-portal-qn {position:absolute;top:-11px;left:18px;display:grid;place-items:center}
 .v3fs-portal-qn b, .v3fs-portal-qn em {width:24px;height:24px;border-radius:99px;display:grid;place-items:center;font-size:11px;font-weight:700;font-style:normal}
 .v3fs-portal-qn b {background:var(--v3-accent-2);color:#fff;box-shadow:0 2px 6px -1px color-mix(in srgb, var(--v3-accent-2) 45%, transparent)}
-.v3fs-portal-qn em {display:none;background:var(--v3-green);color:#fff}
+.v3fs-portal-qn em {display:none;background:var(--v3-green);color:var(--v3-on-success)}
 .v3fs-portal-card.done .v3fs-portal-qn b {display:none}
 .v3fs-portal-card.done .v3fs-portal-qn em {display:grid}
 .v3fs-portal-qt {font-size:14px;font-weight:650;line-height:1.5;color:var(--v3-text-primary);margin-top:2px}
@@ -5555,7 +5608,7 @@ button.v3fs-stale-tag {font-family:inherit;border:none;cursor:pointer}
   background:var(--v3-surface);color:var(--v3-text-muted);font-size:13px;line-height:1;cursor:pointer;display:flex;
   align-items:center;justify-content:center;transition:border-color .15s,color .15s,background .15s}
 .v3fs-micdot:hover {border-color:var(--v3-accent-2);color:var(--v3-accent-2)}
-.v3fs-micdot.on {border-color:var(--v3-amber);color:#fff;background:var(--v3-amber);animation:v3fs-mic-pulse 1.6s ease-in-out infinite}
+.v3fs-micdot.on {border-color:var(--v3-amber);color:var(--v3-on-warning);background:var(--v3-amber);animation:v3fs-mic-pulse 1.6s ease-in-out infinite}
 /* In a flex ROW next to a single-line field (a step's phase comment, the "Ask"
    box), the mic sits inline BESIDE the field rather than floating to the card's
    corner — the default absolute placement is for a textarea's own top-right. */
@@ -6572,7 +6625,7 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-envc-rstep.done {border-color:color-mix(in srgb,var(--v3-green) 40%,var(--fs-line))}
 .v3fs-envc-rn {display:grid;place-items:center;width:22px;height:22px;flex:0 0 auto;border-radius:50%;font-size:11px;font-weight:700;
   color:var(--v3-text-muted);background:var(--v3-surface-2);border:1px solid var(--fs-line)}
-.v3fs-envc-rstep.done .v3fs-envc-rn {color:#fff;background:var(--v3-green);border-color:var(--v3-green)}
+.v3fs-envc-rstep.done .v3fs-envc-rn {color:var(--v3-on-success);background:var(--v3-green);border-color:var(--v3-green)}
 .v3fs-envc-rl {display:flex;flex-direction:column;font-size:12.5px;font-weight:650;color:var(--v3-text-primary);min-width:0}
 .v3fs-envc-rl em {font-style:normal;font-size:10.5px;font-weight:400;color:var(--v3-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* KPI band → horizontal */
@@ -7364,7 +7417,7 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 /* claim status — glyph carries the state, not colour alone */
 .v3lc-status{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;border:1px solid var(--fs-line);border-radius:7px;padding:3px 9px;background:var(--v3-surface-2)}
 .v3lc-status-g{font-size:13px;line-height:1}
-.v3lc-status.is-closed{color:var(--v3-positive,#3f9d6b);border-color:color-mix(in srgb,var(--v3-positive,#3f9d6b) 40%,var(--fs-line))}
+.v3lc-status.is-closed{color:var(--v3-positive);border-color:color-mix(in srgb,var(--v3-positive) 40%,var(--fs-line))}
 .v3lc-status.is-weak{color:var(--v3-amber);border-color:color-mix(in srgb,var(--v3-amber) 45%,var(--fs-line));border-style:dashed}
 .v3lc-status.is-open{color:var(--v3-text-muted)}
 .v3lc-status.is-blocked{color:var(--v3-red);border-color:color-mix(in srgb,var(--v3-red) 45%,var(--fs-line))}
@@ -7386,7 +7439,7 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3lc-band-tag.is-unowned{color:var(--v3-red);background:color-mix(in srgb,var(--v3-red) 11%,transparent);border:1px solid var(--v3-red);letter-spacing:.06em}
 /* deviation marker */
 .v3lc-dev{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;border-radius:6px;padding:2px 9px;border:1px solid var(--fs-line)}
-.v3lc-dev.is-backed{color:var(--v3-positive,#3f9d6b);border-color:color-mix(in srgb,var(--v3-positive,#3f9d6b) 35%,var(--fs-line))}
+.v3lc-dev.is-backed{color:var(--v3-positive);border-color:color-mix(in srgb,var(--v3-positive) 35%,var(--fs-line))}
 .v3lc-dev.is-unbacked{color:var(--v3-red);border-color:color-mix(in srgb,var(--v3-red) 45%,var(--fs-line));background:color-mix(in srgb,var(--v3-red) 7%,transparent)}
 .v3lc-dev-ref{font-weight:700;text-decoration:underline;text-decoration-style:wavy;text-underline-offset:2px}
 /* burn-down */
@@ -7402,7 +7455,7 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3lc-band-nums{display:flex;gap:6px;flex-wrap:wrap}
 .v3lc-chip{font-size:10.5px;font-weight:600;color:var(--v3-text-muted);background:var(--fs-card);border:1px solid var(--fs-line);border-radius:5px;padding:1px 7px}
 .v3lc-chip.is-block{color:var(--v3-red);border-color:color-mix(in srgb,var(--v3-red) 35%,transparent)}
-.v3lc-chip.is-heard{color:var(--v3-positive,#3f9d6b)}
+.v3lc-chip.is-heard{color:var(--v3-positive)}
 .v3lc-qcounts{font-size:11px;color:var(--v3-text-muted)}.v3lc-qcounts b{color:var(--v3-text-primary)}
 .v3lc-devs{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
 .v3lc-devs li{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:11.5px}
@@ -7416,7 +7469,7 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3lc-own{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:650;border:1px solid var(--fs-line);border-radius:6px;padding:2px 8px;background:var(--v3-surface-2);color:var(--v3-text-secondary)}
 .v3lc-own-n{font-weight:800;color:var(--v3-text-primary);margin-left:1px}
 .v3lc-own.is-operator{color:var(--v3-accent-2);border-color:color-mix(in srgb,var(--v3-accent-2) 40%,var(--fs-line))}
-.v3lc-own.is-stakeholder{color:var(--v3-positive,#3f9d6b);border-color:color-mix(in srgb,var(--v3-positive,#3f9d6b) 40%,var(--fs-line))}
+.v3lc-own.is-stakeholder{color:var(--v3-positive);border-color:color-mix(in srgb,var(--v3-positive) 40%,var(--fs-line))}
 .v3lc-own.is-joint{color:var(--mv);border-left:3px double var(--mv)}
 .v3lc-own.is-draft{color:var(--v3-text-muted);border-style:dashed}
 /* the ONE heard readout */
@@ -8203,7 +8256,7 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-vflow-node.removed .v3fs-vflow-action {text-decoration:line-through;color:var(--v3-text-muted)}
 .v3fs-vflow-node.removed .v3fs-vflow-dot {border-color:var(--v3-text-muted);color:var(--v3-text-muted)}
 .v3fs-vflow-node.added .v3fs-vflow-card {border-color:var(--v3-green);background:color-mix(in srgb,var(--v3-green) 6%,var(--fs-bg))}
-.v3fs-vflow-node.added .v3fs-vflow-dot {background:var(--v3-green);border-color:var(--v3-green);color:#fff}
+.v3fs-vflow-node.added .v3fs-vflow-dot {background:var(--v3-green);border-color:var(--v3-green);color:var(--v3-on-success)}
 .v3fs-vflow-node.added .v3fs-vflow-x:hover {color:var(--v3-green)}
 .v3fs-vflow-insert {position:absolute;left:20px;bottom:-3px;z-index:2;transform:translate(-50%,0);width:20px;height:20px;
   border-radius:50%;border:1px solid var(--fs-line);background:var(--v3-surface);color:var(--v3-text-muted);
@@ -8269,7 +8322,7 @@ details[open] > summary .v3fs-disc-c::after {display:none}
   border:1px solid var(--fs-line);background:var(--fs-card);color:var(--v3-text-muted);
   transition:background var(--v3-transition-fast),border-color var(--v3-transition-fast),color var(--v3-transition-fast)}
 .v3fs-vld.yes:hover {border-color:var(--v3-green);color:var(--v3-green)}
-.v3fs-vld.yes.on {background:var(--v3-green);border-color:var(--v3-green);color:#fff}
+.v3fs-vld.yes.on {background:var(--v3-green);border-color:var(--v3-green);color:var(--v3-on-success)}
 .v3fs-vld.no:hover {border-color:var(--v3-amber);color:var(--v3-amber)}
 .v3fs-vld.no.on {background:var(--v3-amber-soft);border-color:var(--v3-amber);color:var(--v3-amber)}
 .v3fs-vld:focus-visible {outline:2px solid var(--v3-accent-2);outline-offset:2px}
@@ -8314,7 +8367,7 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-rvw-erow.removed {opacity:.55}
 .v3fs-rvw-erow.removed .v3fs-rvw-estep {text-decoration:line-through;color:var(--v3-text-muted)}
 .v3fs-rvw-erow.added {border-color:var(--v3-green);background:color-mix(in srgb,var(--v3-green) 6%,var(--fs-bg))}
-.v3fs-rvw-erow.added .v3fs-rvw-num {background:var(--v3-green);color:#fff}
+.v3fs-rvw-erow.added .v3fs-rvw-num {background:var(--v3-green);color:var(--v3-on-success)}
 .v3fs-rvw-estep {flex:1;min-width:0;font-size:14px;font-family:inherit;color:var(--v3-text);border:none;background:transparent;padding:5px 4px}
 .v3fs-rvw-estep:focus {outline:none;box-shadow:inset 0 -2px 0 var(--v3-accent-2)}
 .v3fs-rvw-x,.v3fs-rvw-add {flex-shrink:0;width:28px;height:28px;border-radius:8px;border:1px solid var(--fs-line);background:var(--v3-surface);
@@ -8867,4 +8920,29 @@ body { text-rendering: optimizeLegibility; }
   font-style: italic;
   white-space: nowrap;
   cursor: help;
+}
+
+/* ── A CLOSED durable link. The row keeps every control it had; it just states the
+   state. A closed link that silently lost its buttons is indistinguishable from one
+   that was never sent, which is the read the operator most needs to get right. Quiet
+   by design — closing is routine and fully reversible by re-minting, so it is a fact,
+   not a warning. ── */
+.v3ln-linkclosed {
+  align-self: center;
+  padding: 1px 6px;
+  border: 1px solid var(--fs-line);
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: .01em;
+  color: var(--v3-text-muted);
+  white-space: nowrap;
+  cursor: help;
+}
+/* The ARMED half of the two-click close — the second click is the write, so the
+   control says what it is about to do rather than changing colour and hoping. */
+.v3ln-linkclose-armed {
+  border-color: var(--v3-accent-2);
+  color: var(--v3-accent-2);
 }

@@ -1,4 +1,29 @@
 import React, { Fragment, Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
+
+/**
+ * THE role="button" CONTRACT, in one place.
+ *
+ * Several rows here are DIVs that behave like buttons. ARIA's rule for that is exact,
+ * and each clause is a defect this shell actually had:
+ *
+ *   · ENTER and SPACE both activate. Two rows handled only Enter, so a keyboard user
+ *     pressing Space on a claim row got nothing.
+ *   · SPACE is prevented. Without it the browser scrolls the page a screenful while
+ *     also (or instead of) activating — the row appears to jump away.
+ *   · A key that landed on a NESTED control does not activate the row. `onClick`
+ *     inside these rows calls stopPropagation, but KEYDOWN still bubbles, so pressing
+ *     Enter on "Pull findings" ran the pull AND navigated to the child programme. The
+ *     portfolio card had this guard (with a comment explaining the same bug for its
+ *     Rename pencil); the other four rows did not.
+ *
+ * Written as one helper so the next row that needs it cannot get three of four right.
+ */
+const rowActivate = <T extends Element>(run: () => void) => (e: React.KeyboardEvent<T>) => {
+  if (e.target !== e.currentTarget) return;
+  if (e.key !== "Enter" && e.key !== " ") return;
+  e.preventDefault();
+  run();
+};
 import type { ProgramSummary } from "@/new/types";
 import FlowGrounding from "@/v3/components/flow/FlowGrounding";
 import BrilioLogo from "@/v3/components/BrilioLogo";
@@ -118,6 +143,9 @@ interface FlowShellProps {
   onScheduleFollowUp: (movementId: string, who: string, date: string) => Promise<void>;
   /** Mint a follow-up link (AURA asks the gaps itself); resolves to the URL. */
   onMintFollowUp: (input: { movementId: string; who: string; questions: string[]; captureField: string; unnamed?: boolean; loci?: string[]; scripted?: boolean }) => Promise<string | null>;
+  /** Close a person's durable link — stamps `closedAt`, the field the edge already
+   *  honours. Reversible by re-minting; never alters a submission on the record. */
+  onCloseLink: (who: string) => Promise<void>;
   /** `loci` for the same reason as the follow-up hop above: the review pack rides
    * the SAME durable link, the SAME `questionLoci` field and the SAME edge
    * pass-through, so an ask minted through a hop that does not declare the field
@@ -682,7 +710,7 @@ export default function FlowShell(props: FlowShellProps) {
         <div className="v3fs-lens-bar">
           <button type="button" className="v3fs-lens-exit" title="Mint a no-login sponsor link and copy it"
             onClick={() => void copyTextFromAction(() => props.onMintBrief(), "Copy the sponsor link:")}>
-            ⎘ Copy sponsor link
+            <span aria-hidden="true">⎘ </span>Copy sponsor link
           </button>
           <button type="button" className="v3fs-lens-exit" onClick={() => switchLens("operator")}>
             <DockIcon id="lens" /> Sponsor view — exit
@@ -792,11 +820,12 @@ export default function FlowShell(props: FlowShellProps) {
             ) : null}
           </nav>
         </div>
-        <button type="button" className="v3fs-appbar-search" title="Search — ⌘K or /" aria-label="Search (⌘K)"
+        <button type="button" className="v3fs-appbar-search" title="Search — ⌘K or /"
+          aria-label="Search programmes, evidence and actions. Shortcut: Command K, or forward slash"
           onClick={() => setSearchOpen(true)}>
           <DockIcon id="search" />
           <span>Search programmes, evidence, actions…</span>
-          <kbd>⌘K</kbd>
+          <kbd aria-hidden="true">⌘K</kbd>
         </button>
         <div className="v3fs-appbar-r">
           {/* The Line/Classic toggle is GONE (2026-08-10): Flow is the Line, and
@@ -839,8 +868,8 @@ export default function FlowShell(props: FlowShellProps) {
             </button>
           ))}
           <div className="v3fs-switcher-sep" />
-          <button type="button" role="menuitem" onClick={() => { setSwitcherOpen(false); props.onCreateProgram(); }}>＋ New programme</button>
-          <button type="button" role="menuitem" onClick={() => { setSwitcherOpen(false); setDrillOpen(true); }}>◇ Drill into this programme →</button>
+          <button type="button" role="menuitem" onClick={() => { setSwitcherOpen(false); props.onCreateProgram(); }}><span aria-hidden="true">＋ </span>New programme</button>
+          <button type="button" role="menuitem" onClick={() => { setSwitcherOpen(false); setDrillOpen(true); }}><span aria-hidden="true">◇ </span>Drill into this programme<span aria-hidden="true"> →</span></button>
           <button type="button" role="menuitem" onClick={() => { setSwitcherOpen(false); props.onOpenSetup(); }}>Programme setup</button>
         </div>
       ) : null}
@@ -863,7 +892,7 @@ export default function FlowShell(props: FlowShellProps) {
                 </div>
                 {props.onCreateProgram ? (
                   <button type="button" className="v3fs-btn pri v3fs-portfolio-new" onClick={() => props.onCreateProgram()}>
-                    ＋ New programme
+                    <span aria-hidden="true">＋ </span>New programme
                   </button>
                 ) : null}
               </div>
@@ -874,10 +903,10 @@ export default function FlowShell(props: FlowShellProps) {
                 <button type="button" className="v3fs-breadcrumb"
                   onClick={() => drillParentId && props.onSelectProgram(drillParentId)}
                   title={`Back to ${drillParent?.name ?? "parent programme"}`}>
-                  <span className="v3fs-bc-lens">◇ {drillKindMeta(drillAnchor.kind).noun}</span>
+                  <span className="v3fs-bc-lens"><span aria-hidden="true">◇ </span>{drillKindMeta(drillAnchor.kind).noun}</span>
                   <span className="v3fs-bc-sep">Drill-down of</span>
                   <b>{drillParent?.name ?? "parent programme"}</b>
-                  <span className="v3fs-bc-go">↩ back</span>
+                  <span className="v3fs-bc-go"><span aria-hidden="true">↩ </span>back</span>
                 </button>
               ) : null}
               <h1 className="v3fs-hero-title">{program.name}</h1>
@@ -907,7 +936,7 @@ export default function FlowShell(props: FlowShellProps) {
         ) : view === "flow" ? (
           <TheLine program={program} onSaveInputs={props.onSaveInputs}
             onRenamePerson={props.onRenamePerson} onRenameRole={props.onRenameRole}
-            onMintFollowUp={props.onMintFollowUp} onScheduleFollowUp={props.onScheduleFollowUp}
+            onMintFollowUp={props.onMintFollowUp} onCloseLink={props.onCloseLink} onScheduleFollowUp={props.onScheduleFollowUp}
             onRunAgent={props.onRunAgent}
             onRecordGate={props.onRecordGate} onReopenGate={props.onReopenGate}
             onSendForApproval={props.onSendForApproval} />
@@ -966,7 +995,7 @@ class ViewBoundary extends React.Component<{ view: string; children: React.React
     if (this.state.failed) {
       return (
         <div className="v3fs-panel v3fs-view-fail" role="alert">
-          <div className="v3fs-ph"><h3>This screen hit an error</h3><span>everything else still works</span></div>
+          <div className="v3fs-ph"><h2>This screen hit an error</h2><span>everything else still works</span></div>
           <div className="v3fs-empty">Your data is intact — this screen just failed to display it. Switching views or reloading usually fixes it; the console has the details.</div>
         </div>
       );
@@ -1391,7 +1420,7 @@ function FlowToday({ program, ledger, programs, onSelectProgram, onResolveDecisi
         // A label, not an arithmetic change: both numbers stay exactly as computed.
         <section className="v3fs-inbox" aria-label="From the record" ref={inboxRef}>
           <div className="v3fs-ph">
-            <h3>From the record</h3>
+            <h2>From the record</h2>
             <span>{items.total} item{items.total === 1 ? "" : "s"}</span>
           </div>
           {open.map((decision) => (
@@ -1478,7 +1507,7 @@ function FlowToday({ program, ledger, programs, onSelectProgram, onResolveDecisi
               <div className="v3fs-dec-top">
                 <span className="v3fs-vc pen">Dispute</span>
                 <span className="v3fs-dec-mv">{row.between || "two accounts disagree"}</span>
-                {row.routedTo ? <span className="v3fs-tag ev">routed → {row.routedTo}</span> : null}
+                {row.routedTo ? <span className="v3fs-tag ev">routed to {row.routedTo}</span> : null}
               </div>
               <p className="v3fs-dec-s">“{row.statement.trim().slice(0, 200)}{row.statement.trim().length > 200 ? "…" : ""}”</p>
               <div className="v3fs-dec-rec-b">resolve writes the resolution to the record as evidence and closes the dispute — or route it to whoever can settle it (it lands on their follow-up script)</div>
@@ -1486,7 +1515,7 @@ function FlowToday({ program, ledger, programs, onSelectProgram, onResolveDecisi
                 {onSaveInputs ? (
                   <button type="button" className="v3fs-btn pri" disabled={disputeBusy === row.statement.trim()}
                     onClick={() => void resolveDisputeHere(row)}>
-                    {disputeBusy === row.statement.trim() ? "Resolving…" : "✓ Resolve — the newer account stands"}
+                    {disputeBusy === row.statement.trim() ? "Resolving…" : <><span aria-hidden="true">✓ </span>Resolve — the newer account stands</>}
                   </button>
                 ) : null}
                 {onSaveInputs && people.length ? (
@@ -1532,7 +1561,7 @@ function FlowToday({ program, ledger, programs, onSelectProgram, onResolveDecisi
                 {onSaveInputs ? (
                   <button type="button" className="v3fs-btn" disabled={disputeBusy === person.id}
                     onClick={() => void acceptRole(person.id, person.name, person.role)}>
-                    {disputeBusy === person.id ? "Saving…" : `✓ Keep "${person.role}" as a new role`}
+                    {disputeBusy === person.id ? "Saving…" : <><span aria-hidden="true">✓ </span>{`Keep "${person.role}" as a new role`}</>}
                   </button>
                 ) : null}
                 {onSaveInputs ? (
@@ -1554,7 +1583,7 @@ function FlowToday({ program, ledger, programs, onSelectProgram, onResolveDecisi
                 {onSaveInputs ? (
                   <button type="button" className="v3fs-btn pri" disabled={disputeBusy === cov.name}
                     onClick={() => void addCoverageName(cov.name, cov.domain)}>
-                    {disputeBusy === cov.name ? "Adding…" : `✓ Add ${cov.name} to People`}
+                    {disputeBusy === cov.name ? "Adding…" : <><span aria-hidden="true">✓ </span>{`Add ${cov.name} to People`}</>}
                   </button>
                 ) : null}
                 {onSaveInputs ? (
@@ -1567,7 +1596,7 @@ function FlowToday({ program, ledger, programs, onSelectProgram, onResolveDecisi
           {exceptions.map((ex) => (
             <article key={`gex-${ex.id}`} className="v3fs-dec">
               <div className="v3fs-dec-top">
-                <span className={`v3fs-vc ${ex.overdue ? "pen" : "acc"}`}>⚖ Governed exception</span>
+                <span className={`v3fs-vc ${ex.overdue ? "pen" : "acc"}`}><span aria-hidden="true">⚖ </span>Governed exception</span>
                 <span className="v3fs-dec-mv">{label(ex.movementId)}</span>
                 {ex.overdue ? <span className="v3fs-tag ev">review overdue{ex.reviewBy ? ` · ${ex.reviewBy}` : ""}</span>
                   : ex.reviewBy ? <span className="v3fs-tag ev">review due</span> : null}
@@ -1581,7 +1610,7 @@ function FlowToday({ program, ledger, programs, onSelectProgram, onResolveDecisi
                 {onSaveInputs ? (
                   <button type="button" className="v3fs-btn pri" disabled={busyId === ex.id}
                     onClick={() => void resolveException(ex.movementId, ex.id)}>
-                    {busyId === ex.id ? "Resolving…" : "✓ Mark resolved"}
+                    {busyId === ex.id ? "Resolving…" : <><span aria-hidden="true">✓ </span>Mark resolved</>}
                   </button>
                 ) : null}
               </div>
@@ -1666,14 +1695,14 @@ function FlowMission({ program, fleet, loadMovementSpend, onSetHaltAll, onToggle
             title="AI runs every generator — open provider settings">
             <span className="v3fs-aichip-dot" aria-hidden="true" />
             <span className="v3fs-aichip-l">{label}</span>
-            <span className="v3fs-aichip-cta">{connected ? "Check →" : "Connect →"}</span>
+            <span className="v3fs-aichip-cta">{connected ? "Check" : "Connect"}<span aria-hidden="true"> →</span></span>
           </button>
         );
       })()}
 
       <div className="v3fs-grid2">
         <div className="v3fs-panel">
-          <div className="v3fs-ph"><h3>Fleet</h3><span>the complete roster — live status, hold/resume per agent</span></div>
+          <div className="v3fs-ph"><h2>Fleet</h2><span>the complete roster — live status, hold/resume per agent</span></div>
           {(() => {
             // The COMPLETE fleet: every agent the programme can run, plus any
             // id currently in flight or held that the registry doesn't list
@@ -1742,7 +1771,7 @@ function FlowMission({ program, fleet, loadMovementSpend, onSetHaltAll, onToggle
                       <summary className="v3fs-ctl-group-h">
                         <span className="v3fs-ctl-group-t">{groupLabel(idx)}</span>
                         <span className="v3fs-ctl-group-n">{group.length}</span>
-                        {running ? <span className="v3fs-ctl-group-run">● {running} running</span> : null}
+                        {running ? <span className="v3fs-ctl-group-run"><span aria-hidden="true">● </span>{running} running</span> : null}
                         {held ? <span className="v3fs-ctl-group-held">{held} held</span> : null}
                         <span className="v3fs-ctl-group-caret" aria-hidden="true">▾</span>
                       </summary>
@@ -1756,7 +1785,7 @@ function FlowMission({ program, fleet, loadMovementSpend, onSetHaltAll, onToggle
         </div>
 
         <div className="v3fs-panel">
-          <div className="v3fs-ph"><h3>Budgets</h3><span>token spend per movement</span></div>
+          <div className="v3fs-ph"><h2>Budgets</h2><span>token spend per movement</span></div>
           {movements.map((movement) => {
             const spent = spend?.[movement.id] ?? null;
             const cap = governance.movementBudgets[movement.id];
@@ -1815,7 +1844,7 @@ function FlowMission({ program, fleet, loadMovementSpend, onSetHaltAll, onToggle
       </div>
 
       <div className="v3fs-panel">
-        <div className="v3fs-ph"><h3>Guardrails</h3><span>every change lands on the trail</span></div>
+        <div className="v3fs-ph"><h2>Guardrails</h2><span>every change lands on the trail</span></div>
         <div className="v3fs-guard-row">
           <div className="v3fs-row-g">
             <div className="v3fs-row-n">Halt everything</div>
@@ -1855,7 +1884,7 @@ function FlowMission({ program, fleet, loadMovementSpend, onSetHaltAll, onToggle
                   <button key={agentId} type="button" className={`v3fs-guard-chip${halted ? " off" : ""}`} disabled={busy}
                     title={halted ? "Resume this agent" : "Halt this agent"}
                     onClick={() => void act(() => onToggleAgentHalt(agentId, !halted))}>
-                    {halted ? "⏸ " : ""}{agentId}
+                    {halted ? <span aria-hidden="true">⏸ </span> : null}{halted ? <span className="v3lc-sr">halted: </span> : null}{agentId}
                   </button>
                 );
               })}
@@ -1866,7 +1895,7 @@ function FlowMission({ program, fleet, loadMovementSpend, onSetHaltAll, onToggle
       </div>
 
       <div className="v3fs-panel">
-        <div className="v3fs-ph"><h3>Trail</h3><span>every recorded action, searchable</span></div>
+        <div className="v3fs-ph"><h2>Trail</h2><span>every recorded action, searchable</span></div>
         <input className="v3fs-search" placeholder="Search the trail — an agent, a movement, a phrase…"
           value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search attestations" />
         {visibleTrail.length === 0 ? <div className="v3fs-empty">{q ? "Nothing matches that search." : "No actions recorded yet."}</div> : null}
@@ -1884,7 +1913,7 @@ function FlowMission({ program, fleet, loadMovementSpend, onSetHaltAll, onToggle
       </div>
 
       <div className="v3fs-panel">
-        <div className="v3fs-ph"><h3>Safety</h3><span>how things looked before each recent change — restoring is recorded too</span></div>
+        <div className="v3fs-ph"><h2>Safety</h2><span>how things looked before each recent change — restoring is recorded too</span></div>
         <SnapshotSafety program={program} onRestoreSnapshot={onRestoreSnapshot} />
       </div>
     </div>
@@ -2113,10 +2142,7 @@ function FlowPortfolio({ programs, activeId, onSelectProgram, onHydratePrograms,
                navigate straight off the card. */
             <div className="v3fs-pf-head" role="button" tabIndex={0} aria-label={`Open ${entry.name}`}
               onClick={() => onSelectProgram(entry.id)}
-              onKeyDown={(e) => {
-                if (e.target !== e.currentTarget) return;
-                if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelectProgram(entry.id); }
-              }}>
+              onKeyDown={rowActivate(() => onSelectProgram(entry.id))}>
               <span className="v3fs-pf-id">
                 <span className="v3fs-pf-eyebrow sm">
                   {depth > 0
@@ -2178,7 +2204,7 @@ function FlowPortfolio({ programs, activeId, onSelectProgram, onHydratePrograms,
 
               {s.decisions || s.inbox || childCount > 0 || childAnchor ? (
                 <div className="v3fs-pf-flags">
-                  {childAnchor ? <span className="v3fs-pf-chip anchor">◇ {childAnchor.label}</span> : null}
+                  {childAnchor ? <span className="v3fs-pf-chip anchor"><span aria-hidden="true">◇ </span>{childAnchor.label}</span> : null}
                   {s.decisions ? <span className="v3fs-pf-chip dec">{s.decisions} decision{s.decisions === 1 ? "" : "s"}</span> : null}
                   {s.inbox ? <span className="v3fs-pf-chip q">{s.inbox} in quarantine</span> : null}
                   {childCount > 0 ? <span className="v3fs-pf-chip line">{childCount} drill-down{childCount === 1 ? "" : "s"}</span> : null}
@@ -2574,7 +2600,7 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
             <input className="v3fs-dir-in" type="email" placeholder="add email" defaultValue={row.email ?? ""} aria-label={`Email for ${row.name}`}
               key={`re-${i}-${row.email ?? ""}`} disabled={busyRow === `listen:${row.name}`}
               onBlur={(e) => { if (e.target.value.trim() !== (row.email ?? "")) void setPersonEmail("listen", row.name, e.target.value); }} />
-          ) : (row.email ?? <span className="v3fs-ivc-noaddr">✉ no address</span>)}
+          ) : (row.email ?? <span className="v3fs-ivc-noaddr"><span aria-hidden="true">✉ </span>no address</span>)}
         </td>
         <td><span className={`v3fs-vc ${row.heard ? "acc" : "pen"}`}>{row.heard ? "Heard" : "Awaiting"}</span></td>
       </tr>
@@ -2596,7 +2622,7 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
           <input className="v3fs-dir-in" type="email" placeholder="add email" defaultValue={row.email ?? ""} aria-label={`Email for ${row.name}`}
             key={`de-${i}-${row.email ?? ""}`} disabled={busyRow === `${row.where.toLowerCase()}:${row.name}`}
             onBlur={(e) => { if (e.target.value.trim() !== (row.email ?? "")) void setPersonEmail(row.where.toLowerCase(), row.name, e.target.value); }} />
-        ) : row.name ? (row.email ?? <span className="v3fs-ivc-noaddr">✉ no address</span>) : ""}
+        ) : row.name ? (row.email ?? <span className="v3fs-ivc-noaddr"><span aria-hidden="true">✉ </span>no address</span>) : ""}
       </td>
       <td><span className={`v3fs-vc ${row.name ? "acc" : "pen"}`}>{row.name ? "Bound" : "Open"}</span></td>
     </tr>
@@ -2652,7 +2678,7 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
       </div>
       {onSaveInputs ? (
         <div className="v3fs-panel v3fs-panel-wide">
-          <div className="v3fs-ph"><h3>Add a person</h3><span>name a new person and pick their role from the ones this programme knows — new roles are minted on the Discovery Kit matrix</span></div>
+          <div className="v3fs-ph"><h2>Add a person</h2><span>name a new person and pick their role from the ones this programme knows — new roles are minted on the Discovery Kit matrix</span></div>
           <div className="v3fs-addp">
             <input placeholder="Name" aria-label="Name" value={form.name}
               onChange={(event) => setForm({ ...form, name: event.target.value })} />
@@ -2672,24 +2698,24 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
           {lastAdd ? (
             <p className="v3fs-addp-note">{lastAdd.resolved
               ? `${lastAdd.name} added — role recognised.`
-              : <>{lastAdd.name} added — their role needs clarification. {onGoInbox ? <button type="button" className="v3fs-a" onClick={() => onGoInbox()}>Clarify in the Inbox →</button> : "Clarify it in the Inbox."}</>}</p>
+              : <>{lastAdd.name} added — their role needs clarification. {onGoInbox ? <button type="button" className="v3fs-a" onClick={() => onGoInbox()}>Clarify in the Inbox<span aria-hidden="true"> →</span></button> : "Clarify it in the Inbox."}</>}</p>
           ) : null}
         </div>
       ) : null}
       {onSaveInputs ? (
         <div className="v3fs-panel v3fs-panel-wide">
-          <div className="v3fs-ph"><h3>Reconcile with the Discovery Kit</h3><span>the kit proposes, you dispose — internal personas the kit lists gain a row in one gesture; people the kit doesn&rsquo;t name are flagged for you to judge, never removed for you</span></div>
+          <div className="v3fs-ph"><h2>Reconcile with the Discovery Kit</h2><span>the kit proposes, you dispose — internal personas the kit lists gain a row in one gesture; people the kit doesn&rsquo;t name are flagged for you to judge, never removed for you</span></div>
           <div className="v3fs-recon">
             {reconcile.toAdd.length ? (
               <>
                 <span className="v3fs-recon-sum">
-                  ＋ {reconcile.toAdd.length} to add: {reconcile.toAdd.map((p) => p.name).slice(0, 4).join(", ")}{reconcile.toAdd.length > 4 ? ` +${reconcile.toAdd.length - 4} more` : ""}
+                  <span aria-hidden="true">＋ </span>{reconcile.toAdd.length} to add: {reconcile.toAdd.map((p) => p.name).slice(0, 4).join(", ")}{reconcile.toAdd.length > 4 ? ` +${reconcile.toAdd.length - 4} more` : ""}
                 </span>
                 <button type="button" className="v3fs-btn pri" disabled={reconBusy}
                   onClick={() => void runReconcile()}>{reconBusy ? "Adding…" : `Add ${reconcile.toAdd.length} from the kit`}</button>
               </>
             ) : (
-              <span className="v3fs-recon-sum ok">✓ Everyone the kit lists is on this page{reconNote ? ` (${reconNote})` : ""}</span>
+              <span className="v3fs-recon-sum ok"><span aria-hidden="true">✓ </span>Everyone the kit lists is on this page{reconNote ? ` (${reconNote})` : ""}</span>
             )}
           </div>
           {/* Absences are FLAGGED, never bundled: a person the operator typed in
@@ -2728,7 +2754,7 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
       {suggested.length ? (
         <div className="v3fs-panel v3fs-panel-wide v3fs-sugg">
           <div className="v3fs-ph">
-            <h3>Suggested by stakeholders <span className="v3fs-sugg-count">{suggested.length}</span></h3>
+            <h2>Suggested by stakeholders <span className="v3fs-sugg-count">{suggested.length}</span></h2>
             <span>people named on a response as &ldquo;who else should we speak with?&rdquo; — add them to collect from, or dismiss</span>
           </div>
           <div className="v3fs-sugg-list">
@@ -2742,7 +2768,7 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
                 {onSaveInputs ? (
                   <div className="v3fs-sugg-act">
                     <button type="button" className="v3fs-btn pri" disabled={busyRow === `sug-add:${voice.name}`}
-                      onClick={() => void addSuggested(voice)}>{busyRow === `sug-add:${voice.name}` ? "Adding…" : "＋ Add"}</button>
+                      aria-label={`Add ${voice.name} to People`} onClick={() => void addSuggested(voice)}>{busyRow === `sug-add:${voice.name}` ? "Adding…" : <><span aria-hidden="true">＋ </span>Add</>}</button>
                     <button type="button" className="v3fs-btn quiet" disabled={busyRow === `sug-dismiss:${voice.name}`}
                       onClick={() => void dismissSuggested(voice.name)}>Dismiss</button>
                   </div>
@@ -2754,13 +2780,18 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
       ) : null}
       <div className="v3fs-panel v3fs-panel-wide">
         <div className="v3fs-ph">
-          <h3>People</h3>
+          <h2>People</h2>
           <span>everyone the programme collects from — {unresolved ? `${unresolved} role${unresolved === 1 ? "" : "s"} to clarify; ` : ""}{missing ? `${missing} without an address; ` : ""}edit names, emails and roles inline</span>
         </div>
         {/* The complete roster — one flat table, ordered by phase. */}
+        {/* A real data table, so it is announced as one: a caption naming what the
+            rows are, and scope="col" on each header. Without the scope a screen
+            reader reading a cell has to guess which column it belongs to, and the
+            inline role select in each row loses the only word that says "Role". */}
         {peopleRows.length ? (
           <table className="v3fs-dir">
-            <thead><tr><th>Role</th><th>Person</th><th>Email</th><th>Status</th></tr></thead>
+            <caption className="v3lc-sr">Everyone this programme collects from — role, person, email and contact status</caption>
+            <thead><tr><th scope="col">Role</th><th scope="col">Person</th><th scope="col">Email</th><th scope="col">Status</th></tr></thead>
             <tbody>{peopleRows.map((r) => r.node)}</tbody>
           </table>
         ) : (
@@ -2775,6 +2806,12 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
   const claims = listClaimTags(program);
   const tagTargets = useMemo(() => claimTargets(program), [program]);
   const [claimHighlight, setClaimHighlight] = useState<string | undefined>(undefined);
+  // ONE definition of "open this claim", so the mouse path and the keyboard path
+  // cannot drift: they were two copies, and the keyboard copy had lost its Space key.
+  const openClaim = (claim: ReturnType<typeof listClaimTags>[number]) => {
+    const hit = all.evidence.find((e) => e.text.includes(claim.quote.slice(0, 80)));
+    if (hit) { setClaimHighlight(claim.quote); setEvFor(hit); }
+  };
   const movements = useMemo(() => flowMovements(), []);
   const [query, setQuery] = useState("");
   // Faceted browse: narrow the Library by KIND instead of scrolling panels.
@@ -2914,7 +2951,7 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
       <p className="v3fs-lib-cap">Everything the programme knows — search it and read it. Artifacts regenerate from Flow; people live under People; the board pack exports from Pulse.</p>
       {!q && recent.length ? (
         <div className="v3fs-panel v3fs-panel-wide v3fs-recent">
-          <div className="v3fs-ph"><h3>Recently changed</h3><span>what moved since you last looked</span></div>
+          <div className="v3fs-ph"><h2>Recently changed</h2><span>what moved since you last looked</span></div>
           <div className="v3fs-recent-row">
             {recent.map((r, i) => (
               <button key={i} type="button" className="v3fs-recent-chip" onClick={() => setEvFor(r.entry)}>
@@ -2928,12 +2965,12 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
       ) : null}
       {!q && (dd.children.length || ddParent) ? (
         <div className="v3fs-panel v3fs-panel-wide v3fs-dd-panel">
-          <div className="v3fs-ph"><h3>Drill-downs</h3><span>focused children of this programme, wired to it</span></div>
+          <div className="v3fs-ph"><h2>Drill-downs</h2><span>focused children of this programme, wired to it</span></div>
           {ddParent ? (
             <button type="button" className="v3fs-dd-parent" onClick={() => onSelectProgram(ddParent.id)}>
-              <span className="v3fs-dd-lens">◇ {dd.selfAnchor ? drillKindMeta(dd.selfAnchor.kind).noun : "drill-down"}</span>
+              <span className="v3fs-dd-lens"><span aria-hidden="true">◇ </span>{dd.selfAnchor ? drillKindMeta(dd.selfAnchor.kind).noun : "drill-down"}</span>
               <span className="v3fs-dd-parent-t">Drill-down of <b>{ddParent.name}</b>{dd.selfAnchor ? ` · focused on ${dd.selfAnchor.label}` : ""}</span>
-              <span className="v3fs-dd-open">↩ open parent</span>
+              <span className="v3fs-dd-open"><span aria-hidden="true">↩ </span>open parent</span>
             </button>
           ) : null}
           {dd.children.map(({ child, anchor }) => {
@@ -2942,8 +2979,8 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
             return (
               <div key={child.id} className="v3fs-row v3fs-row-open v3fs-dd-row" role="button" tabIndex={0}
                 onClick={() => onSelectProgram(child.id)}
-                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onSelectProgram(child.id); }}>
-                <span className="v3fs-dd-lens">◇ {anchor ? drillKindMeta(anchor.kind).noun : "scope"}</span>
+                onKeyDown={rowActivate(() => onSelectProgram(child.id))}>
+                <span className="v3fs-dd-lens"><span aria-hidden="true">◇ </span>{anchor ? drillKindMeta(anchor.kind).noun : "scope"}</span>
                 <div className="v3fs-row-g">
                   <div className="v3fs-row-n">{anchor?.label ?? child.name}</div>
                   <div className="v3fs-row-m">{child.name}</div>
@@ -2952,7 +2989,7 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
                   <button type="button" className="v3fs-btn sm" disabled={pullBusy === child.id || pulled.has(child.id)}
                     title="Roll the drill-down's findings up into this programme as attributed evidence"
                     onClick={(e) => { e.stopPropagation(); void pullFindings(child, anchor?.kind ?? null); }}>
-                    {pullBusy === child.id ? "Pulling…" : pulled.has(child.id) ? "✓ Pulled" : "⇪ Pull findings"}
+                    {pullBusy === child.id ? "Pulling…" : pulled.has(child.id) ? <><span aria-hidden="true">✓ </span>Pulled</> : <><span aria-hidden="true">⇪ </span>Pull findings</>}
                   </button>
                 ) : null}
                 <span className={`v3fs-dd-st ${waiting ? "watch" : "clear"}`}>{waiting ? `${waiting} waiting` : "on track"}</span>
@@ -2963,22 +3000,20 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
       ) : null}
       {claims.length ? (
         <div className="v3fs-panel v3fs-panel-wide v3fs-claims">
-          <div className="v3fs-ph"><h3>Claims</h3><span>curated quotes, tagged to the graph — select text in any transcript to add one</span></div>
+          <div className="v3fs-ph"><h2>Claims</h2><span>curated quotes, tagged to the graph — select text in any transcript to add one</span></div>
           {claims.map((claim) => (
             <div key={claim.id} className="v3fs-row v3fs-row-open" role="button" tabIndex={0}
-              onClick={() => {
-                const hit = all.evidence.find((e) => e.text.includes(claim.quote.slice(0, 80)));
-                if (hit) { setClaimHighlight(claim.quote); setEvFor(hit); }
-              }}
-              onKeyDown={(e) => { if (e.key === "Enter") { const hit = all.evidence.find((x) => x.text.includes(claim.quote.slice(0, 80))); if (hit) { setClaimHighlight(claim.quote); setEvFor(hit); } } }}>
+              onClick={() => openClaim(claim)}
+              onKeyDown={rowActivate(() => openClaim(claim))}>
               <span className="v3fs-tag ev">{claim.target.kind}</span>
               <div className="v3fs-row-g">
                 <div className="v3fs-row-n">“{claim.quote.length > 90 ? `${claim.quote.slice(0, 90)}…` : claim.quote}”</div>
-                <div className="v3fs-row-m">→ {claim.target.label} · {claim.who}</div>
+                <div className="v3fs-row-m"><span aria-hidden="true">→ </span>tagged to {claim.target.label} · {claim.who}</div>
               </div>
               {onTagClaim ? (
                 <button type="button" className="v3fs-a" title="Untag — attested"
-                  onClick={(e) => { e.stopPropagation(); void onTagClaim({ quote: claim.quote, who: claim.who, movementId: claim.movementId, target: claim.target, removeId: claim.id }); }}>✕</button>
+                  aria-label={`Untag the claim “${claim.quote.slice(0, 60)}” from ${claim.target.label}`}
+                  onClick={(e) => { e.stopPropagation(); void onTagClaim({ quote: claim.quote, who: claim.who, movementId: claim.movementId, target: claim.target, removeId: claim.id }); }}><span aria-hidden="true">✕</span></button>
               ) : null}
             </div>
           ))}
@@ -2986,7 +3021,7 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
       ) : null}
       <div className="v3fs-panel">
         <div className="v3fs-ph v3fs-ph-attach">
-          <h3>Evidence</h3><span>grouped by voice — click a person to expand</span>
+          <h2>Evidence</h2><span>grouped by voice — click a person to expand</span>
           {onSaveInputs ? (
             <AttachFileButton programId={program.id}
               onExtracted={(filename, text, sourceKey) => {
@@ -3006,12 +3041,12 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
               {pendingDoc.route.speakerBlocks.length ? (
                 <button type="button" className="v3fs-btn pri" onClick={() => fileRoutedDoc(true)}
                   title={`Each matched person gets their own attributed evidence in ${pendingDoc.route.movementId}`}>
-                  ✓ File as {pendingDoc.route.matched.length} {pendingDoc.route.matched.length === 1 ? "person's" : "people's"} evidence
+                  <span aria-hidden="true">✓ </span>File as {pendingDoc.route.matched.length} {pendingDoc.route.matched.length === 1 ? "person's" : "people's"} evidence
                 </button>
               ) : (
                 <button type="button" className="v3fs-btn pri" onClick={() => fileRoutedDoc(false)}
                   title={`Files into the ${pendingDoc.route.movementId} evidence`}>
-                  ✓ File in {pendingDoc.route.movementId.charAt(0).toUpperCase() + pendingDoc.route.movementId.slice(1)}
+                  <span aria-hidden="true">✓ </span>File in {pendingDoc.route.movementId.charAt(0).toUpperCase() + pendingDoc.route.movementId.slice(1)}
                 </button>
               )}
               {pendingDoc.route.speakerBlocks.length ? (
@@ -3051,7 +3086,7 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
           const entryRow = (entry: typeof evidence[number], i: number) => (
             <div key={i} className="v3fs-row v3fs-row-open v3fs-ev-sub" role="button" tabIndex={0}
               onClick={() => openEntry(entry)}
-              onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") openEntry(entry); }}>
+              onKeyDown={rowActivate(() => openEntry(entry))}>
               <span className="v3fs-tag ev">{label(entry.movementId)}</span>
               <div className="v3fs-row-g">
                 <div className="v3fs-row-n">{entry.excerpt ? `“${entry.excerpt}”` : entry.who}</div>
@@ -3085,11 +3120,11 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
       </div>
       <div className="v3fs-panel">
         <div className="v3fs-ph">
-          <h3>Artifacts</h3>
+          <h2>Artifacts</h2>
           <span>{staleCount ? `${staleCount} need regenerating — shown first` : "generated from your evidence"}</span>
           {staleCount && onGoFlow ? (
             <button type="button" className="v3fs-a" title="The spine runner lives on the Flow page — its Up-next queue leads with this"
-              onClick={() => onGoFlow()}>↻ regenerate in Flow</button>
+              onClick={() => onGoFlow()}><span aria-hidden="true">↻ </span>regenerate in Flow</button>
           ) : null}
         </div>
         {/* Grouped by PHASE into collapsible sections — the ledger reads as the
@@ -3114,7 +3149,7 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
                     role={artifact.present ? "button" : undefined}
                     tabIndex={artifact.present ? 0 : undefined}
                     onClick={artifact.present ? () => setDocFor(artifact) : undefined}
-                    onKeyDown={artifact.present ? (event) => { if (event.key === "Enter" || event.key === " ") setDocFor(artifact); } : undefined}>
+                    onKeyDown={artifact.present ? rowActivate(() => setDocFor(artifact)) : undefined}>
                     <span className="v3fs-art-stripe" aria-hidden="true" />
                     <div className="v3fs-row-g">
                       <div className="v3fs-row-n">{artifact.title}</div>
@@ -3190,7 +3225,7 @@ function FlowPulse({ program, programs, onSelectProgram, onMintBrief }: { progra
           <p>The steering read — outcomes, demonstrations, and the board pack.</p>
         </div>
         <button type="button" className="v3fs-btn pri" onClick={() => setPackOpen(true)}>
-          ⎙ Board pack
+          <span aria-hidden="true">⎙ </span>Board pack
         </button>
       </div>
       {packOpen ? <FlowBoardPack program={program} onMintBrief={onMintBrief} onClose={() => setPackOpen(false)} /> : null}
@@ -3202,7 +3237,7 @@ function FlowPulse({ program, programs, onSelectProgram, onMintBrief }: { progra
             const waiting = listOpenFlowDecisions(child).length + listPortalInbox(child).length;
             return (
               <button key={child.id} type="button" className="v3fs-pulse-fam-chip" onClick={() => onSelectProgram?.(child.id)}>
-                <span className="v3fs-dd-lens">◇ {anchor ? drillKindMeta(anchor.kind).noun : "scope"}</span>
+                <span className="v3fs-dd-lens"><span aria-hidden="true">◇ </span>{anchor ? drillKindMeta(anchor.kind).noun : "scope"}</span>
                 <b>{anchor?.label ?? child.name}</b>
                 <span className="v3fs-pulse-fam-m">{demoCountdown(days).short}{waiting ? ` · ${waiting} waiting` : ""}</span>
               </button>
@@ -3241,7 +3276,7 @@ function FlowPulse({ program, programs, onSelectProgram, onMintBrief }: { progra
       </div>
       <div className="v3fs-grid2">
         <div className="v3fs-panel">
-          <div className="v3fs-ph"><h3>Stakeholder demonstrations</h3><span>acceptance recorded person by person</span></div>
+          <div className="v3fs-ph"><h2>Stakeholder demonstrations</h2><span>acceptance recorded person by person</span></div>
           {demos.rows.length === 0 ? <div className="v3fs-empty">Demonstrations are scheduled and recorded in the Show movement.</div> : null}
           {demos.rows.map((row, i) => (
             <div key={i} className="v3fs-row">
@@ -3254,7 +3289,7 @@ function FlowPulse({ program, programs, onSelectProgram, onMintBrief }: { progra
           ))}
         </div>
         <div className="v3fs-panel">
-          <div className="v3fs-ph"><h3>Outcomes</h3><span>one governed definition per measure</span></div>
+          <div className="v3fs-ph"><h2>Outcomes</h2><span>one governed definition per measure</span></div>
           {kpis.length === 0 ? <div className="v3fs-empty">Success KPIs defined in Frame appear here, with baselines drawn from discovery.</div> : null}
           {kpis.length ? (
             <div className={`v3fs-metric-health${metricHealth.governed ? " ok" : ""}`}
@@ -3333,7 +3368,7 @@ function FlowStory({ program }: { program: ProgramSummary }) {
   return (
     <div className="v3fs-panel v3fs-story">
       <div className="v3fs-ph">
-        <h3>The story so far</h3><span>every event on the record, in order — evidence, actions, gates</span>
+        <h2>The story so far</h2><span>every event on the record, in order — evidence, actions, gates</span>
         {snapshots.length ? (
           <select className="v3fs-story-asof" value={asOf} onChange={(e) => setAsOf(e.target.value)} aria-label="View the record as of">
             <option value="now">As of now</option>
@@ -3361,7 +3396,7 @@ function FlowStory({ program }: { program: ProgramSummary }) {
                 <div className="v3fs-story-t">
                   {event.title}
                   {label(event.movementId) ? <span className="v3fs-story-mv">{label(event.movementId)}</span> : null}
-                  {openable ? <span className="v3fs-story-open">read ↗</span> : null}
+                  {openable ? <span className="v3fs-story-open">read<span aria-hidden="true"> ↗</span></span> : null}
                 </div>
                 {event.detail ? <div className="v3fs-story-d">{event.detail}</div> : null}
               </div>

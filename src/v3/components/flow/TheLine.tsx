@@ -25,7 +25,7 @@ import {
   approvalLinkFor, canSendForApproval, stakeholderApprovalItems, type StakeholderApprovalItem,
 } from "@/v3/components/flow/flowApprovals";
 import { displayPersonLabel, resolveMovementStakeholders, type MovementStakeholder } from "@/v3/components/flow/flowStakeholders";
-import { listInterviewPacks, portalLinkFor } from "@/v3/components/flow/flowPortal";
+import { listInterviewPacks, linkIsOpen, portalLinkFor } from "@/v3/components/flow/flowPortal";
 import { stakeholderCollection } from "@/v3/components/flow/CollectBoard";
 // Recording → reviewable text, in the capture dialog. TranscribeButton's only
 // other render site sits inside CollectBoard's IntervieweeDiscovery, which
@@ -90,6 +90,10 @@ interface TheLineProps {
   onRenamePerson?: KitAlignProps["onRenamePerson"];
   onRenameRole?: KitAlignProps["onRenameRole"];
   onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string; unnamed?: boolean; loci?: string[]; scripted?: boolean }) => Promise<string | null>;
+  /** CLOSE a person's durable link — stamps `closedAt`, which is the one thing the edge
+   * already honoured and nothing set. Reversible: re-minting (⎘ link → ↺ reopen) clears
+   * it. Never touches a submission already on the record. Omitted → no close control. */
+  onCloseLink?: (who: string) => Promise<void>;
   onScheduleFollowUp?: (movementId: string, who: string, date: string) => Promise<void>;
   onRunAgent?: (agentId: string, phaseId?: string) => void;
   /** Record a movement's gate — demonstrated. Reopen — evidence changed.
@@ -319,7 +323,7 @@ function packFor(program: ProgramSummary, who: string, movementId: "frame" | "li
     && (movementId === "listen" ? (!pack.movementId || pack.movementId === "listen") : pack.movementId === movementId));
 }
 
-export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenameRole, onMintFollowUp, onScheduleFollowUp, onRunAgent, onRecordGate, onReopenGate, onSendForApproval }: TheLineProps) {
+export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenameRole, onMintFollowUp, onCloseLink, onScheduleFollowUp, onRunAgent, onRecordGate, onReopenGate, onSendForApproval }: TheLineProps) {
   const model = useMemo(() => buildLineModel(program), [program]);
   // The ONE in-browser ledger read every surface here shares (read-only migrate).
   const ledger = useProgramLedger(program);
@@ -706,9 +710,13 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
   const [briefOpen, setBriefOpen] = useState(false);
   const [briefText, setBriefText] = useState("");
   const [briefBusy, setBriefBusy] = useState(false);
-  const copyLink = async (row: CastRow) => {
+  // REOPEN is a re-mint, not a second verb: `mintFollowUpPack` clears `closedAt` on the
+  // durable pack, so forcing the mint path is the whole of it. `reopen` only suppresses
+  // the "there's already a link, just copy it" shortcut — everything below (the ask, the
+  // loci, the send-moment pins) is the ordinary send it always was.
+  const copyLink = async (row: CastRow, opts?: { reopen?: boolean }) => {
     try {
-      const existing = packFor(program, row.label, row.movementId);
+      const existing = opts?.reopen ? null : packFor(program, row.label, row.movementId);
       let url = existing ? portalLinkFor(program.id, existing) : null;
       if (!url && onMintFollowUp) {
         // THE ask on this person's link = the `on this link` bucket of the ONE owned-load
@@ -756,13 +764,40 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
       setQOpen((s) => ({ ...s, [row.label]: true }));
       try {
         await navigator.clipboard.writeText(url);
-        setNote(`Link copied — ${displayPersonLabel(row.label)}. It's also shown below their row.`);
+        setNote(opts?.reopen
+          ? `Link reopened and copied — ${displayPersonLabel(row.label)} can answer again. Their earlier answers are untouched.`
+          : `Link copied — ${displayPersonLabel(row.label)}. It's also shown below their row.`);
       } catch {
-        setNote(`Link ready — copy it from the field under ${displayPersonLabel(row.label)}'s row.`);
+        setNote(opts?.reopen
+          ? `Link reopened — copy it from the field under ${displayPersonLabel(row.label)}'s row.`
+          : `Link ready — copy it from the field under ${displayPersonLabel(row.label)}'s row.`);
       }
       window.setTimeout(() => setNote(null), 6000);
     } catch (error) {
       setNote(`Couldn't create the link: ${error instanceof Error ? error.message : String(error)}`);
+      window.setTimeout(() => setNote(null), 8000);
+    }
+  };
+
+  // ── CLOSING a durable link. Two clicks, because it changes what a stakeholder
+  // sitting on the link can do: the first arms, the second writes `closedAt` through the
+  // same flow-mutation path every mint uses. It stops the link taking NEW answers and
+  // does nothing else — no submission is deleted, the token keeps resolving, and their
+  // recap still renders. Re-minting reopens it, and the armed control says so.
+  const [closeArmed, setCloseArmed] = useState<string | null>(null);
+  const [closeBusy, setCloseBusy] = useState<string | null>(null);
+  const closeLink = async (row: CastRow) => {
+    if (!onCloseLink) return;
+    if (closeArmed !== row.label) { setCloseArmed(row.label); return; }
+    setCloseBusy(row.label);
+    try {
+      await onCloseLink(row.label);
+      setNote(`Link closed — ${displayPersonLabel(row.label)} can't send new answers. Everything they already sent stays on the record; ↺ reopen re-mints the link.`);
+    } catch (error) {
+      setNote(`Couldn't close the link: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setCloseBusy(null);
+      setCloseArmed(null);
       window.setTimeout(() => setNote(null), 8000);
     }
   };
@@ -1226,8 +1261,42 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                     );
                   })()}
                   <span className="v3ln-cr-act">
-                    <button type="button" className="v3ln-a" onClick={() => void copyLink(row)}
-                      title="Their one durable link — minted once, reused forever">⎘ link</button>
+                  {(() => {
+                    // THE LINK'S STATE, read through the ONE closure rule the edge
+                    // enforces (`linkIsOpen` → `acceptsSubmission`). A closed link keeps
+                    // its row and SAYS it is closed — losing the buttons silently is how
+                    // the operator ends up unable to tell "finished" from "never sent".
+                    const pack = packFor(program, row.label, row.movementId);
+                    const closed = !!pack && !linkIsOpen(pack);
+                    const armed = closeArmed === row.label;
+                    const busy = closeBusy === row.label;
+                    return (
+                      <>
+                        <button type="button" className="v3ln-a" onClick={() => void copyLink(row)}
+                          title={closed
+                            ? "Their durable link — closed to new answers, but it still opens and still shows them their recap"
+                            : "Their one durable link — minted once, reused forever"}>⎘ link</button>
+                        {closed ? (
+                          <>
+                            <span className="v3ln-linkclosed" title={`Closed on ${pack?.closedAt?.slice(0, 10) ?? "record"} — it still opens and shows their recap, it just can't take new answers.`}>
+                              link closed
+                            </span>
+                            {onMintFollowUp ? (
+                              <button type="button" className="v3ln-a" onClick={() => void copyLink(row, { reopen: true })}
+                                title="Re-mint the current ask on the same token — the link takes answers again. Nothing already sent is changed.">↺ reopen</button>
+                            ) : null}
+                          </>
+                        ) : onCloseLink && pack ? (
+                          <button type="button" className={`v3ln-a${armed ? " v3ln-linkclose-armed" : ""}`} disabled={busy}
+                            onClick={() => void closeLink(row)}
+                            onBlur={() => setCloseArmed((who) => (who === row.label ? null : who))}
+                            title="Stop this link taking new answers. Nothing already sent is deleted or changed, and ↺ reopen re-mints it.">
+                            {busy ? "closing…" : armed ? "confirm — close (reopen any time)" : "✕ close link"}
+                          </button>
+                        ) : null}
+                      </>
+                    );
+                  })()}
                     {onSaveInputs ? (
                       <button type="button" className="v3ln-a" onClick={() => openCapture(row)}
                         title={`Capture what ${displayPersonLabel(row.label)} said`}>✎ capture</button>

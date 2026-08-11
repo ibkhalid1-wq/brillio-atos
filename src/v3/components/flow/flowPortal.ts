@@ -17,6 +17,15 @@ import { FLOW_ATTESTATION_CAP } from "@/v3/lib/blobGuard";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
 import { parseBeatRecords } from "@/v3/components/flow/flowDemoRun";
 import { kitAgendaQuestions } from "@/v3/lib/ledger/kitAgendaCache";
+// THE ask cap — one declaration (`ownedLoad.ts`), imported, not re-typed. The card
+// that promises "N on this link" and the mint that sends it now read the same number,
+// so the promise cannot drift from the send. Type-only downstream imports mean this
+// pulls in no ledger runtime.
+import { LINK_QUESTION_CAP } from "@/v3/lib/ledger/ownedLoad";
+// THE durable link's state machine — the SAME module the edge enforces and the respond
+// page renders (`_shared` → client is importable; client → Deno is not). The operator's
+// list must not carry a second, softer idea of "finished".
+import { acceptsSubmission } from "@shared/portalLinkState";
 
 export interface FlowInterviewPack {
   id: string;
@@ -55,6 +64,12 @@ export interface FlowInterviewPack {
   token: string;
   createdAt: string;
   respondedAt?: string;
+  /** THE LINK IS FINISHED. Stamped by the person's final send (the edge) or by the
+   * operator's "close this link" action (`closeDurableLink`). Read only through
+   * `@shared/portalLinkState` — this field is never interpreted locally, because the
+   * edge decides submissions against that same module and two readings of "finished"
+   * is the defect. Cleared by a re-mint: a new ask reopens the link. */
+  closedAt?: string;
   /** When the current ASK was last changed (mint/refresh). A submission dated
    * before this means there's a fresh follow-up to answer; a submission on or
    * after it means the person is fully caught up (recap-only). */
@@ -83,6 +98,11 @@ export interface FlowPackSubmission {
   kind: string;
   /** A short human preview of what they sent (for the recap). */
   preview: string;
+  /** They declared themselves DONE with this send — it closed the link. Absent (the
+   * default) means PARTIAL: they sent what they had, and the link stays open. Carried
+   * through here so the operator's list reads the same `portalLinkState` the edge
+   * enforces; without it a partial and a final look identical on this side. */
+  final?: boolean;
 }
 
 export interface FlowPortalItem {
@@ -165,11 +185,15 @@ export function listInterviewPacks(program: ProgramSummary): FlowInterviewPack[]
     token: String(entry.token ?? ""),
     createdAt: String(entry.createdAt ?? ""),
     respondedAt: typeof entry.respondedAt === "string" ? entry.respondedAt : undefined,
+    closedAt: typeof entry.closedAt === "string" ? entry.closedAt : undefined,
     askUpdatedAt: typeof entry.askUpdatedAt === "string" ? entry.askUpdatedAt : undefined,
     submissions: Array.isArray(entry.submissions)
       ? entry.submissions.filter(isRecord).map((s) => ({
           ts: String(s.ts ?? ""), movementId: typeof s.movementId === "string" ? s.movementId : undefined,
           kind: String(s.kind ?? "interview"), preview: String(s.preview ?? ""),
+          // Only ever `true` or absent — the same statement the edge stores, and the
+          // difference between "sent what I have" and "I'm done".
+          ...(s.final === true ? { final: true } : {}),
         }))
       : undefined,
     movementId: typeof entry.movementId === "string" ? entry.movementId : undefined,
@@ -334,20 +358,39 @@ export function listDemoInvites(program: ProgramSummary): FlowDemoInvite[] {
 }
 
 /**
- * The links a surface should SHOW: per person, the newest waiting link (the
- * one live ask) and the newest answered one (the record that they replied).
- * Older duplicates — minted before superseding existed, or answered several
- * times — stay in the blob but not on screen.
+ * IS THIS LINK STILL OPEN? — the operator's read of the ONE rule the edge enforces.
+ *
+ * `acceptsSubmission` is the edge's own gate (`@shared/portalLinkState`): a link is
+ * refused only when it is genuinely finished with nothing outstanding — an explicit
+ * final send, an operator `closedAt`, or a legacy one-shot link that carries only
+ * `respondedAt`. Everything else still takes answers.
+ *
+ * This exists because the operator's list used to group on `respondedAt`, which since
+ * partial submissions means "last heard from", not "finished". A stakeholder who sent
+ * 2 of 8 answers and pressed send read as ANSWERED while their link was still open and
+ * the operator was still waiting on them. There is no second closure rule here: if the
+ * edge would take another submission, the link is open.
+ */
+export const linkIsOpen = (pack: FlowInterviewPack): boolean =>
+  acceptsSubmission(pack as unknown as Record<string, unknown>).ok;
+
+/**
+ * The links a surface should SHOW: per person, the newest OPEN link (the one live ask)
+ * and the newest CLOSED one (the record that they finished). Older duplicates — minted
+ * before superseding existed, or answered several times — stay in the blob but not on
+ * screen.
  */
 export function visibleLinks(packs: FlowInterviewPack[]): FlowInterviewPack[] {
+  const keyFor = (pack: FlowInterviewPack) =>
+    `${pack.stakeholder.trim().toLowerCase()}|${linkIsOpen(pack) ? "open" : "closed"}`;
   const byKey = new Map<string, FlowInterviewPack>();
   for (const pack of packs) {
-    const key = `${pack.stakeholder.trim().toLowerCase()}|${pack.respondedAt ? "answered" : "waiting"}`;
+    const key = keyFor(pack);
     const held = byKey.get(key);
     // Tie-break same-second mints on id so duplicates never both survive.
     if (!held || pack.createdAt > held.createdAt || (pack.createdAt === held.createdAt && pack.id > held.id)) byKey.set(key, pack);
   }
-  return packs.filter((pack) => byKey.get(`${pack.stakeholder.trim().toLowerCase()}|${pack.respondedAt ? "answered" : "waiting"}`) === pack);
+  return packs.filter((pack) => byKey.get(keyFor(pack)) === pack);
 }
 
 /** The shareable link for a pack or demo invite. */
@@ -553,9 +596,9 @@ export function mintFollowUpPack(
   // The follow-up ask rides the person's ONE durable link — a plain question
   // pack (no review surface), superseding whatever ask stood before on the same
   // token. Their prior answers stay in the recap; only these new gaps are open.
-  // The 8-question cap applies to BOTH arrays together, so `questionLoci[i]`
+  // The ask cap applies to BOTH arrays together, so `questionLoci[i]`
   // never stops pointing at `questions[i]`.
-  const askQuestions = input.questions.slice(0, 8);
+  const askQuestions = input.questions.slice(0, LINK_QUESTION_CAP);
   const askLoci = (input.loci ?? []).slice(0, askQuestions.length);
   const askFields: Record<string, unknown> = {
     role: "Follow-up",
@@ -578,13 +621,21 @@ export function mintFollowUpPack(
     // and `questionLoci` is already in that signature, so it carries no
     // independent information about whether the ask changed.
     scripted: input.scripted || undefined,
+    // RE-MINTING REOPENS. A closed link (operator action or their own final send) has a
+    // new ask on it now, so the closure no longer describes it — clear it, in the same
+    // "always SET" idiom as `questionLoci`/`scripted`. This is what makes the operator's
+    // close honestly reversible rather than terminal.
+    closedAt: undefined,
   };
   const { durable, rest } = collapseDurable(existing, input.who);
   let pack: Record<string, unknown>;
   if (durable) {
     const updated = { ...durable, ...askFields };
     // Idempotent: re-sending the identical gaps stands — reuse the standing link.
-    if (askSignature(updated) === askSignature(durable)) return null;
+    // UNLESS the link is closed: then the identical ask is not a no-op, it is the
+    // REOPEN, and returning null here would leave the operator with a control they
+    // were told was reversible and a link that never came back.
+    if (askSignature(updated) === askSignature(durable) && !durable.closedAt) return null;
     updated.askUpdatedAt = now;
     pack = updated;
   } else {
@@ -638,7 +689,7 @@ export function mintReviewPack(
   // The ask this share sets on the person's ONE durable link. Reprojecting a
   // fresh review supersedes the old ask on the SAME token — no new secret, so a
   // link already in their inbox keeps working.
-  const reviewQuestions = input.questions.slice(0, 8);
+  const reviewQuestions = input.questions.slice(0, LINK_QUESTION_CAP);
   const reviewLoci = (input.loci ?? []).slice(0, reviewQuestions.length);
   const askFields: Record<string, unknown> = {
     role: `review:${input.reviewKind}`,
@@ -654,14 +705,18 @@ export function mintReviewPack(
     review: input.review,
     // A link minted for an UNBOUND role placeholder greets nobody by name.
     unnamed: input.unnamed || undefined,
+    // RE-SHARING REOPENS — same rule as the follow-up mint: a fresh ask on a closed
+    // link clears the closure rather than being served behind it.
+    closedAt: undefined,
   };
   const { durable, rest } = collapseDurable(existing, input.who);
   let pack: Record<string, unknown>;
   if (durable) {
     const updated = { ...durable, ...askFields };
     // Idempotent: an identical re-share of the same content stands — the
-    // standing link is returned by the caller's fallback.
-    if (askSignature(updated) === askSignature(durable)) return null;
+    // standing link is returned by the caller's fallback. A CLOSED link is the
+    // exception: the identical re-share is the reopen.
+    if (askSignature(updated) === askSignature(durable) && !durable.closedAt) return null;
     updated.askUpdatedAt = now;
     // The review they LAST saw becomes the baseline for the follow-up's
     // "what changed since your last visit" band — only meaningful when they
@@ -687,6 +742,52 @@ export function mintReviewPack(
   return wrapProgramState(wrapper, {
     ...inner,
     flowInterviewPacks: capInterviewPacks([...rest, pack]),
+    flowAttestations: [...log, attestation].slice(-FLOW_ATTESTATION_CAP),
+  }, usesNestedData);
+}
+
+/**
+ * CLOSE a person's durable link — the operator's half of the closure rule.
+ *
+ * The edge has honoured `pack.closedAt` since `portalLinkState` existed, but nothing
+ * set it: a stakeholder could close their own link with a final send, and the operator's
+ * only lever was "don't re-mint" — which closes nothing, because the token keeps
+ * resolving and keeps taking answers. This is the missing verb, and nothing more.
+ *
+ * What it does NOT do, deliberately:
+ *   · it does not touch `submissions`, `respondedAt`, the quarantine inbox, or anything
+ *     already on the record. Closing a link says "stop asking", never "unsay it";
+ *   · it does not delete the pack or rotate the token — a link in someone's inbox still
+ *     resolves and still shows them their recap;
+ *   · it is not terminal. A later `mintFollowUpPack`/`mintReviewPack` on the same person
+ *     clears `closedAt` (both mints always SET it), so re-minting is the reopen.
+ *
+ * Null when there is no durable pack for that person or it is already closed — an
+ * idempotent no-op writes nothing, exactly like the mints.
+ */
+export function closeDurableLink(program: ProgramSummary, who: string, actor: string): Record<string, unknown> | null {
+  const key = normName(who);
+  if (!key) return null;
+  const { wrapper, inner, usesNestedData } = getProgramState((program.rawData ?? {}) as Record<string, unknown>);
+  const existing = Array.isArray(inner.flowInterviewPacks) ? (inner.flowInterviewPacks as unknown[]) : [];
+  const now = new Date().toISOString();
+  let closed = 0;
+  const nextPacks = existing.map((pack) => {
+    if (!isRecord(pack) || normName(String(pack.stakeholder ?? "")) !== key) return pack;
+    if (typeof pack.closedAt === "string" && pack.closedAt) return pack;
+    closed += 1;
+    return { ...pack, closedAt: now };
+  });
+  if (!closed) return null;
+  const log = Array.isArray(inner.flowAttestations) ? (inner.flowAttestations as unknown[]) : [];
+  const attestation = {
+    ts: now, agentId: actor, phaseId: "listen", tier: 2,
+    action: `Closed the durable link — ${who.trim()}`,
+    detail: "Stops the link taking new answers. Nothing already on the record is changed; re-minting reopens it.",
+  };
+  return wrapProgramState(wrapper, {
+    ...inner,
+    flowInterviewPacks: nextPacks,
     flowAttestations: [...log, attestation].slice(-FLOW_ATTESTATION_CAP),
   }, usesNestedData);
 }

@@ -48,6 +48,20 @@ const nowISO = () => new Date().toISOString();
 const OTHER = "__other__";
 
 /**
+ * The SPOKEN form of a label. The programme's own element names carry relationship
+ * glyphs — "Opportunity→Quote", "Sales Ops⋈Finance" — which a screen reader reads as
+ * "Opportunity rightwards arrow Quote". The glyph is real content (it is part of the
+ * client's ontology, not our decoration), so it stays on screen; this renders the same
+ * meaning in words for the accessible name only.
+ */
+const spoken = (text: string) => text
+  .replace(/\s*→\s*/g, " to ")
+  .replace(/\s*⋈\s*/g, " and ")
+  .replace(/\s*·\s*/g, ", ")
+  .replace(/\s+/g, " ")
+  .trim();
+
+/**
  * SESSIONS — the seam queue, collapsed to ONE line by default.
  *
  * WHY THE SECTION EXISTS AT ALL: a seam locus is JOINTLY owned, and useProgramLedger
@@ -117,12 +131,13 @@ export function SessionsSection({ sessionQueue, plannedPairs, busy, onPropose }:
             const planned = plannedPairs.has(pair);
             return (
               <li key={pair} className={`v3ib-seam${planned ? " planned" : ""}`}>
-                <span className="v3ib-seam-h"><span aria-hidden="true">⋈</span> {pair}</span>
-                <span className="v3ib-seam-n">{abouts.length} joint question{abouts.length === 1 ? "" : "s"} · <span className="v3ib-nodate">⏳ awaiting a date</span></span>
+                <span className="v3ib-seam-h"><span aria-hidden="true">⋈</span> <span className="v3ib-sr">joint seam: </span>{pair}</span>
+                <span className="v3ib-seam-n">{abouts.length} joint question{abouts.length === 1 ? "" : "s"} · <span className="v3ib-nodate"><span aria-hidden="true">⏳ </span>awaiting a date</span></span>
                 {planned ? (
                   <span className="v3ib-onplan">on the session plan · no date yet (gated)</span>
                 ) : (
                   <button type="button" className="v3ib-btn ghost" disabled={busy === pair}
+                    aria-label={spoken(`Propose a time for the ${pair} joint session (${abouts.length} question${abouts.length === 1 ? "" : "s"})`)}
                     onClick={() => onPropose(pair, abouts)}>{busy === pair ? "…" : "propose a time"}</button>
                 )}
               </li>
@@ -221,17 +236,39 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
   const assignAction = (about: string, label: string): OperatorAction =>
     ({ kind: "assign", about, slot: slotOf(about), owner: { label, isRole: isRoleOwner(label) }, by, at: nowISO() });
 
-  const cSelect = (key: string, id: string, placeholder = "Assign an owner…") => (
-    <>
-      <label className="v3ib-sr" htmlFor={id}>Owner</label>
-      <select id={id} value={sel[key] ?? ""} onChange={(e) => setSel((s) => ({ ...s, [key]: e.target.value }))}>
-        <option value="">{placeholder}</option>
-        {candidates.map((c) => <option key={c.label} value={c.label}>{displayPersonLabel(c.label)}{c.role && c.role !== c.label ? ` — ${c.role}` : ""}</option>)}
-        <option value={OTHER}>Someone else…</option>
-      </select>
-      {sel[key] === OTHER ? <input className="v3ib-other" placeholder="Name a person or role" value={other[key] ?? ""} onChange={(e) => setOther((s) => ({ ...s, [key]: e.target.value }))} /> : null}
-    </>
-  );
+  /**
+   * A DOM id has to be unique and has to be usable in `htmlFor`; the ids these
+   * controls were minted with were neither — `asg-grp:Sales Order` carries a space
+   * (invalid per HTML) and `re-el:attr:x.y#type` carries a `#`, so the label/field
+   * association was one browser quirk away from being no association at all. Slugged
+   * here, once, for every control this component mints.
+   */
+  const domId = (raw: string) => raw.replace(/[^A-Za-z0-9_-]+/g, "-").replace(/-+/g, "-");
+
+  /**
+   * There are as many of these selects on the page as there are groups and in-flight
+   * questions, and every one of them used to announce the same word: "Owner". The
+   * label now carries the placeholder — which names WHICH element or question this
+   * control routes — so the twentieth select is distinguishable from the first.
+   */
+  const cSelect = (key: string, rawId: string, placeholder = "Assign an owner…") => {
+    const id = domId(rawId);
+    return (
+      <>
+        <label className="v3ib-sr" htmlFor={id}>{spoken(placeholder)}</label>
+        <select id={id} value={sel[key] ?? ""} onChange={(e) => setSel((s) => ({ ...s, [key]: e.target.value }))}>
+          <option value="">{placeholder}</option>
+          {candidates.map((c) => <option key={c.label} value={c.label}>{displayPersonLabel(c.label)}{c.role && c.role !== c.label ? ` — ${c.role}` : ""}</option>)}
+          <option value={OTHER}>Someone else…</option>
+        </select>
+        {sel[key] === OTHER
+          ? <input className="v3ib-other" aria-label={spoken(`${placeholder} — name a person or role not on the list`)}
+              placeholder="Name a person or role" value={other[key] ?? ""}
+              onChange={(e) => setOther((s) => ({ ...s, [key]: e.target.value }))} />
+          : null}
+      </>
+    );
+  };
 
   // CURATION — loci minted from an ontology-gap kit question. `ledger.proposals` is the
   // ONE source (nothing re-derived here). A proposal is PROVISIONAL and must never read as
@@ -390,10 +427,10 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                   {onAskMark ? (
                     <span className="v3ib-dict-actions">
                       {ask.state === "unrequested" || ask.state === "reopened" ? (
-                        <button type="button" className="v3ib-btn ghost sm" onClick={() => onAskMark({ sor: ask.sor, mark: "requested", by, at: nowISO() })}>mark requested</button>
+                        <button type="button" className="v3ib-btn ghost sm" aria-label={spoken(`Mark the ${ask.sor} dictionary as requested`)} onClick={() => onAskMark({ sor: ask.sor, mark: "requested", by, at: nowISO() })}>mark requested</button>
                       ) : null}
                       {ask.state !== "has-none" ? (
-                        <button type="button" className="v3ib-btn ghost sm" onClick={() => onAskMark({ sor: ask.sor, mark: "has-none", by, at: nowISO() })}>has no dictionary</button>
+                        <button type="button" className="v3ib-btn ghost sm" aria-label={spoken(`Record that ${ask.sor} has no data dictionary`)} onClick={() => onAskMark({ sor: ask.sor, mark: "has-none", by, at: nowISO() })}>has no dictionary</button>
                       ) : null}
                     </span>
                   ) : null}
@@ -415,7 +452,12 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                 every system (the shape a programme that never keys keeps). */}
             {onDictionary ? (
               <>
+                {/* Visually clipped and PROXIED by the labelled buttons above: it is
+                    taken out of the tab order and out of the accessibility tree, so a
+                    keyboard user is not dropped onto an unnamed "choose file" control
+                    that no sighted user can see. `.click()` still opens the dialog. */}
                 <input ref={dictRef} type="file" accept={[".csv", ".tsv", ".txt", ...SPREADSHEET_EXTENSIONS].join(",")} className="v3ib-sr"
+                  tabIndex={-1} aria-hidden="true"
                   onChange={(e) => {
                     const f = e.target.files?.[0]; e.target.value = "";
                     if (f) void readDictionaryFile(f, pendingSor.current, pendingScope.current);
@@ -453,7 +495,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                       {cSelect(key, `asg-${key}`, `Assign owner to ${group}…`)}
                       <button type="button" className="v3ib-btn" disabled={busy === key || !owner}
                         onClick={() => void run(key, items.map((it) => assignAction(it.about, owner!)))}>
-                        {busy === key ? "…" : `→ assign all ${items.length}`}</button>
+                        {busy === key ? "…" : <><span aria-hidden="true">→ </span>{`assign all ${items.length}`}</>}</button>
                     </span>
                   </span>
                   <ul className="v3ib-grp-qs">
@@ -461,7 +503,9 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                       <li key={it.about} className="v3ib-grp-q">
                         <ClaimStatus state={it.status} showLabel={false} />
                         <QLine about={it.about} tail={it.status === "blocked" ? <span className="v3ib-blk" title="Blocked (e.g. an unresolved reference) — still ownerless; assigning an owner is valid, it just can't be answered until unblocked">blocked</span> : undefined} />
-                        <button type="button" className="v3ib-btn ghost sm" onClick={() => setFate((s) => ({ ...s, [it.about]: !s[it.about] }))}>no owner?</button>
+                        <button type="button" className="v3ib-btn ghost sm" aria-expanded={!!fate[it.about]}
+                          aria-label={spoken(`Nobody owns this — rule on: ${Q(it.about).question}`)}
+                          onClick={() => setFate((s) => ({ ...s, [it.about]: !s[it.about] }))}>no owner?</button>
                         {/* REVERSIBLE curation: a proposal minted from a kit question can be
                             retracted, which removes the element AND its question from the read
                             model exactly as if it had never been minted. */}
@@ -473,9 +517,9 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                         ) : null}
                         {fate[it.about] ? (
                           <span className="v3ib-fate">
-                            <input className="v3ib-reason" placeholder="Reason (recorded)…" value={fateReason[it.about] ?? ""} onChange={(e) => setFateReason((s) => ({ ...s, [it.about]: e.target.value }))} />
-                            <button type="button" className="v3ib-btn ghost sm" disabled={busy === it.about || !fateReason[it.about]?.trim()} onClick={() => void run(it.about, { kind: "decide-fate", about: it.about, slot: it.slot, decision: "out-of-scope", reason: fateReason[it.about].trim(), by, at: nowISO() })}>out-of-scope</button>
-                            <button type="button" className="v3ib-btn ghost sm" disabled={busy === it.about || !fateReason[it.about]?.trim()} onClick={() => void run(it.about, { kind: "decide-fate", about: it.about, slot: it.slot, decision: "escalate", reason: fateReason[it.about].trim(), by, at: nowISO() })}>escalate</button>
+                            <input className="v3ib-reason" aria-label={spoken(`Reason for ruling on: ${Q(it.about).question}`)} placeholder="Reason (recorded)…" value={fateReason[it.about] ?? ""} onChange={(e) => setFateReason((s) => ({ ...s, [it.about]: e.target.value }))} />
+                            <button type="button" className="v3ib-btn ghost sm" disabled={busy === it.about || !fateReason[it.about]?.trim()} aria-label={spoken(`Rule out-of-scope: ${Q(it.about).question}`)} onClick={() => void run(it.about, { kind: "decide-fate", about: it.about, slot: it.slot, decision: "out-of-scope", reason: fateReason[it.about].trim(), by, at: nowISO() })}>out-of-scope</button>
+                            <button type="button" className="v3ib-btn ghost sm" disabled={busy === it.about || !fateReason[it.about]?.trim()} aria-label={spoken(`Escalate: ${Q(it.about).question}`)} onClick={() => void run(it.about, { kind: "decide-fate", about: it.about, slot: it.slot, decision: "escalate", reason: fateReason[it.about].trim(), by, at: nowISO() })}>escalate</button>
                           </span>
                         ) : null}
                       </li>
@@ -509,7 +553,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
         <ul className="v3ib-list">
           {ledger.conflicts.map((c) => (
             <li key={c.about} className="v3ib-row is-frozen">
-              <span className="v3ib-row-h"><ClaimStatus state="conflict" showLabel={false} /><QLine about={c.about} tail={<span className="v3ib-frozen-tag">🔒 frozen · {c.count} live claims</span>} /></span>
+              <span className="v3ib-row-h"><ClaimStatus state="conflict" showLabel={false} /><QLine about={c.about} tail={<span className="v3ib-frozen-tag"><span aria-hidden="true">🔒 </span>frozen · {c.count} live claims</span>} /></span>
               <span className="v3ib-awaiting"><span className="v3ib-awaiting-l">awaiting operator adjudication — capture the resolution via the team</span><ProvisionalMark what="the resolving write is gated; no auto-winner" /></span>
             </li>
           ))}
@@ -542,7 +586,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
               <li key={c.about} className="v3ib-row">
                 <span className="v3ib-row-h">
                   <ClaimStatus state="open" showLabel={false} />
-                  <QLine about={c.about} tail={<span className="v3ib-owner">📌 {displayPersonLabel(c.pinned)}{sent ? ` · link sent ${sent}` : ""}</span>} />
+                  <QLine about={c.about} tail={<span className="v3ib-owner"><span aria-hidden="true">📌 </span>pinned to {displayPersonLabel(c.pinned)}{sent ? ` · link sent ${sent}` : ""}</span>} />
                 </span>
                 <span className="v3ib-exits">
                   <span className="v3ib-exits-l">re-derivation routes this to <b>{displayPersonLabel(c.derived)}</b> — nothing moved:</span>
@@ -552,7 +596,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                   </button>
                   <button type="button" className="v3ib-btn ghost sm" disabled={busy === `pin:${c.about}`}
                     onClick={() => void run(`pin:${c.about}`, { kind: "pin-resolve", about: c.about, decision: "release", against: c.derived, by, at: nowISO() })}>
-                    release → move to {displayPersonLabel(c.derived)}
+                    release<span aria-hidden="true"> → </span>move to {displayPersonLabel(c.derived)}
                   </button>
                 </span>
               </li>
@@ -587,32 +631,39 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                   <span className="v3ib-row-h">
                     <ClaimStatus state="open" showLabel={false} />
                     <QLine about={a.about} tail={pin
-                      ? <span className="v3ib-owner">📌 {displayPersonLabel(pin.owner.label)} <span className="v3ib-unit">(on a sent link — pinned)</span></span>
-                      : <span className="v3ib-owner">→ {a.owner.label}</span>} />
+                      ? <span className="v3ib-owner"><span aria-hidden="true">📌 </span>pinned to {displayPersonLabel(pin.owner.label)} <span className="v3ib-unit">(on a sent link — pinned)</span></span>
+                      : <span className="v3ib-owner"><span aria-hidden="true">→ </span>owner: {a.owner.label}</span>} />
                     <span className="v3ib-reassign">
                       {cSelect(a.about, `re-${a.about}`, "Reassign to…")}
-                      <button type="button" className="v3ib-btn ghost sm" disabled={busy === a.about || !pickedOwner(a.about)} onClick={() => void run(a.about, assignAction(a.about, pickedOwner(a.about)!))}>reassign</button>
-                      <button type="button" className="v3ib-btn ghost sm" disabled={busy === a.about} onClick={() => void run(a.about, { kind: "unassign", about: a.about, reason: "operator", by, at: nowISO() })}>unassign</button>
+                      <button type="button" className="v3ib-btn ghost sm" disabled={busy === a.about || !pickedOwner(a.about)} aria-label={spoken(`Reassign: ${Q(a.about).question}`)} onClick={() => void run(a.about, assignAction(a.about, pickedOwner(a.about)!))}>reassign</button>
+                      <button type="button" className="v3ib-btn ghost sm" disabled={busy === a.about} aria-label={spoken(`Unassign ${a.owner.label} from: ${Q(a.about).question}`)} onClick={() => void run(a.about, { kind: "unassign", about: a.about, reason: "operator", by, at: nowISO() })}>unassign</button>
                     </span>
                   </span>
                   {cap ? (
                     <span className="v3ib-captured"><span className="v3ib-captured-tag"><span aria-hidden="true">▧</span> answer captured via team</span><span className="v3ib-captured-body">&ldquo;{cap.answer}&rdquo; — {cap.saidByName}{cap.saidByRole ? `, ${cap.saidByRole}` : ""}</span><ProvisionalMark what="operator-entered, not a stakeholder assertion; not counted as heard" /></span>
                   ) : ref ? (
-                    <span className="v3ib-referral"><span className="v3ib-referral-l">↪ referral: {ref.saidByName} said ask <b>{ref.toOwner}</b> instead</span>
-                      <button type="button" className="v3ib-btn" disabled={busy === a.about} onClick={() => void run(a.about, assignAction(a.about, ref.toOwner))}>confirm → reassign to {ref.toOwner}</button></span>
+                    <span className="v3ib-referral"><span className="v3ib-referral-l"><span aria-hidden="true">↪ </span>referral: {ref.saidByName} said ask <b>{ref.toOwner}</b> instead</span>
+                      <button type="button" className="v3ib-btn" disabled={busy === a.about} onClick={() => void run(a.about, assignAction(a.about, ref.toOwner))}>confirm<span aria-hidden="true"> → </span>reassign to {ref.toOwner}</button></span>
                   ) : (
                     <span className="v3ib-exits">
                       <span className="v3ib-exits-l">awaiting {a.owner.label} — their exits, captured via the team for now:</span>
+                      {/* One set of these per in-flight question, and the visible word
+                          ("answer") is the same on all of them — so the accessible name
+                          names the QUESTION and the holder as well, or a screen-reader
+                          user hears "answer button" twenty times with no way to tell
+                          which question they are about to record against. */}
                       {(["answer", "redirect", "release"] as const).map((k) => (
-                        <button key={k} type="button" className="v3ib-tab" aria-pressed={openExit === k} onClick={() => setExit((s) => ({ ...s, [a.about]: openExit === k ? null : k }))}>{k}</button>
+                        <button key={k} type="button" className="v3ib-tab" aria-pressed={openExit === k}
+                          aria-label={spoken(`Record ${a.owner.label}'s ${k} for: ${Q(a.about).question}`)}
+                          onClick={() => setExit((s) => ({ ...s, [a.about]: openExit === k ? null : k }))}>{k}</button>
                       ))}
                     </span>
                   )}
                   {!cap && !ref && openExit === "answer" ? (
                     <span className="v3ib-form">
-                      <textarea rows={2} placeholder="What they said (captured out-of-band)…" value={f1[a.about] ?? ""} onChange={(e) => setF1((s) => ({ ...s, [a.about]: e.target.value }))} />
+                      <textarea rows={2} aria-label={spoken(`What ${a.owner.label} said, captured out-of-band, about: ${Q(a.about).question}`)} placeholder="What they said (captured out-of-band)…" value={f1[a.about] ?? ""} onChange={(e) => setF1((s) => ({ ...s, [a.about]: e.target.value }))} />
                       <span className="v3ib-form-r">
-                        <input placeholder="Said by (name)" value={f2[a.about] ?? ""} onChange={(e) => setF2((s) => ({ ...s, [a.about]: e.target.value }))} />
+                        <input aria-label="Name of the person who said it" placeholder="Said by (name)" value={f2[a.about] ?? ""} onChange={(e) => setF2((s) => ({ ...s, [a.about]: e.target.value }))} />
                         <button type="button" className="v3ib-btn" disabled={busy === a.about || !f1[a.about]?.trim() || !f2[a.about]?.trim()} onClick={() => void run(a.about, { kind: "capture", about: a.about, slot: slotOf(a.about), answer: f1[a.about].trim(), saidByName: f2[a.about].trim(), saidByRole: "", by, at: nowISO() })}>record answer</button>
                       </span>
                       <span className="v3ib-form-note">Operator-entered · attributed to who said it · <b>not</b> counted as heard.</span>
@@ -621,8 +672,8 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                   {!cap && !ref && openExit === "redirect" ? (
                     <span className="v3ib-form">
                       <span className="v3ib-form-r">
-                        <input placeholder="They said, ask… (target owner)" value={f2[a.about] ?? ""} onChange={(e) => setF2((s) => ({ ...s, [a.about]: e.target.value }))} />
-                        <input placeholder="Said by (name)" value={f1[a.about] ?? ""} onChange={(e) => setF1((s) => ({ ...s, [a.about]: e.target.value }))} />
+                        <input aria-label={spoken(`Who ${a.owner.label} said to ask instead`)} placeholder="They said, ask… (target owner)" value={f2[a.about] ?? ""} onChange={(e) => setF2((s) => ({ ...s, [a.about]: e.target.value }))} />
+                        <input aria-label="Name of the person who gave the referral" placeholder="Said by (name)" value={f1[a.about] ?? ""} onChange={(e) => setF1((s) => ({ ...s, [a.about]: e.target.value }))} />
                         <button type="button" className="v3ib-btn" disabled={busy === a.about || !f2[a.about]?.trim() || !f1[a.about]?.trim()} onClick={() => void run(a.about, { kind: "redirect", about: a.about, slot: slotOf(a.about), toOwner: f2[a.about].trim(), saidByName: f1[a.about].trim(), by, at: nowISO() })}>record redirect</button>
                       </span>
                       <span className="v3ib-form-note">A referral, not an answer. You confirm it with one tap. Not counted as heard.</span>
@@ -631,8 +682,8 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                   {!cap && !ref && openExit === "release" ? (
                     <span className="v3ib-form">
                       <span className="v3ib-form-r">
-                        <input placeholder="Released by (name)" value={f1[a.about] ?? ""} onChange={(e) => setF1((s) => ({ ...s, [a.about]: e.target.value }))} />
-                        <button type="button" className="v3ib-btn" disabled={busy === a.about} onClick={() => void run(a.about, { kind: "unassign", about: a.about, reason: "release", saidByName: f1[a.about]?.trim() || undefined, by, at: nowISO() })}>record release → back to unowned</button>
+                        <input aria-label="Name of the person releasing the question" placeholder="Released by (name)" value={f1[a.about] ?? ""} onChange={(e) => setF1((s) => ({ ...s, [a.about]: e.target.value }))} />
+                        <button type="button" className="v3ib-btn" disabled={busy === a.about} onClick={() => void run(a.about, { kind: "unassign", about: a.about, reason: "release", saidByName: f1[a.about]?.trim() || undefined, by, at: nowISO() })}>record release<span aria-hidden="true"> → </span>back to unowned</button>
                       </span>
                       <span className="v3ib-form-note">&ldquo;Not mine&rdquo; — returns to the unowned queue. The honest signal routing was wrong. Not counted as heard.</span>
                     </span>
@@ -652,7 +703,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
           <ul className="v3ib-list">
             {ledger.decideFates.map((d) => (
               <li key={d.about} className="v3ib-row is-decided">
-                <span className="v3ib-row-h"><SourceTag source="dispositioned" /><QLine about={d.about} tail={<><span className={`v3ib-fate-tag ${d.decision === "escalate" ? "esc" : "oos"}`}>{d.decision === "escalate" ? "↥ escalated" : "⊘ out-of-scope"}</span><span className="v3ib-fate-reason">{d.reason}</span></>} /></span>
+                <span className="v3ib-row-h"><SourceTag source="dispositioned" /><QLine about={d.about} tail={<><span className={`v3ib-fate-tag ${d.decision === "escalate" ? "esc" : "oos"}`}>{d.decision === "escalate" ? <><span aria-hidden="true">↥ </span>escalated</> : <><span aria-hidden="true">⊘ </span>out-of-scope</>}</span><span className="v3ib-fate-reason">{d.reason}</span></>} /></span>
               </li>
             ))}
           </ul>

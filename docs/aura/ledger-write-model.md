@@ -39,23 +39,58 @@ persistence contract below is identical for both.
 
 ## The merge algorithm (specified and tested — `merge.ts`, `ledgerMerge.test.ts`)
 
-Regeneration output is always `generated` (the generation contract's source ceiling). So the decision
-table that actually runs is **incoming `generated` vs one existing claim on the same locus** — driven by
-precedence, with **one rule precedence does not have:** two `generated` claims do not "coexist" (that
-would accumulate a stale generation on every regeneration) — the **incoming (newer) generated supersedes
-the existing generated.**
+Regeneration output is always `generated` (the generation contract's source ceiling), and the import
+batch (data dictionary, FHIR/Salesforce adapters) is always `code-derived`. So the decision table that
+actually runs is **incoming `generated` or `code-derived` vs one existing claim on the same locus** —
+driven by precedence, with **three rules precedence does not have**, because `resolvePrecedence` compares
+`(source × world)` and knows nothing about **time** or **provenance**.
 
 | Existing claim on the locus | Outcome | Why |
 |---|---|---|
 | any source, **different world** (as-is) | **coexist-deviation** | cross-world is the deviation register's job; regeneration (to-be) never touches as-is |
 | `?unknown` (open) | **fill-unknown** | the incoming value answers the open slot |
-| `asserted` / `dispositioned` / `document` / `regulation` / `precedent` / `external-standard` / `code-derived` (to-be) | **preserve-existing** | every non-generated source outranks `generated` for a shared world — the closure/evidence stands, incoming dropped (no overwrite) |
 | `generated`, **same value** | **corroborate** | identical claim; one row kept |
-| `generated`, **different value** | **supersede-existing** | **recency** — the new generation replaces the stale one (the rule beyond precedence) |
+| `generated`, **different value** (incoming `generated`) | **supersede-existing** | **recency rule 1** — the new generation replaces the stale one |
+| `code-derived`, **same import provenance**, different value | **supersede-existing** | **recency rule 2 (N-4)** — the same system re-uploaded a *correction*, not a rival opinion |
+| `code-derived`, **different import provenance**, different value | **coexist-conflict** | two *different* systems disagree — a genuine, routable contradiction; not flattened |
+| **same value**, any two sources | **corroborate** | **rule 3 (N-5)** — agreement is one answer; the stronger source stays live, the weaker is kept as history |
+| anything else | **preserve-existing** / precedence | deferred to `resolvePrecedence` — one definition of who outranks whom |
 
-Every row is unit-tested (`mergeDecision`). The "preserve-existing" row is the no-overwrite guarantee,
-inherited from `resolvePrecedence` and proven by the store; the "supersede-existing" row is the added
-recency rule, without which regeneration accumulates garbage.
+Every row is unit-tested (`mergeDecision`, `ledgerMergeProvenance.test.ts`). The "preserve-existing" row
+is the no-overwrite guarantee, inherited from `resolvePrecedence` and proven by the store.
+
+### Rule 2 — a corrected re-upload CORRECTS (N-4, decided 2026-08-11)
+
+Before this, re-uploading a dictionary with a fixed data type left **both** readings live: one `coexist`
+conflict, `burnDown.weak` +1, the slot rendering `state:"conflict"`. Meanwhile the field layer promised
+the opposite — `writeDictionaryField`'s own test is titled *"re-uploading for a system REPLACES its
+dictionary"*. **The field replaced; the ledger accumulated.** An operator fixing a typo was punished
+for it. The ledger now honours the promise the product already makes.
+
+**Same provenance** is read from **`closedBy.by`, and only when `closedBy.method === "import"`**
+(`importProvenance` in `merge.ts`). That is the *only* field on a `Claim` that records which system a
+row came from — there is no `Claim.provenance`. It is fine-grained enough for the path that matters:
+`readDictionarySources` names every source from its **stored key** (`"<SoR> dictionary"`, or
+`"uploaded-dictionary"` for the global one) and `writeDictionaryField` matches keys case-insensitively,
+so the same system of record yields the same token on every upload while two different systems never
+collide. `dictionaryProvenance()` is the single shared definition of the token, used by the emitter and
+the merge rule alike.
+
+Two limits, stated rather than guessed at:
+
+- **An absent provenance never matches another absent provenance.** A `code-derived` claim with no
+  import closure falls through to precedence and still coexists — *"I cannot tell which system this came
+  from"* must not be read as *"the same system"*. The miss stays visible.
+- **`migrate.ts` stamps every one of its imports `prototype`,** so for migrated rows the token identifies
+  the *pipeline*, not a system of record. Telling two systems apart **within one migrate pass** would
+  need a real field — `Claim.provenance` / `AssertInput.provenance`, a stable system-of-record id
+  independent of `closedBy` — which is a frozen-core (`types.ts`, `store.ts`) change. Recorded below,
+  not guessed at here.
+
+### Rule 3 — two writers, one value (N-5, corrected 2026-08-11)
+
+See "the redundant row" under corollary 2 below: this rule is what now prevents it, on the `reconcile`
+path only.
 
 **The case that breaks naive merges — a closure whose underlying generated claim disappears.** A
 stakeholder asserts something about `Opportunity`; regeneration then drops `Opportunity` upstream, so the
@@ -110,9 +145,44 @@ and what the store already does (the asserted row wins; the generated is superse
 any external reference that holds a **claim id** across a source change goes stale. Therefore a
 persistence layer must make durable foreign keys reference **element ids or `(about, world)` tuples,
 never claim ids.** (Internally, `contradicts`/`supersededBy` hold claim ids and are filtered by
-`isLive`, so a stale link is harmless; the rule is only for *durable/external* references.) One wart to
-note: an upgrade with the *same* value doesn't supersede the generated row (no value conflict), leaving a
-redundant row the projection hides — cosmetic, not a correctness issue.
+`isLive`, so a stale link is harmless; the rule is only for *durable/external* references.)
+
+**The redundant row — CORRECTED 2026-08-11 (N-5). This document was wrong.** It previously said an
+upgrade with the same value leaves "a redundant row the projection hides — cosmetic, not a correctness
+issue". **The projection does not hide it.** `projections.ts:179-188` builds the burn-down from *every
+live claim*:
+
+```
+const closed = all.filter(c => c.status === "closed").length;
+const weak   = all.filter(c => c.status === "weak").length;
+const open   = all.filter(c => c.status === "open" || c.status === "blocked").length;
+const total  = closed + weak + open;
+```
+
+So a duplicate identical closure inflates **both the numerator and the denominator**: one answer is
+counted as two rows, `total` grows by one, and `pctClosed` / `pctSettled` both skew. Concretely — a
+`generated · weak` value that a stakeholder later confirms as `asserted · closed` with the *same* value
+reads `total 2 · closed 1 · weak 1 · pctClosed 50.0` where the honest answer is `total 1 · closed 1 ·
+pctClosed 100.0`. A fully-answered locus reports half-answered. That is a correctness issue, not a
+cosmetic one, and it gets worse the more machine pre-fill a stakeholder agrees with.
+
+The mechanism: `store.ts:97` gates precedence on `valueConflicts`, which requires the two values to be
+substantive **and unequal**. Two writers who *agree* therefore never call `resolvePrecedence`, so neither
+supersedes and both rows stay live.
+
+**What was done about it.** Preventing the row beats hiding it, so the duplicate is now collapsed at
+**write** time on the one path outside the frozen core — `reconcile` (`merge.ts`, rule 3 above). After
+`assert` returns, any live claim on the same locus *and same world* carrying an equal substantive value
+is put to `resolvePrecedence` — the question it would have been asked had the two disagreed. On a clean
+`wins` the weaker row is retained as **history** (`supersededBy`, never deleted, attribution intact). On
+`escalate` or `coexist` **both rows stay live**: where the lattice cannot decide, flattening would erase
+a routable signal.
+
+**What is NOT fixed, and why.** `reconcile` is not the only writer. A duplicate created by two direct
+`store.assert` calls — the operator-action and disposition paths — still leaves two live rows, because
+the gate that causes it is in `store.ts`, which is frozen. This is pinned by a test
+(`ledgerMergeProvenance.test.ts`, *"FROZEN-CORE FINDING, still true"*) so it cannot drift unnoticed. The
+precise edit, for when the core is opened, is recorded under **Frozen-core findings** below.
 
 ## Audit vs ledger — the system-of-record distinction (stated once)
 
@@ -178,6 +248,101 @@ it to a one-time bootstrap (Option A) when the claims-emitting generator lands.*
 So: **B until the generator; A after.** The one thing that must land before persistence regardless is
 `reconcile` (the merge) replacing the current no-merge re-migrate — without it, B loses closures exactly
 as the current code does.
+
+## What the merge report states (and what it used to lie about)
+
+`MergeReport` is the caller's only evidence of what a reconcile actually did:
+
+| Field | Means |
+|---|---|
+| `applied` | rows processed from the batch |
+| `preservedClosures` | attributed closures that survived an incoming conflict (the no-overwrite guarantee, counted) |
+| `supersededGenerated` | stale generations replaced by newer ones — recency rule 1 |
+| `correctedReimports` | earlier `code-derived` rows superseded by a later import from the **same** provenance — recency rule 2 (N-4). Never counts a different system's disagreement |
+| `collapsedDuplicates` | live rows collapsed because a second writer landed the **same** value — rule 3 (N-5) |
+| `filledUnknowns` | open `?unknown` slots the batch answered |
+| `newClaims` | rows added that neither filled an unknown nor met a closure |
+| `deviations` | incoming claims that, once live, stand in a **cross-world deviation** on their locus |
+| `orphanedClosures` | attributed closures about elements the regeneration dropped |
+
+**`deviations` was a dead branch until 2026-08-11 (N-11).** `reconcile` filtered `liveBefore` to
+`c.world === input.world` and *then* asked whether that list contained an `as-is` claim while
+`input.world === "to-be"` — unsatisfiable, so the field could only ever read `0`. A real cross-world
+deviation was registered by `buildDeviationRegister` and reported as `0` by the very merge that created
+it: two readers, two contradictory numbers. It was **fixed, not deleted** — a number that cannot move is
+worse than no number, and deviation reporting is a thing the merge genuinely knows. The incoming claim is
+now compared against the live claims of the **other** world using the *same predicate the register uses*
+(`scalar`/`ref`/`ref-list` on both sides; the incoming value matching none of the other world's values),
+so the two counts are one number rather than two. Pinned by
+`expect(rep.deviations).toBe(buildDeviationRegister(store).length)`.
+
+## Frozen-core findings — the edits to make when the core is opened
+
+`store.ts`, `types.ts`, `precedence.ts` and `projections.ts` are frozen. Three changes belong in them and
+were **not** made; each is recorded here with the exact edit.
+
+**F1 · `store.ts:97` — agreement should still resolve precedence (N-5, the root cause).** The
+`reconcile`-side collapse above fixes one write path; every other caller of `assert` still creates the
+duplicate. The root fix is one line:
+
+```ts
+// current — an AGREEING pair never reaches precedence, so two live rows remain
+if (!valueConflicts(x.value, claim.value)) continue;
+
+// proposed — agreement is one answer: resolve it, keep the loser as history
+if (!substantive(x.value) || !substantive(claim.value)) continue;
+if (valueEq(x.value, claim.value)) {
+  const rEq = resolvePrecedence({ source: claim.source, world: claim.world }, { source: x.source, world: x.world });
+  if (rEq.outcome === "wins") {                       // escalate/coexist: leave BOTH live — the
+    if (rEq.winner === "a") x.supersededBy = claim.id; // lattice cannot decide, so nothing is flattened
+    else claim.supersededBy = x.id;
+  }
+  continue;
+}
+```
+
+Same change in `pgStore.ts:98` (`PgLedger.assert`), which mirrors this loop for the persisted path.
+
+**F2 · `projections.ts:179-188` — count answers, not rows.** F1 is the better fix (prevent the row); if
+instead the counting is to be made defensive, the burn-down must de-duplicate by locus before counting:
+
+```ts
+// current: const all = store.claims().filter(isLive);
+// proposed: one row per (about, world) — the STRONGEST live claim on it — so an agreeing
+// duplicate cannot inflate both the numerator and the denominator.
+const best = new Map<string, Claim>();
+for (const c of store.claims().filter(isLive)) {
+  const k = `${c.about}|${c.world}`;
+  const prior = best.get(k);
+  if (!prior || (strengthRank[c.source] ?? 0) > (strengthRank[prior.source] ?? 0)) best.set(k, c);
+}
+const all = [...best.values()];
+```
+Note this also changes what a *genuine* coexist conflict contributes (one row, not two) — which is a
+product decision about whether an unresolved contradiction should read as one open question or two, and
+is **not** decided here.
+
+**F3 · `types.ts` / `store.ts` — a first-class provenance field.** N-4's rule reads provenance out of
+`closedBy.by`, which works because every `code-derived` producer happens to set `method: "import"` and a
+system token. It is a convention, not a contract: nothing stops a producer from writing a person's name
+there, and `migrate.ts` writes `prototype` for every system it merges. The durable fix is
+`provenance?: string` on `Claim` (and on `AssertInput`, threaded through `assert`), carrying a stable
+system-of-record id set by each adapter. `importProvenance()` in `merge.ts` would then read that field
+and fall back to `closedBy.by` for rows written before it.
+
+**F4 · `pgStore.ts:40` — `closedBy` is swallowed by a comment (unrelated, but load-bearing for N-4).**
+
+```ts
+ownerWhileOpen: normalizeOwner(r.owner),   // rows written before Owner.parties carry {a,b} closedBy: (r.closed_by ?? undefined) as Claim["closedBy"],
+```
+
+The `closedBy:` assignment sits **inside the trailing line comment**, so `rowToClaim` never populates it
+and every claim rehydrated from Postgres comes back with `closedBy === undefined`. Consequences: the
+attribution of a closure (`who`, `verbatim`, `when`) is invisible to any reader that goes through
+`rowToClaim`, and — because provenance is read from `closedBy.by` — **the N-4 correction rule cannot fire
+on the persisted path at all**; a re-upload there still coexists. The fix is to move the assignment onto
+its own line. `pgStore.ts` is not frozen but is outside this session's ownership, so it is reported, not
+edited. **This should be verified against live data before anything else here is scheduled.**
 
 ## The single case neither option handles cleanly
 

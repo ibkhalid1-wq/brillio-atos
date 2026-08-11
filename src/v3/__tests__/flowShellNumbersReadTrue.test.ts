@@ -121,9 +121,18 @@ describe("the copy fixes that ARE the markup", () => {
     // Rename is armed only by its own pencil. The head's key handler ignores
     // events that bubbled up from a nested control — without that, Enter on
     // "Rename" armed the rename and immediately navigated off the card.
+    //
+    // The guard used to be written inline on this ONE row, and was pinned here as
+    // source text. The accessibility audit (2026-08-11) found the other four
+    // role="button" rows had never been given it — two of them nest a real button —
+    // so the rule moved into a single `rowActivate` helper that every row now uses.
+    // This still pins the card, through the helper; the BEHAVIOUR it protects (Enter
+    // and Space both activate, a key on a nested control does not) is now asserted
+    // against the live DOM in a11yFlowKeyboard.test.ts.
     const head = shell.slice(shell.indexOf('className="v3fs-pf-head"'));
     const keyDown = head.slice(head.indexOf("onKeyDown"), head.indexOf("onKeyDown") + 220);
-    expect(keyDown).toMatch(/e\.target !== e\.currentTarget/);
+    expect(keyDown).toMatch(/rowActivate\(/);
+    expect(shell).toMatch(/const rowActivate = [\s\S]{0,240}e\.target !== e\.currentTarget/);
     expect(shell).toMatch(/aria-label=\{`Rename \$\{entry\.name\}`\}/);
   });
 });

@@ -102,15 +102,17 @@ function OperatorTile({ station, role, onOpen, onRegen, onGenerate, regenerating
         {present && onRegen && station.card ? (
           <button type="button" className="v3dl-mini" disabled={regenerating}
             onClick={() => onRegen!(station.card!)}
+            aria-label={`Rebuild ${station.title} from the current claims`}
             title="Rebuild this from the current claims (a decision is re-derived from the claims, not a blob refreshed)">
-            {regenerating ? "rebuilding…" : "↻ rebuild from claims"}
+            {regenerating ? "rebuilding…" : <><span aria-hidden="true">↻ </span>rebuild from claims</>}
           </button>
         ) : null}
         {/* stakeholders question-but-don't-edit: the affordance names the owning role */}
         <span className="v3dl-question" title={`A stakeholder can question this decision — it routes to ${role} as a proposal, and never edits the artifact. The capture lives on their link.`}>
           {onQuestion && station.card
-            ? <button type="button" className="v3dl-mini ghost" onClick={() => onQuestion(station, role)}>? question → {role}</button>
-            : <span className="v3dl-question-note">questionable → routes to {role}</span>}
+            ? <button type="button" className="v3dl-mini ghost" aria-label={`Question the ${station.title} decision — routes to ${role}`}
+                onClick={() => onQuestion(station, role)}><span aria-hidden="true">? </span>question<span aria-hidden="true"> → </span>{role}</button>
+            : <span className="v3dl-question-note">questionable<span aria-hidden="true"> → </span>routes to {role}</span>}
         </span>
       </div>
     </div>
@@ -219,7 +221,7 @@ export default function DesignLoopZones({ band, ledger, onOpen, onRegen, onGener
                   <li key={it.about} title={it.about}>
                     <span className="v3dl-drill-type">{it.typeTag}</span>
                     <span className="v3dl-drill-q">{it.question}</span>
-                    <span className="v3dl-drill-owner">→ {it.ownerLabel}</span>
+                    <span className="v3dl-drill-owner"><span aria-hidden="true">→ </span>owner: {it.ownerLabel}</span>
                   </li>
                 ))}
                 {drillItems.length > 24 ? <li className="v3dl-drill-more">+{drillItems.length - 24} more — work them in the Discover inbox</li> : null}
@@ -249,7 +251,7 @@ export default function DesignLoopZones({ band, ledger, onOpen, onRegen, onGener
                 {ledger.devs.slice(0, 5).map((d) => (
                   <li key={d.about}>
                     <code>{d.about.replace(/^el:/, "")}</code>
-                    <span className="v3dl-devvals">{d.asIs} <span aria-hidden="true">→</span> {d.toBe}</span>
+                    <span className="v3dl-devvals">{d.asIs} <span aria-hidden="true">→</span> <span className="v3lc-sr">becomes </span>{d.toBe}</span>
                     <DeviationMarker classification={d.classification} stillReferenced={d.stillReferenced} />
                   </li>
                 ))}
@@ -261,7 +263,7 @@ export default function DesignLoopZones({ band, ledger, onOpen, onRegen, onGener
             <p className="v3dl-split-body">What the Experience Design document actually renders. A render deviating from asserted intent shows up in the register.</p>
             {experience?.card ? (
               <button type="button" className="v3dl-mini" onClick={() => onOpen(experience.card!)}
-                title="Open Experience Design">open Experience Design →</button>
+                title="Open Experience Design">open Experience Design<span aria-hidden="true"> →</span></button>
             ) : <span className="v3dl-split-num"><ClaimStatus state="open" showLabel={false} /> not rendered yet</span>}
           </div>
         </div>

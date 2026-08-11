@@ -103,11 +103,11 @@ describe("ownedLoad — ONE partition whose buckets add up to the headline", () 
     expect(new Set(pair.owned.map((i) => i.about)).size).toBe(pair.owned.length);
   });
 
+  // The source-text lockstep that used to live here — a regex over flowPortal.ts hunting
+  // its bare `8` — is GONE. Both mints now import `LINK_QUESTION_CAP`, so there is one
+  // declaration and nothing to keep in step; `linkQuestionCapOneDefinition.test.ts` proves
+  // the mint reads THAT export by substituting it. What is left here is the card's half.
   it("the cap is the PACK's cap — a card can never promise a send the mint will truncate", () => {
-    const portal = readFileSync(resolve(__dirname, "../components/flow/flowPortal.ts"), "utf8");
-    const m = /const askQuestions = input\.questions\.slice\(0, (\d+)\);/.exec(portal);
-    expect(m, "mintFollowUpPack's ask cap not found in flowPortal.ts").toBeTruthy();
-    expect(Number(m![1])).toBe(LINK_QUESTION_CAP);
     const load = ownedLoadFor(LEDGER, [HEAVY]);
     expect(load.onLink.length).toBe(LINK_QUESTION_CAP);
     expect(load.nextLink.length).toBe(soloByOwner.get(HEAVY)!.length - LINK_QUESTION_CAP);
