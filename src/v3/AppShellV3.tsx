@@ -72,7 +72,7 @@ import { listOpenFlowDecisions } from "@/v3/components/flow/flowDecisions";
 import { listPortalInbox } from "@/v3/components/flow/flowPortal";
 import { governedExceptionsForInbox } from "@/v3/components/flow/flowExceptions";
 import { personaAreas } from "@/v3/components/flow/flowAreas";
-import { validateProgramBlob, migrateProgramBlob, FLOW_ATTESTATION_CAP } from "@/v3/lib/blobGuard";
+import { validateProgramBlob, formatBlobIssues, migrateProgramBlob, FLOW_ATTESTATION_CAP } from "@/v3/lib/blobGuard";
 import { unrosteredVoicesProposal, reDemoProposal, ontologyRepairProposal, retroAttributionProposal, negatedClaimProposal, queueWatcherProposal, contradictionEvidenceDigest } from "@/v3/components/flow/flowWatchers";
 import { mergePhaseInputBucket } from "@/v3/lib/phaseInputMerge";
 import { isDecisionOpen, pushV3Toast } from "@/v3/utils";
@@ -1464,9 +1464,15 @@ export default function AppShellV3() {
     const inner = typeof raw.data === "object" && raw.data !== null ? (raw.data as Record<string, unknown>) : raw;
     const issues = validateProgramBlob(inner);
     if (!issues.length) return;
-    console.warn("[blobGuard]", activeProgram.id, issues);
+    // Once per programme per session, and as READABLE LINES. This effect
+    // re-runs on every blob identity change, so logging outside the gate
+    // repeated the same warning ~10× per load; and logging the issue array
+    // printed `[object Object]`, so the toast pointed the operator at a
+    // console that held nothing legible. formatBlobIssues is the one
+    // definition of how an issue is written down.
     if (!blobWarned.current.has(activeProgram.id)) {
       blobWarned.current.add(activeProgram.id);
+      console.warn(`[blobGuard] ${activeProgram.id} — ${issues.length} malformed key${issues.length === 1 ? "" : "s"}:\n${formatBlobIssues(issues)}`);
       pushV3Toast(`Data check: ${issues.length} item${issues.length === 1 ? " looks" : "s look"} malformed (${issues.map((i) => i.key).join(", ")}). The app keeps working around it — details are in the console.`, { tone: "warning", duration: 7000 });
     }
   }, [activeProgram?.id, activeProgram?.updatedAt, activeProgram?.rawData, activeProgram]);
@@ -2933,7 +2939,16 @@ export default function AppShellV3() {
             const movement = activeProgram ? flowMovements().find((m) => m.id === target) : undefined;
             // Snapshot the impacted movement's present artifacts BEFORE ingest —
             // ingest doesn't change which are present, only their freshness.
-            const impacted = movement && activeProgram
+            //
+            // GATED on the operator's opt-in. This path used to regenerate
+            // unconditionally, so a single Inbox click replaced artifacts and
+            // spent tokens on a programme whose Control screen states the
+            // opposite ("off by default — evidence stales the affected
+            // artifacts and waits for you to press Regenerate"). With the
+            // opt-in off, ingest still stales them — the evidence moves the
+            // movement's inputs fingerprint — and the operator presses
+            // Regenerate, which is exactly what that copy promises.
+            const impacted = movement && activeProgram && autoBuildEnabled(activeProgram)
               ? movementArtifacts(activeProgram, movement).filter((a) => a.present).map((a) => a.id)
               : [];
             // The area this response touches — steers the regeneration to focus
@@ -2944,6 +2959,16 @@ export default function AppShellV3() {
               ? `AREA-FOCUSED REGENERATION: new evidence just arrived from ${who} in the ${areas.join(" / ")} area. Re-derive faithfully from ALL evidence, giving special attention to ${areas[0]}; keep the workflows and entities of OTHER areas intact where their evidence is unchanged.`
               : undefined;
             await persistFlowMutation((program) => ingestPortalResponse(program, itemId, actor));
+            // Name the DESTINATION. The row simply vanished from the Inbox and
+            // nothing said where it went, so the operator had no way to tell
+            // "filed" from "lost" — and with auto-build off, the stale
+            // artifacts now waiting on them are the whole point of the action.
+            pushV3Toast(
+              impacted.length
+                ? `Filed to the record — ${movement?.displayName ?? target} artifacts are regenerating.`
+                : `Filed to the record — read it under Library. ${movement?.displayName ?? target} artifacts are now stale; press Regenerate when you're ready.`,
+              { tone: "success", duration: 6000 },
+            );
             void runProgramAgent({ agentId: "contradiction-detector", phaseId: target, triggeredBy: "trigger", skipPreSync: true });
             // Auto-regenerate the IMPACTED movement's artifacts — new stakeholder
             // evidence just landed, so the atlas/ontology (Listen), blueprint

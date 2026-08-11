@@ -38,6 +38,12 @@ function mulberry32(seed: number) { let a = seed >>> 0; return () => { a |= 0; a
 const COMPANIES = ["Northwind", "Contoso", "Fabrikam", "Aperture", "Initech", "Umbra", "Halcyon", "Vertex", "Meridian Labs", "Blue Yonder", "Cobalt", "Sterling", "Ironwood", "Pinnacle", "Kestrel", "Lumen", "Orenda", "Quill", "Radian", "Solstice", "Tacit", "Vantage", "Wexford", "Zephyr"];
 const WORDS = ["review", "renewal", "expansion", "migration", "pilot", "rollout", "audit", "handoff", "escalation", "onboarding", "assessment", "sync"];
 const STATUSES = ["Open", "In progress", "Blocked", "Closed", "On hold"];
+// Obviously-synthetic people, in the same register as the placeholder companies
+// above. A person-shaped field needs a person-shaped value: before this list
+// existed, an "owner" column rendered "Northwind onboarding" — an engagement
+// standing in for a human, which is exactly the detail that tells a
+// stakeholder a demo isn't real.
+const PEOPLE = ["A. Whitfield", "R. Osei", "M. Lindqvist", "S. Nakamura", "D. Ferreira", "K. Abadi", "J. Mbeki", "L. Petrov", "T. Halvorsen", "N. Chaudhry", "C. Delacroix", "P. Okonkwo", "E. Vargas", "H. Sørensen", "B. Ramachandran", "F. Novak"];
 
 const singular = (name: string) => name.replace(/s$/i, "");
 
@@ -50,7 +56,15 @@ function valueFor(role: ValueRole | undefined, entity: string, attr: string, i: 
     case "boolean": return rnd() > 0.5;
     case "status": return STATUSES[Math.floor(rnd() * STATUSES.length)];
     case "code": return `${entity.slice(0, 3).toUpperCase()}-${String(1000 + Math.floor(rnd() * 8999))}`;
-    case "title": case "identifier": return `${COMPANIES[i % COMPANIES.length]} ${singular(entity)} ${i + 1}`;
+    case "person-ref": return PEOPLE[Math.floor(rnd() * PEOPLE.length)];
+    // A reference to another record reads as that record's name — the bare
+    // organisation. Sharing the generic filler put "Northwind review" in an
+    // Account column, which names an activity, not an account.
+    case "parent-ref": return COMPANIES[Math.floor(rnd() * COMPANIES.length)];
+    case "title": return `${COMPANIES[i % COMPANIES.length]} ${singular(entity)} ${i + 1}`;
+    // An identifier is a HANDLE, not a second copy of the title. Sharing the
+    // title's branch printed the same string into two adjacent columns.
+    case "identifier": return `${entity.replace(/[^A-Za-z]/g, "").slice(0, 3).toUpperCase()}-${String(i + 1).padStart(5, "0")}`;
     default: return `${COMPANIES[i % COMPANIES.length]} ${WORDS[Math.floor(rnd() * WORDS.length)]}`;
   }
 }
@@ -106,6 +120,12 @@ export function generateSeed(ontology: Record<string, unknown>, version: string,
   let planted = false;
   for (const name of order) {
     const rnd = mulberry32(hashSeed(`${version}::${name}`));
+    // A per-entity ceiling, deterministic from the entity's own name. With ONE
+    // shared cap, every table deep enough in the graph saturated and reported
+    // the identical round number — 12 of Laila's 32 entities all read "120
+    // records", which reads as a placeholder rather than a populated system.
+    // The cap still bounds the work; it just stops being the headline figure.
+    const entityCap = maxPerEntity - Math.floor(mulberry32(hashSeed(`cap::${name}`))() * Math.min(40, maxPerEntity / 3));
     const attrs = attrsOf(name);
     const parents = parentEdgesOf.get(name) ?? [];
     const rows: SeedRecord[] = [];
@@ -132,7 +152,7 @@ export function generateSeed(ontology: Record<string, unknown>, version: string,
       pRows.forEach((p, pi) => {
         // deliberately include the extremes: first parent gets 0, second gets max
         const k = pi === 0 ? 0 : pi === 1 ? maxFanOut : (primary?.card === "1:1" ? 1 : Math.floor(rnd() * (maxFanOut + 1)));
-        for (let j = 0; j < k && rows.length < maxPerEntity; j += 1) {
+        for (let j = 0; j < k && rows.length < entityCap; j += 1) {
           const parentIds: Record<string, string> = { [primary!.parent]: String(p.id) };
           for (const pe of parents.slice(1)) { const alt = records[pe.parent] ?? []; if (alt.length) parentIds[pe.parent] = String(alt[(idx + j) % alt.length].id); }
           rows.push(mk(idx++, parentIds));
