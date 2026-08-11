@@ -27,12 +27,15 @@ import {
 import { displayPersonLabel, resolveMovementStakeholders, type MovementStakeholder } from "@/v3/components/flow/flowStakeholders";
 import { listInterviewPacks, linkIsOpen, visibleLinks, portalLinkFor } from "@/v3/components/flow/flowPortal";
 import { stakeholderCollection } from "@/v3/components/flow/CollectBoard";
-// Recording → reviewable text, in the capture dialog. TranscribeButton's only
-// other render site sits inside CollectBoard's IntervieweeDiscovery, which
-// nothing has imported since the classic-canvas sunset (564cd3d), so this mount
-// is what makes recording ingestion reachable at all. The control self-hides
-// when flow-transcribe answers 501 (no OPENAI_API_KEY on the project).
-import { TranscribeButton } from "@/v3/components/flow/flowCapture";
+// The two roads from the world into the capture dialog, both of them the
+// SHARED controls — no second uploader, no second transcriber.
+// TranscribeButton's only other render site sits inside CollectBoard's
+// IntervieweeDiscovery, which nothing has imported since the classic-canvas
+// sunset (564cd3d), so this mount is what makes recording ingestion reachable
+// at all. It self-hides when flow-transcribe answers 501 (no OPENAI_API_KEY).
+// AttachFileButton posts to flow-extract and reports its own failures inline —
+// this dialog must never wrap it in anything that can swallow one.
+import { AttachFileButton, TranscribeButton } from "@/v3/components/flow/flowCapture";
 import { listenCoverageAreas, listenAreaCoverage } from "@/v3/components/flow/listenCoverage";
 import { canonicalFrameArea, stakeholderPrimaryArea } from "@/v3/components/flow/flowAreas";
 import { buildMeetingIcs, meetingKit, sponsorLinkQuestions } from "@/v3/components/flow/flowMeetings";
@@ -944,24 +947,53 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
   const [capFor, setCapFor] = useState<CastRow | "open" | null>(null);
   const [capWho, setCapWho] = useState<string>("");
   const [capText, setCapText] = useState("");
+  /** Files extracted by flow-extract and waiting for the operator to read them.
+   * Held, not written: the dialog's contract is that NOTHING is evidence until
+   * Capture is pressed, and an extraction is exactly the kind of text that has
+   * to be looked at first (a spreadsheet, a deck, a scanned PDF). */
+  const [capDocs, setCapDocs] = useState<Array<{ filename: string; text: string; sourceKey?: string }>>([]);
   const openCapture = (row?: CastRow) => {
     setCapFor(row ?? "open");
     setCapWho(row?.label ?? cast[0]?.label ?? "");
     setCapText("");
+    setCapDocs([]);
   };
   const saveCapture = async () => {
     const row = cast.find((r) => r.label === capWho);
     const text = capText.trim();
-    if (!row || !text || !onSaveInputs) return;
+    const docs = capDocs.filter((doc) => doc.text.trim());
+    if (!row || (!text && !docs.length) || !onSaveInputs) return;
     const existing = String(readMovementInputs(program, row.movementId)[row.captureField] ?? "");
-    const header = `— ${[row.isRole ? row.role : row.label, row.isRole ? "" : row.role, evidenceStamp()].filter(Boolean).join(", ")} —`;
-    const appended = [existing.trimEnd(), `${header}\n${text}`].filter(Boolean).join("\n\n");
-    await onSaveInputs(row.movementId, { [row.captureField]: appended }, { attest: { action: `Captured — ${row.label}` } });
+    const stamp = evidenceStamp();
+    // The one identity the dialog is capturing FOR — the same one the typed
+    // header names. A file is attributed to the person selected above, never
+    // to the operator who happened to be holding it.
+    const person = row.isRole ? row.role : row.label;
+    const header = `— ${[person, row.isRole ? "" : row.role, stamp].filter(Boolean).join(", ")} —`;
+    const docTitle = (filename: string) => filename.replace(/\.[^.]+$/, "");
+    // The document header the record already parses (flowShellData: kind
+    // "document", with the optional "[source: …]" pointer to the stored
+    // original so the Library can offer it back as a native download).
+    const docBlocks = docs.map((doc) =>
+      `— Document: ${docTitle(doc.filename)}, provided by ${person}, ${stamp} —\n${doc.sourceKey ? `[source: ${doc.sourceKey}]\n` : ""}${doc.text.trim()}`);
+    const appended = [existing.trimEnd(), ...(text ? [`${header}\n${text}`] : []), ...docBlocks]
+      .filter(Boolean).join("\n\n");
+    await onSaveInputs(row.movementId, { [row.captureField]: appended }, {
+      attest: docs.length
+        ? {
+            action: `Document added — ${docs.map((doc) => docTitle(doc.filename)).join(" · ")}`,
+            detail: `provided by ${row.label}${text ? " · with a typed capture" : ""}`,
+          }
+        : { action: `Captured — ${row.label}` },
+    });
     onRunAgent?.("contradiction-detector", row.movementId);
-    setCapFor(null); setCapText("");
+    setCapFor(null); setCapText(""); setCapDocs([]);
+    const what = docs.length
+      ? `${docs.length} document${docs.length === 1 ? "" : "s"} added${text ? " with a capture" : ""}`
+      : "Captured";
     setNote(row.movementId === "listen"
-      ? `Captured — ${displayPersonLabel(row.label)}. The Ontology and Atlas will refresh for ${row.area}.`
-      : `Captured — ${displayPersonLabel(row.label)}. The Charter and Discovery Kit will refresh.`);
+      ? `${what} — ${displayPersonLabel(row.label)}. The Ontology and Atlas will refresh for ${row.area}.`
+      : `${what} — ${displayPersonLabel(row.label)}. The Charter and Discovery Kit will refresh.`);
     window.setTimeout(() => setNote(null), 6000);
   };
 
@@ -1552,14 +1584,35 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                 <textarea rows={7} value={capText} onChange={(e) => setCapText(e.target.value)}
                   placeholder="Paste a transcript, meeting notes, an email thread…" />
               </label>
+              {/* Each attachment stays its own reviewable block: the extracted
+                  text is EDITABLE here and lands as a “— Document —” entry
+                  attributed to the person selected above. Removing one before
+                  Capture leaves no trace on the record. */}
+              {capDocs.map((doc, index) => (
+                <div className="v3ln-cap-f v3ln-cap-doc" key={`${doc.filename}-${index}`}>
+                  <span className="v3ln-cap-doc-h">
+                    <span className="v3ln-cap-doc-n"><span aria-hidden="true">▤ </span>{doc.filename}</span>
+                    <button type="button" className="v3ln-a" aria-label={`Remove ${doc.filename}`}
+                      onClick={() => setCapDocs((current) => current.filter((_, i) => i !== index))}>Remove</button>
+                  </span>
+                  <textarea rows={5} value={doc.text}
+                    aria-label={`Extracted text from ${doc.filename} — edit before it lands`}
+                    onChange={(e) => setCapDocs((current) =>
+                      current.map((d, i) => (i === index ? { ...d, text: e.target.value } : d)))} />
+                </div>
+              ))}
               {/* Appends, never overwrites: a transcript joins whatever the
                   operator has already typed or pasted, and stays editable —
                   nothing becomes evidence until Capture is pressed. */}
-              <TranscribeButton onText={(transcript) => setCapText((current) => (current.trim() ? `${current.trim()}\n\n${transcript}` : transcript))} />
+              <div className="v3ln-cap-ins">
+                <AttachFileButton programId={program.id}
+                  onExtracted={(filename, text, sourceKey) => setCapDocs((current) => [...current, { filename, text, sourceKey }])} />
+                <TranscribeButton onText={(transcript) => setCapText((current) => (current.trim() ? `${current.trim()}\n\n${transcript}` : transcript))} />
+              </div>
               <div className="v3ln-cap-bar">
-                <button type="button" className="v3ln-btn" disabled={!capText.trim() || !capWho}
+                <button type="button" className="v3ln-btn" disabled={(!capText.trim() && !capDocs.some((doc) => doc.text.trim())) || !capWho}
                   onClick={() => void saveCapture()}>Capture</button>
-                <span>Lands as “— Name, Role, Date —” evidence and refreshes what depends on it. To attach a document instead, use Library → Evidence → Attach.</span>
+                <span>Lands as “— Name, Role, Date —” evidence and refreshes what depends on it. An attached file lands as its own “— Document —” entry, attributed to the same person, with the original kept for download.</span>
               </div>
             </div>
           </div>
