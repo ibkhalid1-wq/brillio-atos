@@ -8,6 +8,7 @@
  */
 import type { ProgramSummary } from "@/new/types";
 import { FLOW_ATTESTATION_CAP } from "@/v3/lib/blobGuard";
+import { greetingName } from "@/v3/components/flow/FlowReviewSurface";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
 import { flowMovements, movementArtifacts, movementOpenIssues, kitPersonas, gateChecklist, readMovementInputs, parseGridRows, readContradictions, falsifiedGap, frameFactOnRecord, deferredAsks } from "@/v3/components/flow/flowShellData";
 import { FORMAL_ARTIFACT_FIELD_KEYS, FORMAL_ARTIFACT_PHASES } from "@/v3/lib/formalArtifacts";
@@ -672,8 +673,14 @@ export function buildMeetingIcs(input: {
 /** mailto: URL carrying a response link, ready to send. */
 export function mailtoLink(email: string, input: { stakeholder: string; programmeName: string; link: string }): string {
   const subject = `${input.programmeName} — a few questions, in your own words`;
+  // Same rule as the linked page, from the same definition. This line carried
+  // its own copy of `split(" ")[0]`, so fixing the page alone would have left
+  // "Hi Head," in the invitation EMAIL — the artefact that lands in an
+  // executive's inbox with our name on it. A label with nobody behind it gets
+  // a neutral opener rather than an invented name.
+  const greeting = greetingName(input.stakeholder);
   const body = [
-    `Hi ${input.stakeholder.split(" ")[0]},`,
+    greeting ? `Hi ${greeting},` : "Hello,",
     "",
     "Your perspective shapes what we build next. This link takes a few minutes,",
     "typed or dictated, whenever suits you:",

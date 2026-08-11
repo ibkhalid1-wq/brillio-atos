@@ -232,6 +232,26 @@ export function kpiRatio(done: number, total: number, label: string, emptyLabel:
   return { value: "—", of: null, label: emptyLabel };
 }
 
+/** Token headroom to propose for a movement, from what it has ALREADY spent.
+ *
+ * Every movement reads "· no cap", and none is set anywhere — an autonomous
+ * system defaulting to unlimited spend is the first thing a buyer asks about.
+ * A default cap can't simply be invented in this view, though: enforcement
+ * lives in the edge (`run-agent`, `if (movementCap > 0)`), so a ceiling shown
+ * here that nothing enforces would be fabricated safety — and one set below a
+ * movement's existing spend would halt live work the moment it landed.
+ *
+ * So this proposes rather than imposes: a figure derived from the observed
+ * spend already on screen, with real headroom, offered as a draft the operator
+ * still has to press Set on. Nothing changes until they do; the number is a
+ * measurement, not an invention.
+ */
+export function recommendedCap(spent: number | null): number {
+  const floor = 250_000;
+  const withHeadroom = Math.max(Math.round((spent ?? 0) * 1.5), floor);
+  return Math.ceil(withHeadroom / 50_000) * 50_000;
+}
+
 /** One stroke weight, currentColor — the rail's icons stop being a font-glyph grab bag. */
 const DOCK_PATHS: Record<string, React.ReactNode> = {
   today: <><path d="M4 6h16v12H4z" /><path d="M4 13h5l2 2.5h2L15 13h5" /></>,
@@ -1759,9 +1779,17 @@ function FlowMission({ program, fleet, loadMovementSpend, onSetHaltAll, onToggle
           <details className="v3fs-disc v3fs-disc-sm">
             <summary>
               <span className="v3fs-disc-l">Adjust caps</span>
+              <span className="v3fs-disc-hint">{movements.every((m) => !governance.movementBudgets[m.id]) ? "nothing capped yet" : null}</span>
               <span className="v3fs-disc-c" aria-hidden="true" />
             </summary>
             <div className="v3fs-disc-b">
+              {/* Proposes drafts from spend already measured; the operator still
+                  presses Set on each. Nothing here writes a cap on its own. */}
+              <button type="button" className="v3fs-btn" disabled={busy || spend === null}
+                title="Fill each cap with its movement's spend plus headroom — you still press Set"
+                onClick={() => setCapDrafts(Object.fromEntries(movements.map((m) => [m.id, String(recommendedCap(spend?.[m.id] ?? 0))])))}>
+                Suggest caps from spend
+              </button>
               {movements.map((movement) => (
                 <div key={movement.id} className="v3fs-budget-edit">
                   <span className="v3fs-budget-edit-l">{spineLabel(movement.id, { distinct: true })}</span>
