@@ -1,3 +1,22 @@
+// ┌─────────────────────────────────────────────────────────────────────────────┐
+// │ STATUS: SCRIPT-ONLY TOOLING. Not wired to any edge function — by decision.  │
+// └─────────────────────────────────────────────────────────────────────────────┘
+// Decided 2026-08-10. This module has NO importer among the deployed function
+// entrypoints; it is reached only by the hand-run harnesses in `scripts/ledger/`.
+// That was previously ambiguous, and the ambiguity cost a wrong conclusion: the
+// owner-derivation fix is mirrored here, so it was reported as shipped when in fact
+// this code runs nowhere. Regenerating a programme through `run-agent` does NOT
+// exercise it — which is why the surgery drain test cannot be settled by a
+// regeneration alone (see the brief, §7.1).
+//
+// Being dormant is not the same as being safe to ignore. Two guards now cover it:
+// the fabricated-owner scan reads `supabase/functions/_shared` (it did not before,
+// which is how a constant role owner survived here), and
+// `dormantGeneratorPath.test.ts` asserts no entrypoint has quietly imported it.
+//
+// TO WIRE IT: add the import, then update that test in the same change. The test
+// exists to make that a deliberate act with a reviewer, not a silent one.
+
 // Aura — the claims-emitting generator (edge/Deno). Emits claims-with-unknowns
 // conforming to docs/aura/ledger-generation-contract.md: the batch that Option A
 // feeds directly into the (frozen, proven) reconcile instead of re-migrating a blob.
