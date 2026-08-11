@@ -17,23 +17,20 @@
  * `renderWorkflowDetail`, so the diagram and the inspector are moved, not
  * reimplemented). Picking a workflow in the lifecycle grid opens the same row.
  *
- * ONE COMPONENT, TWO SURFACES. The workflows belong to the CURRENT-STATE ATLAS —
- * that is where the work is described, and where every structural change is made:
- * rename a workflow, retarget its area, add / reorder / drop a step, dismiss the
- * whole thing. AGENTIFY draws the SAME workflows and decides exactly one thing
- * about them: can this step be agentified. So `surface` splits the two:
+ * ONE COMPONENT, ONE SURFACE: THE CURRENT-STATE ATLAS. This is where the work is
+ * described and where every structural change is made — rename a workflow, retarget
+ * its area, add / reorder / drop a step, dismiss the whole thing.
  *
- *   surface="atlas"    (default) — full CRUD, and NO agentify control. The Atlas
- *                      describes the work; it does not decide automation, and it
- *                      does not display a call it did not make.
- *   surface="agentify" — read-only as to STRUCTURE (no add/remove/reorder, no
- *                      workflow fields, no dismiss). The flag is the only edit, and
- *                      it does not write a workflow: it writes a DECISION, keyed by
- *                      the atlas step's ledger element id (agentifyDecisions).
- *
- * There is deliberately no second copy of the workflows. Agentify's caller hands
- * this component the ATLAS's own array, so a rename on the Atlas is a rename on
- * Agentify, immediately, with nothing to reconcile.
+ * IT MAKES NO AUTOMATION CALL, and it draws none. Agentify decides exactly one
+ * thing about these same steps (can this one be agentified), and since 2026-08-11 it
+ * does so as a LIST OF ACTIVITIES with a toggle per row — AgentifyList in
+ * studios.tsx — not as a second rendering of this diagram. That matters here mainly
+ * for what is absent: this file used to carry a `surface="agentify"` mode with a
+ * structurally-frozen twin of the swimlane and a three-way flag control inside the
+ * step inspector. Both are gone. A decision control that no caller reaches is a
+ * second implementation waiting to drift from the one operators actually use, so
+ * there is exactly one, and it is not here. Agentify still reads the Atlas's own
+ * workflows straight off `currentStateAtlas` every render; there is no copy.
  *
  * The registers (events · pain · systems) are properties of the ATLAS document, not
  * of a workflow, so they render outside this component — exported below as
@@ -51,9 +48,6 @@ import { listenCoverageAreas, canonicalFrameArea } from "@/v3/components/flow/li
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
 import { useProgramLedger } from "@/v3/lib/ledger/useProgramLedger";
 import { anchorWorkflowsToAtlas, resolveWorkflow, resolveStep } from "@/v3/lib/ledger/agentifyAnchor";
-import {
-  AGENTIFY_MODES, asMode, decisionStepId, type AgentifyMode, type DecisionMap,
-} from "@/v3/lib/ledger/agentifyDecisions";
 import type { SlotView, StepView } from "@/v3/lib/ledger/projections";
 import { ClaimStatus } from "@/v3/components/flow/studio/ledgerPrimitives";
 import AtlasSeamView from "./AtlasSeamView";
@@ -151,13 +145,11 @@ function painForStep(step: Record<string, unknown>, pains: Array<Record<string, 
  * chips also stop truncating here (`slice(0, 3)` on screen, all of them on
  * paper): a page has the room a tile does not.
  */
-function PrintWorkflowDiagram({ workflow, pains, ontoEvents, area, modeOf }: {
+function PrintWorkflowDiagram({ workflow, pains, ontoEvents, area }: {
   workflow: Record<string, unknown>;
   pains: Array<Record<string, unknown>>;
   ontoEvents: Array<Record<string, unknown>>;
   area: string;
-  /** The call on a step, or "" — empty on the Atlas, which makes no call. */
-  modeOf: (step: Record<string, unknown>) => string;
 }) {
   const steps = asArray(workflow.steps).map(asRecord);
   const lanes: string[] = [];
@@ -203,13 +195,6 @@ function PrintWorkflowDiagram({ workflow, pains, ontoEvents, area, modeOf }: {
                         <span className="v3fs-swim-n" aria-hidden="true">{index + 1}</span>
                         <span className="v3fs-swim-action">{asText(step.action) || "—"}</span>
                         <span className="v3fs-swim-meta">
-                          {/* The agentification call, where one has been made. An
-                              undecided step shows NOTHING — never a default mode
-                              dressed up as a decision. (And the Atlas makes no
-                              calls at all, so `modeOf` is empty there.) */}
-                          {modeOf(step)
-                            ? <span className={`v3fs-wf-flag ${modeOf(step)}`}>{AGENTIFY_MODE_LABEL[modeOf(step)]}</span>
-                            : null}
                           {asText(step.system) ? <span className="v3fs-wf-system">{asText(step.system)}</span> : null}
                           {asText(step.duration) ? <span className="v3fs-wf-dur">{asText(step.duration)}</span> : null}
                         </span>
@@ -233,60 +218,25 @@ function PrintWorkflowDiagram({ workflow, pains, ontoEvents, area, modeOf }: {
   );
 }
 
-/** The agentification call on one step — the same three modes flowFutureState
- * projects, now RECORDED rather than only inferred. The list itself lives with the
- * decisions (agentifyDecisions), so the surface and the store cannot drift. */
-export { AGENTIFY_MODES } from "@/v3/lib/ledger/agentifyDecisions";
-export const AGENTIFY_MODE_LABEL: Record<string, string> = {
-  agentify: "Agentify", assist: "Assist", keep: "Keep manual",
-};
-const AGENTIFY_MODE_HINT: Record<string, string> = {
-  agentify: "An agent runs this step end to end.",
-  assist: "An agent prepares it; a human still decides.",
-  keep: "This step stays a human judgement.",
-};
-/** The mode recorded ON A STEP, or "" when nobody has decided yet. NEVER guessed
- * here — an undecided step reads undecided, and the Envision projection falls
- * back to its own heuristic rather than this surface inventing one.
- *
- * This is the LEGACY reading: a decision that was written onto a copy of the
- * workflow. New decisions live in `agentify.decisions`, keyed by the atlas step's
- * element id, and reach the diagram through the `decisions` prop. */
-export const stepMode = (step: Record<string, unknown>): string => asMode(step.mode);
-
 export default function WorkflowStudio({
-  doc, onChange, onOpenArtifact, program, onFocus, registerDoc,
-  surface = "atlas", anchorDoc, decisions, onDecide,
+  doc, onChange, onOpenArtifact, program, onFocus, registerDoc, anchorDoc,
 }: StudioProps & {
   onFocus?: (focus: AtlasFocus | null) => void;
   /** Where the pain heatmap and the business-event register live. Defaults to
    * `doc` for a caller that holds the workflows and the registers together — the
    * Current-State Atlas does. */
   registerDoc?: Record<string, unknown>;
-  /** Which tab this is: the Atlas edits the work, Agentify decides one thing about
-   * it. See the header. */
-  surface?: "atlas" | "agentify";
   /** The STORED Current-State Atlas — what the claims ledger was migrated from, and
    * therefore what an anchor has to be computed against. Distinct from `doc` (which
-   * on the Atlas tab is the unsaved DRAFT) and from `registerDoc`: anchoring the
-   * draft to itself would stamp a workflow the operator just invented with an id the
-   * ledger has never held, and it would read STRANDED instead of honestly empty. */
+   * is the unsaved DRAFT) and from `registerDoc`: anchoring the draft to itself
+   * would stamp a workflow the operator just invented with an id the ledger has
+   * never held, and it would read STRANDED instead of honestly empty. */
   anchorDoc?: Record<string, unknown>;
-  /** Agentify only: the call on each step, by atlas step element id. */
-  decisions?: DecisionMap;
-  /** Agentify only: record or withdraw the call on one step. Its presence is what
-   * makes the flag control appear at all. */
-  onDecide?: (stepId: string, patch: { mode?: AgentifyMode | ""; rationale?: string }) => void;
 }) {
   const locked = useStudioLocked();
   const authoring = useStudioAuthoring();
   const printing = useStudioPrinting();
   const regDoc = registerDoc ?? doc;
-  // STRUCTURE IS THE ATLAS'S. Agentify draws the same workflows and may not reshape
-  // them — no add, no reorder, no drop, no rename, no dismiss. Separate from `locked`
-  // (the artifact's own lock/derived gate) because the flag control below must stay
-  // live on an unlocked Agentify while everything around it is frozen.
-  const structureLocked = locked || surface === "agentify";
   // ANCHORED WORKFLOWS — each carrying the ledger element id of the ATLAS
   // workflow/step it describes (agentifyAnchor). Derived here, over the document AS
   // IT STANDS, because that is the last moment the draft and the stored atlas are
@@ -301,16 +251,6 @@ export default function WorkflowStudio({
     () => anchorWorkflowsToAtlas(asArray(doc.workflows).map(asRecord), anchorSource),
     [doc.workflows, anchorSource],
   );
-  // The call on a step: Agentify's decisions register, keyed by the step's atlas
-  // element id, with the legacy per-step `mode` behind it. On the ATLAS this is
-  // always "" — the Atlas describes the work and shows no call, because it makes
-  // none.
-  const modeOf = useCallback((step: Record<string, unknown>): string => {
-    if (surface !== "agentify") return "";
-    const wf = workflows.find((entry) => asArray(entry.steps).includes(step));
-    const id = wf ? decisionStepId(wf, step) : "";
-    return (id && decisions?.[id]?.mode) || stepMode(step);
-  }, [surface, workflows, decisions]);
   const pains = useMemo(() => asArray(regDoc.painHeatmap).map(asRecord), [regDoc.painHeatmap]);
   // `active` is now the workflow OPENED INLINE in the seam view — null when none
   // is open (there is no separate editor below to keep pointed at something).
@@ -470,9 +410,9 @@ export default function WorkflowStudio({
   // braces: no path through this component can put a copy of the Atlas's workflows
   // onto the Agentify document, however the surface is later rearranged.
   const writeWorkflows = useCallback((next: Array<Record<string, unknown>>) => {
-    if (structureLocked) return;
+    if (locked) return;
     onChange({ ...doc, workflows: next });
-  }, [doc, onChange, structureLocked]);
+  }, [doc, onChange, locked]);
   const patchWorkflow = useCallback((patch: Record<string, unknown>) => {
     if (active == null) return;
     writeWorkflows(workflows.map((entry, index) => (index === active ? { ...entry, ...patch } : entry)));
@@ -488,12 +428,12 @@ export default function WorkflowStudio({
   // drag that reordered by its own path would be a second way for the document to
   // change, and the first one to drift would do it silently.
   const insertStep = useCallback((at: number, actor: string) => {
-    if (structureLocked) return;
+    if (locked) return;
     const next = [...steps];
     next.splice(at, 0, { actor, action: "New step", system: "", duration: "" });
     patchWorkflow({ steps: next });
     setSelected(at);
-  }, [steps, patchWorkflow, structureLocked]);
+  }, [steps, patchWorkflow, locked]);
   /**
    * Move the step at `from` to index `to`. The ONE reorder — `← Earlier`, `Later →`
    * and a dropped tile all land here, so the keyboard path and the pointer path
@@ -506,7 +446,7 @@ export default function WorkflowStudio({
    * separate list.
    */
   const reorderStep = useCallback((from: number, to: number) => {
-    if (structureLocked) return;
+    if (locked) return;
     if (from === to) return;
     if (from < 0 || to < 0 || from >= steps.length || to >= steps.length) return;
     const next = [...steps];
@@ -514,16 +454,16 @@ export default function WorkflowStudio({
     next.splice(to, 0, step);
     patchWorkflow({ steps: next });
     setSelected(to);
-  }, [steps, patchWorkflow, structureLocked]);
+  }, [steps, patchWorkflow, locked]);
   // MARK-DROPPED, not hard-delete: a step can carry closed claims (its lineage),
   // and reconcile's element handling keeps a dropped element findable as an orphan
   // rather than destroying it. So "remove" sets a soft `dropped` flag — the step
   // stays in the document (and in the ledger, findable), rendered struck-through,
   // and is restorable. A true hard delete of a claim-carrying element is refused.
   const toggleDropped = useCallback((index: number) => {
-    if (structureLocked || !steps[index]) return;
+    if (locked || !steps[index]) return;
     patchStep(index, { dropped: !asRecord(steps[index]).dropped });
-  }, [steps, patchStep, structureLocked]);
+  }, [steps, patchStep, locked]);
 
   const addStep = () => insertStep(
     selected != null ? selected + 1 : steps.length,
@@ -559,7 +499,7 @@ export default function WorkflowStudio({
    * so every cell of the column carries these. Locked/derived and Agentify get an
    * empty object — no drop handler at all, rather than one that fails silently.
    */
-  const dropZone = (index: number) => (structureLocked ? {} : {
+  const dropZone = (index: number) => (locked ? {} : {
     onDragOver: (e: React.DragEvent<HTMLElement>) => {
       if (!drag) return;                       // not our drag — let the page have it
       e.preventDefault();                      // "yes, you may drop here"
@@ -590,7 +530,7 @@ export default function WorkflowStudio({
   // curation trail, exactly as the removed panel's DismissControl did.
   const dismissWorkflow = useCallback((index: number, reason: string) => {
     const entry = workflows[index];
-    if (!entry || structureLocked) return;
+    if (!entry || locked) return;
     onChange({
       ...doc,
       workflows: workflows.filter((_, i) => i !== index),
@@ -598,7 +538,7 @@ export default function WorkflowStudio({
     });
     setActive(null);
     setSelected(null);
-  }, [workflows, doc, onChange, structureLocked]);
+  }, [workflows, doc, onChange, locked]);
   // Opening a row toggles it; the lifecycle grid always opens (never closes).
   const toggleWorkflow = useCallback((index: number) => {
     setActive((prev) => (prev === index ? null : index));
@@ -618,7 +558,7 @@ export default function WorkflowStudio({
             <h3 className="v3fs-wf-printarea">{area} · {items.length} workflow{items.length === 1 ? "" : "s"}</h3>
             {items.map(({ index }) => (
               <PrintWorkflowDiagram key={index} workflow={workflows[index]}
-                pains={pains} ontoEvents={ontoEvents} area={area} modeOf={modeOf} />
+                pains={pains} ontoEvents={ontoEvents} area={area} />
             ))}
           </React.Fragment>
         ))}
@@ -669,12 +609,9 @@ export default function WorkflowStudio({
           goes summary → swimlane → one step's form. Indigo card; the step form
           below is the white working card with the accent spine, so the two levels
           never look alike.
-          On the ATLAS these fields are editable — this is where the work is
-          described. On AGENTIFY they are the same facts, stated and not offered,
-          because reshaping a workflow is not a call Agentify gets to make. */}
+          These fields are editable — this is where the work is described. */}
       <div className="v3fs-wf-details">
-        <div className="v3fs-wf-card-eyebrow">Workflow summary
-          {surface === "agentify" ? <em className="v3fs-wf-src">from the Current-State Atlas</em> : null}</div>
+        <div className="v3fs-wf-card-eyebrow">Workflow summary</div>
         {/* A stranded WORKFLOW strands every step under it (the steps' claims are
             filed beneath its id), so it is said once here rather than repeated on
             each step — and said WITHOUT having to select a step to discover it. */}
@@ -688,45 +625,24 @@ export default function WorkflowStudio({
             <span className="v3fs-wf-claims-note">Anchor: <code>{wfClaims.anchor}</code></span>
           </div>
         ) : null}
-        {surface === "agentify" ? (
-          <div className="v3fs-wf-ro">
-            {[["Name", asText(workflow.name)], ["Trigger", asText(workflow.trigger)],
-              ["Owner", asText(workflow.owner)], ["Area", frameAreaFor(workflowArea(workflow))],
-              ["Hand-offs", asStrings(workflow.handoffs).join(" · ")],
-              ["Failure modes", asStrings(workflow.failureModes).join(" · ")]]
-              .filter(([, value]) => value)
-              .map(([label, value]) => (
-                <div key={label} className="v3fs-dv-fact">
-                  <span className="v3fs-dv-fl">{label}</span><span className="v3fs-dv-fv">{value}</span>
-                </div>
-              ))}
-            <p className="v3fs-wf-ro-note">
-              The workflow itself — its steps, their order, who does them — is edited on the{" "}
-              <b>Current-State Atlas</b>. Here you decide one thing: which of its steps can be agentified.
-            </p>
-          </div>
-        ) : (
-          <>
-            <div className="v3fs-wf-head">
-              <TextField label="Name" value={asText(workflow.name)} onChange={(next) => patchWorkflow({ name: next })} />
-              <TextField label="Trigger" value={asText(workflow.trigger)} onChange={(next) => patchWorkflow({ trigger: next })} />
-              <TextField label="Owner" value={asText(workflow.owner)} onChange={(next) => patchWorkflow({ owner: next })} />
-              {/* Reassigning the area moves this workflow's tab group — how an
-                  "unmapped" frame area gets its first workflow. */}
-              {frameAreas.length ? (
-                <SelectField label="Area (from the Frame)" value={frameAreaFor(workflowArea(workflow))}
-                  options={[...frameAreas, GENERAL_AREA]}
-                  onChange={(next) => patchWorkflow({ area: next })} />
-              ) : null}
-            </div>
-            <div className="v3fs-wf-head">
-              <ChipsField label="Hand-offs" values={asStrings(workflow.handoffs)} onChange={(next) => patchWorkflow({ handoffs: next })} />
-              <ChipsField label="Failure modes" values={asStrings(workflow.failureModes)} onChange={(next) => patchWorkflow({ failureModes: next })} />
-            </div>
-            <DismissControl label="Dismiss this workflow" confirmLabel="Dismiss workflow"
-              onDismiss={(reason) => dismissWorkflow(wfIndex, reason)} />
-          </>
-        )}
+        <div className="v3fs-wf-head">
+          <TextField label="Name" value={asText(workflow.name)} onChange={(next) => patchWorkflow({ name: next })} />
+          <TextField label="Trigger" value={asText(workflow.trigger)} onChange={(next) => patchWorkflow({ trigger: next })} />
+          <TextField label="Owner" value={asText(workflow.owner)} onChange={(next) => patchWorkflow({ owner: next })} />
+          {/* Reassigning the area moves this workflow's tab group — how an
+              "unmapped" frame area gets its first workflow. */}
+          {frameAreas.length ? (
+            <SelectField label="Area (from the Frame)" value={frameAreaFor(workflowArea(workflow))}
+              options={[...frameAreas, GENERAL_AREA]}
+              onChange={(next) => patchWorkflow({ area: next })} />
+          ) : null}
+        </div>
+        <div className="v3fs-wf-head">
+          <ChipsField label="Hand-offs" values={asStrings(workflow.handoffs)} onChange={(next) => patchWorkflow({ handoffs: next })} />
+          <ChipsField label="Failure modes" values={asStrings(workflow.failureModes)} onChange={(next) => patchWorkflow({ failureModes: next })} />
+        </div>
+        <DismissControl label="Dismiss this workflow" confirmLabel="Dismiss workflow"
+          onDismiss={(reason) => dismissWorkflow(wfIndex, reason)} />
       </div>
       {steps.length === 0 ? (
         <div className="v3fs-stu-empty">No steps yet — add the first one below.</div>
@@ -767,9 +683,9 @@ export default function WorkflowStudio({
                         // NOT draggable when the artifact is locked or derived, and not
                         // on Agentify: a frozen tile cannot start a drag at all, rather
                         // than starting one that is refused on drop.
-                        draggable={!structureLocked}
+                        draggable={!locked}
                         onDragStart={(e) => {
-                          if (structureLocked) return;
+                          if (locked) return;
                           if (e.dataTransfer) {
                             e.dataTransfer.effectAllowed = "move";
                             // Firefox refuses to start a drag with no data on it.
@@ -788,13 +704,9 @@ export default function WorkflowStudio({
                         {pain ? <span className={`v3fs-swim-paindot ${pain.severity}`} aria-label={`${pain.severity} pain: ${pain.pain}`} role="img" /> : null}
                         <span className="v3fs-swim-action">{asText(step.action) || "—"}</span>
                         <span className="v3fs-swim-meta">
-                          {/* THE FLAG, where a call has been made. An undecided step
-                              shows NOTHING — never a default mode dressed up as a
-                              decision — and the Atlas shows nothing at all, because
-                              deciding is not what the Atlas is for. */}
-                          {modeOf(step)
-                            ? <span className={`v3fs-wf-flag ${modeOf(step)}`}>{AGENTIFY_MODE_LABEL[modeOf(step)]}</span>
-                            : null}
+                          {/* No agentify flag here, by design: the Atlas describes the
+                              work and makes no call about it. The calls, and the state
+                              of each, are the Agentify tab's list. */}
                           {asText(step.system) ? <span className="v3fs-wf-system">{asText(step.system)}</span> : null}
                           {asText(step.duration) ? <span className="v3fs-wf-dur">{asText(step.duration)}</span> : null}
                         </span>
@@ -829,7 +741,7 @@ export default function WorkflowStudio({
                           Each name says WHICH step it acts on, because twenty buttons
                           all announcing "Add step" are individually named and
                           collectively useless. */}
-                      {structureLocked ? null : (
+                      {locked ? null : (
                         <span className="v3fs-swim-acts">
                           <button type="button" className="v3fs-swim-act"
                             aria-label={`Insert a new step after step ${index + 1}`}
@@ -859,11 +771,7 @@ export default function WorkflowStudio({
         </div>
       )}
 
-      {structureLocked ? (
-        surface === "agentify" && selected == null && steps.length ? (
-          <div className="v3fs-wf-bar"><span className="v3fs-wf-hint">Select a step to decide whether it can be agentified</span></div>
-        ) : null
-      ) : (
+      {locked ? null : (
       <div className="v3fs-wf-bar">
         <button type="button" className="v3fs-btn" onClick={addStep}>＋ Step{selected != null ? " after selected" : ""}</button>
         {selected == null ? <span className="v3fs-wf-hint">Select a step to edit it</span> : null}
@@ -880,7 +788,7 @@ export default function WorkflowStudio({
             <div className="v3fs-wf-insp-h">
               <span className="v3fs-wf-insp-t">Step {selected + 1} <i>of {steps.length}</i>
                 {asRecord(steps[selected]).dropped ? <span className="v3fs-wf-dropped-tag" title="Mark-dropped — the step and its claims stay findable; not hard-deleted">⊘ dropped</span> : null}</span>
-              {structureLocked ? null : (
+              {locked ? null : (
                 <span className="v3fs-wf-insp-actions">
                   <button type="button" className="v3fs-btn" disabled={selected === 0} onClick={() => moveStep(-1)}>← Earlier</button>
                   <button type="button" className="v3fs-btn" disabled={selected === steps.length - 1} onClick={() => moveStep(1)}>Later →</button>
@@ -941,73 +849,21 @@ export default function WorkflowStudio({
                 </div>
               );
             })()}
-            {/* THE FLAG — Agentify's whole job, and the only edit it has. Three
-                exclusive calls, and a fourth state that is not a call: nobody has
-                decided. Clicking the active one again clears it back to undecided
-                rather than leaving a decision no one made.
-                It writes a DECISION under the step's atlas element id, never onto
-                the step — which is why the Atlas can rename that step tomorrow and
-                the call still points at it. */}
-            {surface === "agentify" && onDecide ? (() => {
-              const step = steps[selected!];
-              const id = workflow ? decisionStepId(workflow, step) : "";
-              const chosen = modeOf(step);
-              return (
-                <>
-                  <div className="v3fs-wf-modebar">
-                    <span className="v3fs-wf-modebar-l">Can this step be agentified?</span>
-                    <span className="v3fs-wf-modebar-b">
-                      {AGENTIFY_MODES.map((mode) => {
-                        const on = chosen === mode;
-                        return (
-                          <button key={mode} type="button" disabled={locked || !id} aria-pressed={on}
-                            className={`v3fs-wf-agentify${on ? " on" : ""}`} title={AGENTIFY_MODE_HINT[mode]}
-                            onClick={() => onDecide(id, { mode: on ? "" : mode })}>
-                            {AGENTIFY_MODE_LABEL[mode]}
-                          </button>
-                        );
-                      })}
-                    </span>
-                    {chosen ? null : <span className="v3fs-wf-modebar-n">Not decided yet</span>}
-                  </div>
-                  {chosen ? (
-                    <TextField label="Why — the reason this call was made"
-                      value={decisions?.[id]?.rationale ?? asText(step.modeRationale)}
-                      onChange={(next) => onDecide(id, { rationale: next })} />
-                  ) : null}
-                </>
-              );
-            })() : null}
-            {/* The step itself: EDITED on the Atlas, merely STATED on Agentify. */}
-            {structureLocked && surface === "agentify" ? (
-              <div className="v3fs-wf-ro">
-                {[["Action", asText(steps[selected].action)], ["Persona (lane)", asText(steps[selected].actor)],
-                  ["System", asText(steps[selected].system)], ["Duration", asText(steps[selected].duration)],
-                  ["Entities touched", asStrings(steps[selected].entities).join(" · ")],
-                  ["Business events raised", asStrings(steps[selected].events).join(" · ")]]
-                  .filter(([, value]) => value)
-                  .map(([label, value]) => (
-                    <div key={label} className="v3fs-dv-fact">
-                      <span className="v3fs-dv-fl">{label}</span><span className="v3fs-dv-fv">{value}</span>
-                    </div>
-                  ))}
-              </div>
-            ) : (
-              <>
-                <TextField label="Action — what happens in this step" value={asText(steps[selected].action)} onChange={(next) => patchStep(selected, { action: next })} />
-                <div className="v3fs-stu-grid3">
-                  <TextField label="Persona (lane)" value={asText(steps[selected].actor)} onChange={(next) => patchStep(selected, { actor: next })} />
-                  <TextField label="System" value={asText(steps[selected].system)} onChange={(next) => patchStep(selected, { system: next })} />
-                  <TextField label="Duration" value={asText(steps[selected].duration)} onChange={(next) => patchStep(selected, { duration: next })} />
-                </div>
-                <div className="v3fs-stu-grid2">
-                  <ChipsField label="Entities touched (from the ontology)" values={asStrings(steps[selected].entities)}
-                    onChange={(next) => patchStep(selected, { entities: next })} />
-                  <ChipsField label="Business events raised" values={asStrings(steps[selected].events)}
-                    onChange={(next) => patchStep(selected, { events: next })} />
-                </div>
-              </>
-            )}
+            {/* The step itself — EDITED here, because here is where it is described.
+                No agentify control: that call is Agentify's list, and there is
+                exactly one place to make it. */}
+            <TextField label="Action — what happens in this step" value={asText(steps[selected].action)} onChange={(next) => patchStep(selected, { action: next })} />
+            <div className="v3fs-stu-grid3">
+              <TextField label="Persona (lane)" value={asText(steps[selected].actor)} onChange={(next) => patchStep(selected, { actor: next })} />
+              <TextField label="System" value={asText(steps[selected].system)} onChange={(next) => patchStep(selected, { system: next })} />
+              <TextField label="Duration" value={asText(steps[selected].duration)} onChange={(next) => patchStep(selected, { duration: next })} />
+            </div>
+            <div className="v3fs-stu-grid2">
+              <ChipsField label="Entities touched (from the ontology)" values={asStrings(steps[selected].entities)}
+                onChange={(next) => patchStep(selected, { entities: next })} />
+              <ChipsField label="Business events raised" values={asStrings(steps[selected].events)}
+                onChange={(next) => patchStep(selected, { events: next })} />
+            </div>
           </div>
         ) : null}
       </>
@@ -1021,23 +877,18 @@ export default function WorkflowStudio({
           dismissed — opening a row expands workflowDetail inside it. */}
       <CollapsibleCard label="Areas & seams — every workflow across the areas it crosses" defaultOpen>
         <AtlasSeamView doc={doc} program={program} frameAreas={frameAreas} onOpenArtifact={onOpenArtifact}
-          onChange={onChange} editable={!structureLocked}
+          onChange={onChange} editable={!locked}
           expandedWf={active} onPickWorkflow={toggleWorkflow} renderWorkflowDetail={workflowDetail}
-          {...(structureLocked ? {} : { onAddWorkflow: addWorkflow, onDismissWorkflow: dismissWorkflow })} />
+          {...(locked ? {} : { onAddWorkflow: addWorkflow, onDismissWorkflow: dismissWorkflow })} />
       </CollapsibleCard>
       {workflows.length === 0 ? (
-        surface === "agentify" ? (
-          <EmptyState icon="⚡" title="No workflows to decide on yet"
-            hint="Agentify flags the Current-State Atlas's workflows — that Atlas holds none yet. Record them there and they appear here." />
-        ) : (
         <EmptyState icon="🔀" title="No workflows on record yet"
           hint="Add one here, or regenerate the Current-State Atlas once the SME transcripts are in."
-          action={structureLocked || !authoring ? undefined
-            : <button type="button" className="v3fs-a" onClick={addWorkflow}>＋ workflow</button>} />)
+          action={locked || !authoring ? undefined
+            : <button type="button" className="v3fs-a" onClick={addWorkflow}>＋ workflow</button>} />
       ) : null}
-      {/* An unmapped area is an ATLAS gap — hear the SME, record the workflow. It
-          is not a decision Agentify can take, so it is not raised there. */}
-      {unmappedAreas.length && surface !== "agentify" ? (
+      {/* An unmapped area is an ATLAS gap — hear the SME, record the workflow. */}
+      {unmappedAreas.length ? (
         <div className="v3fs-wf-unmapped-row"
           title="Areas the Frame covers whose current-state workflow has no evidence yet — hear their SMEs, then regenerate the Atlas (or open a workflow above and reassign its Area)">
           Not mapped yet: {unmappedAreas.map((area) => <span key={area} className="v3fs-wf-unmapped">{area}</span>)}

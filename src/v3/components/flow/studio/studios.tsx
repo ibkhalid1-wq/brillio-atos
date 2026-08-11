@@ -17,14 +17,16 @@ import PrototypeStudio from "./PrototypeStudio";
 import { GapRoutingEditor } from "./GapRoutingEditor";
 import {
   Section, CollapsibleCard, TextField, TextArea, SelectField, ChipsField, StringListEditor, TableEditor,
-  asArray, asRecord, asText, asStrings, useStudioLocked, type StudioProps,
+  EmptyState, asArray, asRecord, asText, asStrings, useStudioLocked, type StudioProps,
 } from "./StudioKit";
 import { FORMAL_ARTIFACT_FIELD_KEYS } from "@/v3/lib/formalArtifacts";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
 import { listenCoverageAreas, listenAreaCoverage, canonicalFrameArea } from "@/v3/components/flow/listenCoverage";
-import { stakeholderPrimaryArea } from "@/v3/components/flow/flowAreas";
+import { stakeholderPrimaryArea, workflowArea } from "@/v3/components/flow/flowAreas";
 import { kitAgendaQuestions, demoteInterviewAgenda, KIT_AGENDA_CACHE_FIELD } from "@/v3/lib/ledger/kitAgendaCache";
-import { readDecisions, writeDecision, type AgentifyMode } from "@/v3/lib/ledger/agentifyDecisions";
+import {
+  readDecisions, writeDecision, decisionStepId, type AgentifyMode,
+} from "@/v3/lib/ledger/agentifyDecisions";
 
 /* ── shared card-list scaffolding ─────────────────────────────────────────── */
 
@@ -352,7 +354,7 @@ function AtlasStudio({ doc, onChange, onOpenArtifact, program, gapRoutes, onRout
     <>
       <Section label="Workflows — who does what, in which system" hint="the swimlane is the document: open a workflow to edit it, its steps and their order">
         <WorkflowStudio doc={doc} onChange={onChange} onOpenArtifact={onOpenArtifact} program={program}
-          onFocus={handleFocus} surface="atlas" anchorDoc={storedAtlas ?? undefined} />
+          onFocus={handleFocus} anchorDoc={storedAtlas ?? undefined} />
       </Section>
       <AtlasRegisters doc={doc} onChange={onChange} program={program} focus={focus} />
       {ATLAS_GAP_SECTIONS.map((section) => (
@@ -425,77 +427,250 @@ const ATLAS_GAP_SECTIONS = [
   { label: "Gaps", hint: "redirect each gap to the stakeholder or role who can close it", key: "gaps", addLabel: "Add gap", placeholder: undefined, empty: "No gaps." },
 ] as const;
 
+/* ── Agentify: a list of activities, one toggle each ──────────────────────── */
+
+/**
+ * The three exclusive calls, said in words. `agentify` is the one the toggle
+ * writes; `assist` and `keep` exist in recorded data (the generator emits them,
+ * and flowFutureState reads them), so this surface must be able to SAY them even
+ * though it cannot set them.
+ */
+const AGENTIFY_MODE_LABEL: Record<AgentifyMode, string> = {
+  agentify: "Agentify", assist: "Assist", keep: "Keep manual",
+};
+const AGENTIFY_MODE_HINT: Record<AgentifyMode, string> = {
+  agentify: "An agent runs this step end to end.",
+  assist: "An agent prepares it; a human still decides.",
+  keep: "This step stays a human judgement.",
+};
+
+/** One decidable activity: an Atlas step, plus the id its decision files under. */
+interface Activity {
+  /** The ledger element id of the atlas step — the decision's key. */
+  id: string;
+  /** Its 1-based position in its workflow, so the toggle's name can say WHICH. */
+  n: number;
+  action: string;
+  actor: string;
+  system: string;
+  /** "" is UNDECIDED — a state of its own, never a "no". */
+  mode: AgentifyMode | "";
+  rationale: string;
+}
+
+/**
+ * ONE ROW, ONE TOGGLE.
+ *
+ * The toggle answers exactly the question the artifact is named for — is this
+ * activity agentified — so it is `role="switch"`, on for `agentify` and off for
+ * everything else. Off is not one state, though, and that is the whole difficulty
+ * of putting a binary control on a decision with four readings:
+ *
+ *   · UNDECIDED — nobody has looked. Drawn UNSET (a hollow, dashed track), and the
+ *     status beside it reads "Not decided". It is never styled as a chosen "no".
+ *   · ASSIST / KEEP MANUAL — somebody DID look and said something other than
+ *     agentify. The switch is honestly off, and the row says which call was made,
+ *     because flattening a recorded "keep it manual" into the same grey as "nobody
+ *     has read this yet" is the exact ambiguity a plain on/off collapses.
+ *
+ * A screen reader gets that distinction too: `aria-checked` alone cannot carry it,
+ * so the status text is the switch's `aria-describedby` — "Not decided" and
+ * "Assist — an agent prepares it; a human still decides" are announced with it.
+ *
+ * TURNING IT OFF WITHDRAWS. From `agentify`, off writes `mode: ""` — undecided, not
+ * "keep manual". That is the existing semantic (clicking the active call again took
+ * it back) and it is the only honest one: this control cannot express "a human
+ * decided no", so it must not silently record one. For the same reason a row on
+ * `assist`/`keep` gets its own Withdraw button rather than having its call
+ * overwritten by a toggle that only knows one word.
+ */
+function AgentifyActivityRow({ activity, workflowName, locked, onDecide }: {
+  activity: Activity;
+  workflowName: string;
+  locked: boolean;
+  onDecide: (stepId: string, patch: { mode?: AgentifyMode | ""; rationale?: string }) => void;
+}) {
+  const uid = React.useId();
+  const stateId = `${uid}-state`;
+  const on = activity.mode === "agentify";
+  /** Names the ACTIVITY, not the control: twenty switches called "Agentify" is an
+   *  ambiguity failure, and the step number keeps two identically-worded steps of
+   *  one workflow apart. */
+  const names = `${activity.action || "this step"} — step ${activity.n} of ${workflowName}`;
+  const status = activity.mode
+    ? `${AGENTIFY_MODE_LABEL[activity.mode]} — ${AGENTIFY_MODE_HINT[activity.mode]}`
+    : "Not decided";
+  return (
+    <li className={`v3fs-ag-row${activity.mode ? ` is-${activity.mode}` : " is-undecided"}`}>
+      <div className="v3fs-ag-row-main">
+        <span className="v3fs-ag-n" aria-hidden="true">{activity.n}</span>
+        <span className="v3fs-ag-act">{activity.action || "—"}</span>
+        <span className="v3fs-ag-meta">
+          {activity.actor ? <span className="v3fs-ag-actor" title="Persona (lane) — who performs it today">{activity.actor}</span> : null}
+          {activity.system ? <span className="v3fs-ag-sys" title="System it runs in">{activity.system}</span> : null}
+        </span>
+        <span id={stateId} className="v3fs-ag-state">{status}</span>
+        {/* An `assist` / `keep` call cannot be expressed by this toggle, so it gets
+            its own way back to undecided rather than being overwritten by one. */}
+        {activity.mode && activity.mode !== "agentify" ? (
+          <button type="button" className="v3fs-ag-withdraw" disabled={locked || !activity.id}
+            aria-label={`Withdraw the ${AGENTIFY_MODE_LABEL[activity.mode]} call on ${names}`}
+            title="Take this call back to undecided"
+            onClick={() => onDecide(activity.id, { mode: "" })}>Withdraw</button>
+        ) : null}
+        <button type="button" role="switch" aria-checked={on} aria-describedby={stateId}
+          className="v3fs-ag-switch" disabled={locked || !activity.id}
+          aria-label={`Agentify ${names}`}
+          title={on ? "Agentified — switch off to take the call back to undecided" : AGENTIFY_MODE_HINT.agentify}
+          onClick={() => onDecide(activity.id, { mode: on ? "" : "agentify" })}>
+          <span className="v3fs-ag-switch-t" aria-hidden="true" />
+        </button>
+      </div>
+      {/* WHY — offered only where a call has actually been made; there is no reason
+          to give for a decision nobody has taken. */}
+      {activity.mode ? (
+        <label className="v3fs-ag-why">
+          <span className="v3fs-ag-why-l">Why</span>
+          <input value={activity.rationale} disabled={locked || !activity.id}
+            placeholder="the reason this call was made"
+            aria-label={`Why ${AGENTIFY_MODE_LABEL[activity.mode]} was chosen for ${names}`}
+            onChange={(e) => onDecide(activity.id, { rationale: e.target.value })} />
+        </label>
+      ) : null}
+    </li>
+  );
+}
+
 /**
  * AGENTIFY — Listen's third artifact, straight after the Current-State Atlas, and
- * the home of exactly one question: can this step be agentified?
+ * the home of exactly one question: can this activity be agentified?
  *
- * It shows THE SAME WORKFLOWS THE ATLAS HOLDS — not a copy of them. The array
- * handed to the diagram is read straight off `currentStateAtlas`, so a rename or a
- * new step on the Atlas is a rename or a new step here, with nothing to reconcile
- * and no second version to go stale. Structure is therefore read-only on this tab:
- * no add, no reorder, no drop, no dismiss, no workflow fields. The flag is the only
- * edit there is.
+ * A LIST, NOT A DIAGRAM (operator direction 2026-08-11: "agentify, should show a
+ * list of activities by workflow with a toggle to agentify"). It used to render the
+ * Atlas's swimlane structurally frozen, with the call buried in a step inspector you
+ * had to open a workflow and click a tile to reach — the diagram was doing the
+ * Atlas's job on a tab that has one job. Now every decidable activity is a row,
+ * grouped under its workflow, with its toggle in reach and a running count of what
+ * is still undecided. The swimlane stays where it belongs: on the Atlas.
  *
- * AND THE FLAG IS NOT STORED ON A WORKFLOW. It is stored alone, under the LEDGER
+ * IT STILL SHOWS THE ATLAS'S OWN WORKFLOWS — not a copy. The array is read straight
+ * off `currentStateAtlas` every render, so a rename or a new step there is a rename
+ * or a new step here, with nothing to reconcile and no second version to go stale.
+ * DROPPED steps are omitted: a step the Atlas has struck out is not work anyone
+ * needs to decide about.
+ *
+ * AND THE CALL IS NOT STORED ON A WORKFLOW. It is stored alone, under the LEDGER
  * ELEMENT ID of the atlas step it is about (`agentify.decisions`, see
  * agentifyDecisions) — which is what lets the Atlas keep full editorial control of
  * the workflows while the calls made about them survive being re-worded. A document
  * generated in the older shape (`agentify.workflows[].steps[].mode`) is read through
  * the same reader and migrates on the first new decision.
- *
- * The pain and event registers live on the Atlas document and are read through
- * `registerDoc`, so the swimlane still shades by voiced pain and still chips its
- * business events without owning either.
  */
-function AgentifyStudio({ doc, onChange, onOpenArtifact, program, gapRoutes, onRouteGap }: StudioProps) {
+function AgentifyStudio({ doc, onChange, program, gapRoutes, onRouteGap }: StudioProps) {
   const patch = patchOf(doc, onChange);
-  // The diagram's focus filters this document's gaps and open questions.
-  const [focus, setFocus] = React.useState<AtlasFocus | null>(null);
-  const [showAll, setShowAll] = React.useState(false);
-  const handleFocus = React.useCallback((next: AtlasFocus | null) => {
-    setFocus((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
-  }, []);
+  const locked = useStudioLocked();
 
   const atlasDoc = (program ? readArtifactDoc(program, FORMAL_ARTIFACT_FIELD_KEYS["current-state-atlas"]) : null) as Record<string, unknown> | null;
   // THE WORKFLOWS ARE THE ATLAS'S. Read every render, never copied onto this
   // document, and never written back — the only fallback is a pre-correction
-  // Agentify that still carries its own array, which is shown so its programme does
-  // not lose its diagram, and which retires the moment a decision is recorded.
+  // Agentify that still carries its own array, which is listed so its programme does
+  // not lose its activities, and which retires the moment a decision is recorded.
   const atlasWorkflows = asArray(atlasDoc?.workflows);
-  const workflowDoc = React.useMemo(
-    () => ({ workflows: atlasWorkflows.length ? atlasWorkflows : asArray(doc.workflows) }),
+  const source = React.useMemo(
+    () => (atlasWorkflows.length ? atlasWorkflows : asArray(doc.workflows)).map(asRecord),
     [atlasWorkflows, doc.workflows],
   );
   const decisions = React.useMemo(() => readDecisions(doc, atlasDoc), [doc, atlasDoc]);
+  // THE ONE DOOR to this document. Every control on every row routes through it, and
+  // it is shut when the artifact is locked or derived — belt to the braces of the
+  // `disabled` on each control, so a locked Agentify cannot be written however the
+  // rows are later rearranged.
   const decide = React.useCallback(
-    (stepId: string, next: { mode?: AgentifyMode | ""; rationale?: string }) =>
-      onChange(writeDecision(doc, atlasDoc, stepId, next)),
-    [doc, atlasDoc, onChange],
+    (stepId: string, next: { mode?: AgentifyMode | ""; rationale?: string }) => {
+      if (locked) return;
+      onChange(writeDecision(doc, atlasDoc, stepId, next));
+    },
+    [doc, atlasDoc, onChange, locked],
   );
-  const decided = Object.values(decisions).filter((d) => d.mode).length;
-  const stepCount = workflowDoc.workflows.map(asRecord).reduce((n, wf) => n + asArray(wf.steps).length, 0);
+
+  // ONE READING of the list, and every count below is derived from it — so the
+  // counter cannot say a number the rows do not show.
+  const groups = React.useMemo(() => source.map((wf, wfIndex) => {
+    const activities: Activity[] = asArray(wf.steps).map(asRecord)
+      .map((step, i) => ({ step, n: i + 1 }))
+      .filter(({ step }) => step.dropped !== true)
+      .map(({ step, n }) => {
+        const id = decisionStepId(wf, step);
+        return {
+          id, n,
+          action: asText(step.action),
+          actor: asText(step.actor),
+          system: asText(step.system),
+          mode: decisions[id]?.mode ?? "",
+          rationale: decisions[id]?.rationale ?? "",
+        };
+      });
+    return {
+      key: `${wfIndex}-${asText(wf.name)}`,
+      name: asText(wf.name) || "Untitled workflow",
+      area: workflowArea(wf),
+      activities,
+      decided: activities.filter((a) => a.mode).length,
+    };
+  }).filter((group) => group.activities.length), [source, decisions]);
+
+  const total = groups.reduce((n, g) => n + g.activities.length, 0);
+  const decided = groups.reduce((n, g) => n + g.decided, 0);
+  // Calls on record that no longer name an activity in the list — the Atlas moved
+  // under them. Said out loud, because otherwise "N of M decided" quietly hides
+  // decisions that are still in the document and still reaching Envision.
+  const listed = new Set(groups.flatMap((g) => g.activities.map((a) => a.id)));
+  const orphaned = Object.entries(decisions).filter(([id, d]) => d.mode && !listed.has(id)).length;
 
   return (
     <>
-      <Section label="Workflows — and the flag on each step"
-        hint="the same workflows the Current-State Atlas holds; here you mark which steps can be agentified">
+      <Section label="Activities — one row per step, grouped by workflow"
+        hint="the Current-State Atlas's own activities; flip a toggle to agentify one">
         <p className="v3fs-stu-lead">
-          These are the <b>Current-State Atlas&rsquo;s</b> workflows, shown as they stand — edit them there.
-          On this tab you make one call per step: <b>agentify</b> it, <b>assist</b> the human doing it, or
-          <b> keep it manual</b>. A step nobody has decided carries no flag, and that is the honest reading:
-          it means the call has not been made, not that the answer is no.
-          {stepCount ? <> <b>{decided} of {stepCount} steps decided.</b></> : null}
+          These are the <b>Current-State Atlas&rsquo;s</b> activities, listed as they stand — edit the work
+          itself there. Here you make one call per activity: turn the toggle on to <b>agentify</b> it, off to
+          take that call back. An activity nobody has decided sits <b>unset</b>, and that is the honest
+          reading — it means the call has not been made, not that the answer is no.
+          {total ? <> <b>{decided} of {total} decided</b>, {total - decided} still open.</> : null}
         </p>
-        <WorkflowStudio doc={workflowDoc} onChange={onChange} onOpenArtifact={onOpenArtifact} program={program}
-          onFocus={handleFocus} surface="agentify" registerDoc={atlasDoc ?? undefined} anchorDoc={atlasDoc ?? undefined}
-          decisions={decisions} onDecide={decide} />
+        {orphaned ? (
+          <p className="v3fs-ag-orphans">
+            ⚠ {orphaned} call{orphaned === 1 ? "" : "s"} on record no longer match any activity in the Atlas —
+            the step {orphaned === 1 ? "it was" : "they were"} made about has been reworded or dismissed there.
+            {" "}{orphaned === 1 ? "It is" : "They are"} still in this document, and not counted above.
+          </p>
+        ) : null}
+        {groups.length === 0 ? (
+          <EmptyState icon="⚡" title="No activities to decide on yet"
+            hint="Agentify decides about the Current-State Atlas's activities — that Atlas holds none yet. Record them there and they appear here." />
+        ) : groups.map((group) => (
+          <div key={group.key} className="v3fs-ag-wf">
+            <div className="v3fs-ag-wf-h">
+              <span className="v3fs-ag-wf-n">{group.name}</span>
+              {group.area ? <span className="v3fs-ag-wf-a">{group.area}</span> : null}
+              <span className="v3fs-ag-wf-c">{group.decided} of {group.activities.length} decided</span>
+            </div>
+            <ul className="v3fs-ag-rows">
+              {group.activities.map((activity) => (
+                <AgentifyActivityRow key={activity.id || `${group.key}-${activity.n}`}
+                  activity={activity} workflowName={group.name} locked={locked} onDecide={decide} />
+              ))}
+            </ul>
+          </div>
+        ))}
       </Section>
-      {/* Open questions and gaps follow the diagram's focus too — items that
-          MENTION the focused workflow/step's terms. These ARE Agentify's own. */}
+      {/* Agentify's OWN open questions and gaps. They are unfiltered here: the
+          selection that used to scope them belonged to the diagram, and a list of
+          activities has no selection to scope by. */}
       {ATLAS_GAP_SECTIONS.map((section) => (
         <Section key={section.key} label={section.label} hint={section.hint}>
-          <FocusedGapSection doc={doc} section={section} focus={focus} showAll={showAll}
-            onShowAll={() => setShowAll(true)} onRefocus={() => setShowAll(false)}
+          <FocusedGapSection doc={doc} section={section} focus={null} showAll={false}
+            onShowAll={() => {}} onRefocus={() => {}}
             onChange={(next) => patch({ [section.key]: next })}
             program={program} gapRoutes={gapRoutes} onRouteGap={onRouteGap} />
         </Section>
@@ -1166,15 +1341,11 @@ export const STUDIO_REGISTRY: Record<string, StudioEntry> = {
   // The workflows LEAD the atlas again — they are what the artifact is, and the
   // typeset reading has to open on them for the same reason the studio does.
   "current-state-atlas": { fieldKey: flowFieldKey("current-state-atlas"), docOrder: ["workflows", "events", "painHeatmap", "systemsInventory", "openQuestions", "coverage"], Component: AtlasStudio },
-  // Agentify's document is DECISIONS, not workflows. `workflows` stays out of the
-  // order (and is hidden from the reading pane in FlowArtifactStudio) so a legacy
-  // copy cannot typeset as a second, competing atlas.
-  // `decisions` is deliberately NOT listed: docOrder is the GENERATOR's narrative
-  // order (edgeLockstep checks every key here against the agent's output contract),
-  // and the edge still emits `agentify.workflows`. The section typesets anyway —
-  // unlisted keys append after the ordered ones — so nothing is hidden. When the
-  // agentify prompt is changed to emit `decisions`, add it here, first.
-  "agentify": { fieldKey: flowFieldKey("agentify"), docOrder: ["agentCandidates", "openQuestions"], Component: AgentifyStudio },
+  // Agentify's document is DECISIONS, not workflows — so the calls LEAD the reading,
+  // as the generator now emits them. `workflows` stays out of the order (and is
+  // hidden from the reading pane in FlowArtifactStudio) so a legacy copy cannot
+  // typeset as a second, competing atlas.
+  "agentify": { fieldKey: flowFieldKey("agentify"), docOrder: ["decisions", "agentCandidates", "openQuestions"], Component: AgentifyStudio },
   "domain-ontology": { fieldKey: flowFieldKey("domain-ontology"), docOrder: ["entities", "relations", "standardAlignment", "ambiguities"], Component: OntologyStudio },
   "architecture-strategy": { fieldKey: flowFieldKey("architecture-strategy"), docOrder: ["candidates", "recommendation"], Component: StrategyStudio },
   "agentic-blueprint": { fieldKey: flowFieldKey("agentic-blueprint"), docOrder: ["agents", "journeys", "orchestration", "dataContracts", "hitlPoints", "evalPlan", "buildSequence", "tracks"], Component: BlueprintStudio },
