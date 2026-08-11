@@ -6233,17 +6233,28 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-wf-agentify:hover:not(:disabled){border-color:color-mix(in srgb,var(--v3-accent-2) 44%,var(--fs-line));color:var(--v3-accent-2)}
 .v3fs-wf-agentify.on{background:var(--v3-accent);border-color:var(--v3-accent);color:#fff}
 .v3fs-wf-agentify:disabled{opacity:.55;cursor:default}
-/* ── The agentification call, made in the step inspector and worn by the tile.
-   An UNDECIDED step gets no chip at all — absence is the honest rendering of a
-   decision nobody has made. ── */
+/* ── The agentification call, made in the step inspector on AGENTIFY and worn by
+   the tile there. An UNDECIDED step gets no flag at all — absence is the honest
+   rendering of a decision nobody has made — and the Current-State Atlas wears no
+   flags whatever, because deciding is not what the Atlas is for.
+   `-flag`, not `-mode`: `.v3fs-wf-mode` is already the SEAM VIEW's view-switcher
+   button further down this file, and the two rules were quietly fighting over the
+   same tile. ── */
 .v3fs-wf-modebar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:2px 0 8px;padding:8px 10px;border:1px solid var(--fs-line);border-radius:12px;background:var(--fs-card)}
 .v3fs-wf-modebar-l{font-size:11.5px;font-weight:650;color:var(--v3-text-primary)}
 .v3fs-wf-modebar-b{display:flex;gap:6px;flex-wrap:wrap}
 .v3fs-wf-modebar-n{font-size:10.5px;font-style:italic;color:var(--v3-text-muted)}
-.v3fs-wf-mode{flex:none;font-size:9.5px;font-weight:700;letter-spacing:.02em;border-radius:999px;padding:1px 7px;border:1px solid var(--fs-line);color:var(--v3-text-muted);background:var(--fs-card)}
-.v3fs-wf-mode.agentify{border-color:var(--v3-green);color:var(--v3-green);background:color-mix(in srgb,var(--v3-green) 12%,transparent)}
-.v3fs-wf-mode.assist{border-color:var(--v3-amber);color:var(--v3-amber);background:var(--v3-amber-soft)}
-.v3fs-wf-mode.keep{border-color:var(--fs-line);color:var(--v3-text-muted)}
+.v3fs-wf-flag{flex:none;font-size:9.5px;font-weight:700;letter-spacing:.02em;border-radius:999px;padding:1px 7px;border:1px solid var(--fs-line);color:var(--v3-text-muted);background:var(--fs-card)}
+.v3fs-wf-flag.agentify{border-color:var(--v3-green);color:var(--v3-green);background:color-mix(in srgb,var(--v3-green) 12%,transparent)}
+.v3fs-wf-flag.assist{border-color:var(--v3-amber);color:var(--v3-amber);background:var(--v3-amber-soft)}
+.v3fs-wf-flag.keep{border-color:var(--fs-line);color:var(--v3-text-muted)}
+/* Facts STATED, not offered: the workflow/step as Agentify shows it — read from
+   the Atlas, editable only there. Reuses the document view's fact grid so a
+   read-only fact looks the same wherever it is read. */
+.v3fs-wf-ro{display:flex;flex-direction:column;gap:6px;margin:2px 0 8px}
+.v3fs-wf-ro .v3fs-dv-fl{flex-basis:132px}
+.v3fs-wf-ro-note{margin:6px 0 0;font-size:11px;line-height:1.5;color:var(--v3-text-muted)}
+.v3fs-wf-src{font-style:normal;margin-left:8px;font-size:9.5px;font-weight:650;letter-spacing:.04em;text-transform:uppercase;color:var(--v3-text-muted)}
 /* ── Agentify tree — the Listen workflows by area, each step with a suggest /
    approve / mark control. An expandable area → workflow → steps structure. ── */
 .v3fs-agtree{display:flex;flex-direction:column;gap:10px}
@@ -7580,6 +7591,13 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 /* Atlas ledger-awareness: per-step claim status + mark-dropped */
 .v3fs-wf-claims {display:flex;flex-direction:column;gap:5px;margin:8px 0;padding:8px 11px;border:1px solid var(--v3-border-soft);border-left:3px solid var(--v3-accent-2);border-radius:9px;background:var(--fs-card)}
 .v3fs-wf-claims.none {border-left-color:var(--v3-text-muted);color:var(--v3-text-muted);font-size:11px;font-style:italic}
+/* STRANDED — an anchor pointing at evidence the Atlas no longer holds. Amber, not
+   muted: the muted `.none` above means "nothing ever claimed this", and the one
+   thing this state must never do is look like that one. */
+.v3fs-wf-claims.stranded {border-left-color:var(--v3-amber);background:color-mix(in srgb,var(--v3-amber) 7%,var(--fs-card))}
+.v3fs-wf-claims.stranded .v3fs-wf-claims-h {color:var(--v3-amber)}
+.v3fs-wf-claims.stranded .v3fs-wf-claims-sum {display:block}
+.v3fs-wf-claims-note code {font-family:var(--v3-font-mono);font-size:10px;color:var(--v3-accent-2)}
 .v3fs-wf-claims-h {font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--v3-text-muted)}
 .v3fs-wf-claims-sum {display:flex;flex-wrap:wrap;gap:10px;font-size:11.5px;color:var(--v3-text-primary)}
 .v3fs-wf-claims-sum span {display:inline-flex;align-items:center;gap:4px}

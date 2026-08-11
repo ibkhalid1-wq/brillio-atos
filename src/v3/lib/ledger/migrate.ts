@@ -159,6 +159,32 @@ const jointOrOwner = (areaA: string, areaB: string): Owner => {
 
 export interface Snapshot { ontology: Record<string, unknown>; atlas: Record<string, unknown>; overrides: Array<Record<string, unknown>>; }
 
+// ── atlas element ids, as ONE rule ────────────────────────────────────────────
+//
+// The workflow/step ids below used to be spelled inline in the loop at the foot of
+// migrate(). That was fine while migrate() was the only code that needed to name an
+// atlas element — and stopped being fine the moment a SURFACE had to anchor a
+// document to one (`agentifyAnchor.ts`). A second copy of "how a step is named" is a
+// second answer, and the answer is a hash: the drift would not be a wrong label, it
+// would be evidence silently resolving to nothing. So the rule lives here, exported,
+// and migrate() itself calls it — the migration and any anchor are the same function
+// or they are provably the same nothing.
+
+/** THE ledger element id of an atlas workflow, from its name. */
+export const workflowElementId = (name: unknown): string => `el:wf:${slug(name)}`;
+
+/** How much of a step's action IS the step, for identity purposes. */
+export const STEP_NAME_CHARS = 60;
+
+/** A step element's `name` — its action, truncated. Also the identity input below,
+ *  so the element's name and its id can never be computed from different strings. */
+export const stepElementName = (action: unknown): string => String(action ?? "").slice(0, STEP_NAME_CHARS);
+
+/** THE ledger element id of an atlas step: content-derived (A6), never positional,
+ *  so a reorder never restrands its claims. */
+export const stepElementId = (workflowId: string, actor: unknown, action: unknown): string =>
+  contentId("el:step", workflowId, String(actor ?? ""), stepElementName(action));
+
 // ── ambiguities → ledger loci ─────────────────────────────────────────────────
 /** The document still ASKS when it records no resolution, or one that says so. The
  *  SAME predicate the movement gate applied while ambiguities lived only in the blob —
@@ -313,7 +339,7 @@ export function migrate(snap: Snapshot): LedgerStore {
   // ── workflows + steps ──
   for (const w of workflows) {
     const wn = String(w.name ?? ""); if (!wn) continue;
-    const wid = `el:wf:${slug(wn)}`;
+    const wid = workflowElementId(wn);
     const area = String(w.area ?? "");
     // functionOf hit → the function owns it; miss → the atlas's OWN stated owner
     // (data-grounded), else unowned. Never a constant.
@@ -328,8 +354,8 @@ export function migrate(snap: Snapshot): LedgerStore {
     const steps = (Array.isArray(w.steps) ? w.steps : []) as Array<Record<string, unknown>>;
     for (const st of steps) {
       const action = String(st.action ?? "");
-      const sid = contentId("el:step", wid, String(st.actor ?? ""), action.slice(0, 60)); // A6 content id, not index
-      store.addElement({ id: sid, kind: "step", name: action.slice(0, 60), of: wid });
+      const sid = stepElementId(wid, st.actor, action); // A6 content id, not index
+      store.addElement({ id: sid, kind: "step", name: stepElementName(action), of: wid });
       // a step whose actor-area differs from the workflow's owning area is a handoff seam → joint
       // Seam/function first (unchanged); on a double-miss the step's own stated actor
       // owns it, else the workflow's stated owner, else unowned. Data-grounded only.

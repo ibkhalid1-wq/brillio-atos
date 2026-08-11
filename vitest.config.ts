@@ -6,6 +6,11 @@ export default defineConfig({
     globals: true,
     environment: "jsdom",
     include: ["src/v3/__tests__/**/*.test.ts"],
+    // jsdom 29's btoa/atob recurse into themselves under vitest's jsdom
+    // environment: ~30s of CPU and then a bogus InvalidCharacterError on valid
+    // input, which silently pushes every upload path onto its failure branch.
+    // The setup file restores Node's spec-correct pair — see it for the mechanism.
+    setupFiles: ["./src/test/setupBase64.ts"],
   },
   resolve: {
     alias: {

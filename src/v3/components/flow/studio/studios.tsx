@@ -24,6 +24,7 @@ import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
 import { listenCoverageAreas, listenAreaCoverage, canonicalFrameArea } from "@/v3/components/flow/listenCoverage";
 import { stakeholderPrimaryArea } from "@/v3/components/flow/flowAreas";
 import { kitAgendaQuestions, demoteInterviewAgenda, KIT_AGENDA_CACHE_FIELD } from "@/v3/lib/ledger/kitAgendaCache";
+import { readDecisions, writeDecision, type AgentifyMode } from "@/v3/lib/ledger/agentifyDecisions";
 
 /* ── shared card-list scaffolding ─────────────────────────────────────────── */
 
@@ -319,28 +320,101 @@ function DiscoveryKitStudio({ doc, onChange, program }: StudioProps) {
 /* ── Listen ───────────────────────────────────────────────────────────────── */
 
 /**
- * The Current-State Atlas tab: the registers of what runs today — business
- * events, the pain heatmap, the systems inventory — with the document's open
- * questions and gaps.
+ * THE CURRENT-STATE ATLAS — how the business runs today, and the surface where
+ * that description is CHANGED.
  *
- * WHAT LEFT. The workflow diagram used to open this tab; it is now Listen's
- * third artifact, AGENTIFY (below), because the swimlane is where the
- * automate / assist / keep-manual call is actually made. Nothing about the
- * atlas's DATA moved: `currentStateAtlas.workflows` is still what the generator
- * writes, what the ledger migrates from, and what Agentify is drafted out of.
+ * The workflows are the artifact: the swimlane with full CRUD (rename a workflow,
+ * retarget its area, add / reorder / drop a step, edit a step, dismiss the whole
+ * flow), plus the registers those workflows are read against — business events,
+ * the pain heatmap, the systems inventory — and the document's open questions and
+ * gaps. Selecting a step scopes the registers and the gap lists to it.
+ *
+ * WHAT IS NOT HERE: the automate / assist / keep-manual call. The Atlas describes
+ * the work; it does not decide what to do about it. That is Agentify, below, and
+ * it decides nothing else.
  */
-function AtlasStudio({ doc, onChange, program, gapRoutes, onRouteGap }: StudioProps) {
+function AtlasStudio({ doc, onChange, onOpenArtifact, program, gapRoutes, onRouteGap }: StudioProps) {
   const patch = patchOf(doc, onChange);
+  // The diagram's focus scopes this document's registers, gaps and open questions.
+  // Filtered views are READ-ONLY on purpose — editing a filtered table would
+  // silently drop the hidden rows — so "Show all & edit" opens the full editor.
+  const [focus, setFocus] = React.useState<AtlasFocus | null>(null);
+  const [showAll, setShowAll] = React.useState(false);
+  const handleFocus = React.useCallback((next: AtlasFocus | null) => {
+    setFocus((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
+  }, []);
+  // ANCHORING reads the STORED atlas, never this draft. An anchor is a ledger
+  // element id, and the ledger is migrated from what is saved; anchoring the draft
+  // to itself would stamp a workflow the operator invented ten seconds ago with an
+  // id the ledger has never held, and it would read STRANDED instead of empty.
+  const storedAtlas = program ? readArtifactDoc(program, FORMAL_ARTIFACT_FIELD_KEYS["current-state-atlas"]) : null;
   return (
     <>
-      <AtlasRegisters doc={doc} onChange={onChange} program={program} focus={null} />
+      <Section label="Workflows — who does what, in which system" hint="the swimlane is the document: open a workflow to edit it, its steps and their order">
+        <WorkflowStudio doc={doc} onChange={onChange} onOpenArtifact={onOpenArtifact} program={program}
+          onFocus={handleFocus} surface="atlas" anchorDoc={storedAtlas ?? undefined} />
+      </Section>
+      <AtlasRegisters doc={doc} onChange={onChange} program={program} focus={focus} />
       {ATLAS_GAP_SECTIONS.map((section) => (
         <Section key={section.key} label={section.label} hint={section.hint}>
-          <GapRoutingEditor values={asStrings(doc[section.key])} onChange={(next) => patch({ [section.key]: next })}
-            program={program} movementId="listen" gapRoutes={gapRoutes} onRoute={onRouteGap} addLabel={section.addLabel}
-            {...(section.placeholder ? { placeholder: section.placeholder } : {})} emptyHint={section.empty} />
+          <FocusedGapSection doc={doc} section={section} focus={focus} showAll={showAll}
+            onShowAll={() => setShowAll(true)} onRefocus={() => setShowAll(false)}
+            onChange={(next) => patch({ [section.key]: next })}
+            program={program} gapRoutes={gapRoutes} onRouteGap={onRouteGap} />
         </Section>
       ))}
+    </>
+  );
+}
+
+/**
+ * One routed free-text register, scoped to the diagram's selection: items that
+ * MENTION the focused workflow/step's terms (its name, actors, systems, entities,
+ * events). A filtered view never edits — dropping the hidden rows on a write is
+ * exactly the silent damage this guards against — so "Show all & edit" is the way
+ * back to the full editor. Shared by both Listen tabs so the rule cannot differ
+ * between them.
+ */
+function FocusedGapSection({ doc, section, focus, showAll, onShowAll, onRefocus, onChange, program, gapRoutes, onRouteGap }: {
+  doc: Record<string, unknown>;
+  section: (typeof ATLAS_GAP_SECTIONS)[number];
+  focus: AtlasFocus | null;
+  showAll: boolean;
+  onShowAll: () => void;
+  onRefocus: () => void;
+  onChange: (next: string[]) => void;
+  program: StudioProps["program"];
+  gapRoutes: StudioProps["gapRoutes"];
+  onRouteGap: StudioProps["onRouteGap"];
+}) {
+  const values = asStrings(doc[section.key]);
+  const terms = focus?.terms.map((term) => term.toLowerCase()).filter((term) => term.length >= 4) ?? [];
+  const filtered = focus && !showAll && terms.length
+    ? values.filter((value) => { const t = value.toLowerCase(); return terms.some((term) => t.includes(term)); })
+    : null;
+  if (filtered) {
+    return (
+      <>
+        <div className="v3fs-atlas-fltbar">
+          <span>{filtered.length} of {values.length} for <b>{focus?.label}</b></span>
+          <button type="button" className="v3fs-a" onClick={onShowAll}>Show all &amp; edit</button>
+        </div>
+        {filtered.length ? filtered.map((value, i) => (
+          <div key={i} className="v3fs-atlas-flt-row"><span>{value}</span></div>
+        )) : <div className="v3fs-stu-empty">Nothing here mentions this selection.</div>}
+      </>
+    );
+  }
+  return (
+    <>
+      {focus && showAll ? (
+        <div className="v3fs-atlas-fltbar">
+          <button type="button" className="v3fs-a" onClick={onRefocus}>Filter to {focus.label}</button>
+        </div>
+      ) : null}
+      <GapRoutingEditor values={values} onChange={onChange} program={program}
+        movementId="listen" gapRoutes={gapRoutes} onRoute={onRouteGap} addLabel={section.addLabel}
+        {...(section.placeholder ? { placeholder: section.placeholder } : {})} emptyHint={section.empty} />
     </>
   );
 }
@@ -352,93 +426,80 @@ const ATLAS_GAP_SECTIONS = [
 ] as const;
 
 /**
- * AGENTIFY — Listen's third artifact, straight after the Current-State Atlas.
+ * AGENTIFY — Listen's third artifact, straight after the Current-State Atlas, and
+ * the home of exactly one question: can this step be agentified?
  *
- * The workflow surface, moved here whole: the seam view IS the editor, a row
- * opens the cockpit / summary card / swimlane / step inspector inline, and the
- * inspector now carries the decision the artifact exists for — automate, assist,
- * or keep manual, per step, with the reason. The pain and event registers stay
- * on the Atlas tab and are read through `registerDoc`, so the swimlane still
- * shades by voiced pain and still chips its business events without owning them.
+ * It shows THE SAME WORKFLOWS THE ATLAS HOLDS — not a copy of them. The array
+ * handed to the diagram is read straight off `currentStateAtlas`, so a rename or a
+ * new step on the Atlas is a rename or a new step here, with nothing to reconcile
+ * and no second version to go stale. Structure is therefore read-only on this tab:
+ * no add, no reorder, no drop, no dismiss, no workflow fields. The flag is the only
+ * edit there is.
+ *
+ * AND THE FLAG IS NOT STORED ON A WORKFLOW. It is stored alone, under the LEDGER
+ * ELEMENT ID of the atlas step it is about (`agentify.decisions`, see
+ * agentifyDecisions) — which is what lets the Atlas keep full editorial control of
+ * the workflows while the calls made about them survive being re-worded. A document
+ * generated in the older shape (`agentify.workflows[].steps[].mode`) is read through
+ * the same reader and migrates on the first new decision.
+ *
+ * The pain and event registers live on the Atlas document and are read through
+ * `registerDoc`, so the swimlane still shades by voiced pain and still chips its
+ * business events without owning either.
  */
 function AgentifyStudio({ doc, onChange, onOpenArtifact, program, gapRoutes, onRouteGap }: StudioProps) {
   const patch = patchOf(doc, onChange);
   // The diagram's focus filters this document's gaps and open questions.
-  // Filtered views are READ-ONLY on purpose — editing a filtered table would
-  // silently drop the hidden rows — so "Show all & edit" opens the full editor.
   const [focus, setFocus] = React.useState<AtlasFocus | null>(null);
   const [showAll, setShowAll] = React.useState(false);
   const handleFocus = React.useCallback((next: AtlasFocus | null) => {
     setFocus((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
   }, []);
-  // READ THROUGH TO THE ATLAS until Agentify owns workflows of its own.
-  //
-  // Moving the workflows here left every EXISTING programme with no diagram at
-  // all: Agentify's document does not exist until it is generated, so the
-  // swimlane that had been on the Atlas for months simply vanished, and the
-  // Atlas was left rendering the same data as a raw field dump through the
-  // generic fallback. A move that makes a working surface disappear until a new
-  // artifact is generated is a regression, whatever the target structure is.
-  //
-  // So: the Atlas remains the evidence record and the source of the workflows;
-  // Agentify shows them immediately and becomes the working copy on the first
-  // edit (onChange still writes to `agentify`, seeding the whole array, so a
-  // single step edit cannot persist a one-workflow document). Once Agentify
-  // holds its own workflows they win — a generated or edited decision is never
-  // overwritten by the source it came from.
-  const atlasDoc = program ? readArtifactDoc(program, FORMAL_ARTIFACT_FIELD_KEYS["current-state-atlas"]) : null;
-  const ownWorkflows = asArray(doc.workflows);
-  const workflowDoc = ownWorkflows.length
-    ? doc
-    : { ...doc, workflows: asArray((atlasDoc as Record<string, unknown> | null)?.workflows) };
 
-  const filtering = !!focus && !showAll;
-  const filterBar = (shown: number, total: number) => (
-    <div className="v3fs-atlas-fltbar">
-      <span>{shown} of {total} for <b>{focus?.label}</b></span>
-      <button type="button" className="v3fs-a" onClick={() => setShowAll(true)}>Show all &amp; edit</button>
-    </div>
+  const atlasDoc = (program ? readArtifactDoc(program, FORMAL_ARTIFACT_FIELD_KEYS["current-state-atlas"]) : null) as Record<string, unknown> | null;
+  // THE WORKFLOWS ARE THE ATLAS'S. Read every render, never copied onto this
+  // document, and never written back — the only fallback is a pre-correction
+  // Agentify that still carries its own array, which is shown so its programme does
+  // not lose its diagram, and which retires the moment a decision is recorded.
+  const atlasWorkflows = asArray(atlasDoc?.workflows);
+  const workflowDoc = React.useMemo(
+    () => ({ workflows: atlasWorkflows.length ? atlasWorkflows : asArray(doc.workflows) }),
+    [atlasWorkflows, doc.workflows],
   );
-  const refocusBar = focus && showAll ? (
-    <div className="v3fs-atlas-fltbar">
-      <button type="button" className="v3fs-a" onClick={() => setShowAll(false)}>Filter to {focus.label}</button>
-    </div>
-  ) : null;
+  const decisions = React.useMemo(() => readDecisions(doc, atlasDoc), [doc, atlasDoc]);
+  const decide = React.useCallback(
+    (stepId: string, next: { mode?: AgentifyMode | ""; rationale?: string }) =>
+      onChange(writeDecision(doc, atlasDoc, stepId, next)),
+    [doc, atlasDoc, onChange],
+  );
+  const decided = Object.values(decisions).filter((d) => d.mode).length;
+  const stepCount = workflowDoc.workflows.map(asRecord).reduce((n, wf) => n + asArray(wf.steps).length, 0);
+
   return (
     <>
-      <Section label="Workflows — the diagram, and the call on each step" hint="who does what, in which system; then: agentify · assist · keep manual">
-        <WorkflowStudio doc={workflowDoc} onChange={onChange} onOpenArtifact={onOpenArtifact} program={program} onFocus={handleFocus}
-          registerDoc={atlasDoc ?? undefined} />
+      <Section label="Workflows — and the flag on each step"
+        hint="the same workflows the Current-State Atlas holds; here you mark which steps can be agentified">
+        <p className="v3fs-stu-lead">
+          These are the <b>Current-State Atlas&rsquo;s</b> workflows, shown as they stand — edit them there.
+          On this tab you make one call per step: <b>agentify</b> it, <b>assist</b> the human doing it, or
+          <b> keep it manual</b>. A step nobody has decided carries no flag, and that is the honest reading:
+          it means the call has not been made, not that the answer is no.
+          {stepCount ? <> <b>{decided} of {stepCount} steps decided.</b></> : null}
+        </p>
+        <WorkflowStudio doc={workflowDoc} onChange={onChange} onOpenArtifact={onOpenArtifact} program={program}
+          onFocus={handleFocus} surface="agentify" registerDoc={atlasDoc ?? undefined} anchorDoc={atlasDoc ?? undefined}
+          decisions={decisions} onDecide={decide} />
       </Section>
       {/* Open questions and gaps follow the diagram's focus too — items that
-          MENTION the focused workflow/step's terms (its name, actors,
-          systems, entities, events). Same read-only-when-filtered rule. */}
-      {ATLAS_GAP_SECTIONS.map((section) => {
-        const values = asStrings(doc[section.key]);
-        const terms = focus?.terms.map((term) => term.toLowerCase()).filter((term) => term.length >= 4) ?? [];
-        const filtered = filtering && terms.length
-          ? values.filter((value) => { const t = value.toLowerCase(); return terms.some((term) => t.includes(term)); })
-          : null;
-        return (
-          <Section key={section.key} label={section.label} hint={section.hint}>
-            {filtered ? (
-              <>
-                {filterBar(filtered.length, values.length)}
-                {filtered.length ? filtered.map((value, i) => (
-                  <div key={i} className="v3fs-atlas-flt-row"><span>{value}</span></div>
-                )) : <div className="v3fs-stu-empty">Nothing here mentions this selection.</div>}
-              </>
-            ) : (
-              <>
-                {refocusBar}
-                <GapRoutingEditor values={values} onChange={(next) => patch({ [section.key]: next })} program={program}
-                  movementId="listen" gapRoutes={gapRoutes} onRoute={onRouteGap} addLabel={section.addLabel}
-                  {...(section.placeholder ? { placeholder: section.placeholder } : {})} emptyHint={section.empty} />
-              </>
-            )}
-          </Section>
-        );
-      })}
+          MENTION the focused workflow/step's terms. These ARE Agentify's own. */}
+      {ATLAS_GAP_SECTIONS.map((section) => (
+        <Section key={section.key} label={section.label} hint={section.hint}>
+          <FocusedGapSection doc={doc} section={section} focus={focus} showAll={showAll}
+            onShowAll={() => setShowAll(true)} onRefocus={() => setShowAll(false)}
+            onChange={(next) => patch({ [section.key]: next })}
+            program={program} gapRoutes={gapRoutes} onRouteGap={onRouteGap} />
+        </Section>
+      ))}
     </>
   );
 }
@@ -1102,12 +1163,18 @@ const flowFieldKey = (artifactId: string): string => FORMAL_ARTIFACT_FIELD_KEYS[
 export const STUDIO_REGISTRY: Record<string, StudioEntry> = {
   "charter": { fieldKey: flowFieldKey("charter"), docOrder: ["mandate", "sponsor", "businessObjective", "objectives", "inScope", "outOfScope", "successCriteria", "keyRisks", "governanceSummary"], Component: CharterStudio },
   "discovery-kit": { fieldKey: flowFieldKey("discovery-kit"), docOrder: ["personas", "interviews", "coverageMap"], Component: DiscoveryKitStudio },
-  // "workflows" is deliberately GONE from the atlas's document order: the
-  // workflows are Agentify's surface now, and the atlas tab typesets the
-  // registers it kept. The atlas GENERATOR still emits workflows (it is where
-  // they come from) — this is what the tab renders, not what the document holds.
-  "current-state-atlas": { fieldKey: flowFieldKey("current-state-atlas"), docOrder: ["events", "painHeatmap", "systemsInventory", "openQuestions", "coverage"], Component: AtlasStudio },
-  "agentify": { fieldKey: flowFieldKey("agentify"), docOrder: ["workflows", "agentCandidates", "openQuestions"], Component: AgentifyStudio },
+  // The workflows LEAD the atlas again — they are what the artifact is, and the
+  // typeset reading has to open on them for the same reason the studio does.
+  "current-state-atlas": { fieldKey: flowFieldKey("current-state-atlas"), docOrder: ["workflows", "events", "painHeatmap", "systemsInventory", "openQuestions", "coverage"], Component: AtlasStudio },
+  // Agentify's document is DECISIONS, not workflows. `workflows` stays out of the
+  // order (and is hidden from the reading pane in FlowArtifactStudio) so a legacy
+  // copy cannot typeset as a second, competing atlas.
+  // `decisions` is deliberately NOT listed: docOrder is the GENERATOR's narrative
+  // order (edgeLockstep checks every key here against the agent's output contract),
+  // and the edge still emits `agentify.workflows`. The section typesets anyway —
+  // unlisted keys append after the ordered ones — so nothing is hidden. When the
+  // agentify prompt is changed to emit `decisions`, add it here, first.
+  "agentify": { fieldKey: flowFieldKey("agentify"), docOrder: ["agentCandidates", "openQuestions"], Component: AgentifyStudio },
   "domain-ontology": { fieldKey: flowFieldKey("domain-ontology"), docOrder: ["entities", "relations", "standardAlignment", "ambiguities"], Component: OntologyStudio },
   "architecture-strategy": { fieldKey: flowFieldKey("architecture-strategy"), docOrder: ["candidates", "recommendation"], Component: StrategyStudio },
   "agentic-blueprint": { fieldKey: flowFieldKey("agentic-blueprint"), docOrder: ["agents", "journeys", "orchestration", "dataContracts", "hitlPoints", "evalPlan", "buildSequence", "tracks"], Component: BlueprintStudio },

@@ -72,10 +72,15 @@ function judge(file: string, route: Route, res: { text?: string; method?: string
 
 const MAX = 60_000;
 /**
- * Base64 via Node's Buffer, NOT `btoa`. Under this repo's vitest 0.34.6 + jsdom
- * environment `globalThis.btoa` never returns — it spins forever on even an
- * 11-character string, silently wedging the whole run. (The edge function runs
- * on Deno, whose native `btoa` is fine; this is purely a test-harness hazard.)
+ * Base64 via Node's Buffer because the input here is BYTES. `btoa` takes a
+ * latin1 string, so a Uint8Array would have to be widened into one first; Buffer
+ * encodes the bytes directly and is what the edge function's own path resolves
+ * to anyway.
+ *
+ * (This used to read "NOT `btoa`, which never returns" — jsdom 29's btoa
+ * recursed into itself under vitest and hung. That is fixed suite-wide by
+ * src/test/setupBase64.ts; `btoa` is safe to call now. Buffer is still the right
+ * tool for bytes.)
  */
 const b64 = (bytes: Uint8Array) => Buffer.from(bytes).toString("base64");
 const utf8 = (s: string) => new TextEncoder().encode(s);
