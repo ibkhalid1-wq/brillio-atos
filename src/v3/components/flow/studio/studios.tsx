@@ -371,6 +371,27 @@ function AgentifyStudio({ doc, onChange, onOpenArtifact, program, gapRoutes, onR
   const handleFocus = React.useCallback((next: AtlasFocus | null) => {
     setFocus((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
   }, []);
+  // READ THROUGH TO THE ATLAS until Agentify owns workflows of its own.
+  //
+  // Moving the workflows here left every EXISTING programme with no diagram at
+  // all: Agentify's document does not exist until it is generated, so the
+  // swimlane that had been on the Atlas for months simply vanished, and the
+  // Atlas was left rendering the same data as a raw field dump through the
+  // generic fallback. A move that makes a working surface disappear until a new
+  // artifact is generated is a regression, whatever the target structure is.
+  //
+  // So: the Atlas remains the evidence record and the source of the workflows;
+  // Agentify shows them immediately and becomes the working copy on the first
+  // edit (onChange still writes to `agentify`, seeding the whole array, so a
+  // single step edit cannot persist a one-workflow document). Once Agentify
+  // holds its own workflows they win — a generated or edited decision is never
+  // overwritten by the source it came from.
+  const atlasDoc = program ? readArtifactDoc(program, FORMAL_ARTIFACT_FIELD_KEYS["current-state-atlas"]) : null;
+  const ownWorkflows = asArray(doc.workflows);
+  const workflowDoc = ownWorkflows.length
+    ? doc
+    : { ...doc, workflows: asArray((atlasDoc as Record<string, unknown> | null)?.workflows) };
+
   const filtering = !!focus && !showAll;
   const filterBar = (shown: number, total: number) => (
     <div className="v3fs-atlas-fltbar">
@@ -386,8 +407,8 @@ function AgentifyStudio({ doc, onChange, onOpenArtifact, program, gapRoutes, onR
   return (
     <>
       <Section label="Workflows — the diagram, and the call on each step" hint="who does what, in which system; then: agentify · assist · keep manual">
-        <WorkflowStudio doc={doc} onChange={onChange} onOpenArtifact={onOpenArtifact} program={program} onFocus={handleFocus}
-          registerDoc={(program ? readArtifactDoc(program, FORMAL_ARTIFACT_FIELD_KEYS["current-state-atlas"]) : null) ?? undefined} />
+        <WorkflowStudio doc={workflowDoc} onChange={onChange} onOpenArtifact={onOpenArtifact} program={program} onFocus={handleFocus}
+          registerDoc={atlasDoc ?? undefined} />
       </Section>
       {/* Open questions and gaps follow the diagram's focus too — items that
           MENTION the focused workflow/step's terms (its name, actors,

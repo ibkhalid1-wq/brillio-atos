@@ -772,7 +772,14 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
                   // as the plan (coverage + cast), not a duplicate of the scripts.
                   // On EXPORT they come back: a printed kit that omits the
                   // questions isn't the kit, it's the cover sheet.
-                  hideKeys={artifact.id === "discovery-kit" && !printing ? new Set(["interviews"]) : undefined}
+                  // The Atlas still CARRIES `workflows` — it is the evidence
+                  // record and the source Agentify generates from — but it no
+                  // longer PRESENTS them: the diagram moved to Agentify. Without
+                  // this, the generic renderer appended them as a raw NAME /
+                  // OWNER / STEPS / ACTION field dump, which is worse than either
+                  // showing the swimlane or showing nothing.
+                  hideKeys={artifact.id === "discovery-kit" && !printing ? new Set(["interviews"])
+                    : artifact.id === "current-state-atlas" ? new Set(["workflows"]) : undefined}
                   openToSection={initialSection}
                   onPatch={editable ? (key, value) => { setDraft({ ...draft, [key]: value }); setDirty(true); } : undefined}
                   onOpenFullEditor={editable ? () => setEditing(true) : undefined} />
