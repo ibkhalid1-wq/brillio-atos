@@ -119,6 +119,58 @@ describe("rendering rules — full data, verbatim quoting, casing, plain relatio
   });
 });
 
+/**
+ * The meaning question carries the RIVAL READINGS — the half this template used to drop.
+ *
+ * A terminology collision reached the record as a plain string composed in
+ * flowShellData ("Two teams use X differently (…)"), a second producer whose answer
+ * closed nothing. It is a `#semantics` locus now, with the readings beside it as
+ * `semantics.reading.*` claims. If this template ignored them the migrated question
+ * would be WEAKER than the string it replaced, so both halves are pinned here: named
+ * when the ledger holds them, and never invented when it does not.
+ */
+describe("meaning questions name the readings the LEDGER holds — and invent none", () => {
+  const collided: Snapshot = {
+    ontology: {
+      entities: [
+        { name: "Case", area: "Surgical Operations", attributes: ["priority"] },
+        { name: "Anesthesia Record", area: "Anesthesiology" },
+      ],
+      ambiguities: [
+        { term: "Case", conflictingMeanings: ["a surgical booking", "a billing episode"], resolution: "unresolved" },
+        { term: "Anesthesia Record", conflictingMeanings: ["the intra-op chart"], resolution: "unresolved" },
+        { term: "Chart", conflictingMeanings: [], resolution: "unresolved" },
+      ],
+    },
+    atlas: {}, overrides: [],
+  };
+  const store = migrate(collided);
+
+  it("two recorded readings → BOTH are named, verbatim, inside the one question", () => {
+    const q = renderQuestion(store, "el:entity:case#semantics", "stakeholder").question;
+    expect(q).toContain("What does Case mean, exactly?");            // the plain ask survives
+    expect(q).toContain("a surgical booking");
+    expect(q).toContain("a billing episode");
+    expect(q).toContain("which meaning should it adopt?");
+    // operator audience is the SAME deterministic text — readings are data, not tone
+    expect(renderQuestion(store, "el:entity:case#semantics", "operator").question).toBe(q);
+  });
+
+  it("ONE recorded reading is not a collision — the plain ask, with no invented rival", () => {
+    const q = renderQuestion(store, "el:entity:anesthesia-record#semantics", "stakeholder").question;
+    expect(q).toBe("What does Anesthesia Record mean, exactly?");
+  });
+
+  it("a term with NO recorded meanings still asks honestly — nothing is fabricated to fill the template", () => {
+    // "Chart" names no entity, so the collision hangs on its own `el:term:` element
+    // instead of being dropped — but the ledger records no readings for it, and none
+    // are supplied.
+    const q = renderQuestion(store, "el:term:chart#semantics", "stakeholder").question;
+    expect(q).toBe("What does Chart mean, exactly?");
+    expect(q).not.toContain("ways —");
+  });
+});
+
 describe("end to end — a chip answer closes the locus, burn-down moves, projection regenerates", () => {
   it("chip → attributed assertion → closed → count-1 → gone from the kit", () => {
     const store = migrate(surgery);

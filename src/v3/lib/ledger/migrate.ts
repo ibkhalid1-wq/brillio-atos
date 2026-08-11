@@ -94,6 +94,83 @@ const jointOrOwner = (areaA: string, areaB: string): Owner => {
 
 export interface Snapshot { ontology: Record<string, unknown>; atlas: Record<string, unknown>; overrides: Array<Record<string, unknown>>; }
 
+// ── ambiguities → ledger loci ─────────────────────────────────────────────────
+/** The document still ASKS when it records no resolution, or one that says so. The
+ *  SAME predicate the movement gate applied while ambiguities lived only in the blob —
+ *  migrating them must not silently change WHICH collisions ask. */
+const UNRESOLVED_RE = /unresolved/i;
+
+/** The slot family carrying a term's competing readings, one claim per reading. The
+ *  renderer reads them back to name the rivals in the meaning question; nothing here
+ *  composes question text. */
+export const READING_SLOT_PREFIX = "semantics.reading.";
+
+/** One terminology collision, resolved onto the ledger locus that carries it. */
+export interface AmbiguityLocus {
+  /** the disputed word, as the ontology spelled it */
+  term: string;
+  /** the element whose `#semantics` slot this collision opens */
+  elementId: string;
+  /** the ontology entity the term names, or null when the ontology holds none */
+  entityName: string | null;
+  /** the competing readings, in document order — never invented, sometimes empty */
+  meanings: string[];
+  /** the resolution the generator PROPOSED (never a human closure), or "" */
+  resolution: string;
+  /** true while the document still asks (no resolution, or one that says "unresolved") */
+  unresolved: boolean;
+}
+
+/**
+ * THE definition of which ledger loci an ontology's `ambiguities[]` open — one
+ * function, shared by the migration that writes them and by any surface that asks
+ * whether one is still open, so the two cannot drift.
+ *
+ * A term is matched to the entity it names (exactly, then case-insensitively, then
+ * through an alias). A term the ontology holds NO entity for still gets a locus, on
+ * an `el:term:` element carrying the word verbatim — dropping it would delete the
+ * only place a generator-detected collision is ever raised. That prefix marks its
+ * provenance exactly as `el:removed:` marks an override-born element; no entity is
+ * invented under `el:entity:`.
+ *
+ * Two rows naming one element are ONE question: their readings union, and it asks
+ * while EITHER row asks.
+ */
+export function ambiguityLoci(ontology: Record<string, unknown> | null | undefined): AmbiguityLocus[] {
+  const doc = (ontology ?? {}) as Record<string, unknown>;
+  const rows = (Array.isArray(doc.ambiguities) ? doc.ambiguities : []) as unknown[];
+  if (!rows.length) return [];
+  const entities = (Array.isArray(doc.entities) ? doc.entities : []) as Array<Record<string, unknown>>;
+  const byLower = new Map<string, string>();          // lowercased name/alias → entity name (names win)
+  for (const e of entities) { const n = String(e.name ?? "").trim(); if (n) byLower.set(n.toLowerCase(), n); }
+  for (const e of entities) {
+    const n = String(e.name ?? "").trim(); if (!n) continue;
+    for (const a of (Array.isArray(e.aliases) ? e.aliases : []) as unknown[]) {
+      const al = String(a).trim().toLowerCase();
+      if (al && !byLower.has(al)) byLower.set(al, n);
+    }
+  }
+  const byElement = new Map<string, AmbiguityLocus>();
+  for (const row of rows) {
+    if (!row || typeof row !== "object" || Array.isArray(row)) continue;
+    const r = row as Record<string, unknown>;
+    const term = String(r.term ?? "").trim();
+    if (!term) continue;
+    const entityName = byLower.get(term.toLowerCase()) ?? null;
+    const elementId = entityName ? `el:entity:${slug(entityName)}` : `el:term:${slug(term)}`;
+    const meanings = ((Array.isArray(r.conflictingMeanings) ? r.conflictingMeanings : []) as unknown[])
+      .map((m) => String(m).trim()).filter(Boolean);
+    const resolution = String(r.resolution ?? "").trim();
+    const unresolved = !resolution || UNRESOLVED_RE.test(resolution);
+    const prior = byElement.get(elementId);
+    if (!prior) { byElement.set(elementId, { term, elementId, entityName, meanings, resolution, unresolved }); continue; }
+    for (const m of meanings) if (!prior.meanings.includes(m)) prior.meanings.push(m);
+    if (!prior.resolution) prior.resolution = resolution;
+    prior.unresolved = prior.unresolved || unresolved;
+  }
+  return [...byElement.values()];
+}
+
 /**
  * @deprecated Option A replaces this. Change now flows through the generator + override
  * adapter → reconcile (`supabase/functions/_shared/optionA.ts` → `PgLedger.reconcile`),
@@ -139,6 +216,22 @@ export function migrate(snap: Snapshot): LedgerStore {
       A(aboutOf(aid, "dataType"), OPEN, "generated", "to-be", "configuration", owner, { status: "open" }); // F-D — owned by the attribute's OWN entity area, not a constant
       if (ENUMISH.test(an)) A(aboutOf(aid, "valueSet"), OPEN, "generated", "to-be", "domain", owner, { status: "open" }); // F-F
     }
+  }
+
+  // ── ambiguities → a real #semantics locus on the term's ELEMENT ──
+  // A terminology collision the ontology recorded is a MEANING question, so it becomes
+  // the ordinary thing a meaning question is here: an open `#semantics` unknown — owned,
+  // routable, closable — with the rival readings beside it as weak `semantics.reading.*`
+  // claims the renderer reads back. A recorded resolution is the generator's PROPOSAL,
+  // not a human closure: asserted as a weak scalar on the same locus, where precedence
+  // supersedes the unknown (store.ts) and the slot settles weakly and stops asking —
+  // exactly the population the document gate asked for, now with a closure path.
+  for (const amb of ambiguityLoci(snap.ontology)) {
+    const owner = ownerFor(areaByName.get(amb.entityName ?? "") ?? "");
+    if (!amb.entityName) store.addElement({ id: amb.elementId, kind: "entity", name: amb.term });
+    A(aboutOf(amb.elementId, "semantics"), OPEN, "generated", "to-be", "domain", owner, { status: "open" });
+    for (const m of amb.meanings) A(aboutOf(amb.elementId, `${READING_SLOT_PREFIX}${slug(m)}`), s(m), "generated", "to-be", "domain", owner, { status: "weak" });
+    if (!amb.unresolved) A(aboutOf(amb.elementId, "semantics"), s(amb.resolution), "generated", "to-be", "domain", owner, { status: "weak" });
   }
 
   for (const r of relations) {

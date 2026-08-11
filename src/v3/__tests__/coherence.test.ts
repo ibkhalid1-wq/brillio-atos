@@ -12,6 +12,9 @@ import {
   spineRegenerationPlan, type ArtifactCardModel,
 } from "@/v3/components/flow/flowShellData";
 import { meetingKit } from "@/v3/components/flow/flowMeetings";
+import { canSendForApproval } from "@/v3/components/flow/flowApprovals";
+import { migrate } from "@/v3/lib/ledger/migrate";
+import { renderQuestion } from "@/v3/lib/ledger/renderQuestion";
 import { describeDecisionChanges, type FlowDecision } from "@/v3/components/flow/flowDecisions";
 
 const programme = (inner: Record<string, unknown>): ProgramSummary => ({
@@ -187,6 +190,59 @@ describe("the record's questions hold the gate and reach the script", () => {
 
   it("no artifacts generated → no phantom issues criterion", () => {
     expect(gateChecklist(programme({}), listen(), []).some((c) => c.id === "issues")).toBe(false);
+  });
+
+  /**
+   * AN AMBIGUITY IS A LEDGER LOCUS, AND THAT IS WHY THE GATE CAN BE RELEASED.
+   *
+   * The collision used to be a plain string composed here, matched against the
+   * document's `resolution` field — which no studio editor writes. So the movement
+   * approval gate below could be held by a question no human had any way to answer;
+   * only a regeneration could clear it. It is a `#semantics` unknown now, and an
+   * operator ruling moves it exactly as it moves any other open unknown.
+   */
+  const ambiguityOnly = (listenInputs: Record<string, unknown> = {}) => programme({
+    discoveryKit: { interviews: [{ stakeholder: "Dan Reyes", role: "RevOps", agenda: [] }] },
+    domainOntology: {
+      entities: [{ name: "Quote" }],
+      ambiguities: [{ term: "Order", conflictingMeanings: ["sales order", "purchase order"], resolution: "unresolved" }],
+    },
+    currentStateAtlas: { workflows: [] },
+    phaseInputs: { listen: {
+      interviewRoster: JSON.stringify([{ name: "Dan Reyes", status: "Heard" }]),
+      interviewTranscripts: "— Dan Reyes, RevOps —\nplenty of words here on the record",
+      contradictionLog: JSON.stringify([]),
+      ...listenInputs,
+    } },
+  });
+  const ontologyCard = art({ id: "domain-ontology", title: "Domain Ontology" });
+  const ruling = (decision: "out-of-scope" | "escalate") => ({
+    _operatorActions: JSON.stringify([{
+      kind: "decide-fate", about: "el:term:order#semantics", slot: "semantics",
+      decision, reason: "one team's word for a Quote — not this programme's", by: "op", at: "2026-08-10T00:00:00Z",
+    }]),
+  });
+
+  it("the collision's WORDS come from the one renderer, not from this module", () => {
+    const store = migrate({
+      ontology: { entities: [{ name: "Quote" }], ambiguities: [{ term: "Order", conflictingMeanings: ["sales order", "purchase order"], resolution: "unresolved" }] },
+      atlas: { workflows: [] }, overrides: [],
+    });
+    const issue = movementOpenIssues(ambiguityOnly(), listen()).find((i) => i.kind === "ambiguity")!;
+    expect(issue.text).toBe(renderQuestion(store, "el:term:order#semantics", "stakeholder").question);
+    expect(issue.text).toContain("sales order");     // the rival readings the old string carried
+    expect(issue.text).toContain("purchase order");
+  });
+
+  it("an unresolved collision HOLDS the approval gate — and an operator ruling RELEASES it", () => {
+    expect(canSendForApproval(ambiguityOnly(), listen(), ontologyCard)).toBe(false);
+    expect(canSendForApproval(ambiguityOnly(ruling("out-of-scope")), listen(), ontologyCard)).toBe(true);
+    expect(movementOpenIssues(ambiguityOnly(ruling("out-of-scope")), listen())).toHaveLength(0);
+  });
+
+  it("an ESCALATION is not a release — the question is still being asked, of someone senior", () => {
+    expect(movementOpenIssues(ambiguityOnly(ruling("escalate")), listen()).map((i) => i.kind)).toEqual(["ambiguity"]);
+    expect(canSendForApproval(ambiguityOnly(ruling("escalate")), listen(), ontologyCard)).toBe(false);
   });
 });
 
