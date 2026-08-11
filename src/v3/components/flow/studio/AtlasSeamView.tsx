@@ -7,7 +7,15 @@
  * personas are single-area, so no one person sees a seam either — this view is
  * the only place a seam is made visible.
  *
- * Read-only. It renders across any selected set of areas and surfaces the three
+ * It is ALSO the atlas's only edit surface. A workflow's row carries its whole
+ * CRUD — create, rename, retrigger, reassign its area, declare hand-offs and
+ * failure modes, dismiss — and expanding a row opens that workflow's swimlane
+ * and step inspector inline (rendered by the caller through
+ * `renderWorkflowDetail`, so the diagram and the inspector are the SAME
+ * components the studio always used, not a second implementation). The separate
+ * "Edit a workflow" panel that used to sit below this view is gone.
+ *
+ * It renders across any selected set of areas and surfaces the three
  * things that only exist BETWEEN lanes:
  *   1. handoffs, as visible crossings (a connector that spans the lanes it jumps),
  *   2. shared entities — two areas' steps touching the same ontology entity, a
@@ -18,7 +26,10 @@
  * handoff, a handoff with no crossing) rather than papering over them.
  */
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { asArray, asRecord, asText, asStrings } from "./StudioKit";
+import {
+  asArray, asRecord, asText, asStrings,
+  useStudioLocked, useStudioAuthoring, DismissControl,
+} from "./StudioKit";
 import { canonicalFrameArea } from "@/v3/components/flow/listenCoverage";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
 import type { ProgramSummary } from "@/new/types";
@@ -74,6 +85,8 @@ function handoffCovers(handoffs: string[], from: string, to: string): boolean {
 interface SeamStep {
   index: number; actor: string; action: string; system: string;
   area: string; entities: string[]; missing: string[]; evidence: string;
+  /** Mark-dropped (soft): the step and its ledger claims stay findable. */
+  dropped: boolean;
 }
 interface SeamCrossing { after: number; from: string; to: string; declared: boolean }
 interface SeamWf {
@@ -81,19 +94,36 @@ interface SeamWf {
   areas: string[]; crossings: SeamCrossing[]; undeclared: number; unseenHandoffs: number;
 }
 
-export default function AtlasSeamView({ doc, program, frameAreas, onOpenArtifact, onPickWorkflow, onChange, editable }: {
+export default function AtlasSeamView({
+  doc, program, frameAreas, onOpenArtifact, onPickWorkflow, onChange, editable,
+  expandedWf = null, renderWorkflowDetail, onAddWorkflow, onDismissWorkflow,
+}: {
   doc: Record<string, unknown>;
   program?: ProgramSummary;
   frameAreas: string[];
   onOpenArtifact?: (id: string) => void;
-  /** Open this workflow in the single-workflow editor below (consolidated view). */
+  /** Expand this workflow INLINE in this view — there is no editor below. */
   onPickWorkflow?: (wfIndex: number) => void;
-  /** Write the whole doc back (same setter the single-workflow editor uses). */
+  /** Write the whole doc back (the studio's one write path). */
   onChange?: (next: Record<string, unknown>) => void;
   /** When true (studio not locked), tiles become inline-editable with CRUD. */
   editable?: boolean;
+  /** Which workflow is open inline; null = none. */
+  expandedWf?: number | null;
+  /** The expanded workflow's body — the studio's own swimlane + step inspector. */
+  renderWorkflowDetail?: (wfIndex: number) => React.ReactNode;
+  /** Author a new workflow (gated by the studio's authoring context upstream). */
+  onAddWorkflow?: () => void;
+  /** Dismiss a workflow WITH a reason — lands a curation note on the doc. */
+  onDismissWorkflow?: (wfIndex: number, reason: string) => void;
 }) {
-  const canEdit = editable && !!onChange;
+  // The lock/authoring gates are read from the studio's own contexts as well as
+  // the prop, so a locked artifact can never become editable through a stale
+  // prop, and "author a new workflow" stays separate from "curate this one".
+  const lockedCtx = useStudioLocked();
+  const authoringCtx = useStudioAuthoring();
+  const canEdit = editable !== false && !lockedCtx && !!onChange;
+  const canAuthor = canEdit && authoringCtx;
   const workflows = useMemo(() => asArray(doc.workflows).map(asRecord), [doc.workflows]);
 
   // The ontology's entity names (+ aliases), lowercased — the set a step's
@@ -118,7 +148,7 @@ export default function AtlasSeamView({ doc, program, frameAreas, onOpenArtifact
         index, actor: asText(s.actor).trim() || "Unassigned", action: asText(s.action),
         system: asText(s.system), area: resolveArea(asText(s.actor)),
         entities, missing: entities.filter((e) => !ontoSet.has(e.trim().toLowerCase())),
-        evidence: asText(s.evidence),
+        evidence: asText(s.evidence), dropped: s.dropped === true,
       };
     });
     const crossings: SeamCrossing[] = [];
@@ -214,24 +244,12 @@ export default function AtlasSeamView({ doc, program, frameAreas, onOpenArtifact
       return { ...w, steps };
     }));
   }, [workflows, writeWorkflows]);
-  const deleteStepAbs = useCallback((wfI: number, stepI: number) => {
-    writeWorkflows(workflows.map((w, i) => (i !== wfI ? w
-      : { ...w, steps: asArray(w.steps).map(asRecord).filter((_, j) => j !== stepI) })));
-    setPinned(null);
-  }, [workflows, writeWorkflows]);
-  const addWorkflow = useCallback(() => {
-    writeWorkflows([...workflows, { name: "New workflow", area: "", trigger: "",
-      steps: [{ actor: "", action: "First step", system: "", entities: [] }], handoffs: [], failureModes: [] }]);
-  }, [workflows, writeWorkflows]);
-  const deleteWorkflow = useCallback((wfI: number) => {
-    if (typeof window !== "undefined" && !window.confirm("Delete this whole workflow from the atlas?")) return;
-    writeWorkflows(workflows.filter((_, i) => i !== wfI));
-  }, [workflows, writeWorkflows]);
-  const patchWorkflowAbs = useCallback((wfI: number, patch: Record<string, unknown>) => {
-    writeWorkflows(workflows.map((w, i) => (i === wfI ? { ...w, ...patch } : w)));
-  }, [workflows, writeWorkflows]);
-  // Which workflow's field panel (name/trigger/owner/area/hand-offs) is open.
-  const [wfEditKey, setWfEditKey] = useState<number | null>(null);
+  // MARK-DROPPED, not hard-delete — the same discipline the step inspector uses:
+  // a step can carry closed claims, so "remove" sets a soft `dropped` flag and the
+  // step stays in the document (and findable in the ledger), restorable.
+  const dropStepAbs = useCallback((wfI: number, stepI: number, dropped: boolean) => {
+    patchStepAbs(wfI, stepI, { dropped: !dropped });
+  }, [patchStepAbs]);
 
   // Workflows in scope: any that touch a selected area.
   const inScope = useMemo(() => wfData.filter((wf) =>
@@ -250,11 +268,19 @@ export default function AtlasSeamView({ doc, program, frameAreas, onOpenArtifact
     return { undeclared, unseen, gapSteps };
   }, [inScope]);
 
-  // Blocks shown: in-scope, optionally narrowed to a clicked finding.
-  const visibleScope = useMemo(() => (findingFilter === null ? inScope : inScope.filter((wf) =>
-    (findingFilter === "gap" && wf.steps.some((s) => s.missing.length))
-    || (findingFilter === "cross" && wf.undeclared > 0)
-    || (findingFilter === "unseen" && wf.unseenHandoffs > 0))), [inScope, findingFilter]);
+  // Blocks shown: in-scope, optionally narrowed to a clicked finding. The
+  // EXPANDED workflow is always shown — it is being edited inline here, and a
+  // filter (or a pick from the lifecycle grid, whose workflow may sit outside
+  // the area selection) must never hide the thing the operator just opened.
+  const visibleScope = useMemo(() => {
+    const narrowed = findingFilter === null ? inScope : inScope.filter((wf) =>
+      (findingFilter === "gap" && wf.steps.some((s) => s.missing.length))
+      || (findingFilter === "cross" && wf.undeclared > 0)
+      || (findingFilter === "unseen" && wf.unseenHandoffs > 0));
+    if (expandedWf === null || narrowed.some((wf) => wf.wfIndex === expandedWf)) return narrowed;
+    const open = wfData.find((wf) => wf.wfIndex === expandedWf);
+    return open ? [...narrowed, open].sort((a, b) => a.wfIndex - b.wfIndex) : narrowed;
+  }, [inScope, findingFilter, expandedWf, wfData]);
 
   const laneStyle = (area: string): React.CSSProperties => ({ ["--area" as string]: `hsl(${areaHue(area)} 46% 52%)` });
   const rowOrderFor = useCallback((wf: SeamWf): string[] => {
@@ -322,19 +348,27 @@ export default function AtlasSeamView({ doc, program, frameAreas, onOpenArtifact
             const rowOf = (area: string) => { const i = rows.indexOf(effSel.has(area) ? area : OTHER); return i < 0 ? rows.length - 1 : i; };
             const cols = `118px ${wf.steps.map(() => "minmax(108px,150px) 14px").join(" ")}`;
             const areaPath = wf.areas.filter((a) => a !== OTHER);
+            const isOpen = expandedWf === wf.wfIndex;
             return (
-              <section key={wf.wfIndex} className="v3fs-seam-wf">
+              <section key={wf.wfIndex} className={`v3fs-seam-wf${isOpen ? " open" : ""}`}>
                 <header className="v3fs-seam-wf-h">
                   <div className="v3fs-seam-wf-hl">
+                    {/* The workflow's own row IS its editor handle: opening it
+                        expands the swimlane + step inspector inline, below. */}
                     {onPickWorkflow
-                      ? <button type="button" className="v3fs-seam-wf-open" onClick={() => onPickWorkflow(wf.wfIndex)}
-                          title="Open this workflow in the editor below">{wf.name}<span className="v3fs-seam-wf-open-i" aria-hidden="true">edit ↓</span></button>
+                      ? <button type="button" className="v3fs-seam-wf-open" aria-expanded={isOpen}
+                          onClick={() => onPickWorkflow(wf.wfIndex)}
+                          title={isOpen ? "Close this workflow" : "Open this workflow here — its summary, swimlane and step editor"}>
+                          {wf.name}
+                          <span className="v3fs-seam-wf-open-i" aria-hidden="true">{isOpen ? "close ▴" : "open ▾"}</span>
+                        </button>
                       : <h4>{wf.name}</h4>}
-                    {canEdit ? <button type="button" className="v3fs-seam-wf-editbtn" aria-pressed={wfEditKey === wf.wfIndex}
-                      title="Edit this workflow's facts inline"
-                      onClick={() => setWfEditKey((k) => (k === wf.wfIndex ? null : wf.wfIndex))}>{wfEditKey === wf.wfIndex ? "Close" : "Edit ✎"}</button> : null}
-                    {canEdit ? <button type="button" className="v3fs-seam-wf-del" title="Delete this workflow"
-                      onClick={() => deleteWorkflow(wf.wfIndex)}>✕</button> : null}
+                    {canEdit && onDismissWorkflow ? (
+                      <span className="v3fs-seam-wf-dismiss">
+                        <DismissControl label="Dismiss" confirmLabel="Dismiss workflow"
+                          onDismiss={(reason) => onDismissWorkflow(wf.wfIndex, reason)} />
+                      </span>
+                    ) : null}
                     {/* Path only where it carries information — a multi-area seam.
                         For a single-area workflow the lane label already says it. */}
                     {areaPath.length > 1 ? (
@@ -349,25 +383,6 @@ export default function AtlasSeamView({ doc, program, frameAreas, onOpenArtifact
                     ) : null}
                   </div>
                 </header>
-                {canEdit && wfEditKey === wf.wfIndex ? (() => {
-                  const raw = asRecord(workflows[wf.wfIndex]);
-                  return (
-                    <div className="v3fs-seam-wfedit">
-                      <label><span>Name</span><input value={asText(raw.name)} onChange={(e) => patchWorkflowAbs(wf.wfIndex, { name: e.target.value })} /></label>
-                      <label><span>Trigger</span><input value={asText(raw.trigger)} placeholder="what starts it" onChange={(e) => patchWorkflowAbs(wf.wfIndex, { trigger: e.target.value })} /></label>
-                      <label><span>Owner</span><input value={asText(raw.owner)} onChange={(e) => patchWorkflowAbs(wf.wfIndex, { owner: e.target.value })} /></label>
-                      {frameAreas.length ? (
-                        <label><span>Area</span>
-                          <select value={asText(raw.area)} onChange={(e) => patchWorkflowAbs(wf.wfIndex, { area: e.target.value })}>
-                            <option value="">—</option>
-                            {frameAreas.map((a) => <option key={a} value={a}>{a}</option>)}
-                          </select></label>
-                      ) : null}
-                      <label className="wide"><span>Hand-offs</span><input value={asStrings(raw.handoffs).join(", ")} placeholder="comma-separated" onChange={(e) => patchWorkflowAbs(wf.wfIndex, { handoffs: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) })} /></label>
-                      <label className="wide"><span>Failure modes</span><input value={asStrings(raw.failureModes).join(", ")} placeholder="comma-separated" onChange={(e) => patchWorkflowAbs(wf.wfIndex, { failureModes: e.target.value.split(",").map((x) => x.trim()).filter(Boolean) })} /></label>
-                    </div>
-                  );
-                })() : null}
                 <div className="v3fs-seam-scroll">
                   <div className="v3fs-seam-grid" style={{ gridTemplateColumns: cols, gridTemplateRows: `repeat(${rows.length}, minmax(72px, auto))` }}>
                     {/* lane stripes + labels */}
@@ -388,7 +403,7 @@ export default function AtlasSeamView({ doc, program, frameAreas, onOpenArtifact
                       return (
                         <div key={`st-${s.index}`} className={`v3fs-seam-cell${out ? " out" : ""}`}
                           style={{ gridColumn: 2 + s.index * 2, gridRow: r + 1 }}>
-                          <div className={`v3fs-seam-tile${s.missing.length ? " has-gap" : ""}${isPinned ? " pinned" : ""}`} style={laneStyle(s.area)}
+                          <div className={`v3fs-seam-tile${s.missing.length ? " has-gap" : ""}${isPinned ? " pinned" : ""}${s.dropped ? " dropped" : ""}`} style={laneStyle(s.area)}
                             tabIndex={0} aria-label={`Step ${s.index + 1}: ${s.action || "—"} — ${s.actor}`}
                             onMouseEnter={placePop} onFocus={placePop}
                             onClick={(e) => { placePop(e); setPinned(isPinned ? null : stepKey); }}>
@@ -422,7 +437,9 @@ export default function AtlasSeamView({ doc, program, frameAreas, onOpenArtifact
                                       onChange={(ev) => patchStepAbs(wf.wfIndex, s.index, { evidence: ev.target.value })} /></label>
                                   <div className="v3fs-seam-edit-acts">
                                     <button type="button" className="v3fs-a" onClick={() => addStepAfter(wf.wfIndex, s.index, s.area)}>＋ Step after</button>
-                                    <button type="button" className="v3fs-seam-del" onClick={() => deleteStepAbs(wf.wfIndex, s.index)}>Delete step</button>
+                                    <button type="button" className="v3fs-seam-del" onClick={() => dropStepAbs(wf.wfIndex, s.index, s.dropped)}
+                                      title={s.dropped ? "Restore this step" : "Mark dropped — the step's claims stay findable (not hard-deleted)"}>
+                                      {s.dropped ? "↩ Restore step" : "⊘ Mark step dropped"}</button>
                                     <button type="button" className="v3fs-a" onClick={() => setPinned(null)}>Done</button>
                                   </div>
                                 </div>
@@ -478,11 +495,17 @@ export default function AtlasSeamView({ doc, program, frameAreas, onOpenArtifact
                     })}
                   </div>
                 </div>
+                {/* OPEN INLINE: the workflow's summary, its swimlane and the step
+                    inspector — the studio's own components, rendered here by the
+                    caller. There is no editor below this view any more. */}
+                {isOpen && renderWorkflowDetail ? (
+                  <div className="v3fs-seam-wfdetail">{renderWorkflowDetail(wf.wfIndex)}</div>
+                ) : null}
               </section>
             );
           })}
-          {canEdit ? (
-            <button type="button" className="v3fs-seam-addwf" onClick={addWorkflow}>＋ Add workflow</button>
+          {canAuthor && onAddWorkflow ? (
+            <button type="button" className="v3fs-seam-addwf" onClick={onAddWorkflow}>＋ workflow</button>
           ) : null}
         </div>
       )}

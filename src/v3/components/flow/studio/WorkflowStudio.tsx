@@ -6,6 +6,18 @@
  * the pain heatmap overlaid as a severity edge with the strongest voiced
  * complaint. The diagram IS the document: selection edits in the inspector;
  * add/reorder/remove rewrite the same steps array the generator emits.
+ *
+ * ONE SURFACE, NOT TWO. The atlas used to be a read-only overview (the seam
+ * view) followed by a separate "Edit a workflow" panel with its own cascading
+ * Area/Workflow selects — the only place a workflow or a step could be changed.
+ * Two lists of the same workflows, one to look at and one to edit. Now the seam
+ * view IS the editor: a workflow's row carries its create/dismiss affordances,
+ * and opening a row expands THIS file's summary card, swimlane and step
+ * inspector inline underneath it (handed to AtlasSeamView as
+ * `renderWorkflowDetail`, so the diagram and the inspector are moved, not
+ * reimplemented). Picking a workflow in the lifecycle grid opens the same row.
+ * The registers (events · pain · systems) are document-level, not
+ * workflow-level, so they stay in their own card below.
  */
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -185,9 +197,11 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program,
   const printing = useStudioPrinting();
   const workflows = useMemo(() => asArray(doc.workflows).map(asRecord), [doc.workflows]);
   const pains = useMemo(() => asArray(doc.painHeatmap).map(asRecord), [doc.painHeatmap]);
-  const [active, setActive] = useState(0);
+  // `active` is now the workflow OPENED INLINE in the seam view — null when none
+  // is open (there is no separate editor below to keep pointed at something).
+  const [active, setActive] = useState<number | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
-  const workflow = workflows[Math.min(active, Math.max(0, workflows.length - 1))];
+  const workflow = active == null ? undefined : workflows[active];
   const steps = useMemo(() => (workflow ? asArray(workflow.steps).map(asRecord) : []), [workflow]);
 
   // LEDGER-AWARE: this atlas edit surface reads the same claims ledger every other
@@ -197,10 +211,10 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program,
   // ledger's content-derived step id (migrate: contentId over actor+action) — so a
   // reorder never restrands a step's claims (identity is content, not position).
   const ledger = useProgramLedger(program);
-  const ledgerWf = useMemo(
-    () => ledger.atlas.find((w) => w.name.trim().toLowerCase() === asText(workflow?.name).trim().toLowerCase()),
-    [ledger.atlas, workflow],
-  );
+  const ledgerWf = useMemo(() => {
+    const name = asText(workflow?.name).trim().toLowerCase();
+    return name ? ledger.atlas.find((w) => w.name.trim().toLowerCase() === name) : undefined;
+  }, [ledger.atlas, workflow]);
   const claimsForStep = useCallback((action: string): StepView | undefined => {
     const n = action.slice(0, 60).trim().toLowerCase();
     return ledgerWf?.steps.find((s) => s.name.trim().toLowerCase() === n);
@@ -353,6 +367,7 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program,
     onChange({ ...doc, workflows: next });
   }, [doc, onChange]);
   const patchWorkflow = useCallback((patch: Record<string, unknown>) => {
+    if (active == null) return;
     writeWorkflows(workflows.map((entry, index) => (index === active ? { ...entry, ...patch } : entry)));
   }, [workflows, active, writeWorkflows]);
   const patchStep = useCallback((index: number, patch: Record<string, unknown>) => {
@@ -385,14 +400,33 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program,
     if (selected == null) return;
     patchStep(selected, { dropped: !asRecord(steps[selected]).dropped });
   };
-  const addWorkflow = () => {
+  // CREATE — the ＋ workflow affordance the removed panel's filter row carried,
+  // now reachable from the seam view (and from the empty state). Authoring-gated
+  // by the caller; the new workflow opens inline straight away.
+  const addWorkflow = useCallback(() => {
     writeWorkflows([...workflows, { name: `Workflow ${workflows.length + 1}`, owner: "", trigger: "", steps: [], handoffs: [], failureModes: [] }]);
     setActive(workflows.length);
     setSelected(null);
-  };
-
-  const activeArea = workflow ? frameAreaFor(workflowArea(workflow)) : "";
-  const areaWorkflows = groupedTabs.find(([area]) => area === activeArea)?.[1] ?? [];
+  }, [workflows, writeWorkflows]);
+  // DISMISS — one destructive path, still reason-bearing and still noted on the
+  // curation trail, exactly as the removed panel's DismissControl did.
+  const dismissWorkflow = useCallback((index: number, reason: string) => {
+    const entry = workflows[index];
+    if (!entry) return;
+    onChange({
+      ...doc,
+      workflows: workflows.filter((_, i) => i !== index),
+      ...curationNote(doc, `Dismissed workflow “${asText(entry.name) || `#${index + 1}`}”`, reason),
+    });
+    setActive(null);
+    setSelected(null);
+  }, [workflows, doc, onChange]);
+  // Opening a row toggles it; the lifecycle grid always opens (never closes).
+  const toggleWorkflow = useCallback((index: number) => {
+    setActive((prev) => (prev === index ? null : index));
+    setSelected(null);
+  }, []);
+  const openWorkflow = useCallback((index: number) => { setActive(index); setSelected(null); }, []);
 
   // EXPORT: every workflow, in area order, instead of the one on the tab.
   // Placed after every hook so the hook order never changes between the screen
@@ -421,357 +455,338 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program,
     );
   }
 
+  // THE MOVED EDITOR — the cockpit, the workflow summary card, the swimlane and
+  // the step inspector: the same markup the deleted "Edit a workflow" section
+  // carried, handed to the seam view so it renders INSIDE the opened workflow's
+  // own row. Never a second copy of the diagram; the same one, relocated.
+  const workflowDetail = (wfIndex: number) => {
+    if (!workflow || wfIndex !== active) return null;
+    return (
+      <>
+      {/* The cockpit: this workflow's vitals in one glance — what starts
+          it, who owns it, its size, and where the pain sits. */}
+      <div className="v3fs-wf-cockpit">
+        <div className="v3fs-wf-ckpt-id">
+          <span className="v3fs-wf-ckpt-name">{asText(workflow.name) || "Untitled workflow"}</span>
+          {triggerEvent
+            ? <span className="v3fs-wf-evt" title="The business event that starts this workflow">⚡{triggerEvent}</span>
+            : asText(workflow.trigger) ? <span className="v3fs-wf-ckpt-trig" title="What starts this workflow">{asText(workflow.trigger)}</span> : null}
+        </div>
+        <div className="v3fs-wf-ckpt-stats">
+          <span><b>{steps.length}</b> step{steps.length === 1 ? "" : "s"}</span>
+          <span><b>{lanes.length}</b> persona{lanes.length === 1 ? "" : "s"}</span>
+          <span><b>{systems.length}</b> system{systems.length === 1 ? "" : "s"}</span>
+          {painCounts.high || painCounts.medium || painCounts.low ? (
+            <span className="v3fs-wf-ckpt-pains" title="Steps carrying voiced pain, by severity">
+              {painCounts.high ? <i className="high">{painCounts.high}</i> : null}
+              {painCounts.medium ? <i className="medium">{painCounts.medium}</i> : null}
+              {painCounts.low ? <i className="low">{painCounts.low}</i> : null}
+              pain
+            </span>
+          ) : null}
+          {asText(workflow.owner) ? <span className="v3fs-wf-ckpt-owner">{asText(workflow.owner)}</span> : null}
+        </div>
+      </div>
+      {/* WORKFLOW SUMMARY — the whole flow's editable facts, ABOVE the
+          diagram: the read goes summary → swimlane → one step's form.
+          Indigo card; the step form below is the white working card with
+          the accent spine, so the two levels never look alike. */}
+      <div className="v3fs-wf-details">
+        <div className="v3fs-wf-card-eyebrow">Workflow summary</div>
+        <div className="v3fs-wf-head">
+          <TextField label="Name" value={asText(workflow.name)} onChange={(next) => patchWorkflow({ name: next })} />
+          <TextField label="Trigger" value={asText(workflow.trigger)} onChange={(next) => patchWorkflow({ trigger: next })} />
+          <TextField label="Owner" value={asText(workflow.owner)} onChange={(next) => patchWorkflow({ owner: next })} />
+          {/* Reassigning the area moves this workflow's tab group — how an
+              "unmapped" frame area gets its first workflow. */}
+          {frameAreas.length ? (
+            <SelectField label="Area (from the Frame)" value={frameAreaFor(workflowArea(workflow))}
+              options={[...frameAreas, GENERAL_AREA]}
+              onChange={(next) => patchWorkflow({ area: next })} />
+          ) : null}
+        </div>
+        <div className="v3fs-wf-head">
+          <ChipsField label="Hand-offs" values={asStrings(workflow.handoffs)} onChange={(next) => patchWorkflow({ handoffs: next })} />
+          <ChipsField label="Failure modes" values={asStrings(workflow.failureModes)} onChange={(next) => patchWorkflow({ failureModes: next })} />
+        </div>
+        <DismissControl label="Dismiss this workflow" confirmLabel="Dismiss workflow"
+          onDismiss={(reason) => dismissWorkflow(wfIndex, reason)} />
+      </div>
+      {steps.length === 0 ? (
+        <div className="v3fs-stu-empty">No steps yet — add the first one below.</div>
+      ) : (
+        <div className="v3fs-swim-scroll">
+          <div className="v3fs-swim" style={{ gridTemplateColumns: `130px repeat(${steps.length}, minmax(178px, 1fr))` }}>
+            {lanes.map((lane) => (
+              <React.Fragment key={lane}>
+                <div className="v3fs-swim-lane"><span className="v3fs-swim-av" aria-hidden="true">{laneInitials(lane)}</span>{lane}</div>
+                {steps.map((step, index) => {
+                  const actor = asText(step.actor).trim() || "Unassigned";
+                  if (actor !== lane) return <div key={index} className="v3fs-swim-cell" aria-hidden="true" />;
+                  const pain = painForStep(step, pains);
+                  const entities = asStrings(step.entities);
+                  const stepEvents = eventsForStep(step, ontoEvents);
+                  return (
+                    <div key={index} className="v3fs-swim-cell has">
+                      <button
+                        type="button"
+                        className={`v3fs-swim-tile${selected === index ? " on" : ""}${pain ? ` pain-${pain.severity}` : ""}${asRecord(step).dropped ? " dropped" : ""}`}
+                        onClick={() => setSelected(selected === index ? null : index)}
+                        onMouseEnter={showStepPeek(index)}
+                        onMouseLeave={() => setPeek(null)}
+                      >
+                        <span className="v3fs-swim-n" aria-hidden="true">{index + 1}</span>
+                        {pain ? <span className={`v3fs-swim-paindot ${pain.severity}`} aria-label={`${pain.severity} pain: ${pain.pain}`} role="img" /> : null}
+                        <span className="v3fs-swim-action">{asText(step.action) || "—"}</span>
+                        <span className="v3fs-swim-meta">
+                          {asText(step.system) ? <span className="v3fs-wf-system">{asText(step.system)}</span> : null}
+                          {asText(step.duration) ? <span className="v3fs-wf-dur">{asText(step.duration)}</span> : null}
+                        </span>
+                        {pain ? <span className="v3fs-swim-pain">{pain.pain.slice(0, 46)}</span> : null}
+                        {entities.length || stepEvents.length ? (
+                          <span className="v3fs-wf-ents">
+                            {entities.slice(0, 3).map((entity) => (
+                              <span key={entity} role="link" tabIndex={0} className="v3fs-wf-ent"
+                                title="Defined in the Domain Ontology — open it"
+                                onClick={(event) => { event.stopPropagation(); onOpenArtifact?.("domain-ontology"); }}
+                                onKeyDown={(event) => { if (event.key === "Enter") { event.stopPropagation(); onOpenArtifact?.("domain-ontology"); } }}>
+                                {entity}
+                              </span>
+                            ))}
+                            {stepEvents.slice(0, 2).map((name) => (
+                              <span key={`ev-${name}`} role="link" tabIndex={0} className="v3fs-wf-evt"
+                                title="Business event — defined in the Domain Ontology; open it"
+                                onClick={(event) => { event.stopPropagation(); onOpenArtifact?.("domain-ontology"); }}
+                                onKeyDown={(event) => { if (event.key === "Enter") { event.stopPropagation(); onOpenArtifact?.("domain-ontology"); } }}>
+                                ⚡{name}
+                              </span>
+                            ))}
+                          </span>
+                        ) : null}
+                      </button>
+                      {index < steps.length - 1 ? <span className="v3fs-swim-arrow" aria-hidden="true">→</span> : null}
+                    </div>
+                  );
+                })}
+              </React.Fragment>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {locked ? null : (
+      <div className="v3fs-wf-bar">
+        <button type="button" className="v3fs-btn" onClick={addStep}>＋ Step{selected != null ? " after selected" : ""}</button>
+        {selected == null ? <span className="v3fs-wf-hint">Select a step to edit it</span> : null}
+      </div>
+      )}
+      {/* The step inspector travels WITH the diagram — a step is only
+          editable where it is drawn. (The registers below are a property of
+          the document, not of a workflow, so they stayed behind.) */}
+      {selected != null && steps[selected] ? (
+          <div className="v3fs-wf-inspector">
+            <div className="v3fs-wf-insp-h">
+              <span className="v3fs-wf-insp-t">Step {selected + 1} <i>of {steps.length}</i>
+                {asRecord(steps[selected]).dropped ? <span className="v3fs-wf-dropped-tag" title="Mark-dropped — the step and its claims stay findable; not hard-deleted">⊘ dropped</span> : null}</span>
+              {locked ? null : (
+                <span className="v3fs-wf-insp-actions">
+                  <button type="button" className="v3fs-btn" disabled={selected === 0} onClick={() => moveStep(-1)}>← Earlier</button>
+                  <button type="button" className="v3fs-btn" disabled={selected === steps.length - 1} onClick={() => moveStep(1)}>Later →</button>
+                  <button type="button" className="v3fs-btn" onClick={dropStep}
+                    title={asRecord(steps[selected]).dropped ? "Restore this step" : "Mark dropped — the step's claims stay findable (not hard-deleted)"}>
+                    {asRecord(steps[selected]).dropped ? "↩ Restore" : "⊘ Mark dropped"}</button>
+                </span>
+              )}
+            </div>
+            {/* CLAIM STATUS per element — this atlas edit surface reads the ledger.
+                Editing a slot is a claim on that locus; a ?unknown slot is an open
+                unknown, shown here (answering it in the ledger is the gated write). */}
+            {(() => {
+              const sv = claimsForStep(asText(steps[selected].action));
+              const sum = stepClaimSummary(sv);
+              if (!sv) return <div className="v3fs-wf-claims none">No ledger claims matched this step yet (content-derived id — set the action to ground it).</div>;
+              return (
+                <div className="v3fs-wf-claims">
+                  <span className="v3fs-wf-claims-h">Ledger claims on this step</span>
+                  <span className="v3fs-wf-claims-sum">
+                    {sum.closed ? <span><ClaimStatus state="closed" showLabel={false} /> {sum.closed} closed</span> : null}
+                    {sum.weak ? <span><ClaimStatus state="weak" showLabel={false} /> {sum.weak} weak</span> : null}
+                    {sum.conflict ? <span><ClaimStatus state="conflict" showLabel={false} /> {sum.conflict} conflict</span> : null}
+                    {sum.openSlots.length ? <span><ClaimStatus state="open" showLabel={false} /> {sum.openSlots.length} open unknown{sum.openSlots.length === 1 ? "" : "s"}</span> : null}
+                  </span>
+                  {sum.openSlots.length ? (
+                    <ul className="v3fs-wf-claims-open">
+                      {sum.openSlots.map((s) => (
+                        <li key={s.about} title={s.about}><code>{s.slot}</code> <span className="v3fs-wf-claims-q">= ?unknown</span> <span className="v3fs-wf-claims-src">{s.source}</span></li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  <span className="v3fs-wf-claims-note">Answering a ?unknown lands as an attributed ledger closure through reconcile — the gated write path (operator edits here persist to the atlas doc today).</span>
+                </div>
+              );
+            })()}
+            <TextField label="Action — what happens in this step" value={asText(steps[selected].action)} onChange={(next) => patchStep(selected, { action: next })} />
+            <div className="v3fs-stu-grid3">
+              <TextField label="Persona (lane)" value={asText(steps[selected].actor)} onChange={(next) => patchStep(selected, { actor: next })} />
+              <TextField label="System" value={asText(steps[selected].system)} onChange={(next) => patchStep(selected, { system: next })} />
+              <TextField label="Duration" value={asText(steps[selected].duration)} onChange={(next) => patchStep(selected, { duration: next })} />
+            </div>
+            <div className="v3fs-stu-grid2">
+              <ChipsField label="Entities touched (from the ontology)" values={asStrings(steps[selected].entities)}
+                onChange={(next) => patchStep(selected, { entities: next })} />
+              <ChipsField label="Business events raised" values={asStrings(steps[selected].events)}
+                onChange={(next) => patchStep(selected, { events: next })} />
+            </div>
+          </div>
+        ) : null}
+      </>
+    );
+  };
+
   return (
     <div className="v3fs-wf">
-      {/* ONE consolidated view: the multi-area seam overview (compare workflows
-          across the areas they cross), then the single-workflow editor below.
-          Picking a workflow in the overview opens it in the editor. */}
+      {/* ONE surface. The seam overview compares every workflow across the areas
+          it crosses AND is where each one is created, edited, opened and
+          dismissed — opening a row expands workflowDetail inside it. */}
       <CollapsibleCard label="Areas & seams — every workflow across the areas it crosses" defaultOpen>
         <AtlasSeamView doc={doc} program={program} frameAreas={frameAreas} onOpenArtifact={onOpenArtifact}
           onChange={onChange} editable={!locked}
-          onPickWorkflow={(i) => { setActive(i); setSelected(null); }} />
+          expandedWf={active} onPickWorkflow={toggleWorkflow} renderWorkflowDetail={workflowDetail}
+          onAddWorkflow={addWorkflow} onDismissWorkflow={dismissWorkflow} />
       </CollapsibleCard>
+      {workflows.length === 0 ? (
+        <EmptyState icon="🔀" title="No workflows on record yet"
+          hint="Add one here, or regenerate the Current-State Atlas once the SME transcripts are in."
+          action={locked || !authoring ? undefined
+            : <button type="button" className="v3fs-a" onClick={addWorkflow}>＋ workflow</button>} />
+      ) : null}
+      {unmappedAreas.length ? (
+        <div className="v3fs-wf-unmapped-row"
+          title="Areas the Frame covers whose current-state workflow has no evidence yet — hear their SMEs, then regenerate the Atlas (or open a workflow above and reassign its Area)">
+          Not mapped yet: {unmappedAreas.map((area) => <span key={area} className="v3fs-wf-unmapped">{area}</span>)}
+        </div>
+      ) : null}
       <CollapsibleCard label="Lifecycle × area — the derived second axis (area across, phase down)" defaultOpen={false}>
         <AtlasLifecycleGrid doc={doc} program={program} frameAreas={frameAreas}
-          onPickWorkflow={(i) => { setActive(i); setSelected(null); }} />
+          onPickWorkflow={openWorkflow} />
       </CollapsibleCard>
       <CollapsibleCard label="Ledger lens — one claims ledger, migrated from these artifacts (read-only)" defaultOpen={false}>
         <LedgerLensPanel program={program} />
       </CollapsibleCard>
-      <div className="v3fs-wf-editor-h">Edit a workflow</div>
-      {/* Cascading filters: pick the AREA, then one of ITS workflows — the
-          grouped pill strip outgrew the tab metaphor once every area mapped. */}
-      <div className="v3fs-wf-filters">
-        <label className="v3fs-wf-filter">
-          <span>Area</span>
-          <select value={activeArea} aria-label="Filter by area"
-            onChange={(e) => {
-              const first = groupedTabs.find(([area]) => area === e.target.value)?.[1]?.[0];
-              if (first) { setActive(first.index); setSelected(null); }
-            }}>
-            {groupedTabs.map(([area, items]) => (
-              <option key={area} value={area}>{area} ({items.length})</option>
-            ))}
-          </select>
-        </label>
-        <label className="v3fs-wf-filter grow">
-          <span>Workflow</span>
-          <select value={String(active)} aria-label="Pick a workflow"
-            onChange={(e) => { setActive(Number(e.target.value)); setSelected(null); }}>
-            {areaWorkflows.map(({ name, index }) => (
-              <option key={index} value={String(index)}>{name}</option>
-            ))}
-          </select>
-        </label>
-        {locked || !authoring ? null : <button type="button" className="v3fs-a" onClick={addWorkflow}>＋ workflow</button>}
-      </div>
-      {unmappedAreas.length ? (
-        <div className="v3fs-wf-unmapped-row"
-          title="Areas the Frame covers whose current-state workflow has no evidence yet — hear their SMEs, then regenerate the Atlas (or assign a workflow's Area below)">
-          Not mapped yet: {unmappedAreas.map((area) => <span key={area} className="v3fs-wf-unmapped">{area}</span>)}
-        </div>
-      ) : null}
-
-      {!workflow ? (
-        <EmptyState icon="🔀" title="No workflows on record yet" hint="Add one above, or regenerate the Current-State Atlas once the SME transcripts are in." />
-      ) : (
-        <>
-          {/* The cockpit: this workflow's vitals in one glance — what starts
-              it, who owns it, its size, and where the pain sits. */}
-          <div className="v3fs-wf-cockpit">
-            <div className="v3fs-wf-ckpt-id">
-              <span className="v3fs-wf-ckpt-name">{asText(workflow.name) || "Untitled workflow"}</span>
-              {triggerEvent
-                ? <span className="v3fs-wf-evt" title="The business event that starts this workflow">⚡{triggerEvent}</span>
-                : asText(workflow.trigger) ? <span className="v3fs-wf-ckpt-trig" title="What starts this workflow">{asText(workflow.trigger)}</span> : null}
-            </div>
-            <div className="v3fs-wf-ckpt-stats">
-              <span><b>{steps.length}</b> step{steps.length === 1 ? "" : "s"}</span>
-              <span><b>{lanes.length}</b> persona{lanes.length === 1 ? "" : "s"}</span>
-              <span><b>{systems.length}</b> system{systems.length === 1 ? "" : "s"}</span>
-              {painCounts.high || painCounts.medium || painCounts.low ? (
-                <span className="v3fs-wf-ckpt-pains" title="Steps carrying voiced pain, by severity">
-                  {painCounts.high ? <i className="high">{painCounts.high}</i> : null}
-                  {painCounts.medium ? <i className="medium">{painCounts.medium}</i> : null}
-                  {painCounts.low ? <i className="low">{painCounts.low}</i> : null}
-                  pain
-                </span>
-              ) : null}
-              {asText(workflow.owner) ? <span className="v3fs-wf-ckpt-owner">{asText(workflow.owner)}</span> : null}
-            </div>
+      {/* The three registers (events / pain / systems) are the DOCUMENT's, not a
+          workflow's — so they stay here, scoped to whatever the opened workflow
+          or selected step focuses, with the shared "Show all & edit" escape. */}
+      <CollapsibleCard defaultOpen label="Registers — events · pain · systems"
+        hint={focus ? `scoped to ${focus.label}` : undefined}>
+        {focus && showAllReg ? (
+          <div className="v3fs-atlas-fltbar">
+            <button type="button" className="v3fs-a" onClick={() => setShowAllReg(false)}>Filter to {focus.label}</button>
           </div>
-          {/* WORKFLOW SUMMARY — the whole flow's editable facts, ABOVE the
-              diagram: the read goes summary → swimlane → one step's form.
-              Indigo card; the step form below is the white working card with
-              the accent spine, so the two levels never look alike. */}
-          <div className="v3fs-wf-details">
-            <div className="v3fs-wf-card-eyebrow">Workflow summary</div>
-            <div className="v3fs-wf-head">
-              <TextField label="Name" value={asText(workflow.name)} onChange={(next) => patchWorkflow({ name: next })} />
-              <TextField label="Trigger" value={asText(workflow.trigger)} onChange={(next) => patchWorkflow({ trigger: next })} />
-              <TextField label="Owner" value={asText(workflow.owner)} onChange={(next) => patchWorkflow({ owner: next })} />
-              {/* Reassigning the area moves this workflow's tab group — how an
-                  "unmapped" frame area gets its first workflow. */}
-              {frameAreas.length ? (
-                <SelectField label="Area (from the Frame)" value={frameAreaFor(workflowArea(workflow))}
-                  options={[...frameAreas, GENERAL_AREA]}
-                  onChange={(next) => patchWorkflow({ area: next })} />
-              ) : null}
-            </div>
-            <div className="v3fs-wf-head">
-              <ChipsField label="Hand-offs" values={asStrings(workflow.handoffs)} onChange={(next) => patchWorkflow({ handoffs: next })} />
-              <ChipsField label="Failure modes" values={asStrings(workflow.failureModes)} onChange={(next) => patchWorkflow({ failureModes: next })} />
-            </div>
-            <DismissControl label="Dismiss this workflow" confirmLabel="Dismiss workflow"
-              onDismiss={(reason) => {
-                onChange({
-                  ...doc,
-                  workflows: workflows.filter((_, index) => index !== active),
-                  ...curationNote(doc, `Dismissed workflow “${asText(workflow.name) || `#${active + 1}`}”`, reason),
-                });
-                setActive(Math.max(0, active - 1));
-                setSelected(null);
-              }} />
-          </div>
-          {steps.length === 0 ? (
-            <div className="v3fs-stu-empty">No steps yet — add the first one below.</div>
-          ) : (
-            <div className="v3fs-swim-scroll">
-              <div className="v3fs-swim" style={{ gridTemplateColumns: `130px repeat(${steps.length}, minmax(178px, 1fr))` }}>
-                {lanes.map((lane) => (
-                  <React.Fragment key={lane}>
-                    <div className="v3fs-swim-lane"><span className="v3fs-swim-av" aria-hidden="true">{laneInitials(lane)}</span>{lane}</div>
-                    {steps.map((step, index) => {
-                      const actor = asText(step.actor).trim() || "Unassigned";
-                      if (actor !== lane) return <div key={index} className="v3fs-swim-cell" aria-hidden="true" />;
-                      const pain = painForStep(step, pains);
-                      const entities = asStrings(step.entities);
-                      const stepEvents = eventsForStep(step, ontoEvents);
-                      return (
-                        <div key={index} className="v3fs-swim-cell has">
-                          <button
-                            type="button"
-                            className={`v3fs-swim-tile${selected === index ? " on" : ""}${pain ? ` pain-${pain.severity}` : ""}${asRecord(step).dropped ? " dropped" : ""}`}
-                            onClick={() => setSelected(selected === index ? null : index)}
-                            onMouseEnter={showStepPeek(index)}
-                            onMouseLeave={() => setPeek(null)}
-                          >
-                            <span className="v3fs-swim-n" aria-hidden="true">{index + 1}</span>
-                            {pain ? <span className={`v3fs-swim-paindot ${pain.severity}`} aria-label={`${pain.severity} pain: ${pain.pain}`} role="img" /> : null}
-                            <span className="v3fs-swim-action">{asText(step.action) || "—"}</span>
-                            <span className="v3fs-swim-meta">
-                              {asText(step.system) ? <span className="v3fs-wf-system">{asText(step.system)}</span> : null}
-                              {asText(step.duration) ? <span className="v3fs-wf-dur">{asText(step.duration)}</span> : null}
-                            </span>
-                            {pain ? <span className="v3fs-swim-pain">{pain.pain.slice(0, 46)}</span> : null}
-                            {entities.length || stepEvents.length ? (
-                              <span className="v3fs-wf-ents">
-                                {entities.slice(0, 3).map((entity) => (
-                                  <span key={entity} role="link" tabIndex={0} className="v3fs-wf-ent"
-                                    title="Defined in the Domain Ontology — open it"
-                                    onClick={(event) => { event.stopPropagation(); onOpenArtifact?.("domain-ontology"); }}
-                                    onKeyDown={(event) => { if (event.key === "Enter") { event.stopPropagation(); onOpenArtifact?.("domain-ontology"); } }}>
-                                    {entity}
-                                  </span>
-                                ))}
-                                {stepEvents.slice(0, 2).map((name) => (
-                                  <span key={`ev-${name}`} role="link" tabIndex={0} className="v3fs-wf-evt"
-                                    title="Business event — defined in the Domain Ontology; open it"
-                                    onClick={(event) => { event.stopPropagation(); onOpenArtifact?.("domain-ontology"); }}
-                                    onKeyDown={(event) => { if (event.key === "Enter") { event.stopPropagation(); onOpenArtifact?.("domain-ontology"); } }}>
-                                    ⚡{name}
-                                  </span>
-                                ))}
-                              </span>
-                            ) : null}
-                          </button>
-                          {index < steps.length - 1 ? <span className="v3fs-swim-arrow" aria-hidden="true">→</span> : null}
-                        </div>
-                      );
-                    })}
-                  </React.Fragment>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {locked ? null : (
-          <div className="v3fs-wf-bar">
-            <button type="button" className="v3fs-btn" onClick={addStep}>＋ Step{selected != null ? " after selected" : ""}</button>
-            {selected == null ? <span className="v3fs-wf-hint">Select a step to edit it</span> : null}
-          </div>
-          )}
-          {/* ONE card for the working context: the selected step's form plus
-              the three registers (events / pain / systems), each scoped to
-              the focus with a shared "Show all & edit" escape. */}
-          <CollapsibleCard key={selected != null ? `ctx-step-${selected}` : "ctx-wf"} defaultOpen
-            label={selected != null ? `Step ${selected + 1} — details & registers` : "Registers — events · pain · systems"}
-            hint={focus ? `scoped to ${focus.label}` : undefined}>
-            {selected != null && steps[selected] ? (
-              <div className="v3fs-wf-inspector">
-                <div className="v3fs-wf-insp-h">
-                  <span className="v3fs-wf-insp-t">Step {selected + 1} <i>of {steps.length}</i>
-                    {asRecord(steps[selected]).dropped ? <span className="v3fs-wf-dropped-tag" title="Mark-dropped — the step and its claims stay findable; not hard-deleted">⊘ dropped</span> : null}</span>
-                  {locked ? null : (
-                    <span className="v3fs-wf-insp-actions">
-                      <button type="button" className="v3fs-btn" disabled={selected === 0} onClick={() => moveStep(-1)}>← Earlier</button>
-                      <button type="button" className="v3fs-btn" disabled={selected === steps.length - 1} onClick={() => moveStep(1)}>Later →</button>
-                      <button type="button" className="v3fs-btn" onClick={dropStep}
-                        title={asRecord(steps[selected]).dropped ? "Restore this step" : "Mark dropped — the step's claims stay findable (not hard-deleted)"}>
-                        {asRecord(steps[selected]).dropped ? "↩ Restore" : "⊘ Mark dropped"}</button>
-                    </span>
-                  )}
-                </div>
-                {/* CLAIM STATUS per element — this atlas edit surface reads the ledger.
-                    Editing a slot is a claim on that locus; a ?unknown slot is an open
-                    unknown, shown here (answering it in the ledger is the gated write). */}
-                {(() => {
-                  const sv = claimsForStep(asText(steps[selected].action));
-                  const sum = stepClaimSummary(sv);
-                  if (!sv) return <div className="v3fs-wf-claims none">No ledger claims matched this step yet (content-derived id — set the action to ground it).</div>;
-                  return (
-                    <div className="v3fs-wf-claims">
-                      <span className="v3fs-wf-claims-h">Ledger claims on this step</span>
-                      <span className="v3fs-wf-claims-sum">
-                        {sum.closed ? <span><ClaimStatus state="closed" showLabel={false} /> {sum.closed} closed</span> : null}
-                        {sum.weak ? <span><ClaimStatus state="weak" showLabel={false} /> {sum.weak} weak</span> : null}
-                        {sum.conflict ? <span><ClaimStatus state="conflict" showLabel={false} /> {sum.conflict} conflict</span> : null}
-                        {sum.openSlots.length ? <span><ClaimStatus state="open" showLabel={false} /> {sum.openSlots.length} open unknown{sum.openSlots.length === 1 ? "" : "s"}</span> : null}
-                      </span>
-                      {sum.openSlots.length ? (
-                        <ul className="v3fs-wf-claims-open">
-                          {sum.openSlots.map((s) => (
-                            <li key={s.about} title={s.about}><code>{s.slot}</code> <span className="v3fs-wf-claims-q">= ?unknown</span> <span className="v3fs-wf-claims-src">{s.source}</span></li>
-                          ))}
-                        </ul>
-                      ) : null}
-                      <span className="v3fs-wf-claims-note">Answering a ?unknown lands as an attributed ledger closure through reconcile — the gated write path (operator edits here persist to the atlas doc today).</span>
+        ) : null}
+        {(() => {
+          const filteredEvents = regFiltering ? ontoEvents.filter((event) => regHit(asText(event.name), focus!.events)) : null;
+          return (
+            <div className="v3fs-wf-reg">
+              <div className="v3fs-wf-reg-h"><span>Business events</span>
+                <em>{filteredEvents ? `${filteredEvents.length} of ${ontoEvents.length}` : ontoEvents.length}</em></div>
+              <div>
+                {filteredEvents ? (
+                  <>
+                    <div className="v3fs-atlas-fltbar">
+                      <span>{filteredEvents.length} of {ontoEvents.length} for <b>{focus!.label}</b></span>
+                      <button type="button" className="v3fs-a" onClick={() => setShowAllReg(true)}>Show all &amp; edit</button>
                     </div>
-                  );
-                })()}
-                <TextField label="Action — what happens in this step" value={asText(steps[selected].action)} onChange={(next) => patchStep(selected, { action: next })} />
-                <div className="v3fs-stu-grid3">
-                  <TextField label="Persona (lane)" value={asText(steps[selected].actor)} onChange={(next) => patchStep(selected, { actor: next })} />
-                  <TextField label="System" value={asText(steps[selected].system)} onChange={(next) => patchStep(selected, { system: next })} />
-                  <TextField label="Duration" value={asText(steps[selected].duration)} onChange={(next) => patchStep(selected, { duration: next })} />
-                </div>
-                <div className="v3fs-stu-grid2">
-                  <ChipsField label="Entities touched (from the ontology)" values={asStrings(steps[selected].entities)}
-                    onChange={(next) => patchStep(selected, { entities: next })} />
-                  <ChipsField label="Business events raised" values={asStrings(steps[selected].events)}
-                    onChange={(next) => patchStep(selected, { events: next })} />
-                </div>
-              </div>
-            ) : null}
-            {focus && showAllReg ? (
-              <div className="v3fs-atlas-fltbar">
-                <button type="button" className="v3fs-a" onClick={() => setShowAllReg(false)}>Filter to {focus.label}</button>
-              </div>
-            ) : null}
-            {(() => {
-              const filteredEvents = regFiltering ? ontoEvents.filter((event) => regHit(asText(event.name), focus!.events)) : null;
-              return (
-                <div className="v3fs-wf-reg">
-                  <div className="v3fs-wf-reg-h"><span>Business events</span>
-                    <em>{filteredEvents ? `${filteredEvents.length} of ${ontoEvents.length}` : ontoEvents.length}</em></div>
-                  <div>
-                    {filteredEvents ? (
-                      <>
-                        <div className="v3fs-atlas-fltbar">
-                          <span>{filteredEvents.length} of {ontoEvents.length} for <b>{focus!.label}</b></span>
-                          <button type="button" className="v3fs-a" onClick={() => setShowAllReg(true)}>Show all &amp; edit</button>
-                        </div>
-                        {filteredEvents.length ? filteredEvents.map((event, i) => (
-                          <div key={i} className="v3fs-atlas-flt-row">
-                            <b>⚡ {asText(event.name)}</b>
-                            <span>{[asText(event.triggers), asText(event.produces)].filter(Boolean).join(" → ")}</span>
-                          </div>
-                        )) : <div className="v3fs-stu-empty">No business events touch this selection.</div>}
-                      </>
-                    ) : (
-                      <TableEditor
-                        columns={[
-                          { key: "name", label: "Event" },
-                          { key: "triggers", label: "Triggered by", grow: 1.4 },
-                          { key: "produces", label: "Produces", grow: 1.4 },
-                        ]}
-                        rows={ontoEvents}
-                        onChange={(next) => onChange({ ...doc, events: next })}
-                        addLabel="Add event"
-                        emptyHint="No business events captured yet."
-                      />
-                    )}
-                  </div>
-                </div>
-              );
-            })()}
-            {(() => {
-              const filteredPains = regFiltering ? pains.filter((pain) => regHit(asText(pain.pain), focus!.pains)) : null;
-              return (
-                <div className="v3fs-wf-reg">
-                  <div className="v3fs-wf-reg-h"><span>Pain heatmap</span>
-                    <em>{filteredPains ? `${filteredPains.length} of ${pains.length}` : pains.length}</em></div>
-                  <div>
-                    {filteredPains ? (
-                      filteredPains.length ? filteredPains.map((pain, i) => (
-                        <div key={i} className={`v3fs-atlas-flt-row sev-${asText(pain.severity) || "medium"}`}>
-                          <b>{asText(pain.area) || "—"}</b>
-                          <span>{asText(pain.pain)}</span>
-                        </div>
-                      )) : <div className="v3fs-stu-empty">No voiced pain on this selection.</div>
-                    ) : (
-                      <div className="v3fs-stu-heat">
-                        {pains.map((pain, index) => (
-                          <div key={index} className={`v3fs-stu-heat-row sev-${asText(pain.severity) || "medium"}`}>
-                            <select value={asText(pain.severity) || "medium"} aria-label="Severity" disabled={locked}
-                              onChange={(e) => onChange({ ...doc, painHeatmap: pains.map((p, i) => (i === index ? { ...p, severity: e.target.value } : p)) })}>
-                              {["high", "medium", "low"].map((s) => <option key={s} value={s}>{s}</option>)}
-                            </select>
-                            <input value={asText(pain.area)} placeholder="Area" aria-label="Area" disabled={locked}
-                              onChange={(e) => onChange({ ...doc, painHeatmap: pains.map((p, i) => (i === index ? { ...p, area: e.target.value } : p)) })} />
-                            <input value={asText(pain.pain)} placeholder="The pain" aria-label="Pain" style={{ flexGrow: 2 }} disabled={locked}
-                              onChange={(e) => onChange({ ...doc, painHeatmap: pains.map((p, i) => (i === index ? { ...p, pain: e.target.value } : p)) })} />
-                            {locked ? null : <button type="button" className="v3fs-stu-x" aria-label="Remove"
-                              onClick={() => onChange({ ...doc, painHeatmap: pains.filter((_, i) => i !== index) })}>×</button>}
-                          </div>
-                        ))}
-                        {locked || !authoring ? null : <button type="button" className="v3fs-a"
-                          onClick={() => onChange({ ...doc, painHeatmap: [...pains, { area: "", pain: "", severity: "medium", voicedBy: [] }] })}>＋ Add pain</button>}
+                    {filteredEvents.length ? filteredEvents.map((event, i) => (
+                      <div key={i} className="v3fs-atlas-flt-row">
+                        <b>⚡ {asText(event.name)}</b>
+                        <span>{[asText(event.triggers), asText(event.produces)].filter(Boolean).join(" → ")}</span>
                       </div>
-                    )}
+                    )) : <div className="v3fs-stu-empty">No business events touch this selection.</div>}
+                  </>
+                ) : (
+                  <TableEditor
+                    columns={[
+                      { key: "name", label: "Event" },
+                      { key: "triggers", label: "Triggered by", grow: 1.4 },
+                      { key: "produces", label: "Produces", grow: 1.4 },
+                    ]}
+                    rows={ontoEvents}
+                    onChange={(next) => onChange({ ...doc, events: next })}
+                    addLabel="Add event"
+                    emptyHint="No business events captured yet."
+                  />
+                )}
+              </div>
+            </div>
+          );
+        })()}
+        {(() => {
+          const filteredPains = regFiltering ? pains.filter((pain) => regHit(asText(pain.pain), focus!.pains)) : null;
+          return (
+            <div className="v3fs-wf-reg">
+              <div className="v3fs-wf-reg-h"><span>Pain heatmap</span>
+                <em>{filteredPains ? `${filteredPains.length} of ${pains.length}` : pains.length}</em></div>
+              <div>
+                {filteredPains ? (
+                  filteredPains.length ? filteredPains.map((pain, i) => (
+                    <div key={i} className={`v3fs-atlas-flt-row sev-${asText(pain.severity) || "medium"}`}>
+                      <b>{asText(pain.area) || "—"}</b>
+                      <span>{asText(pain.pain)}</span>
+                    </div>
+                  )) : <div className="v3fs-stu-empty">No voiced pain on this selection.</div>
+                ) : (
+                  <div className="v3fs-stu-heat">
+                    {pains.map((pain, index) => (
+                      <div key={index} className={`v3fs-stu-heat-row sev-${asText(pain.severity) || "medium"}`}>
+                        <select value={asText(pain.severity) || "medium"} aria-label="Severity" disabled={locked}
+                          onChange={(e) => onChange({ ...doc, painHeatmap: pains.map((p, i) => (i === index ? { ...p, severity: e.target.value } : p)) })}>
+                          {["high", "medium", "low"].map((s) => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                        <input value={asText(pain.area)} placeholder="Area" aria-label="Area" disabled={locked}
+                          onChange={(e) => onChange({ ...doc, painHeatmap: pains.map((p, i) => (i === index ? { ...p, area: e.target.value } : p)) })} />
+                        <input value={asText(pain.pain)} placeholder="The pain" aria-label="Pain" style={{ flexGrow: 2 }} disabled={locked}
+                          onChange={(e) => onChange({ ...doc, painHeatmap: pains.map((p, i) => (i === index ? { ...p, pain: e.target.value } : p)) })} />
+                        {locked ? null : <button type="button" className="v3fs-stu-x" aria-label="Remove"
+                          onClick={() => onChange({ ...doc, painHeatmap: pains.filter((_, i) => i !== index) })}>×</button>}
+                      </div>
+                    ))}
+                    {locked || !authoring ? null : <button type="button" className="v3fs-a"
+                      onClick={() => onChange({ ...doc, painHeatmap: [...pains, { area: "", pain: "", severity: "medium", voicedBy: [] }] })}>＋ Add pain</button>}
                   </div>
-                </div>
-              );
-            })()}
-            {(() => {
-              const inventory = asArray(doc.systemsInventory).map(asRecord);
-              const filteredSystems = regFiltering ? inventory.filter((row) => regHit(asText(row.system), focus!.systems)) : null;
-              return (
-                <div className="v3fs-wf-reg">
-                  <div className="v3fs-wf-reg-h"><span>Systems inventory</span>
-                    <em>{filteredSystems ? `${filteredSystems.length} of ${inventory.length}` : inventory.length}</em></div>
-                  <div>
-                    {filteredSystems ? (
-                      filteredSystems.length ? filteredSystems.map((row, i) => (
-                        <div key={i} className="v3fs-atlas-flt-row">
-                          <b>{asText(row.system)}</b>
-                          <span>{asText(row.usedFor)}</span>
-                        </div>
-                      )) : <div className="v3fs-stu-empty">No systems named on this selection.</div>
-                    ) : (
-                      <TableEditor
-                        columns={[{ key: "system", label: "System" }, { key: "usedFor", label: "Used for", grow: 2 }]}
-                        rows={inventory}
-                        onChange={(next) => onChange({ ...doc, systemsInventory: next })}
-                        addLabel="Add system"
-                        emptyHint="No systems captured."
-                      />
-                    )}
-                  </div>
-                </div>
-              );
-            })()}
-          </CollapsibleCard>
+                )}
+              </div>
+            </div>
+          );
+        })()}
+        {(() => {
+          const inventory = asArray(doc.systemsInventory).map(asRecord);
+          const filteredSystems = regFiltering ? inventory.filter((row) => regHit(asText(row.system), focus!.systems)) : null;
+          return (
+            <div className="v3fs-wf-reg">
+              <div className="v3fs-wf-reg-h"><span>Systems inventory</span>
+                <em>{filteredSystems ? `${filteredSystems.length} of ${inventory.length}` : inventory.length}</em></div>
+              <div>
+                {filteredSystems ? (
+                  filteredSystems.length ? filteredSystems.map((row, i) => (
+                    <div key={i} className="v3fs-atlas-flt-row">
+                      <b>{asText(row.system)}</b>
+                      <span>{asText(row.usedFor)}</span>
+                    </div>
+                  )) : <div className="v3fs-stu-empty">No systems named on this selection.</div>
+                ) : (
+                  <TableEditor
+                    columns={[{ key: "system", label: "System" }, { key: "usedFor", label: "Used for", grow: 2 }]}
+                    rows={inventory}
+                    onChange={(next) => onChange({ ...doc, systemsInventory: next })}
+                    addLabel="Add system"
+                    emptyHint="No systems captured."
+                  />
+                )}
+              </div>
+            </div>
+          );
+        })()}
+      </CollapsibleCard>
 
           {/* Hover evidence peek — the step's verbatim grounding without a
               click. Fixed-position and pointer-transparent (same pattern as
@@ -796,8 +811,6 @@ export default function WorkflowStudio({ doc, onChange, onOpenArtifact, program,
               </div>
             );
           })() : null}
-        </>
-      )}
     </div>
   );
 }
