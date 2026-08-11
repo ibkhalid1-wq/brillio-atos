@@ -11,6 +11,7 @@ import { resolve } from "node:path";
 import { migrate, type Snapshot } from "../../src/v3/lib/ledger/migrate";
 import { PgLedger } from "../../src/v3/lib/ledger/pgStore";
 import { buildOptionABatch } from "../../supabase/functions/_shared/optionA";
+import { migrateOverrideOwner } from "./overrideOwner";
 import type { AssertInput } from "../../src/v3/lib/ledger/store";
 import type { LedgerElement } from "../../src/v3/lib/ledger/types";
 
@@ -26,7 +27,8 @@ async function main() {
   const otherBefore = (await pool.query("select md5(coalesce(string_agg(id||program_id||coalesce(superseded_by,''),'|' order by program_id,id),'')) h from ledger_claims where program_id not like 'retire-%'")).rows[0].h;
 
   // ── Option A, cold from an EMPTY ledger ──
-  const batch = buildOptionABatch(S);
+  // override owner from migrate's own mapping — this script IS the migrate-equivalence proof
+  const batch = buildOptionABatch(S, migrateOverrideOwner());
   console.log("# Item 1 — retire migrate(): Option A cold from empty\n");
   console.log(`buildOptionABatch: generated ${batch.counts.generated} · dispositioned ${batch.counts.dispositioned} · code-derived ${batch.counts.codeDerived} · elements ${batch.counts.elements}`);
   console.log(`  boundary validation: generator ${ok(batch.generator.ok)} · override ${ok(batch.override.ok)}`);

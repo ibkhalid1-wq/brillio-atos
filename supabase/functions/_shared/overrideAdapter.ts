@@ -10,8 +10,6 @@
 //   - a touch with a who but no verbatim           → weak, closed-without-verbatim (dispositioned)
 import { slug, aboutOf, type Batch, type BatchClaim, type GeneratedElement, type ClaimValue, type Owner, type World, type Layer } from "./ledgerGenerator.ts";
 
-const OP_OWNER: Owner = { kind: "role", role: "Sales Leaders" }; // matches migrate's ownerFor("sales")
-
 export interface OverrideEntry { note?: string; by?: string; ts?: string; fieldKey?: string; }
 export interface OverrideReport {
   batch: Batch; total: number; classified: number; skipped: number;
@@ -26,7 +24,22 @@ function parseRelation(text: string): { from: string; rel: string; to: string } 
   return null;
 }
 
-export function overridesToBatch(overrides: OverrideEntry[]): OverrideReport {
+/**
+ * Build the override batch. `opOwner` is a REQUIRED argument with NO default: an override
+ * log states a `by` (a person who touched it), never the ROLE that owns the locus, so this
+ * adapter has nothing to derive an owner from. It used to stamp a constant
+ * `{ kind: "role", role: "Sales Leaders" }` on every claim it emitted — a fabricated owner,
+ * correct for Laila and wrong for every other domain (the same shape that once put a Sales
+ * role on a clinical dataset). The decision now belongs to the caller, who is the only one
+ * who knows the engagement; a caller with no real owner to state must pass
+ * `{ kind: "unowned" }` so the miss stays visible, NOT a plausible-looking role string.
+ *
+ * PARITY: on the Laila override-log path this must equal migrate.ts's `ownerFor("sales")`
+ * — the `scripts/ledger/*.ts` comparison scripts hold Option A against migrate(). Those
+ * callers derive it from migrate's own exported mapping (`scripts/ledger/overrideOwner.ts`)
+ * rather than re-typing the label, so the two paths cannot drift apart silently.
+ */
+export function overridesToBatch(overrides: OverrideEntry[], opOwner: Owner): OverrideReport {
   const elements: GeneratedElement[] = []; const claims: BatchClaim[] = [];
   const elIds = new Set<string>();
   const addEl = (e: GeneratedElement) => { if (!elIds.has(e.id)) { elIds.add(e.id); elements.push(e); } };
@@ -36,7 +49,7 @@ export function overridesToBatch(overrides: OverrideEntry[]): OverrideReport {
 
   const emit = (about: string, value: ClaimValue, source: "dispositioned" | "code-derived", world: World, layer: Layer, by: string) => {
     // no verbatim ⇒ weak (closed-without-verbatim); a disposition/import method, never a stakeholder assertion
-    claims.push({ about, value, world, layer, source, status: "weak", ownerWhileOpen: OP_OWNER,
+    claims.push({ about, value, world, layer, source, status: "weak", ownerWhileOpen: opOwner,
       closedBy: { method: source === "code-derived" ? "import" : "disposition", by } });
     bump(bySource, source);
   };
