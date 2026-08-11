@@ -115,6 +115,7 @@ const click = (el: Element | null | undefined) => {
 };
 const openWorkflow = (el: HTMLElement, name: string) =>
   click([...el.querySelectorAll("button")].find((b) => (b.textContent ?? "").includes(name)));
+const wroteDoc = () => wrote;
 const rows = (doc: Record<string, unknown>) => (doc[DECISIONS_FIELD] ?? []) as Array<Record<string, unknown>>;
 
 /* ── reading Agentify's LIST ──────────────────────────────────────────────── */
@@ -374,6 +375,85 @@ describe("Agentify lists the Atlas's activities, grouped by workflow", () => {
  * here — their fixture never opens a studio, so they would pass on an unlabelled
  * div — so their own helpers are applied directly to this surface instead.
  */
+describe("the list collapses and filters — presentation only", () => {
+  const type = (el: HTMLElement, selector: string, value: string) => {
+    const input = el.querySelector(selector) as HTMLInputElement;
+    expect(input, `no ${selector}`).toBeTruthy();
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")!.set!;
+    act(() => { setter.call(input, value); input.dispatchEvent(new Event("input", { bubbles: true })); });
+  };
+  it("a workflow card collapses and expands from its own heading", () => {
+    const el = mount("agentify", {}, programWith(atlasDoc()));
+    const head = el.querySelector(".v3fs-ag-wf-h") as HTMLButtonElement;
+    expect(head.tagName, "the disclosure must be a real button so the keyboard reaches it").toBe("BUTTON");
+    expect(head.getAttribute("aria-expanded")).toBe("true");
+    expect(activityRows(el).length).toBeGreaterThan(0);
+
+    click(head);
+    expect((el.querySelector(".v3fs-ag-wf-h") as HTMLElement).getAttribute("aria-expanded")).toBe("false");
+    expect(activityRows(el), "a collapsed card still lists its rows").toHaveLength(0);
+
+    click(el.querySelector(".v3fs-ag-wf-h")!);
+    expect(activityRows(el).length).toBeGreaterThan(0);
+  });
+
+  it("a COLLAPSED card still shows its counts — otherwise you reopen it to find out", () => {
+    const el = mount("agentify", {}, programWith(atlasDoc()));
+    click(el.querySelector(".v3fs-ag-wf-h")!);
+    expect(el.querySelector(".v3fs-ag-wf-c")?.textContent).toMatch(/\d+ of \d+ decided/);
+    expect(el.textContent).toContain("Quote to cash");
+  });
+
+  it("the query filters activities, and says what it is hiding", () => {
+    const el = mount("agentify", {}, programWith(atlasDoc()));
+    const before = activityRows(el).length;
+    type(el, ".v3fs-ag-q", APPROVE.slice(0, 12));
+    expect(activityRows(el).map(actionOf)).toEqual([APPROVE]);
+    // The narrowed view must reconcile itself against the whole document.
+    expect(el.querySelector(".v3fs-ag-filter-note")?.textContent)
+      .toMatch(new RegExp(`Showing.*1.*of ${before}`));
+  });
+
+  it("matching a WORKFLOW keeps its activities — a hit must not answer with an empty card", () => {
+    const el = mount("agentify", {}, programWith(atlasDoc()));
+    type(el, ".v3fs-ag-q", "Quote to cash");
+    expect(activityRows(el).length, "the workflow matched but its rows were hidden").toBeGreaterThan(0);
+  });
+
+  it("'only undecided' hides decided work without changing it", () => {
+    const atlas = atlasDoc();
+    const wf = atlas.workflows[0] as Record<string, unknown>;
+    const decided = { [DECISIONS_FIELD]: [{ _stepId: RE_KEY_ID, mode: "agentify" }] };
+    const el = mount("agentify", decided, programWith(atlas));
+    expect(activityRows(el)).toHaveLength(2);
+    const only = el.querySelector(".v3fs-ag-only input") as HTMLInputElement;
+    click(only);
+    expect(activityRows(el).map(actionOf), "the decided row is still listed").toEqual([APPROVE]);
+  });
+
+  it("THE COUNTER STAYS WHOLE-DOCUMENT — a filter cannot make the open work look smaller", () => {
+    const el = mount("agentify", {}, programWith(atlasDoc()));
+    const full = counter(el);
+    type(el, ".v3fs-ag-q", APPROVE.slice(0, 12));
+    expect(counter(el), "filtering rewrote the headline count").toBe(full);
+  });
+
+  it("a filter that matches nothing SAYS so rather than looking empty", () => {
+    const el = mount("agentify", {}, programWith(atlasDoc()));
+    type(el, ".v3fs-ag-q", "zzzz-no-such-activity");
+    expect(activityRows(el)).toHaveLength(0);
+    expect(el.querySelector(".v3fs-ag-filter-note")?.textContent).toContain("Nothing matches");
+  });
+
+  it("neither control writes anything — presentation only", () => {
+    const el = mount("agentify", {}, programWith(atlasDoc()));
+    type(el, ".v3fs-ag-q", "quote");
+    click(el.querySelector(".v3fs-ag-wf-h"));
+    click(el.querySelector(".v3fs-ag-only input"));
+    expect(wroteDoc(), "collapsing or filtering wrote to the document").toBeNull();
+  });
+});
+
 describe("the toggles are named, distinctly, after the activity they decide", () => {
   /** Two workflows sharing a step's wording — the case a generic name cannot survive. */
   const twoWorkflows = () => {

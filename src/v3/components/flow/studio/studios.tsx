@@ -627,6 +627,45 @@ function AgentifyStudio({ doc, onChange, program, gapRoutes, onRouteGap }: Studi
   const listed = new Set(groups.flatMap((g) => g.activities.map((a) => a.id)));
   const orphaned = Object.entries(decisions).filter(([id, d]) => d.mode && !listed.has(id)).length;
 
+  // ── FILTER + COLLAPSE ──────────────────────────────────────────────────────
+  // 31 activities over 10 workflows is a scroll, and the operator's question is
+  // usually "what is still open?" rather than "show me everything". Both controls
+  // are PRESENTATION ONLY: no filter and no collapse ever changes what is decided,
+  // and the counters below stay whole-document so a narrowed view cannot make the
+  // remaining work look smaller than it is.
+  const [query, setQuery] = React.useState("");
+  const [onlyOpen, setOnlyOpen] = React.useState(false);
+  const [collapsed, setCollapsed] = React.useState<Record<string, boolean>>({});
+
+  const areas = React.useMemo(
+    () => [...new Set(groups.map((g) => g.area).filter(Boolean))].sort(),
+    [groups],
+  );
+  const [area, setArea] = React.useState("");
+
+  const q = query.trim().toLowerCase();
+  const shown = React.useMemo(() => groups
+    .filter((g) => (area ? g.area === area : true))
+    .map((g) => {
+      // A query matches the WORKFLOW (keep all its activities) or individual
+      // activities (keep those). Matching the workflow name and then hiding its
+      // rows would answer a search with an empty card.
+      const wfHit = !q || g.name.toLowerCase().includes(q);
+      const activities = g.activities.filter((a) => {
+        if (onlyOpen && a.mode) return false;
+        if (!q || wfHit) return true;
+        return `${a.action} ${a.actor} ${a.system}`.toLowerCase().includes(q);
+      });
+      return { ...g, activities };
+    })
+    .filter((g) => g.activities.length), [groups, q, area, onlyOpen]);
+
+  const shownActivities = shown.reduce((n, g) => n + g.activities.length, 0);
+  const filtering = !!q || !!area || onlyOpen;
+  const isCollapsed = (key: string) => collapsed[key] === true;
+  const setAll = (next: boolean) =>
+    setCollapsed(Object.fromEntries(groups.map((g) => [g.key, next])));
+
   return (
     <>
       <Section label="Activities — one row per step, grouped by workflow"
@@ -645,24 +684,67 @@ function AgentifyStudio({ doc, onChange, program, gapRoutes, onRouteGap }: Studi
             {" "}{orphaned === 1 ? "It is" : "They are"} still in this document, and not counted above.
           </p>
         ) : null}
+        {groups.length === 0 ? null : (
+          <div className="v3fs-ag-filter">
+            <input className="v3fs-ag-q" type="search" value={query} placeholder="Filter activities or workflows…"
+              aria-label="Filter activities or workflows" onChange={(e) => setQuery(e.target.value)} />
+            {areas.length > 1 ? (
+              <select className="v3fs-ag-sel" value={area} aria-label="Filter by area"
+                onChange={(e) => setArea(e.target.value)}>
+                <option value="">All areas ({groups.length})</option>
+                {areas.map((a) => <option key={a} value={a}>{a}</option>)}
+              </select>
+            ) : null}
+            <label className="v3fs-ag-only">
+              <input type="checkbox" checked={onlyOpen} onChange={(e) => setOnlyOpen(e.target.checked)} />
+              Only undecided
+            </label>
+            <span className="v3fs-ag-filter-sp" />
+            <button type="button" className="v3fs-a" onClick={() => setAll(true)}>Collapse all</button>
+            <button type="button" className="v3fs-a" onClick={() => setAll(false)}>Expand all</button>
+          </div>
+        )}
+        {/* The filter narrows what is SHOWN; the counter above stays whole-document,
+            so this line is what reconciles the two. Without it a filtered view reads
+            as if the rest of the work had gone away. */}
+        {filtering ? (
+          <p className="v3fs-ag-filter-note">
+            Showing <b>{shownActivities}</b> of {total} activit{total === 1 ? "y" : "ies"}
+            {" "}across {shown.length} of {groups.length} workflow{groups.length === 1 ? "" : "s"}.
+            {shown.length === 0 ? " Nothing matches — clear the filter to see the rest." : null}
+          </p>
+        ) : null}
         {groups.length === 0 ? (
           <EmptyState icon="⚡" title="No activities to decide on yet"
             hint="Agentify decides about the Current-State Atlas's activities — that Atlas holds none yet. Record them there and they appear here." />
-        ) : groups.map((group) => (
-          <div key={group.key} className="v3fs-ag-wf">
-            <div className="v3fs-ag-wf-h">
+        ) : shown.map((group) => {
+          const shut = isCollapsed(group.key);
+          const rowsId = `ag-rows-${group.key.replace(/[^a-zA-Z0-9]+/g, "-")}`;
+          return (
+          <div key={group.key} className={`v3fs-ag-wf${shut ? " is-shut" : ""}`}>
+            {/* The heading IS the disclosure — a real button, so the keyboard
+                reaches every card the mouse does, and the counts stay readable
+                while it is shut (a collapsed card that hides its own progress is
+                why you would open it again). */}
+            <button type="button" className="v3fs-ag-wf-h" aria-expanded={!shut}
+              aria-controls={shut ? undefined : rowsId}
+              onClick={() => setCollapsed((c) => ({ ...c, [group.key]: !shut }))}>
+              <span className="v3fs-ag-wf-c-ic" aria-hidden="true">{shut ? "▸" : "▾"}</span>
               <span className="v3fs-ag-wf-n">{group.name}</span>
               {group.area ? <span className="v3fs-ag-wf-a">{group.area}</span> : null}
               <span className="v3fs-ag-wf-c">{group.decided} of {group.activities.length} decided</span>
-            </div>
-            <ul className="v3fs-ag-rows">
-              {group.activities.map((activity) => (
-                <AgentifyActivityRow key={activity.id || `${group.key}-${activity.n}`}
-                  activity={activity} workflowName={group.name} locked={locked} onDecide={decide} />
-              ))}
-            </ul>
+            </button>
+            {shut ? null : (
+              <ul id={rowsId} className="v3fs-ag-rows">
+                {group.activities.map((activity) => (
+                  <AgentifyActivityRow key={activity.id || `${group.key}-${activity.n}`}
+                    activity={activity} workflowName={group.name} locked={locked} onDecide={decide} />
+                ))}
+              </ul>
+            )}
           </div>
-        ))}
+          );
+        })}
       </Section>
       {/* Agentify's OWN open questions and gaps. They are unfiltered here: the
           selection that used to scope them belonged to the diagram, and a list of
