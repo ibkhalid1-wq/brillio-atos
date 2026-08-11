@@ -382,7 +382,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
               ) : (
                 <button type="button" className="v3ib-btn ghost"
                   onClick={() => { pendingSor.current = sor; pendingScope.current = loci; dictRef.current?.click(); }}>
-                  ⬆ upload {sor ? `the ${sor} dictionary` : "a dictionary covering every system"} (CSV/TSV/Excel)
+                  <span aria-hidden="true">⬆ </span>upload {sor ? `the ${sor} dictionary` : "a dictionary covering every system"} (CSV/TSV/Excel)
                 </button>
               )}
             </div>
@@ -634,7 +634,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                       ? <span className="v3ib-owner"><span aria-hidden="true">📌 </span>pinned to {displayPersonLabel(pin.owner.label)} <span className="v3ib-unit">(on a sent link — pinned)</span></span>
                       : <span className="v3ib-owner"><span aria-hidden="true">→ </span>owner: {a.owner.label}</span>} />
                     <span className="v3ib-reassign">
-                      {cSelect(a.about, `re-${a.about}`, "Reassign to…")}
+                      {cSelect(a.about, `re-${a.about}`, `Reassign to… — ${Q(a.about).question}`)}
                       <button type="button" className="v3ib-btn ghost sm" disabled={busy === a.about || !pickedOwner(a.about)} aria-label={spoken(`Reassign: ${Q(a.about).question}`)} onClick={() => void run(a.about, assignAction(a.about, pickedOwner(a.about)!))}>reassign</button>
                       <button type="button" className="v3ib-btn ghost sm" disabled={busy === a.about} aria-label={spoken(`Unassign ${a.owner.label} from: ${Q(a.about).question}`)} onClick={() => void run(a.about, { kind: "unassign", about: a.about, reason: "operator", by, at: nowISO() })}>unassign</button>
                     </span>
@@ -663,8 +663,8 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                     <span className="v3ib-form">
                       <textarea rows={2} aria-label={spoken(`What ${a.owner.label} said, captured out-of-band, about: ${Q(a.about).question}`)} placeholder="What they said (captured out-of-band)…" value={f1[a.about] ?? ""} onChange={(e) => setF1((s) => ({ ...s, [a.about]: e.target.value }))} />
                       <span className="v3ib-form-r">
-                        <input aria-label="Name of the person who said it" placeholder="Said by (name)" value={f2[a.about] ?? ""} onChange={(e) => setF2((s) => ({ ...s, [a.about]: e.target.value }))} />
-                        <button type="button" className="v3ib-btn" disabled={busy === a.about || !f1[a.about]?.trim() || !f2[a.about]?.trim()} onClick={() => void run(a.about, { kind: "capture", about: a.about, slot: slotOf(a.about), answer: f1[a.about].trim(), saidByName: f2[a.about].trim(), saidByRole: "", by, at: nowISO() })}>record answer</button>
+                        <input aria-label={spoken(`Name of the person who said it, for: ${Q(a.about).question}`)} placeholder="Said by (name)" value={f2[a.about] ?? ""} onChange={(e) => setF2((s) => ({ ...s, [a.about]: e.target.value }))} />
+                        <button type="button" className="v3ib-btn" disabled={busy === a.about || !f1[a.about]?.trim() || !f2[a.about]?.trim()} onClick={() => void run(a.about, { kind: "capture", about: a.about, slot: slotOf(a.about), answer: f1[a.about].trim(), saidByName: f2[a.about].trim(), saidByRole: "", by, at: nowISO() })} aria-label={spoken(`Record the answer to: ${Q(a.about).question}`)}>record answer</button>
                       </span>
                       <span className="v3ib-form-note">Operator-entered · attributed to who said it · <b>not</b> counted as heard.</span>
                     </span>
@@ -673,8 +673,8 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                     <span className="v3ib-form">
                       <span className="v3ib-form-r">
                         <input aria-label={spoken(`Who ${a.owner.label} said to ask instead`)} placeholder="They said, ask… (target owner)" value={f2[a.about] ?? ""} onChange={(e) => setF2((s) => ({ ...s, [a.about]: e.target.value }))} />
-                        <input aria-label="Name of the person who gave the referral" placeholder="Said by (name)" value={f1[a.about] ?? ""} onChange={(e) => setF1((s) => ({ ...s, [a.about]: e.target.value }))} />
-                        <button type="button" className="v3ib-btn" disabled={busy === a.about || !f2[a.about]?.trim() || !f1[a.about]?.trim()} onClick={() => void run(a.about, { kind: "redirect", about: a.about, slot: slotOf(a.about), toOwner: f2[a.about].trim(), saidByName: f1[a.about].trim(), by, at: nowISO() })}>record redirect</button>
+                        <input aria-label={spoken(`Name of the person who gave the referral, for: ${Q(a.about).question}`)} placeholder="Said by (name)" value={f1[a.about] ?? ""} onChange={(e) => setF1((s) => ({ ...s, [a.about]: e.target.value }))} />
+                        <button type="button" className="v3ib-btn" disabled={busy === a.about || !f2[a.about]?.trim() || !f1[a.about]?.trim()} onClick={() => void run(a.about, { kind: "redirect", about: a.about, slot: slotOf(a.about), toOwner: f2[a.about].trim(), saidByName: f1[a.about].trim(), by, at: nowISO() })} aria-label={spoken(`Record the redirect for: ${Q(a.about).question}`)}>record redirect</button>
                       </span>
                       <span className="v3ib-form-note">A referral, not an answer. You confirm it with one tap. Not counted as heard.</span>
                     </span>
@@ -682,8 +682,8 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                   {!cap && !ref && openExit === "release" ? (
                     <span className="v3ib-form">
                       <span className="v3ib-form-r">
-                        <input aria-label="Name of the person releasing the question" placeholder="Released by (name)" value={f1[a.about] ?? ""} onChange={(e) => setF1((s) => ({ ...s, [a.about]: e.target.value }))} />
-                        <button type="button" className="v3ib-btn" disabled={busy === a.about} onClick={() => void run(a.about, { kind: "unassign", about: a.about, reason: "release", saidByName: f1[a.about]?.trim() || undefined, by, at: nowISO() })}>record release<span aria-hidden="true"> → </span>back to unowned</button>
+                        <input aria-label={spoken(`Name of the person releasing: ${Q(a.about).question}`)} placeholder="Released by (name)" value={f1[a.about] ?? ""} onChange={(e) => setF1((s) => ({ ...s, [a.about]: e.target.value }))} />
+                        <button type="button" className="v3ib-btn" disabled={busy === a.about} onClick={() => void run(a.about, { kind: "unassign", about: a.about, reason: "release", saidByName: f1[a.about]?.trim() || undefined, by, at: nowISO() })} aria-label={spoken(`Record the release of: ${Q(a.about).question} — back to unowned`)}>record release<span aria-hidden="true"> → </span>back to unowned</button>
                       </span>
                       <span className="v3ib-form-note">&ldquo;Not mine&rdquo; — returns to the unowned queue. The honest signal routing was wrong. Not counted as heard.</span>
                     </span>

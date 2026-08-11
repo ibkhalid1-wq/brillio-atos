@@ -65,8 +65,16 @@ const RECORD_SIDE = {
       // select + the three exit tabs) and its decided trace. Without an assignment
       // on the fixture, those controls never mount and never get audited.
       _operatorActions: JSON.stringify([
+        // TWO assignments, not one: the in-flight section repeats a whole control set
+        // (reassign select, three exit tabs) per question, and a fixture with a single
+        // row cannot show that the twenty-first "answer" button is indistinguishable
+        // from the first. Ambiguity needs at least two of a thing to be visible.
         {
           kind: "assign", about: lailaQueue.items[0].about, slot: lailaQueue.items[0].slot,
+          owner: { label: "Sales Ops", isRole: true }, by: "op", at: AT,
+        },
+        {
+          kind: "assign", about: lailaQueue.items[2].about, slot: lailaQueue.items[2].slot,
           owner: { label: "Sales Ops", isRole: true }, by: "op", at: AT,
         },
         {
@@ -263,6 +271,37 @@ describe("decorative glyphs are hidden from the reading order", () => {
       "v3fs-a|⌲ Attach a file — PDF, W",
       "v3ln-a|＋ add to the record",
     ]);
+  });
+});
+
+describe("repeated controls are told apart", () => {
+  it("no two controls on a page answer to the same name", () => {
+    // The other half of "say what it does": twenty buttons all announcing "answer",
+    // or eight selects all announcing "Owner", are each individually named and
+    // collectively useless — a screen-reader user tabbing the Inbox cannot tell which
+    // question they are about to record against. Wordlessness is caught above; this
+    // catches ambiguity, which is the failure mode of a repeated row.
+    const clashes: string[] = [];
+    for (const view of VIEWS) {
+      goto(view);
+      expandEverything();
+      const byName = new Map<string, Element[]>();
+      for (const el of interactiveElements(host)) {
+        const name = accessibleName(el);
+        if (!name) continue;
+        (byName.get(name) ?? byName.set(name, []).get(name)!).push(el);
+      }
+      for (const [name, els] of byName) {
+        // ONE allowance, and it is not ambiguity: "New programme" appears twice on
+        // Portfolio — once in the programme switcher's menu, once as the page's own
+        // button — and both do exactly the same thing. WCAG 2.4.6 asks a label to
+        // DESCRIBE its purpose, not to be unique; two doors to one room may share a
+        // sign. Every other repeat here was a different action wearing the same word.
+        if (name === "New programme") continue;
+        if (els.length > 1) clashes.push(`${view}: ${els.length}x ${JSON.stringify(name)} (${els[0].tagName}.${els[0].getAttribute("class")})`);
+      }
+    }
+    expect([...new Set(clashes)]).toEqual([]);
   });
 });
 
