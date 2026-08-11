@@ -399,7 +399,12 @@ function FocusedGapSection({ doc, section, focus, showAll, onShowAll, onRefocus,
       <>
         <div className="v3fs-atlas-fltbar">
           <span>{filtered.length} of {values.length} for <b>{focus?.label}</b></span>
-          <button type="button" className="v3fs-a" onClick={onShowAll}>Show all &amp; edit</button>
+          {/* One filter bar per register, and the Atlas draws several at once: the
+              visible words are enough beside the count they sit next to, but in the
+              tab order three identical "Show all & edit" buttons name three different
+              registers. The label says which one it unfilters. */}
+          <button type="button" className="v3fs-a" onClick={onShowAll}
+            aria-label={`Show all ${values.length} of ${section.label.toLowerCase()} and edit them`}>Show all &amp; edit</button>
         </div>
         {filtered.length ? filtered.map((value, i) => (
           <div key={i} className="v3fs-atlas-flt-row"><span>{value}</span></div>

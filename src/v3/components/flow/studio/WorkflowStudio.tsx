@@ -518,6 +518,31 @@ export default function WorkflowStudio({
       reorderStep(from, at > from ? at - 1 : at);
     },
   });
+  /**
+   * A swimlane chip: an entity or an event that opens the Domain Ontology.
+   *
+   * `stopPropagation` on BOTH the click and the key, because the chip sits inside the
+   * step tile's <button> — without it, opening the ontology also toggles the step's
+   * selection underneath. `preventDefault` on Space because a Space that bubbles to a
+   * button scrolls the page AND presses that button. And the name is given, never
+   * derived, so it can say which step the chip belongs to; the same entity name recurs
+   * on several steps of one workflow and "Invoice" alone identifies none of them.
+   */
+  const chipProps = (label: string) => {
+    const open = () => onOpenArtifact?.("domain-ontology");
+    return {
+      role: "link" as const,
+      tabIndex: 0,
+      "aria-label": label,
+      onClick: (e: React.MouseEvent) => { e.stopPropagation(); open(); },
+      onKeyDown: (e: React.KeyboardEvent) => {
+        if (e.key !== "Enter" && e.key !== " ") return;
+        e.stopPropagation();
+        e.preventDefault();
+        open();
+      },
+    };
+  };
   // CREATE — the ＋ workflow affordance the removed panel's filter row carried,
   // now reachable from the seam view (and from the empty state). Authoring-gated
   // by the caller; the new workflow opens inline straight away.
@@ -587,7 +612,7 @@ export default function WorkflowStudio({
         <div className="v3fs-wf-ckpt-id">
           <span className="v3fs-wf-ckpt-name">{asText(workflow.name) || "Untitled workflow"}</span>
           {triggerEvent
-            ? <span className="v3fs-wf-evt" title="The business event that starts this workflow">⚡{triggerEvent}</span>
+            ? <span className="v3fs-wf-evt" title="The business event that starts this workflow"><span aria-hidden="true">⚡</span>{triggerEvent}</span>
             : asText(workflow.trigger) ? <span className="v3fs-wf-ckpt-trig" title="What starts this workflow">{asText(workflow.trigger)}</span> : null}
         </div>
         <div className="v3fs-wf-ckpt-stats">
@@ -699,6 +724,18 @@ export default function WorkflowStudio({
                         onClick={() => setSelected(selected === index ? null : index)}
                         onMouseEnter={showStepPeek(index)}
                         onMouseLeave={() => setPeek(null)}
+                        // NAMED EXPLICITLY, not from its own content. The tile packs a
+                        // number, a pain dot, the system, the duration and the entity /
+                        // event chips inside itself, and a name computed from all of
+                        // that is a paragraph — read out in full every time the tile is
+                        // focused, with the chips' own glyphs in the middle of it. This
+                        // says the one thing the tile does: select step N.
+                        // It says SELECT, and it names its workflow, because the seam
+                        // grid above draws a tile for this same step: two controls, two
+                        // different jobs (that one pins a detail popover, this one opens
+                        // the inspector), and a shared name would hide the difference.
+                        aria-label={`Select step ${index + 1} of ${asText(workflow.name) || "this workflow"}: ${asText(step.action) || "—"} — ${actor}`}
+                        aria-pressed={selected === index}
                       >
                         <span className="v3fs-swim-n" aria-hidden="true">{index + 1}</span>
                         {pain ? <span className={`v3fs-swim-paindot ${pain.severity}`} aria-label={`${pain.severity} pain: ${pain.pain}`} role="img" /> : null}
@@ -711,22 +748,28 @@ export default function WorkflowStudio({
                           {asText(step.duration) ? <span className="v3fs-wf-dur">{asText(step.duration)}</span> : null}
                         </span>
                         {pain ? <span className="v3fs-swim-pain">{pain.pain.slice(0, 46)}</span> : null}
+                        {/* THE CHIPS ARE LINKS, AND THEY OWE THE KEYBOARD WHAT A LINK
+                            OWES IT. Each opens the Domain Ontology. Three things were
+                            wrong and all three are fixed by `chipProps` below: the name
+                            came from content, so an event announced as "high voltage
+                            sign, Invoice Issued"; the same entity appears on several
+                            steps of one workflow, so "Invoice" named two different
+                            chips; and Enter fired but SPACE did not, which for a widget
+                            a keyboard user has to guess at is a dead control. */}
                         {entities.length || stepEvents.length ? (
                           <span className="v3fs-wf-ents">
                             {entities.slice(0, 3).map((entity) => (
-                              <span key={entity} role="link" tabIndex={0} className="v3fs-wf-ent"
+                              <span key={entity} className="v3fs-wf-ent"
                                 title="Defined in the Domain Ontology — open it"
-                                onClick={(event) => { event.stopPropagation(); onOpenArtifact?.("domain-ontology"); }}
-                                onKeyDown={(event) => { if (event.key === "Enter") { event.stopPropagation(); onOpenArtifact?.("domain-ontology"); } }}>
+                                {...chipProps(`${entity} — an entity on step ${index + 1}; open it in the Domain Ontology`)}>
                                 {entity}
                               </span>
                             ))}
                             {stepEvents.slice(0, 2).map((name) => (
-                              <span key={`ev-${name}`} role="link" tabIndex={0} className="v3fs-wf-evt"
+                              <span key={`ev-${name}`} className="v3fs-wf-evt"
                                 title="Business event — defined in the Domain Ontology; open it"
-                                onClick={(event) => { event.stopPropagation(); onOpenArtifact?.("domain-ontology"); }}
-                                onKeyDown={(event) => { if (event.key === "Enter") { event.stopPropagation(); onOpenArtifact?.("domain-ontology"); } }}>
-                                ⚡{name}
+                                {...chipProps(`${name} — a business event raised by step ${index + 1}; open it in the Domain Ontology`)}>
+                                <span aria-hidden="true">⚡</span>{name}
                               </span>
                             ))}
                           </span>
@@ -773,7 +816,11 @@ export default function WorkflowStudio({
 
       {locked ? null : (
       <div className="v3fs-wf-bar">
-        <button type="button" className="v3fs-btn" onClick={addStep}>＋ Step{selected != null ? " after selected" : ""}</button>
+        {/* The words live in the aria-label and the glyph is hidden, so this is read
+            as "Add a step, button" and not as "fullwidth plus sign, Step". */}
+        <button type="button" className="v3fs-btn" onClick={addStep}
+          aria-label={selected != null ? `Add a step after step ${selected + 1}` : "Add a step at the end of this workflow"}>
+          <span aria-hidden="true">＋</span> Step{selected != null ? " after selected" : ""}</button>
         {selected == null ? <span className="v3fs-wf-hint">Select a step to edit it</span> : null}
         {steps.length > 1 ? (
           <span className="v3fs-wf-hint">Drag a tile to reorder it — or select one and use ← Earlier / Later →.</span>
@@ -790,13 +837,30 @@ export default function WorkflowStudio({
                 {asRecord(steps[selected]).dropped ? <span className="v3fs-wf-dropped-tag" title="Mark-dropped — the step and its claims stay findable; not hard-deleted">⊘ dropped</span> : null}</span>
               {locked ? null : (
                 <span className="v3fs-wf-insp-actions">
-                  <button type="button" className="v3fs-btn" disabled={selected === 0} onClick={() => moveStep(-1)}>← Earlier</button>
-                  <button type="button" className="v3fs-btn" disabled={selected === steps.length - 1} onClick={() => moveStep(1)}>Later →</button>
+                  {/* Same rule as the toolbar: the arrows and the ⊘ are decoration and
+                      are hidden, and each name says which step it moves — an inspector
+                      that announces a bare "leftwards arrow, Earlier" tells a screen
+                      reader user neither the direction nor what is being moved. */}
+                  <button type="button" className="v3fs-btn" disabled={selected === 0} onClick={() => moveStep(-1)}
+                    aria-label={`Move step ${selected + 1} earlier in the workflow`}>
+                    <span aria-hidden="true">←</span> Earlier</button>
+                  <button type="button" className="v3fs-btn" disabled={selected === steps.length - 1} onClick={() => moveStep(1)}
+                    aria-label={`Move step ${selected + 1} later in the workflow`}>
+                    Later <span aria-hidden="true">→</span></button>
                   <button type="button" className="v3fs-btn" onClick={dropStep}
+                    // "…from the step inspector": the selected tile carries a ⊘ of its
+                    // own that does exactly this, and the two are reached from different
+                    // places in the tab order. Naming both identically would leave a
+                    // screen-reader user unable to tell where they had got to.
+                    aria-label={asRecord(steps[selected]).dropped
+                      ? `Restore step ${selected + 1} from the step inspector — put it back in the workflow`
+                      : `Mark step ${selected + 1} dropped from the step inspector — reversible, and it keeps its claims`}
                     title={asRecord(steps[selected]).dropped
                       ? "Restore this step — it was marked dropped, not deleted"
                       : "Mark dropped — reversible. The step and its ledger claims stay on record; nothing is deleted."}>
-                    {asRecord(steps[selected]).dropped ? "↩ Restore" : "⊘ Mark dropped (reversible)"}</button>
+                    {asRecord(steps[selected]).dropped
+                      ? <><span aria-hidden="true">↩</span> Restore</>
+                      : <><span aria-hidden="true">⊘</span> Mark dropped (reversible)</>}</button>
                 </span>
               )}
             </div>

@@ -35,6 +35,9 @@ import {
   anchorWorkflowsToAtlas, resolveWorkflow, resolveStep,
   ATLAS_WORKFLOW_ID, ATLAS_STEP_ID,
 } from "@/v3/lib/ledger/agentifyAnchor";
+import {
+  decisionStepId, readDecisions, writeDecision, DECISION_STEP_ID,
+} from "@/v3/lib/ledger/agentifyDecisions";
 import { STUDIO_REGISTRY } from "@/v3/components/flow/studio/studios";
 import { StudioLockContext, StudioAuthoringContext } from "@/v3/components/flow/studio/StudioKit";
 
@@ -207,6 +210,72 @@ describe("client and edge stamp identically", () => {
   it("the edge wires it in — a stamper nothing calls anchors nothing", () => {
     expect(EDGE).toContain('import { anchorAgentifyToAtlas } from "../_shared/agentifyAnchor.ts"');
     expect(EDGE).toContain("anchorAgentifyToAtlas(spec.fieldKey, formalResult, areaGrounding(contextProgramData).workflows)");
+  });
+});
+
+/* ── a GENERATED decision is filed where the operator's would be ──────────── */
+
+describe("the edge files a generated decision under the client's own id", () => {
+  // The generator emits decisions naming their step in the Atlas's words. If the
+  // edge filed them under any id but the one writeDecision uses, the operator's
+  // first call on that step would open a SECOND row and the generated one would
+  // read as an orphan — a call on record that matches no activity.
+  const generated = () => ({
+    decisions: [
+      { workflow: "Quote to cash", step: RE_KEY, mode: "agentify", rationale: "he retypes it twice" },
+      { workflow: "Quote to cash", step: APPROVE, mode: "keep", rationale: "a person owns the discount" },
+    ],
+    agentCandidates: [], openQuestions: [], gaps: [],
+  });
+
+  it("every emitted row is stamped with the atlas step id the client derives", () => {
+    const doc = generated();
+    edgeAnchor("agentify", doc, (atlasDoc().workflows as Array<Record<string, unknown>>));
+    const atlasWf = wfOf(atlasDoc());
+    const expected = (atlasWf.steps as Array<Record<string, unknown>>)
+      .map((step) => decisionStepId(atlasWf, step));
+    expect(doc.decisions.map((d) => rec(d)[DECISION_STEP_ID])).toEqual(expected);
+    // …and the ids are the ones migrate() files the claims under.
+    const ids = new Set(migrate({ ontology: ONTOLOGY, atlas: atlasDoc(), overrides: [] } as Snapshot)
+      .elements().map((e) => e.id));
+    for (const id of expected) expect(ids.has(id)).toBe(true);
+  });
+
+  it("so the reader finds those calls, and an operator edit lands on the same rows", () => {
+    const doc = generated() as unknown as Record<string, unknown>;
+    edgeAnchor("agentify", doc, (atlasDoc().workflows as Array<Record<string, unknown>>));
+    const atlasWf = wfOf(atlasDoc());
+    const reKeyId = decisionStepId(atlasWf, rec((atlasWf.steps as unknown[])[0]));
+    expect(readDecisions(doc, atlasDoc())[reKeyId]).toEqual({ mode: "agentify", rationale: "he retypes it twice" });
+
+    // The operator takes that call back: still ONE row for the step, now cleared.
+    const next = writeDecision(doc, atlasDoc(), reKeyId, { mode: "" });
+    const rows = (next.decisions as Array<Record<string, unknown>>)
+      .filter((r) => r[DECISION_STEP_ID] === reKeyId);
+    expect(rows).toHaveLength(1);
+    expect(readDecisions(next, atlasDoc())[reKeyId]).toBeUndefined();
+  });
+
+  it("a row the Atlas holds no step for is left unanchored, never given a made-up id", () => {
+    const doc = {
+      decisions: [
+        { workflow: "Quote to cash", step: "Invent a step nobody does", mode: "agentify", rationale: "" },
+        { workflow: "A workflow the atlas never had", step: RE_KEY, mode: "keep", rationale: "" },
+      ],
+    };
+    edgeAnchor("agentify", doc, (atlasDoc().workflows as Array<Record<string, unknown>>));
+    for (const row of doc.decisions) expect(rec(row)[DECISION_STEP_ID]).toBeUndefined();
+    expect(readDecisions(doc, atlasDoc())).toEqual({});
+  });
+
+  it("an id already on a row is never re-derived, and a second pass changes nothing", () => {
+    const doc = generated() as unknown as Record<string, unknown>;
+    (doc.decisions as Array<Record<string, unknown>>)[0][DECISION_STEP_ID] = "el:step:already-decided";
+    edgeAnchor("agentify", doc, (atlasDoc().workflows as Array<Record<string, unknown>>));
+    expect((doc.decisions as Array<Record<string, unknown>>)[0][DECISION_STEP_ID]).toBe("el:step:already-decided");
+    const snapshot = structuredClone(doc);
+    edgeAnchor("agentify", doc, (atlasDoc().workflows as Array<Record<string, unknown>>));
+    expect(doc).toEqual(snapshot);
   });
 });
 

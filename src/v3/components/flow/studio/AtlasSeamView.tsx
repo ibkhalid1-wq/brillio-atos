@@ -88,6 +88,14 @@ interface SeamStep {
   /** Mark-dropped (soft): the step and its ledger claims stay findable. */
   dropped: boolean;
 }
+/**
+ * How a step is NAMED to a screen reader. The seam view draws every workflow at once,
+ * so "step 2" is ambiguous forty-six ways and only the pair (workflow, index) is not.
+ * Used for every per-step control's aria-label; the visible labels stay short because
+ * on screen the popover the control sits in already answers "which step".
+ */
+const stepOf = (wf: SeamWf, s: SeamStep) => `step ${s.index + 1} of ${wf.name}`;
+
 interface SeamCrossing { after: number; from: string; to: string; declared: boolean }
 interface SeamWf {
   wfIndex: number; name: string; handoffs: string[]; steps: SeamStep[];
@@ -331,9 +339,11 @@ export default function AtlasSeamView({
       {/* Findings — click one to filter the workflows below to just that issue. */}
       {(findings.gapSteps || findings.undeclared || findings.unseen) ? (
         <div className="v3fs-seam-findings" role="group" aria-label="Filter workflows by finding">
-          {findings.gapSteps ? <button type="button" aria-pressed={findingFilter === "gap"} className={`fnd gap${findingFilter === "gap" ? " on" : ""}`} onClick={() => setFindingFilter((f) => (f === "gap" ? null : "gap"))}>⚠ {findings.gapSteps} step{findings.gapSteps === 1 ? "" : "s"} reference an entity the ontology doesn’t hold</button> : null}
-          {findings.undeclared ? <button type="button" aria-pressed={findingFilter === "cross"} className={`fnd cross${findingFilter === "cross" ? " on" : ""}`} onClick={() => setFindingFilter((f) => (f === "cross" ? null : "cross"))}>◇ {findings.undeclared} crossing{findings.undeclared === 1 ? "" : "s"} with no declared hand-off</button> : null}
-          {findings.unseen ? <button type="button" aria-pressed={findingFilter === "unseen"} className={`fnd unseen${findingFilter === "unseen" ? " on" : ""}`} onClick={() => setFindingFilter((f) => (f === "unseen" ? null : "unseen"))}>↯ {findings.unseen} declared hand-off{findings.unseen === 1 ? "" : "s"} with no crossing in the steps</button> : null}
+          {/* The leading glyph is a severity cue for the eye and is hidden from the
+              reading order; the words after it already say the whole finding. */}
+          {findings.gapSteps ? <button type="button" aria-pressed={findingFilter === "gap"} className={`fnd gap${findingFilter === "gap" ? " on" : ""}`} onClick={() => setFindingFilter((f) => (f === "gap" ? null : "gap"))}><span aria-hidden="true">⚠</span> {findings.gapSteps} step{findings.gapSteps === 1 ? "" : "s"} reference an entity the ontology doesn’t hold</button> : null}
+          {findings.undeclared ? <button type="button" aria-pressed={findingFilter === "cross"} className={`fnd cross${findingFilter === "cross" ? " on" : ""}`} onClick={() => setFindingFilter((f) => (f === "cross" ? null : "cross"))}><span aria-hidden="true">◇</span> {findings.undeclared} crossing{findings.undeclared === 1 ? "" : "s"} with no declared hand-off</button> : null}
+          {findings.unseen ? <button type="button" aria-pressed={findingFilter === "unseen"} className={`fnd unseen${findingFilter === "unseen" ? " on" : ""}`} onClick={() => setFindingFilter((f) => (f === "unseen" ? null : "unseen"))}><span aria-hidden="true">↯</span> {findings.unseen} declared hand-off{findings.unseen === 1 ? "" : "s"} with no crossing in the steps</button> : null}
           {findingFilter ? <button type="button" className="v3fs-a v3fs-seam-fnd-clear" onClick={() => setFindingFilter(null)}>show all</button> : null}
         </div>
       ) : null}
@@ -365,7 +375,11 @@ export default function AtlasSeamView({
                       : <h4>{wf.name}</h4>}
                     {canEdit && onDismissWorkflow ? (
                       <span className="v3fs-seam-wf-dismiss">
-                        <DismissControl label="Dismiss" confirmLabel="Dismiss workflow"
+                        {/* One "Dismiss" per workflow on a page that draws fourteen of
+                            them: the label has to name the workflow it dismisses, or
+                            every one of the fourteen announces the same word. */}
+                        <DismissControl label="Dismiss" ariaLabel={`Dismiss the workflow ${wf.name}`}
+                          confirmLabel="Dismiss workflow"
                           onDismiss={(reason) => onDismissWorkflow(wf.wfIndex, reason)} />
                       </span>
                     ) : null}
@@ -403,9 +417,41 @@ export default function AtlasSeamView({
                       return (
                         <div key={`st-${s.index}`} className={`v3fs-seam-cell${out ? " out" : ""}`}
                           style={{ gridColumn: 2 + s.index * 2, gridRow: r + 1 }}>
+                          {/* A FOCUSABLE DIV THAT CLICKS OWES THE KEYBOARD WHAT THE
+                              MOUSE GETS. This tile was `tabIndex={0}` with an onClick
+                              and NO KEYDOWN AT ALL: a keyboard user could tab onto every
+                              step of every workflow, press Enter, and pin nothing — the
+                              popover holding the step's editor was mouse-only. Space is
+                              swallowed too, or it scrolls the page out from under the
+                              operator instead of pinning.
+
+                              DELIBERATELY NOT `role="button"`. The popover — five fields
+                              and three buttons — is rendered INSIDE this div (see
+                              `.v3fs-seam-tile:focus-within .v3fs-seam-pop`), and a
+                              role=button must not contain focusable descendants: some
+                              screen readers stop exposing the children of a button, so
+                              the label would be bought at the cost of the editor. The
+                              base stylesheet also puts `user-select:none` on every
+                              [role=button], which would make the evidence quote in that
+                              popover unselectable. The tile keeps its own aria-label and
+                              its own :focus-visible ring, which is where the value was.
+
+                              The `currentTarget` guard matters here more than anywhere
+                              else on this surface: every key pressed while editing a
+                              step bubbles back up to the tile, so without it typing a
+                              space into "Action" would unpin the popover being typed
+                              into. */}
                           <div className={`v3fs-seam-tile${s.missing.length ? " has-gap" : ""}${isPinned ? " pinned" : ""}${s.dropped ? " dropped" : ""}`} style={laneStyle(s.area)}
-                            tabIndex={0} aria-label={`Step ${s.index + 1}: ${s.action || "—"} — ${s.actor}`}
+                            tabIndex={0}
+                            aria-label={`${stepOf(wf, s)}: ${s.action || "—"} — ${s.actor}`}
                             onMouseEnter={placePop} onFocus={placePop}
+                            onKeyDown={(e) => {
+                              if (e.target !== e.currentTarget) return;
+                              if (e.key !== "Enter" && e.key !== " ") return;
+                              e.preventDefault();
+                              placePop(e);
+                              setPinned(isPinned ? null : stepKey);
+                            }}
                             onClick={(e) => { placePop(e); setPinned(isPinned ? null : stepKey); }}>
                             {/* Compact face: number + a one-line action. Everything else is on hover/focus. */}
                             <span className="v3fs-seam-tile-n" aria-hidden="true">{s.index + 1}</span>
@@ -419,28 +465,49 @@ export default function AtlasSeamView({
                                 <span className="v3fs-seam-pop-area" style={laneStyle(s.area)}>{s.area}</span>
                               </div>
                               {canEdit ? (
+                                // EVERY CONTROL IN HERE IS DRAWN ONCE PER STEP, and this
+                                // page draws forty-six of them at a time: the visible
+                                // <label> text is what the sighted operator needs (the
+                                // popover it sits in says which step), but in the tab
+                                // order it produced forty-six fields called "System" and
+                                // forty-six buttons called "Done". So each carries an
+                                // aria-label naming its step and workflow, and the
+                                // visible label stays exactly as short as it was.
                                 <div className="v3fs-seam-edit">
                                   <label><span>Action</span>
                                     <textarea rows={2} value={s.action} placeholder="what happens in this step"
+                                      aria-label={`${stepOf(wf, s)} — action`}
                                       onChange={(ev) => patchStepAbs(wf.wfIndex, s.index, { action: ev.target.value })} /></label>
                                   <label><span>Actor / lane</span>
                                     <input value={s.actor} placeholder="who performs it"
+                                      aria-label={`${stepOf(wf, s)} — actor or lane`}
                                       onChange={(ev) => patchStepAbs(wf.wfIndex, s.index, { actor: ev.target.value })} /></label>
                                   <label><span>System</span>
                                     <input value={s.system} placeholder="system of record"
+                                      aria-label={`${stepOf(wf, s)} — system of record`}
                                       onChange={(ev) => patchStepAbs(wf.wfIndex, s.index, { system: ev.target.value })} /></label>
                                   <label><span>Entities</span>
                                     <input value={s.entities.join(", ")} placeholder="comma-separated"
+                                      aria-label={`${stepOf(wf, s)} — entities it touches`}
                                       onChange={(ev) => patchStepAbs(wf.wfIndex, s.index, { entities: ev.target.value.split(",").map((x) => x.trim()).filter(Boolean) })} /></label>
                                   <label><span>Evidence</span>
                                     <textarea rows={2} value={s.evidence} placeholder="the quote this step rests on"
+                                      aria-label={`${stepOf(wf, s)} — the evidence it rests on`}
                                       onChange={(ev) => patchStepAbs(wf.wfIndex, s.index, { evidence: ev.target.value })} /></label>
                                   <div className="v3fs-seam-edit-acts">
-                                    <button type="button" className="v3fs-a" onClick={() => addStepAfter(wf.wfIndex, s.index, s.area)}>＋ Step after</button>
+                                    <button type="button" className="v3fs-a" aria-label={`Insert a new step after ${stepOf(wf, s)}`}
+                                      onClick={() => addStepAfter(wf.wfIndex, s.index, s.area)}>
+                                      <span aria-hidden="true">＋</span> Step after</button>
                                     <button type="button" className="v3fs-seam-del" onClick={() => dropStepAbs(wf.wfIndex, s.index, s.dropped)}
+                                      aria-label={s.dropped
+                                        ? `Restore ${stepOf(wf, s)} — put it back in the workflow`
+                                        : `Mark ${stepOf(wf, s)} dropped — reversible, and it keeps its claims`}
                                       title={s.dropped ? "Restore this step" : "Mark dropped — the step's claims stay findable (not hard-deleted)"}>
-                                      {s.dropped ? "↩ Restore step" : "⊘ Mark step dropped"}</button>
-                                    <button type="button" className="v3fs-a" onClick={() => setPinned(null)}>Done</button>
+                                      {s.dropped
+                                        ? <><span aria-hidden="true">↩</span> Restore step</>
+                                        : <><span aria-hidden="true">⊘</span> Mark step dropped</>}</button>
+                                    <button type="button" className="v3fs-a" aria-label={`Done editing ${stepOf(wf, s)}`}
+                                      onClick={() => setPinned(null)}>Done</button>
                                   </div>
                                 </div>
                               ) : (

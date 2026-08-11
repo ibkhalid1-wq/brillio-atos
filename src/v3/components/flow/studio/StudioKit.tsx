@@ -64,25 +64,40 @@ export function curationNote(doc: Record<string, unknown>, action: string, reaso
  * is never accidental and always carries its rationale onto the trail. Hidden
  * when the studio is hard-locked.
  */
-export function DismissControl({ label, confirmLabel, onDismiss }: {
-  label: string; confirmLabel?: string; onDismiss: (reason: string) => void;
+export function DismissControl({ label, ariaLabel, confirmLabel, onDismiss }: {
+  label: string;
+  /**
+   * What a screen reader hears, for callers whose visible `label` is too short to say
+   * WHICH thing is being dismissed. The seam view lists fourteen workflows and so
+   * draws fourteen buttons all reading "Dismiss": on screen the row they sit in tells
+   * them apart, in the tab order nothing does. A caller with one dismiss on the page
+   * leaves this off and the visible label stands.
+   */
+  ariaLabel?: string;
+  confirmLabel?: string;
+  onDismiss: (reason: string) => void;
 }) {
   const locked = useStudioLocked();
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
+  // The reason field and the two verbs are inside the same widget, so they inherit
+  // the same disambiguation — otherwise dismissing workflow 3 opens a "Cancel" that
+  // is indistinguishable from workflow 9's.
+  const named = ariaLabel ?? label;
   if (locked) return null;
   if (!open) {
-    return <button type="button" className="v3fs-btn danger" onClick={() => setOpen(true)}>{label}</button>;
+    return <button type="button" className="v3fs-btn danger" aria-label={named} onClick={() => setOpen(true)}>{label}</button>;
   }
   return (
-    <div className="v3fs-dismiss" role="group" aria-label={label}>
-      <input className="v3fs-dismiss-in" autoFocus value={reason}
+    <div className="v3fs-dismiss" role="group" aria-label={named}>
+      <input className="v3fs-dismiss-in" autoFocus value={reason} aria-label={`${named} — reason`}
         placeholder="Why is this being removed? (recorded on the trail)"
         onChange={(e) => setReason(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Enter" && reason.trim()) { onDismiss(reason.trim()); setOpen(false); setReason(""); } }} />
-      <button type="button" className="v3fs-btn danger" disabled={!reason.trim()}
+      <button type="button" className="v3fs-btn danger" disabled={!reason.trim()} aria-label={`${named} — confirm`}
         onClick={() => { onDismiss(reason.trim()); setOpen(false); setReason(""); }}>{confirmLabel ?? "Confirm dismiss"}</button>
-      <button type="button" className="v3fs-btn" onClick={() => { setOpen(false); setReason(""); }}>Cancel</button>
+      <button type="button" className="v3fs-btn" aria-label={`${named} — cancel`}
+        onClick={() => { setOpen(false); setReason(""); }}>Cancel</button>
     </div>
   );
 }

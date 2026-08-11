@@ -187,7 +187,23 @@ export default function AtlasLifecycleGrid({ doc, program, frameAreas, onPickWor
                     <div key={cellKey} className={`v3fs-lgrid-cell${cell.length ? "" : " is-empty"}${seamish ? " is-seam" : ""}`}
                       data-cell={cellKey} data-phase={String(depth)} data-area={area}>
                       {cell.map((g) => (
+                        // NAMED, never read off its own face. The chip stacks a workflow
+                        // name, a derived-from marker and up to three count badges, and
+                        // a name computed from all of that ran them together as
+                        // "Escalation Management°Escalation→Sales◇1" — degree sign,
+                        // rightwards arrow and white diamond, each announced by its
+                        // Unicode name in the middle of the words. The badges are a
+                        // visual shorthand; this spells out what they abbreviate.
                         <button key={g.wfIndex} type="button" className="v3fs-lgrid-chip" style={chipStyle(area)}
+                          aria-label={[
+                            `Open the workflow ${g.name}`,
+                            g.viaEntity ? `placed here via ${g.viaEntity}` : "",
+                            g.crossAreas.filter((a) => a !== area).length
+                              ? `crosses into ${g.crossAreas.filter((a) => a !== area).join(", ")}` : "",
+                            g.gapSteps > 0 ? `${g.gapSteps} step${g.gapSteps === 1 ? "" : "s"} reference an entity the ontology lacks` : "",
+                            g.undeclared > 0 ? `${g.undeclared} area crossing${g.undeclared === 1 ? "" : "s"} with no declared hand-off` : "",
+                            g.unseenHandoffs > 0 ? `${g.unseenHandoffs} declared hand-off${g.unseenHandoffs === 1 ? "" : "s"} with no actual crossing` : "",
+                          ].filter(Boolean).join(" — ")}
                           onClick={() => onPickWorkflow?.(g.wfIndex)} title={`${g.name} — phase ${g.phase} derived from ${g.viaEntity} (${g.viaCount}×)`}>
                           <span className="v3fs-lgrid-chip-name">{g.name}</span>
                           <span className="v3fs-lgrid-chip-meta">

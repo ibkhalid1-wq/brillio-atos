@@ -97,6 +97,15 @@ export function GapRoutingEditor({ values, onChange, program, movementId, gapRou
         // In overlay mode the redirect the operator set wins over the generator's
         // own addressee; fall back to the addressee baked into the item string.
         const who = overlay ? (gapRoutes?.[gapRouteKey(gap)] ?? parsed.who) : parsed.who;
+        // WHICH GAP THIS ROW IS. The column header names the columns once and is
+        // aria-hidden; every row below it then produced a "Gap" field and a "Redirect
+        // to stakeholder or role" field with no way to tell the tenth from the first.
+        // The gap's own text is the only thing that distinguishes them, so it is what
+        // the labels carry — trimmed, because some of these run to a paragraph, and
+        // falling back to the row number when a freshly-added gap is still blank.
+        const rowName = parsed.text.trim()
+          ? `“${parsed.text.trim().slice(0, 60)}${parsed.text.trim().length > 60 ? "…" : ""}”`
+          : `the blank gap in row ${index + 1}`;
         return (
           // Hover lands on the ROW, not the input — a disabled input (overlay
           // mode) swallows mouse events, and that's exactly where peeks matter.
@@ -108,13 +117,14 @@ export function GapRoutingEditor({ values, onChange, program, movementId, gapRou
               setPeek({ text: parsed.text, x: rect.left, y: rect.bottom + 6 });
             }}
             onMouseLeave={() => setPeek(null)}>
-            <input style={{ flexGrow: 2, flexBasis: 0 }} value={parsed.text} placeholder={placeholder} aria-label="Gap"
+            <input style={{ flexGrow: 2, flexBasis: 0 }} value={parsed.text} placeholder={placeholder}
+              aria-label={`Gap ${index + 1} of ${values.length}`}
               disabled={overlay || locked} readOnly={overlay}
               onChange={(e) => set(index, composeGap(e.target.value, who))} />
             {overlay ? (
               <div className={`v3fs-gaprt-who${who ? " on" : ""}`} style={{ flexGrow: 1, flexBasis: 0 }}>
                 <span className="v3fs-gaprt-ic" aria-hidden="true">{who ? "→" : "○"}</span>
-                <select value={who} aria-label="Redirect to stakeholder or role" onChange={(e) => onRoute!(gap, e.target.value)}>
+                <select value={who} aria-label={`Redirect ${rowName} to a stakeholder or role`} onChange={(e) => onRoute!(gap, e.target.value)}>
                   <option value="">— unassigned (movement-wide) —</option>
                   {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                   {who && !options.some((o) => o.value === who) ? <option value={who}>{who}</option> : null}
@@ -123,17 +133,18 @@ export function GapRoutingEditor({ values, onChange, program, movementId, gapRou
             ) : (
               <div className="v3fs-gaprt-who" style={{ flexGrow: 1, flexBasis: 0 }}>
                 <span className="v3fs-gaprt-ic" aria-hidden="true">{who ? "→" : "○"}</span>
-                <input list={listId} value={who} placeholder="unassigned" aria-label="Redirect to stakeholder or role" disabled={locked}
+                <input list={listId} value={who} placeholder="unassigned" disabled={locked}
+                  aria-label={`Redirect ${rowName} to a stakeholder or role`}
                   onChange={(e) => set(index, composeGap(parsed.text, e.target.value))} />
               </div>
             )}
-            {overlay || locked ? null : <button type="button" className="v3fs-stu-x v3fs-stu-xcol" aria-label="Remove gap" onClick={() => remove(index)}>×</button>}
+            {overlay || locked ? null : <button type="button" className="v3fs-stu-x v3fs-stu-xcol" aria-label={`Remove ${rowName}`} onClick={() => remove(index)}>×</button>}
           </div>
         );
       })}
 
       {overlay ? null : <datalist id={listId}>{options.map((o) => <option key={o.value} value={o.value} />)}</datalist>}
-      {overlay || locked ? null : <button type="button" className="v3fs-a" onClick={() => onChange([...values, ""])}>＋ {addLabel}</button>}
+      {overlay || locked ? null : <button type="button" className="v3fs-a" aria-label={addLabel} onClick={() => onChange([...values, ""])}><span aria-hidden="true">＋</span> {addLabel}</button>}
       {peek ? (
         <div className="v3fs-gaprt-peek" role="presentation"
           style={{ left: Math.min(peek.x, Math.max(8, window.innerWidth - 440)), top: peek.y }}>

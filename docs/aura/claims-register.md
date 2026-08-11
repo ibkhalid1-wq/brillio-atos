@@ -219,10 +219,13 @@ into those steps' definitions of done — not touched here.
 
 ### 18 · Agentify: "one plain sentence: why this call, grounded in the pain, the wait or the judgement"
 - **Where:** `supabase/functions/run-agent/index.ts` (agentify system prompt, the JSON
-  template's `modeRationale` field — **model-facing**).
-- **Added 2026-08-11.** Agentify is Listen's third artifact: it carries every Current-State
-  Atlas workflow step forward and records the call on it — automate / assist / keep manual.
-  `modeRationale` is where the model must say WHY, and the word chosen was *grounded*.
+  template's `rationale` field — **model-facing**).
+- **Added 2026-08-11.** Agentify is Listen's third artifact: it records the call on each
+  Current-State Atlas step — automate / assist / keep manual. `rationale` is where the model
+  must say WHY, and the word chosen was *grounded*. (Moved 2026-08-11, same claim and same
+  status: the generator now emits `decisions[]` naming the step it decides about instead of a
+  copy of the Atlas's workflows, so the field is a decision's `rationale` rather than a step's
+  `modeRationale`. What the sentence may cite did not change.)
 - **What it asserts, and its bound.** *Grounded* here means one specific, checkable thing: the
   reason must cite something already on the record — a pain in the Atlas's `painHeatmap`, a
   stated duration, or the judgement the step's own verb carries. It does **not** assert a

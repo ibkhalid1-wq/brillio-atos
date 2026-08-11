@@ -53,9 +53,17 @@ export function SourceTag({ source }: { source: string }) {
 
 // ── contradiction badge — two live claims; reads as a routable item, not an error ──
 export function ContradictionBadge({ count, escalate, onClick }: { count: number; escalate?: "slot-owner" | "legal-compliance"; onClick?: () => void }) {
-  const label = escalate ? `escalate → ${escalate === "legal-compliance" ? "Legal" : "owner"}` : `${count} live claims`;
+  const to = escalate === "legal-compliance" ? "Legal" : "owner";
+  const label = escalate ? `escalate → ${to}` : `${count} live claims`;
   return (
-    <button type="button" className={`v3lc-contra${escalate ? " is-escalate" : ""}`} onClick={onClick} title={`${count} live claims on one locus — ${escalate ? "escalated" : "routable contradiction"}`}>
+    // The ⇄ and the › were already hidden, but the ARROW INSIDE the visible label was
+    // not, so this announced "escalate, rightwards arrow, owner". The visible text is
+    // left exactly as it was and the spoken form spells the arrow out as "to".
+    <button type="button" className={`v3lc-contra${escalate ? " is-escalate" : ""}`} onClick={onClick}
+      aria-label={escalate
+        ? `Escalate to ${to} — ${count} live claims on one locus`
+        : `${count} live claims on one locus — a routable contradiction`}
+      title={`${count} live claims on one locus — ${escalate ? "escalated" : "routable contradiction"}`}>
       <span aria-hidden="true">⇄</span> {label} <span className="v3lc-contra-go" aria-hidden="true">›</span>
     </button>
   );
