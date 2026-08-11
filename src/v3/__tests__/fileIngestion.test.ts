@@ -186,86 +186,123 @@ describe("edge attachment — office route", () => {
   });
 
   /**
-   * FINDING E1 — an Excel-shaped workbook (shared string table) extracts to an
-   * UNUSABLE blob. `officeText` reads ONLY `xl/sharedStrings.xml`, which is the
-   * deduplicated string POOL: no sheet names attached to values, no rows, no
-   * columns, and NO NUMBERS (numeric cells live in the sheet XML). Worse, the
-   * pool contains no `</row>` element, so the paragraph splitter finds a single
-   * part and joins every string with the EMPTY separator — one glued line.
+   * WAS FINDING E1 — an Excel-shaped workbook (shared string table) extracted to
+   * an UNUSABLE 262-char blob, because `officeText` read ONLY the DEDUPLICATED
+   * string pool `xl/sharedStrings.xml`: no sheet names attached to values, no
+   * rows, no columns, and NO NUMBERS (numeric cells live in the sheet XML and
+   * never enter the pool). The pool has no `</row>` element either, so the
+   * paragraph splitter found a single part and joined every string with the EMPTY
+   * separator — one glued line for the whole book.
+   *
+   * `sheetText` now resolves each cell IN its sheet, IN its row, IN its column.
    */
-  it("xlsx multi-tab (Excel-shaped, shared strings): extracts a glued, deduplicated, number-free blob", async () => {
+  it("xlsx multi-tab (Excel-shaped, shared strings): every tab named, every row a row, every number kept", async () => {
     const bytes = makeMultiTabWorkbook("xlsx", true);
     const res = await run(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "dictionary.xlsx");
     judge("dictionary.xlsx (3 tabs, SST)", "office", res);
+    expect(res.method).toBe("office-xml");
 
-    expect(res.text).toContain("account_name");                  // strings do come through…
-    for (const n of ["255", "320", "12"]) expect(res.text).not.toContain(n);  // …numbers do not
-    expect(res.text.split("\n").length).toBe(1);                // ONE glued line for the whole book
-    expect(res.text).toContain("EntityFieldType");               // adjacent header cells run together
-    expect(res.text).toContain("Acme CRM");                      // cover-sheet prose merged with the table
-    // Deduplicated: "Account" is the entity on THREE rows but appears once, so
-    // row structure and row counts are unrecoverable from the extraction.
-    expect((res.text.match(/Account(?!_)/g) ?? []).length).toBe(1);
-    RESULTS[RESULTS.length - 1].outcome = "WRONG CONTENT";
-    RESULTS[RESULTS.length - 1].detail += " — 1 glued line, numbers dropped, strings deduped, no sheet attribution";
+    // All three tabs, named, in WORKBOOK order — not filename order, not a merge.
+    expect(res.text.match(/^=== Sheet: .+ ===$/gm)).toEqual([
+      "=== Sheet: Cover ===", "=== Sheet: Notes ===", "=== Sheet: Field Dictionary ===",
+    ]);
+    for (const n of ["255", "12", "18", "320"]) expect(res.text).toContain(n);   // numbers survive
+    // Rows are rows and columns are columns; the blank D cell stays a GAP, so the
+    // "Required" value never slides into the "Allowed Values" column.
+    expect(res.text).toContain("Entity\tField\tType\tAllowed Values\tRequired\tMax Length");
+    expect(res.text).toContain("Account\taccount_name\tstring\t\tYes\t255");
+    expect(res.text).toContain("Account\tstatus\tcode\tActive|Churned|Prospect\tYes\t12");
+    expect(res.text).toContain("Contact\tconsent_flag\tboolean\ttrue|false\tNo\t5");
+    // De-duplication is undone: "Account" is the entity on THREE rows and says so.
+    expect((res.text.match(/^Account\t/gm) ?? []).length).toBe(3);
+    // Cover prose stays attributed to the cover instead of being glued to the
+    // table: the block under each heading holds only that tab's cells.
+    const [cover, notes, dict] = res.text.split(/^=== Sheet: .+ ===$/gm).slice(1);
+    expect(cover).toContain("Acme CRM");
+    expect(cover).not.toContain("Entity");
+    expect(notes.trim()).toBe("Release notes\nv3 adds the consent flags");
+    expect(dict.trim().split("\n").length).toBe(6);              // header + 5 field rows
   });
 
   /**
-   * FINDING E2 — an inline-string workbook (SheetJS, many BI exporters, ODS→XLSX
-   * converters) has NO `xl/sharedStrings.xml`. `officeText` therefore reads
-   * nothing at all and the caller is told the document contains no text — while
-   * `pickDictionarySheet` reads the very same bytes perfectly (see the client
-   * suite below). The failure is visible, but the message is a lie.
+   * WAS FINDING E2 — an inline-string workbook (SheetJS, many BI exporters,
+   * ODS→XLSX converters) has NO `xl/sharedStrings.xml`, so `officeText` read
+   * nothing at all and the caller was told the document contains no text — a 422
+   * over bytes `pickDictionarySheet` read perfectly (see the client suite below).
+   * The failure was visible, but the message was a lie.
+   *
+   * Values now come from the CELLS, so whether a pool exists no longer decides.
    */
-  it("xlsx multi-tab (inline strings, no SST): extracts NOTHING and reports 'no readable text'", async () => {
+  it("xlsx multi-tab (inline strings, no SST): identical rows to the shared-string build", async () => {
     const bytes = makeMultiTabWorkbook("xlsx", false);
     const res = await run(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "inline.xlsx");
-    expect(res.text).toBeUndefined();
-    expect(res.status).toBe(422);
-    expect(res.error).toBe("No readable text found inside the document.");
     judge("inline.xlsx (3 tabs, no SST)", "office", res);
-    RESULTS[RESULTS.length - 1].detail += " — but the SAME bytes parse to 5 fields on the client path";
+    expect(res.method).toBe("office-xml");
+    expect(res.text).toContain("Account\taccount_name\tstring\t\tYes\t255");
+    // The two ENCODINGS of the same workbook must extract to the SAME text — that
+    // equality is the point: how a producer stores its strings is not content.
+    const sst = await run(makeMultiTabWorkbook("xlsx", true),
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "dictionary.xlsx");
+    expect(res.text).toBe(sst.text);
+    RESULTS[RESULTS.length - 1].detail += " — byte-identical to the shared-string build";
   });
 
-  it("xlsx with ONLY numeric cells extracts nothing — visible, and arguably correct", async () => {
+  it("xlsx with ONLY numeric cells extracts the numbers — they ARE the document", async () => {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([[1, 2, 3], [4, 5, 6]]), "Sheet1");
     const bytes = new Uint8Array(XLSX.write(wb, { type: "array", bookType: "xlsx", bookSST: true }));
     const res = await run(bytes, "", "numbers.xlsx");
-    expect(res.status).toBe(422);
+    expect(res.text).toBe("=== Sheet: Sheet1 ===\n1\t2\t3\n4\t5\t6");
     judge("numbers-only.xlsx", "office", res);
   });
 
   /**
-   * FINDING H1 — THE FALLBACK HEURISTIC LAUNDERS BINARY INTO "TEXT".
+   * WAS FINDING H1 — THE FALLBACK HEURISTIC LAUNDERED BINARY INTO "TEXT".
    *
-   * `.xlsm` is not in OFFICE_EXTS, so with an empty mime the workbook falls to
-   * the trailing salvage branch. That branch strips the class
+   * `.xlsm` was not in OFFICE_EXTS, so with an empty mime the workbook fell to the
+   * trailing salvage branch. That branch strips the class
    * `[^ \x20-\x7E \s \u00a0-\uffff ]` (spaces added here only for legibility)
-   * and accepts anything ≥90% "printable" — but decoding arbitrary bytes as UTF-8
-   * yields U+FFFD replacement characters, and U+FFFD sits INSIDE the kept
-   * \u00a0 to \uffff range.
-   * So the filter removes almost nothing, the ratio passes, and 19 KB of zip
-   * garbage is returned as `{ method: "decoded" }` — a confident success over
-   * content that is not the document. Any binary above the 40-char floor lands
-   * here; only tiny ones (like the 8-byte .dwg below) are correctly refused.
+   * and accepts anything >=90% "printable" — but decoding arbitrary bytes as UTF-8
+   * yields U+FFFD replacement characters, and U+FFFD sat INSIDE the kept
+   * \u00a0 to \uffff range. So the filter removed almost nothing, the ratio
+   * passed, and 19 KB of zip garbage came back as `{ method: "decoded" }` — a
+   * confident success over content that is not the document.
+   *
+   * TWO fixes, because either alone leaves the other half open: `.xlsm`/`.xlsb`
+   * now route by EXTENSION into the office branch, AND the salvage branch refuses
+   * a ZIP container outright (see the .zip case in the adversarial suite).
    */
-  it("xlsm with an empty mime is 'salvaged' into replacement-character garbage", async () => {
+  it("xlsm with an empty mime routes by EXTENSION to the office branch, never salvaged as ZIP bytes", async () => {
     const bytes = makeMultiTabWorkbook("xlsm", true);
     const res = await run(bytes, "", "macro.xlsm");
-    expect(res.method).toBe("decoded");                 // NOT office-xml, NOT rejected
+    expect(res.method).toBe("office-xml");                       // NOT "decoded"
     expect(res.error).toBeUndefined();
-    expect(res.text.length).toBeGreaterThan(10_000);
-    // The proof it is container bytes, not document text: it opens with the ZIP
-    // local-file signature and carries internal OOXML part paths, and half of it
-    // is non-ASCII mojibake from decoding deflate streams as UTF-8.
-    expect(res.text.startsWith("PK")).toBe(true);               // ZIP local-file signature
-    expect(res.text).toContain("xl/_rels/workbook.xml.rels");    // internal OOXML part paths
-    expect(res.text).toContain("[Content_Types].xml");
-    expect(res.text).toContain("�");                        // decode damage, not prose
-    judge("macro.xlsm (mime empty)", "heuristic", res);
-    RESULTS[RESULTS.length - 1].outcome = "WRONG CONTENT";
-    RESULTS[RESULTS.length - 1].detail += " — raw ZIP container bytes, not cell values";
+    expect(res.text.startsWith("PK")).toBe(false);               // no ZIP local-file signature
+    expect(res.text).not.toContain("xl/_rels/workbook.xml.rels"); // no internal part paths
+    expect(res.text).not.toContain("[Content_Types].xml");
+    expect(res.text).not.toContain("\ufffd");                     // no decode damage
+    expect(res.text).toContain("Account\taccount_name\tstring\t\tYes\t255");
+    // An absent mime must change only HOW the file was routed, never WHAT was read.
+    const withMime = await run(bytes, "application/vnd.ms-excel.sheet.macroEnabled.12", "macro.xlsm");
+    expect(res.text).toBe(withMime.text);
+    judge("macro.xlsm (mime empty)", "office", res);
+  });
+
+  /**
+   * `.xlsb` is a ZIP too, but its sheets are BIFF12 RECORDS in `.bin` parts — there
+   * is no XML to read. With an empty mime it used to become 19 KB of container
+   * mojibake; the honest answer names the format and the way out.
+   */
+  it("xlsb reports a binary workbook instead of emitting its container bytes", async () => {
+    const bytes = makeMultiTabWorkbook("xlsb", true);
+    for (const mime of ["", "application/vnd.ms-excel.sheet.binary.macroEnabled.12"]) {
+      const res = await run(bytes, mime, "dictionary.xlsb");
+      expect(res.text).toBeUndefined();
+      expect(res.status).toBe(415);
+      expect(res.error).toMatch(/binary format \(\.xlsb\)/);
+      expect(res.error).toMatch(/re-save it as \.xlsx/);
+    }
+    judge("dictionary.xlsb (edge)", "office", await run(bytes, "", "dictionary.xlsb"));
   });
 
   it("xlsm WITH the browser-supplied mime does reach the office route", async () => {
@@ -294,6 +331,201 @@ describe("edge attachment — office route", () => {
     expect(res.error).toBeTruthy();
     judge("legacy.xls", "office", res);
   });
+});
+
+/**
+ * THE SPREADSHEET BRANCH, against HAND-BUILT SpreadsheetML.
+ *
+ * SheetJS will not emit several of the shapes real exporters do (true inline
+ * strings, date-styled serials, rels that do not follow filename order, namespace
+ * prefixes, empty tabs), so these workbooks are written by hand: the bytes are the
+ * spec, not a second library's opinion of it.
+ */
+const SS_NS = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" ' +
+  'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
+const REL_NS = 'xmlns="http://schemas.openxmlformats.org/package/2006/relationships"';
+const WORKSHEET_REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet";
+
+interface RawTab { name: string; part: string; rows: string }
+function makeRawWorkbook(tabs: RawTab[], extra: Record<string, string> = {}): Uint8Array {
+  const files: Record<string, Uint8Array> = { "[Content_Types].xml": strToU8('<?xml version="1.0"?><Types/>') };
+  files["xl/workbook.xml"] = strToU8(`<?xml version="1.0"?><workbook ${SS_NS}><sheets>` +
+    tabs.map((t, i) => `<sheet name="${t.name}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join("") +
+    `</sheets></workbook>`);
+  files["xl/_rels/workbook.xml.rels"] = strToU8(`<?xml version="1.0"?><Relationships ${REL_NS}>` +
+    tabs.map((t, i) => `<Relationship Id="rId${i + 1}" Type="${WORKSHEET_REL}" Target="${t.part}"/>`).join("") +
+    `</Relationships>`);
+  for (const t of tabs) {
+    files[`xl/${t.part}`] = strToU8(`<?xml version="1.0"?><worksheet ${SS_NS}><sheetData>${t.rows}</sheetData></worksheet>`);
+  }
+  for (const [name, xml] of Object.entries(extra)) files[name] = strToU8(xml);
+  return zipSync(files);
+}
+/** An inline-string cell — `<is>`, which is NOT the same thing as a `t="str"` cell. */
+const inl = (ref: string, text: string) => `<c r="${ref}" t="inlineStr"><is><t>${text}</t></is></c>`;
+const sheetOf = (text: string, name: string): string =>
+  (text.split(/^=== Sheet: .+ ===$/gm)[text.split("\n").filter((l) => /^=== Sheet: /.test(l))
+    .findIndex((l) => l === `=== Sheet: ${name} ===`) + 1] ?? "").trim();
+
+describe("edge attachment — spreadsheet branch", () => {
+  const xlsx = (bytes: Uint8Array, name = "book.xlsx") =>
+    run(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", name);
+
+  /**
+   * `sheet3.xml` is not the third tab. Sheet ORDER and NAMES come from
+   * `workbook.xml`, and which PART each name points at comes from the rels —
+   * getting this from filenames would attribute rows to the wrong tab, which is
+   * worse than no attribution because it reads as fact.
+   */
+  it("attributes each block by workbook order and rels, not by part filename", async () => {
+    const bytes = makeRawWorkbook([
+      { name: "Field Dictionary", part: "worksheets/sheet9.xml", rows: `<row r="1">${inl("A1", "Entity")}${inl("B1", "Field")}</row>` },
+      { name: "R&amp;D &lt;draft&gt;", part: "worksheets/sheet1.xml", rows: `<row r="1">${inl("A1", "Prototype")}</row>` },
+    ]);
+    const res = await xlsx(bytes, "shuffled.xlsx");
+    judge("shuffled.xlsx (rels out of order)", "office", res);
+    expect(res.text.match(/^=== Sheet: .+ ===$/gm)).toEqual([
+      "=== Sheet: Field Dictionary ===", "=== Sheet: R&D <draft> ===",   // names are XML-decoded
+    ]);
+    expect(sheetOf(res.text, "Field Dictionary")).toBe("Entity\tField");
+    expect(sheetOf(res.text, "R&D <draft>")).toBe("Prototype");
+  });
+
+  it("reads inline strings, including multi-run ones", async () => {
+    const bytes = makeRawWorkbook([{
+      name: "Inline", part: "worksheets/sheet1.xml",
+      rows: `<row r="1">${inl("A1", "Consent")}<c r="B1" t="inlineStr"><is><r><t>opt</t></r><r><t xml:space="preserve">-in</t></r></is></c></row>`,
+    }]);
+    const res = await xlsx(bytes, "inline-str.xlsx");
+    judge("inline-str.xlsx", "office", res);
+    expect(sheetOf(res.text, "Inline")).toBe("Consent\topt-in");
+  });
+
+  it("keeps column position: interior gaps stay gaps, trailing blanks are trimmed", async () => {
+    const bytes = makeRawWorkbook([{
+      name: "Gaps", part: "worksheets/sheet1.xml",
+      rows: `<row r="1">${inl("A1", "A")}${inl("D1", "D")}<c r="F1" s="2"/></row>`,
+    }]);
+    const res = await xlsx(bytes, "gaps.xlsx");
+    // A .. D is three tabs of gap, so a downstream reader can still count columns;
+    // the empty F cell adds nothing and is not padded out.
+    expect(sheetOf(res.text, "Gaps")).toBe("A\t\t\tD");
+  });
+
+  it("renders booleans, cached formula strings, error cells and typed dates", async () => {
+    const bytes = makeRawWorkbook([{
+      name: "Types", part: "worksheets/sheet1.xml",
+      rows: `<row r="1"><c r="A1" t="b"><v>1</v></c><c r="B1" t="b"><v>0</v></c>` +
+        `<c r="C1" t="e"><v>#REF!</v></c><c r="D1" t="str"><v>Acme &amp; Co</v></c>` +
+        `<c r="E1" t="d"><v>2026-11-02</v></c></row>`,
+    }]);
+    const res = await xlsx(bytes, "types.xlsx");
+    judge("types.xlsx (b/e/str/d cells)", "office", res);
+    expect(sheetOf(res.text, "Types")).toBe("TRUE\tFALSE\t#REF!\tAcme & Co\t2026-11-02");
+  });
+
+  /**
+   * A date in a workbook is a NUMBER plus a style. Emitting "46245" into a model
+   * prompt is not a lossy rendering of 2026-08-11, it is a different figure — the
+   * same class of defect as dropping the cell. So `s=` is resolved through
+   * `cellXfs` to a `numFmtId`, and only a date format converts.
+   */
+  it("date-styled serials become dates; the same serial without a date style stays a number", async () => {
+    const styles = '<?xml version="1.0"?><styleSheet ' + SS_NS + '>' +
+      '<numFmts count="1"><numFmt numFmtId="164" formatCode="yyyy\\-mm\\-dd"/></numFmts>' +
+      '<cellXfs count="4"><xf numFmtId="0"/><xf numFmtId="14" applyNumberFormat="1"/>' +
+      '<xf numFmtId="164" applyNumberFormat="1"/><xf numFmtId="3"/></cellXfs></styleSheet>';
+    const bytes = makeRawWorkbook([{
+      name: "Dates", part: "worksheets/sheet1.xml",
+      rows: `<row r="1"><c r="A1" s="1"><v>46245</v></c><c r="B1" s="2"><v>46328</v></c>` +
+        `<c r="C1" s="0"><v>46245</v></c><c r="D1" s="3"><v>255</v></c></row>`,
+    }], { "xl/styles.xml": styles });
+    const res = await xlsx(bytes, "dates.xlsx");
+    judge("dates.xlsx (numFmt-styled serials)", "office", res);
+    // built-in date fmt 14 · custom date fmt 164 · General · a thousands format
+    expect(sheetOf(res.text, "Dates")).toBe("2026-08-11\t2026-11-02\t46245\t255");
+  });
+
+  it("resolves shared strings through the pool, decodes entities and skips phonetic runs", async () => {
+    // `<si/>` is a REAL shape and it occupies an index — miss it and every cell
+    // after it resolves to the wrong string.
+    const sst = '<?xml version="1.0"?><sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+      '<si/><si><t>R&amp;D &lt;core&gt;</t></si>' +
+      '<si><t>Tokyo</t><rPh sb="0" eb="2"><t>PHONETIC</t></rPh><phoneticPr fontId="1"/></si></sst>';
+    const bytes = makeRawWorkbook([{
+      name: "Pool", part: "worksheets/sheet1.xml",
+      rows: `<row r="1"><c r="A1" t="s"><v>1</v></c><c r="B1" t="s"><v>2</v></c></row>`,
+    }], { "xl/sharedStrings.xml": sst });
+    const res = await xlsx(bytes, "pool.xlsx");
+    judge("pool.xlsx (entities, rPh, empty si)", "office", res);
+    expect(sheetOf(res.text, "Pool")).toBe("R&D <core>\tTokyo");
+  });
+
+  it("reads namespace-prefixed SpreadsheetML", async () => {
+    const sst = '<?xml version="1.0"?><x:sst xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+      '<x:si><x:t>Prefixed</x:t></x:si></x:sst>';
+    const bytes = makeRawWorkbook([{
+      name: "Prefixed", part: "worksheets/sheet1.xml",
+      rows: `<x:row r="1"><x:c r="A1" t="s"><x:v>0</x:v></x:c><x:c r="B1"><x:v>7</x:v></x:c></x:row>`,
+    }], { "xl/sharedStrings.xml": sst });
+    const res = await xlsx(bytes, "prefixed.xlsx");
+    judge("prefixed.xlsx (x: namespace)", "office", res);
+    expect(sheetOf(res.text, "Prefixed")).toBe("Prefixed\t7");
+  });
+
+  it("an empty tab SAYS it is empty rather than leaving a bare heading", async () => {
+    const bytes = makeRawWorkbook([
+      { name: "Data", part: "worksheets/sheet1.xml", rows: `<row r="1">${inl("A1", "Entity")}</row>` },
+      { name: "Blank", part: "worksheets/sheet2.xml", rows: "" },
+      { name: "AlsoBlank", part: "worksheets/sheet3.xml", rows: `<row r="1"><c r="A1" s="1"/></row>` },
+    ]);
+    const res = await xlsx(bytes, "half-empty.xlsx");
+    judge("half-empty.xlsx", "office", res);
+    expect(res.text).toContain("=== Sheet: Blank ===\n(no cells)");
+    expect(res.text).toContain("=== Sheet: AlsoBlank ===\n(no cells)");
+    expect(sheetOf(res.text, "Data")).toBe("Entity");
+  });
+
+  it("a workbook whose every tab is empty fails visibly instead of returning nothing", async () => {
+    const bytes = makeRawWorkbook([
+      { name: "Blank", part: "worksheets/sheet1.xml", rows: "" },
+      { name: "AlsoBlank", part: "worksheets/sheet2.xml", rows: "" },
+    ]);
+    const res = await xlsx(bytes, "all-empty.xlsx");
+    expect(res.text).toBeUndefined();
+    expect(res.status).toBe(422);
+    judge("all-empty.xlsx", "office", res);
+  });
+
+  it("a workbook with no readable workbook.xml still yields its rows, labelled by part", async () => {
+    const bytes = zipSync({
+      "[Content_Types].xml": strToU8('<?xml version="1.0"?><Types/>'),
+      "xl/worksheets/sheet2.xml": strToU8(`<?xml version="1.0"?><worksheet ${SS_NS}><sheetData><row r="1">${inl("A1", "second")}</row></sheetData></worksheet>`),
+      "xl/worksheets/sheet1.xml": strToU8(`<?xml version="1.0"?><worksheet ${SS_NS}><sheetData><row r="1">${inl("A1", "first")}</row></sheetData></worksheet>`),
+    });
+    const res = await xlsx(bytes, "no-workbook-part.xlsx");
+    judge("no-workbook-part.xlsx", "office", res);
+    // Numeric part order, and the label is the part it came from — never invented.
+    expect(res.text).toBe("=== Sheet: sheet1 ===\nfirst\n\n=== Sheet: sheet2 ===\nsecond");
+  });
+
+  it("a 20k-row workbook is capped at maxChars, not dropped and not built whole", async () => {
+    const rows: (string | number)[][] = [["Entity", "Field", "Type"]];
+    for (let i = 0; i < 20_000; i++) rows.push(["Account", `field_${i}`, "string"]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), "Dict");
+    const bytes = new Uint8Array(XLSX.write(wb, { type: "array", bookType: "xlsx", bookSST: true }));
+    const res = await xlsx(bytes, "large.xlsx");
+    expect(res.error).toBeUndefined();
+    expect(res.text.length).toBe(MAX);
+    expect(res.text.startsWith("=== Sheet: Dict ===\nEntity\tField\tType\nAccount\tfield_0\tstring")).toBe(true);
+    record("large-20k-rows.xlsx (edge)", "office", "extracted", `capped to ${MAX} chars via ${res.method}`);
+    // A tiny budget is honoured too — the branch stops building, it does not build
+    // 20k rows and then slice.
+    const tiny = await extractDocumentText(bytes, "", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "large.xlsx", 500);
+    expect(tiny.text.length).toBeLessThanOrEqual(500);
+    expect(tiny.text).toContain("Account\tfield_0\tstring");
+  }, 60_000);
 });
 
 describe("edge attachment — model route (branch + payload, no network)", () => {
@@ -385,6 +617,40 @@ describe("edge attachment — adversarial", () => {
     judge("model.dwg", "rejected", res);
   });
 
+  /**
+   * The other half of FINDING H1. Routing `.xlsm`/`.xlsb` by extension fixes the
+   * workbooks we know about; it does nothing for the NEXT zip-shaped file. Any
+   * container — a .zip of evidence, a Keynote deck, an ODT — decoded to its local
+   * file header, its internal part paths and kilobytes of deflate mojibake, and the
+   * printable ratio waved it through. A ZIP is never text.
+   */
+  it("a plain .zip is refused, not decoded into container bytes", async () => {
+    const zip = zipSync({
+      "notes/readme.txt": strToU8("hello from inside the archive"),
+      "notes/blob.bin": new Uint8Array(4096).fill(0x41),
+    });
+    const res = await run(zip, "", "evidence.zip");
+    expect(res.status).toBe(415);
+    expect(res.error).toContain(".zip");
+    expect(res.error).toMatch(/zipped container/);
+    judge("evidence.zip", "rejected", res);
+  });
+
+  /**
+   * And the root cause under both: U+FFFD is what the decoder emits for bytes that
+   * are NOT UTF-8, so counting it as "printable" made the ratio measure nothing.
+   * 4 KB of non-UTF-8 bytes used to come back as 4 KB of replacement characters
+   * with `{ method: "decoded" }`.
+   */
+  it("non-UTF-8 binary is no longer laundered into text by the printable ratio", async () => {
+    const junk = new Uint8Array(4096);
+    for (let i = 0; i < junk.length; i++) junk[i] = i % 2 ? 0xff : 0x81;   // never valid UTF-8
+    const res = await run(junk, "", "dump.bin");
+    expect(res.status).toBe(415);
+    expect(res.text).toBeUndefined();
+    judge("dump.bin (4KB non-UTF-8)", "rejected", res);
+  });
+
   it("an unknown extension whose bytes are printable is salvaged by the heuristic", async () => {
     const res = await run(utf8("entity,field,type\nAccount,name,string\nAccount,arr,number\n"), "", "dictionary.dat");
     judge("dictionary.dat (printable)", "heuristic", res);
@@ -409,14 +675,23 @@ describe("data-dictionary upload — client path", () => {
     record("dictionary.xlsx (3 tabs)", "client-workbook", "extracted", `sheet "${pick.sheet}" of 3, ${parsed.fields.length} fields`);
   });
 
-  /** The contrast that makes FINDING E2 a defect rather than a limitation. */
-  it("the SAME workbook bytes the edge calls 'no readable text' parse to 5 fields here", async () => {
+  /**
+   * The contrast that made FINDING E2 a defect rather than a limitation: the edge
+   * called these bytes "no readable text" while the client read 5 fields from them.
+   * The two paths must now AGREE on the same bytes — not byte-for-byte (one emits
+   * CSV for a parser, the other prose for a prompt), but on the content: the sheet
+   * the client chose is named in the edge text, and every field it parsed is there.
+   */
+  it("the two paths now agree on the workbook the edge used to call 'no readable text'", async () => {
     const bytes = makeMultiTabWorkbook("xlsx", false);
     const edge = await run(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "inline.xlsx");
-    expect(edge.error).toBe("No readable text found inside the document.");
+    expect(edge.error).toBeUndefined();
     const pick = await pickDictionarySheet(bytes.buffer.slice(0) as ArrayBuffer);
     expect(pick.sheet).toBe("Field Dictionary");
-    expect(parseDictionaryCsv(pick.csv).fields.length).toBe(5);
+    const { fields } = parseDictionaryCsv(pick.csv);
+    expect(fields.length).toBe(5);
+    expect(edge.text).toContain(`=== Sheet: ${pick.sheet} ===`);
+    for (const f of fields) expect(edge.text).toContain(`${f.entity}\t${f.field}\t`);
   });
 
   it.each(["xlsm", "xlsb", "xls"] as XLSX.BookType[])("legacy/alternate workbook .%s parses", async (bookType) => {
