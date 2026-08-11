@@ -49,6 +49,52 @@ export type OperatorQueueReads = Pick<ProgramLedger,
 export const sessionQuestionCount = (sessionQueue: OperatorQueueReads["sessionQueue"]): number =>
   sessionQueue.reduce((n, s) => n + s.abouts.length, 0);
 
+/**
+ * THE UNFROZEN QUEUES — the terms of the sum, with frozen loci removed exactly once.
+ *
+ * A locus held by two or more live contradicting claims is FROZEN: it is already the
+ * adjudicate term and already a row in the adjudicate section. But the same locus can
+ * simultaneously be an open unowned question (assign) or a joint one (sessions), and
+ * `store.assert` produces contradictions on its own — escalating, or letting same-world
+ * claims coexist — with no explicit `contradict()` call anywhere. So the terms were not
+ * disjoint: one locus counted twice in the badge and drew a row in two Inbox sections,
+ * asking the operator to route a question that is frozen until they adjudicate it first.
+ *
+ * Derived HERE, once, and read by BOTH surfaces, because that is the only shape that
+ * cannot drift: the Inbox draws assign/sessions from this function and the rail badge
+ * counts those same lists. Filtering in the page instead would leave the badge counting
+ * a set the page does not draw. Filtering in `useProgramLedger.assignQueue` instead would
+ * fork the partition conservation asserts on (all-unowned = assignQueue + the unowned
+ * slice of typingLoci) — a different and much larger change.
+ *
+ * Adjudication is the ONLY term that keeps a frozen locus, which is what makes the
+ * operator's next move unambiguous: unfreeze it, and it reappears wherever it belongs.
+ */
+export function unfrozenQueues(ledger: OperatorQueueReads): {
+  frozen: ReadonlySet<string>;
+  assign: OperatorQueueReads["assignQueue"];
+  sessions: OperatorQueueReads["sessionQueue"];
+} {
+  const frozen: ReadonlySet<string> = new Set(ledger.conflicts.map((c) => c.about));
+  // Overwhelmingly the common case (0 conflicts): return the originals by reference so
+  // no surface pays a copy, and identity-based memoisation upstream still holds.
+  if (frozen.size === 0) return { frozen, assign: ledger.assignQueue, sessions: ledger.sessionQueue };
+  return {
+    frozen,
+    assign: ledger.assignQueue.filter((it) => !frozen.has(it.about)),
+    // A seam whose every question is frozen is not a conversation to schedule, so it
+    // stops being a seam here too — otherwise the section prints "0 joint questions"
+    // beside a live "propose a time" button.
+    sessions: ledger.sessionQueue
+      .map((s) => ({
+        ...s,
+        abouts: s.abouts.filter((a) => !frozen.has(a)),
+        items: s.items.filter((i) => !frozen.has(i.about)),
+      }))
+      .filter((s) => s.abouts.length > 0),
+  };
+}
+
 /** Per-section counts plus the two sums the surfaces need. Sections that render, terms
  *  that count — the same list, in the same order the Inbox lays them out. */
 export interface OperatorQueueCounts {
@@ -80,8 +126,10 @@ export interface OperatorQueueCounts {
 }
 
 export function operatorQueueCounts(ledger: OperatorQueueReads): OperatorQueueCounts {
-  const assign = ledger.assignQueue.length;
-  const sessionQuestions = sessionQuestionCount(ledger.sessionQueue);
+  // Frozen loci are the adjudicate term and nothing else — see unfrozenQueues.
+  const unfrozen = unfrozenQueues(ledger);
+  const assign = unfrozen.assign.length;
+  const sessionQuestions = sessionQuestionCount(unfrozen.sessions);
   const adjudicate = ledger.conflicts.length;
   const pinned = ledger.pinConflicts.length;
   const inFlight = ledger.assignments.length;

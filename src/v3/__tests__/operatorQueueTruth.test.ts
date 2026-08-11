@@ -220,3 +220,88 @@ describe("L2 — the header stat and the Sessions section print the SAME number"
     expect(counts.sessionQuestions).toBe(sessionQuestionCount(sessionQueue));
   });
 });
+
+// ════════════════════════════════════════════════════════════════════════════════════
+/**
+ * L8 — A FROZEN LOCUS WAS TWO PIECES OF WORK.
+ *
+ * `operatorQueueCounts.total` summed terms that are not disjoint. A locus held by two
+ * contradicting live claims is the adjudicate term; the SAME locus can still be an open
+ * unowned question (assign) or a joint one (sessions). So one locus added two to the
+ * badge and drew a row in two sections — one of which asked the operator to route a
+ * question that is frozen until they adjudicate it first.
+ *
+ * This is not exotic: `store.assert` links contradictions itself (L1 above), so the
+ * overlap arrives through ordinary stakeholder answers with no `contradict()` anywhere.
+ * It measured zero on the Laila snapshot only because that programme happens to hold no
+ * conflict pairs — a fact about DATA, which any new programme can change.
+ *
+ * THE ORDERING TRAP, stated so it is not re-sprung: fixing the SUM alone turns F7
+ * (inboxBadgeIsThePage) red, because the page would still draw the frozen rows the badge
+ * had stopped counting. So the subtraction is written ONCE in `unfrozenQueues`, and both
+ * the badge and the page read it — which is what the DOM half of this test pins.
+ */
+describe("L8 — a frozen locus counts once, and draws once", () => {
+  const frozenLedger = (): ProgramLedger => {
+    const store = twoClaimContradiction();
+    const conflicts = readConflicts(store);
+    expect(conflicts).toHaveLength(1);          // guard: the fixture really is frozen
+    expect(conflicts[0].about).toBe(LOCUS);
+    // The same locus is ALSO an open unowned question — the overlap itself.
+    const alsoUnowned: QueueItem = {
+      about: LOCUS, owner: { kind: "unowned" }, ownerLabel: "",
+      routing: "unowned", slot: "semantics", status: "open",
+    };
+    return { ...emptyLedger(store), conflicts, assignQueue: [alsoUnowned] };
+  };
+
+  it("the overlap is real: the same about is in BOTH source lists", () => {
+    const l = frozenLedger();
+    expect(l.assignQueue.map((i) => i.about)).toContain(LOCUS);
+    expect(l.conflicts.map((c) => c.about)).toContain(LOCUS);
+  });
+
+  it("ONE locus of work counts ONE, not two", () => {
+    const counts = operatorQueueCounts(frozenLedger());
+    expect(counts.adjudicate).toBe(1);   // it is adjudication…
+    expect(counts.assign).toBe(0);       // …and therefore not also an assignment
+    expect(counts.total).toBe(1);        // the defect printed 2
+  });
+
+  it("a frozen JOINT locus is not also offered as a session to schedule", () => {
+    const store = twoClaimContradiction();
+    const item: QueueItem = {
+      about: LOCUS, owner: { kind: "joint", roles: ["Sales Ops", "Finance"] } as unknown as Owner,
+      ownerLabel: "Sales Ops ⋈ Finance", routing: "blocking", slot: "semantics", status: "open",
+    };
+    const counts = operatorQueueCounts({
+      ...emptyLedger(store), conflicts: readConflicts(store),
+      sessionQueue: [{ pair: "Sales Ops ⋈ Finance", items: [item], abouts: [LOCUS] }],
+    });
+    expect(counts.adjudicate).toBe(1);
+    expect(counts.sessionQuestions).toBe(0);   // the seam emptied, so it is not a seam
+    expect(counts.total).toBe(1);
+  });
+
+  it("THE ORDERING TRAP: the page draws it once too — badge and page agree", () => {
+    const ledger = frozenLedger();
+    mount(ledger);
+    // the adjudicate section owns it…
+    expect(host.querySelector("#ib-adjudicate")).not.toBeNull();
+    // …and the assign section is not drawn at all, because its only row was frozen
+    expect(host.querySelector("#ib-assign")).toBeNull();
+    // the badge's own number, read through the public sum, matches what is on screen
+    expect(operatorQueueCounts(ledger).total).toBe(1);
+    expect(headerStat("need an owner")).toBeNull();   // no stat for a section with nothing
+    expect(headerStat("to adjudicate")).toBe(1);
+  });
+
+  it("unfreezing returns it: the locus goes back to the queue it belongs in", () => {
+    const l = frozenLedger();
+    // same ledger, conflicts cleared (as adjudication would) — nothing else changed
+    const counts = operatorQueueCounts({ ...l, conflicts: [] });
+    expect(counts.adjudicate).toBe(0);
+    expect(counts.assign).toBe(1);   // it was never dropped, only deferred
+    expect(counts.total).toBe(1);
+  });
+});
