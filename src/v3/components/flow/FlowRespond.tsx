@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ScreenCard } from "@/v3/components/flow/studio/ExperienceDesignStudio";
-import FlowReviewSurface from "@/v3/components/flow/FlowReviewSurface";
+import FlowReviewSurface, { greetingName } from "@/v3/components/flow/FlowReviewSurface";
 import { projectStakeholderReview, reviewDiff, type ReviewPayload } from "@/v3/components/flow/flowReviews";
 import {
   parseFixtures, fixturesForEntities, screenEntities, stepMetric, transitionForStep, isAgentActor, foldBeatRecords,
@@ -30,7 +30,9 @@ type PackState =
   | { phase: "loading" }
   | { phase: "invalid"; reason?: string }
   | { phase: "ready"; pack: Pack }
-  | { phase: "sent" };
+  /** `final` distinguishes "I'm done" from "here's what I have so far" — the
+   *  second leaves the durable link open and the confirmation must say so. */
+  | { phase: "sent"; final: boolean };
 
 interface Pack {
   kind?: "interview" | "demo";
@@ -52,13 +54,22 @@ interface Pack {
   /** The programme's cast — lets the respondent defer a question to the
    * person who actually owns the answer. */
   roster?: Array<{ name: string; role: string }>;
-  /** True only when the person has answered AND nothing new is outstanding — the
-   * page shows a read-only recap rather than a dead end or a fresh form. */
+  /** True only when the person has FINISHED (said "I'm done", or an operator
+   * closed the link) AND nothing new is outstanding — the page then shows a
+   * read-only recap. A partial send does NOT set this: the durable link keeps
+   * carrying the questions they haven't reached. Derived by the ONE shared
+   * definition in `@shared/portalLinkState`. */
   responded: boolean;
-  /** The durable link's recap: every response this person has already sent. */
-  submissions?: Array<{ ts: string; movementId?: string; kind: string; preview: string }>;
+  /** The durable link's recap: every response this person has already sent.
+   * `final` marks the send where they declared themselves done. */
+  submissions?: Array<{ ts: string; movementId?: string; kind: string; preview: string; final?: boolean; answered?: string[] }>;
   /** They've responded at least once on this link. */
   answered?: boolean;
+  /** The link is finished — by the stakeholder or by an operator. */
+  closed?: boolean;
+  /** Asks already on the record (stored question strings and/or their loci).
+   * These are shown as answered rather than asked again as if nothing was sent. */
+  answeredAsks?: string[];
   /** A new ask has been posted SINCE their last answer — they're returning to a
    * genuine follow-up, so the surface renders with a "welcome back" framing. */
   followUp?: boolean;
@@ -189,6 +200,48 @@ function reviewSignature(review: ReviewPayload): string {
   return h.toString(16);
 }
 
+/**
+ * Drop the asks this person has ALREADY answered on this durable link.
+ *
+ * A partial send files what they had and leaves the link open. On the return
+ * visit the questions they answered must not be presented as if they had said
+ * nothing — their answer is on the record and the operator is reviewing it. This
+ * removes them from the form and hands back their text so the page can SAY they
+ * are on record rather than silently shrinking the list.
+ *
+ * `answeredAsks` is the edge's sanitised union (stored question strings and/or
+ * the loci behind them), so a row matches on either identity. Pure; the model is
+ * rebuilt, never mutated.
+ */
+export function withoutAnsweredAsks(
+  model: PortalQuestionModel,
+  answeredAsks: readonly string[] | undefined,
+): { model: PortalQuestionModel; onRecord: string[] } {
+  const done = new Set((answeredAsks ?? []).map((a) => String(a).trim()).filter(Boolean));
+  if (!done.size) return { model, onRecord: [] };
+  const onRecord: string[] = [];
+  const groups = model.groups
+    .map((group) => {
+      const rows = group.rows.filter((row) => {
+        if (!done.has(row.about) && !done.has(row.stored.trim())) return true;
+        onRecord.push(row.rendered.question);
+        return false;
+      });
+      return { ...group, rows, count: rows.length };
+    })
+    .filter((group) => group.rows.length > 0);
+  const rows = groups.flatMap((group) => group.rows);
+  const strings = model.strings.filter((entry) => {
+    if (!done.has(entry.question.trim())) return true;
+    onRecord.push(entry.question);
+    return false;
+  });
+  if (model.mode === "strings") {
+    return { model: { ...model, strings, count: strings.length }, onRecord };
+  }
+  return { model: { ...model, groups, rows, strings, count: rows.length, unbacked: strings.length }, onRecord };
+}
+
 type DemoVerdict = "accepted" | "accepted-with-changes" | "rework";
 
 const FUNCTIONS_BASE = `${import.meta.env.VITE_SUPABASE_URL || ""}/functions/v1`;
@@ -222,9 +275,14 @@ export default function FlowRespond({ token }: { token: string }) {
   const draftKey = `atos.respond.${token}`;
   const draft0 = readRespondDraft(draftKey);
   const [state, setState] = useState<PackState>({ phase: "loading" });
-  // The name greetings use — BLANK for a role-placeholder link, so every
-  // surface (opener, banners, recap, demo) skips the greeting cleanly.
-  const greetName = state.phase === "ready" && !state.pack.unnamed ? state.pack.stakeholder : "";
+  // The name greetings use — a first name only when the recipient IS a person,
+  // the whole label when it's a role ("Head of Sales", never "Head"), and BLANK
+  // for a role-placeholder link, so every surface (opener, banners, recap, demo)
+  // skips the greeting cleanly. `unnamed` is stamped at mint; `greetingName`
+  // catches the packs minted before that flag existed, so the stored "— TBC"
+  // machine token can never reach this page.
+  const greetName = state.phase === "ready" && !state.pack.unnamed
+    ? greetingName(state.pack.stakeholder) : "";
   // ── the ledger, rebuilt on THIS page from the live artifacts the edge already
   // ships (ontology + atlas). Read-only, the ONE read path (useProgramLedger) —
   // no second migration, no second projection. It exists here for exactly one
@@ -236,12 +294,19 @@ export default function FlowRespond({ token }: { token: string }) {
     return { rawData: { data: state.pack.liveArtifacts } } as unknown as ProgramSummary;
   }, [state]);
   const portalLedger = useProgramLedger(portalProgram);
-  const questionModel = useMemo<PortalQuestionModel>(
+  const packQuestionModel = useMemo<PortalQuestionModel>(
     () => portalQuestionModel(
       state.phase === "ready" ? state.pack : {},
       portalProgram ? portalLedger.store : null,
     ),
     [state, portalProgram, portalLedger.store],
+  );
+  // What is STILL OPEN on this durable link. A partial send leaves the link
+  // usable; the asks it already carried an answer for are on the record and are
+  // shown as such (`asksOnRecord`) rather than asked again as if unanswered.
+  const { model: questionModel, onRecord: asksOnRecord } = useMemo(
+    () => withoutAnsweredAsks(packQuestionModel, state.phase === "ready" ? state.pack.answeredAsks : undefined),
+    [packQuestionModel, state],
   );
   const lociMode = questionModel.mode === "loci";
   // The review shown — rebuilt LIVE from the current artifacts the edge shipped,
@@ -442,10 +507,11 @@ export default function FlowRespond({ token }: { token: string }) {
     // Demo packs carry no questions — this memo only serves the interview view.
     // In loci mode the string list holds only the asks with no renderable locus;
     // the locus-backed answers compose separately, each naming what it answers.
-    const stringQuestions = questionModel.mode === "loci"
-      ? questionModel.strings
-      : (state.pack.questions ?? []).map((question, index) => ({ index, question }));
-    const blocks = stringQuestions
+    // `questionModel.strings` is the whole stored list in strings mode and the
+    // leftovers in loci mode — and in BOTH it is already stripped of the asks
+    // this person answered on an earlier partial send, so a returning visit
+    // cannot re-submit an answer to something already on the record.
+    const blocks = questionModel.strings
       .map(({ question, index }) => {
         if (deferrals[index]) return ""; // deferred — routed, not answered here
         const answer = (answers[index] ?? "").trim();
@@ -471,13 +537,63 @@ export default function FlowRespond({ token }: { token: string }) {
 
   const answeredCount = useMemo(() => {
     if (state.phase !== "ready" || state.pack.kind === "demo") return 0;
-    const stringQuestions = questionModel.mode === "loci"
-      ? questionModel.strings
-      : (state.pack.questions ?? []).map((question, index) => ({ index, question }));
-    const strings = stringQuestions.reduce((count, { index }) =>
+    const strings = questionModel.strings.reduce((count, { index }) =>
       count + (((answers[index] ?? "").trim() || (attachments[index] ?? []).length || deferrals[index]) ? 1 : 0), 0);
     return strings + answeredLocusCount(questionModel.rows, locusAnswers, locusDeferrals);
   }, [state, answers, attachments, deferrals, questionModel, locusAnswers, locusDeferrals]);
+
+  // Which asks THIS send covers, named the way the pack stores them (a locus for
+  // a locus-backed row, the stored question string otherwise) so the edge can
+  // validate each against the pack's own list. It rides the submission, and a
+  // return visit reads it back as "already on the record" instead of re-asking.
+  const answeredAskKeys = useMemo(() => {
+    if (state.phase !== "ready" || state.pack.kind === "demo") return [];
+    const keys: string[] = [];
+    for (const row of questionModel.rows) {
+      if ((locusAnswers[row.about] ?? "").trim() || locusDeferrals[row.about]) keys.push(row.about);
+    }
+    for (const { index } of questionModel.strings) {
+      if (!((answers[index] ?? "").trim() || (attachments[index] ?? []).length || deferrals[index])) continue;
+      const stored = state.pack.questions?.[index];
+      if (stored) keys.push(stored);
+    }
+    return keys;
+  }, [state, questionModel, answers, attachments, deferrals, locusAnswers, locusDeferrals]);
+
+  const canSend = composed.trim().length >= 20
+    || Object.values(attachments).some((docs) => docs.length > 0)
+    || Object.keys(deferrals).length > 0 || Object.keys(locusDeferrals).length > 0
+    || filledVoices.length > 0;
+
+  /** The plain question form's submission. `final` is the ONLY thing that closes
+   *  the durable link — everything else is "here's what I have so far". */
+  const sendPayload = (final: boolean): Record<string, unknown> => ({
+    answers: composed,
+    final,
+    answered: answeredAskKeys,
+    documents: Object.entries(attachments).flatMap(([key, list]) =>
+      list.filter((doc) => doc.sourceKey).map((doc) => ({
+        name: doc.name,
+        // Question-keyed attachments carry their question number; field-keyed
+        // ones ("extra", review fields) ride unnumbered.
+        ...(Number.isFinite(Number(key)) ? { question: Number(key) + 1 } : {}),
+        sourceKey: doc.sourceKey,
+      }))),
+    // A deferral names the question AS THE PACK STORED IT — the edge validates
+    // routing against the pack's own list, so a locus-mode deferral sends the
+    // stored string, not the freshly-rendered one.
+    deferrals: [
+      ...Object.entries(deferrals).map(([qIndex, to]) => ({
+        question: (state.phase === "ready" ? state.pack.questions[Number(qIndex)] : "") ?? "", to,
+      })),
+      ...questionModel.rows
+        .filter((row) => locusDeferrals[row.about])
+        .map((row) => ({ question: row.stored, to: locusDeferrals[row.about] })),
+    ].filter((entry) => entry.question && entry.to),
+    suggestedVoices: filledVoices.map((voice) => ({
+      name: voice.name.trim(), role: voice.role.trim(), note: voice.note.trim(),
+    })),
+  });
 
   const submit = async (payload: Record<string, unknown>) => {
     setSubmitting(true);
@@ -490,7 +606,9 @@ export default function FlowRespond({ token }: { token: string }) {
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(typeof body.error === "string" ? body.error : "Could not send that.");
-      setState({ phase: "sent" });
+      // "Sent" is not "spent". Only an explicit `final` finishes the durable
+      // link; the confirmation has to tell the truth about which one happened.
+      setState({ phase: "sent", final: payload.final === true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not send that.");
     } finally {
@@ -546,19 +664,34 @@ export default function FlowRespond({ token }: { token: string }) {
             <div className="v3fs-quiet">
               <div className="v3fs-quiet-mark" aria-hidden="true">✓</div>
               <h2>Thank you — your answers are in.</h2>
-              <p>The team reviews everything before it enters the record. This link is now closed — if more detail occurs to you later, the team can send a fresh one.</p>
+              {/* The link only closes when THEY said they were done. Saying
+                  "closed" after a partial send was the defect: it stranded every
+                  question the person hadn't reached yet behind an operator
+                  noticing and re-minting. */}
+              {state.final ? (
+                <p>The team reviews everything before it enters the record. You told us you&rsquo;re done, so this link is now closed — if more detail occurs to you later, the team can send a fresh one.</p>
+              ) : (
+                <p>
+                  The team reviews everything before it enters the record. <b>This link stays open</b> — reopen it
+                  whenever you like to answer the rest; what you&rsquo;ve already sent won&rsquo;t be asked again.
+                </p>
+              )}
             </div>
           ) : state.pack.responded ? (
             <RespondRecap stakeholder={greetName} submissions={state.pack.submissions ?? []}
               kind={state.pack.kind} />
           ) : shownReview ? (
             <>
-              {state.pack.followUp ? <FollowUpBanner stakeholder={greetName}
+              {/* A RETURN VISIT is any second look at an open link — a new ask
+                  posted since (`followUp`) or a partial send they're resuming.
+                  Both must be greeted as a return; only the first is "new". */}
+              {state.pack.answered ? <FollowUpBanner stakeholder={greetName}
                 submissions={state.pack.submissions ?? []}
+                resuming={!state.pack.followUp}
                 changes={state.pack.priorReview ? reviewDiff(state.pack.priorReview, shownReview) : undefined} /> : null}
               <FlowReviewSurface review={shownReview} stakeholder={greetName} clip={fieldClip}
                 programme={state.pack.programme} objective={state.pack.objective}
-                returning={!!state.pack.followUp}
+                returning={!!state.pack.answered}
                 // The SAME locus questions the plain page renders — the review
                 // surface hosts them beside the workflow they belong to, through
                 // the same component and the same ONE renderer.
@@ -696,22 +829,23 @@ export default function FlowRespond({ token }: { token: string }) {
               {/* "…they're below" — so this is a count of what is RENDERED, both
                   the locus-backed rows and the unbacked leftovers. It is not the
                   actionability figure; that one stays split in the header. */}
-              {state.pack.followUp ? <FollowUpBanner stakeholder={greetName}
+              {state.pack.answered ? <FollowUpBanner stakeholder={greetName}
                 submissions={state.pack.submissions ?? []}
+                resuming={!state.pack.followUp}
                 newCount={questionModel.count + questionModel.unbacked} /> : null}
               <header className="v3fs-portal-head">
                 <div className="v3fs-hero-eyebrow">{state.pack.programme} <span>· <img src="/brillio-logo.png" alt="Brillio" className="v3fs-portal-brandimg sm" /> AURA</span></div>
-                {/* On a follow-up the banner above already greets and frames the
-                    visit — the header stays lean so a returning voice isn't
+                {/* On a return visit the banner above already greets and frames it
+                    — the header stays lean so a returning voice isn't
                     re-onboarded ("replaces a discovery call" is a first-time line). */}
-                {state.pack.followUp ? (
+                {state.pack.answered ? (
                   <p className="v3fs-portal-sub">
                     Same as before — answer in your own words, whenever suits you. Skip anything that doesn&rsquo;t apply.
                   </p>
                 ) : (
                   <>
                     <h1 className="v3fs-portal-title">{greetName
-                      ? `Hello ${greetName.split(" ")[0]} — your perspective shapes what gets built.`
+                      ? `Hello ${greetName} — your perspective shapes what gets built.`
                       : "Your perspective shapes what gets built."}</h1>
                     <p className="v3fs-portal-sub">
                       These questions replace a scheduled discovery call. Answer in your own words, whenever suits you — skip anything that doesn&rsquo;t apply.
@@ -743,6 +877,18 @@ export default function FlowRespond({ token }: { token: string }) {
                     against your name, so your answers are read by the programme team rather than filed against a particular
                     point in it. That makes them no less useful: they are how those points get opened.
                   </p>
+                ) : null}
+                {/* ALREADY ON THE RECORD. These asks were answered on an earlier
+                    partial send from this same link, so they are not in the form
+                    below — but they are NOT silently dropped either: a question
+                    that vanished without explanation reads as a question the team
+                    lost. It is named, and said to be with the team. */}
+                {asksOnRecord.length ? (
+                  <div className="v3fs-portal-onrecord">
+                    <b>{asksOnRecord.length} {asksOnRecord.length === 1 ? "question you already answered" : "questions you already answered"}</b> —
+                    with the team, not asked again:
+                    <ul>{asksOnRecord.map((q, i) => <li key={i}>{q}</li>)}</ul>
+                  </div>
                 ) : null}
               </header>
               <div className="v3fs-portal-qs">
@@ -799,10 +945,7 @@ export default function FlowRespond({ token }: { token: string }) {
                     </span>
                   </div>
                 ) : null}
-                {(questionModel.mode === "loci"
-                  ? questionModel.strings
-                  : state.pack.questions.map((question, index) => ({ index, question }))
-                ).map(({ question, index }) => (
+                {questionModel.strings.map(({ question, index }) => (
                   <label key={index} className={`v3fs-portal-card${((answers[index] ?? "").trim() || (attachments[index] ?? []).length || deferrals[index]) ? " done" : ""}${deferrals[index] ? " deferred" : ""}`}>
                     <span className="v3fs-portal-qn"><b>{index + 1}</b><em aria-hidden="true">{deferrals[index] ? "→" : "✓"}</em></span>
                     <span className="v3fs-portal-qt">{question}</span>
@@ -902,35 +1045,27 @@ export default function FlowRespond({ token }: { token: string }) {
                   </div>
                   {hasDraft ? <span className="v3fs-portal-saved">✓ Saved on this device — you can close this and come back</span> : null}
                 </div>
-                <button type="button" className="v3fs-btn pri v3fs-portal-send"
-                  disabled={submitting || (composed.trim().length < 20 && Object.values(attachments).every((docs) => !docs.length) && !Object.keys(deferrals).length && !Object.keys(locusDeferrals).length && !filledVoices.length)}
-                  onClick={() => void submit({
-                    answers: composed,
-                    documents: Object.entries(attachments).flatMap(([key, list]) =>
-                      list.filter((doc) => doc.sourceKey).map((doc) => ({
-                        name: doc.name,
-                        // Question-keyed attachments carry their question number;
-                        // field-keyed ones ("extra", review fields) ride unnumbered.
-                        ...(Number.isFinite(Number(key)) ? { question: Number(key) + 1 } : {}),
-                        sourceKey: doc.sourceKey,
-                      }))),
-                    // A deferral names the question AS THE PACK STORED IT — the edge
-                    // validates routing against the pack's own list, so a locus-mode
-                    // deferral sends the stored string, not the freshly-rendered one.
-                    deferrals: [
-                      ...Object.entries(deferrals).map(([qIndex, to]) => ({
-                        question: state.pack.questions[Number(qIndex)] ?? "", to,
-                      })),
-                      ...questionModel.rows
-                        .filter((row) => locusDeferrals[row.about])
-                        .map((row) => ({ question: row.stored, to: locusDeferrals[row.about] })),
-                    ].filter((entry) => entry.question && entry.to),
-                    suggestedVoices: filledVoices.map((voice) => ({
-                      name: voice.name.trim(), role: voice.role.trim(), note: voice.note.trim(),
-                    })),
-                  })}>
-                  {submitting ? "Sending…" : "Send my answers"}
-                </button>
+                {/* TWO sends, because they are two different things. The primary
+                    files what they have and LEAVES THE LINK OPEN — answering one
+                    of eight questions must not strand the other seven. "I have
+                    nothing more" is the terminal one, and only the person (or the
+                    operator) gets to say it. */}
+                <div className="v3fs-portal-sendgroup">
+                  <button type="button" className="v3fs-btn pri v3fs-portal-send"
+                    disabled={submitting || !canSend}
+                    onClick={() => void submit(sendPayload(false))}>
+                    {submitting ? "Sending…" : "Send my answers"}
+                  </button>
+                  <button type="button" className="v3fs-a v3fs-portal-finish"
+                    disabled={submitting || !canSend}
+                    onClick={() => void submit(sendPayload(true))}>
+                    Send &amp; finish — I have nothing more to add
+                  </button>
+                  <p className="v3fs-portal-foot">
+                    Sending keeps this link open — come back any time to answer the rest. Only
+                    &ldquo;Send &amp; finish&rdquo; closes it.
+                  </p>
+                </div>
               </div>
             </>
           )}
@@ -1098,7 +1233,7 @@ type Submission = { ts: string; movementId?: string; kind: string; preview: stri
 function RespondRecap({ stakeholder, submissions, kind }: {
   stakeholder: string; submissions: Submission[]; kind?: string;
 }) {
-  const first = stakeholder ? stakeholder.split(/\s+/)[0] : "";
+  const first = greetingName(stakeholder);
   return (
     <div className="v3fs-quiet v3fs-recap">
       <div className="v3fs-quiet-mark" aria-hidden="true">✓</div>
@@ -1186,23 +1321,32 @@ function MeetingRequestBar({ kind, sent, submitting, onRequest }: {
 
 /** A calm banner atop a link a stakeholder is RETURNING to — acknowledges what
  * they already sent and frames the page as a short follow-up, not a repeat. */
-function FollowUpBanner({ stakeholder, submissions, changes, newCount }: {
+function FollowUpBanner({ stakeholder, submissions, changes, newCount, resuming }: {
   stakeholder: string; submissions: Submission[];
   /** Structural "what changed since your last visit" phrases — from reviewDiff. */
   changes?: string[];
-  /** How many NEW questions have appeared since they last answered (discovery). */
+  /** How many questions are still open below (new asks, or the ones they
+   *  haven't reached yet after a partial send). */
   newCount?: number;
+  /** They are picking up a PARTIAL send on the same link rather than answering a
+   *  newly-posted ask — the questions below are the ones they hadn't reached, not
+   *  new ones, and calling them "new" would be a small lie. */
+  resuming?: boolean;
 }) {
-  const first = stakeholder ? stakeholder.split(/\s+/)[0] : "";
+  const first = greetingName(stakeholder);
   const last = submissions.length ? submissions[submissions.length - 1] : null;
   const when = last ? fmtWhen(last.ts) : "";
   // Name what's actually new so the return feels purposeful, not a vague "we've
   // changed things". Discovery knows the count; reviews list the changes below.
-  const whatsNew = newCount && newCount > 0
-    ? `${newCount} new ${newCount === 1 ? "question has" : "questions have"} come up since — ${newCount === 1 ? "it’s" : "they’re"} below.`
-    : changes?.length
-      ? "Here’s exactly what moved since — the rest is unchanged."
-      : "There’s a short update below.";
+  const whatsNew = resuming
+    ? (newCount && newCount > 0
+      ? `${newCount} ${newCount === 1 ? "question is" : "questions are"} still open below — pick up where you left off.`
+      : "There's nothing else outstanding, but this link is still yours — add anything you like.")
+    : newCount && newCount > 0
+      ? `${newCount} new ${newCount === 1 ? "question has" : "questions have"} come up since — ${newCount === 1 ? "it’s" : "they’re"} below.`
+      : changes?.length
+        ? "Here’s exactly what moved since — the rest is unchanged."
+        : "There’s a short update below.";
   return (
     <aside className="v3fs-followup">
       <div className="v3fs-followup-h">

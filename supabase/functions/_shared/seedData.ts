@@ -122,9 +122,11 @@ export function generateSeed(ontology: Record<string, unknown>, version: string,
     const rnd = mulberry32(hashSeed(`${version}::${name}`));
     // A per-entity ceiling, deterministic from the entity's own name. With ONE
     // shared cap, every table deep enough in the graph saturated and reported
-    // the identical round number — 12 of Laila's 32 entities all read "120
-    // records", which reads as a placeholder rather than a populated system.
-    // The cap still bounds the work; it just stops being the headline figure.
+    // the identical round number — on a real 32-entity ontology, 12 tables all
+    // read "120 records", which presents as a placeholder rather than as a
+    // populated system. The cap still bounds the work; it just stops being the
+    // headline figure. (Client names stay out of this cluster by design — see
+    // the generic-naming gate in pipelineValidation.)
     const entityCap = maxPerEntity - Math.floor(mulberry32(hashSeed(`cap::${name}`))() * Math.min(40, maxPerEntity / 3));
     const attrs = attrsOf(name);
     const parents = parentEdgesOf.get(name) ?? [];

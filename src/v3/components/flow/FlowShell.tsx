@@ -9,7 +9,7 @@ import FlowBoardPack from "@/v3/components/flow/FlowBoardPack";
 import EvidenceReader from "@/v3/components/flow/EvidenceReader";
 import {
   flowMovements, movementEvidence, movementArtifacts, gateChecklist, gateReadiness, listenCoverage,
-  demoAcceptance, daysToFirstDemo, wordsOfEvidence, parseGridRows, readMovementInputs,
+  demoAcceptance, daysToFirstDemo, parseGridRows, readMovementInputs,
   contradictionLogWithout, autoBuildEnabled, spineLabel,
 } from "@/v3/components/flow/flowShellData";
 import {
@@ -20,7 +20,7 @@ import {
   listFlowTracks, trackAcceptance, trackPace,
 } from "@/v3/components/flow/flowTracks";
 import { readFlowGovernance, flowAgentTier } from "@/v3/components/flow/flowGovernance";
-import { resolveMovementStakeholders, deliveryRoleDirectory, readDirectoryPeople, validateProgramRole, readRoleBindings, knownProgramRoles, kitPersonaDirectory, readSuggestedVoices, readListenPlan, listenPlanWrite, dismissedListenRoles, labelIdentity, dedupePeopleRows, UNNAMED_SUFFIX_RE } from "@/v3/components/flow/flowStakeholders";
+import { resolveMovementStakeholders, deliveryRoleDirectory, readDirectoryPeople, validateProgramRole, readRoleBindings, knownProgramRoles, kitPersonaDirectory, readSuggestedVoices, readListenPlan, listenPlanWrite, dismissedListenRoles, labelIdentity, personKey, dedupePeopleRows, reconcilePeopleWithKit, reconcileDirectoryWrite, removeDirectoryPerson, UNNAMED_SUFFIX_RE } from "@/v3/components/flow/flowStakeholders";
 import DiscoveryKitAlign from "@/v3/components/flow/DiscoveryKitAlign";
 import TheLine from "@/v3/components/flow/TheLine";
 import OperatorInbox from "@/v3/components/flow/OperatorInbox";
@@ -179,6 +179,58 @@ const DOCK_TIPS: Record<FlowView, string> = {
   grounding: "Grounding — the standards the ontology is grounded in, plus the client vocabulary",
   portfolio: "Portfolio — every programme and its engagements",
 };
+
+/* ── The shell's number-to-words rules ──────────────────────────────────────
+ * Every surface that renders one of these numbers reads it from HERE. They are
+ * exported so they can be tested directly: the failures they fix were all
+ * arithmetic that read correctly to the code and wrongly to a person.
+ */
+
+/** How the first-demo countdown reads, everywhere it appears.
+ *
+ * The defect: an overdue programme rendered "-17d to demo" — a minus sign doing
+ * the work of a word, on the number an exec looks at first. The hero line
+ * already said it properly ("17 days past the first-demo target"), so the short
+ * forms now share its vocabulary instead of leaking the sign. `magnitude` is
+ * always the absolute count; the words carry the direction. */
+export interface DemoCountdown {
+  known: boolean;
+  /** Days, always non-negative — direction lives in the words, never the sign. */
+  magnitude: number;
+  overdue: boolean;
+  /** Compact form for chips and collapsed cards: "17d overdue" / "12d to demo". */
+  short: string;
+  /** The phrase that follows a rendered day count: "past the first-demo target". */
+  phrase: string;
+}
+export function demoCountdown(days: number | null): DemoCountdown {
+  if (days == null) return { known: false, magnitude: 0, overdue: false, short: "no demo date", phrase: "first-demo date unset" };
+  const overdue = days < 0;
+  const magnitude = Math.abs(days);
+  return {
+    known: true, magnitude, overdue,
+    short: overdue ? `${magnitude}d overdue` : `${magnitude}d to demo`,
+    phrase: overdue ? "past the first-demo target" : "to first demo",
+  };
+}
+
+/** An evidence group's volume. "0.1k words" for a 100-word transcript was the
+ * rounding talking, not the record: the k form only earns its place at four
+ * figures, and below that the plain count is both shorter and true. */
+export function evidenceVolume(words: number, items: number): string {
+  if (words >= 1000) return `${(words / 1000).toFixed(words >= 10000 ? 0 : 1)}k words`;
+  if (words >= 100) return `${words.toLocaleString()} words`;
+  return `${items} item${items === 1 ? "" : "s"}`;
+}
+
+/** A Pulse KPI that is a ratio. An unknown denominator was rendered as a
+ * literal "?" ("0/?" for demonstrations accepted), which reads as a broken
+ * screen in a steering meeting. There is no honest denominator to invent when
+ * nothing is scheduled, so the KPI says so in words and shows no ratio. */
+export function kpiRatio(done: number, total: number, label: string, emptyLabel: string): { value: string; of: string | null; label: string } {
+  if (total > 0) return { value: String(done), of: `/${total}`, label };
+  return { value: "—", of: null, label: emptyLabel };
+}
 
 /** One stroke weight, currentColor — the rail's icons stop being a font-glyph grab bag. */
 const DOCK_PATHS: Record<string, React.ReactNode> = {
@@ -622,7 +674,7 @@ export default function FlowShell(props: FlowShellProps) {
             <h1 className="v3fs-hero-title">{program.name}</h1>
             {days != null ? (
               <p className="v3fs-hero-line">
-                <b>{days}</b> day{Math.abs(days) === 1 ? "" : "s"} {days >= 0 ? "to first demo" : "past the first-demo target"}
+                <b>{demoCountdown(days).magnitude}</b> day{demoCountdown(days).magnitude === 1 ? "" : "s"} {demoCountdown(days).phrase}
               </p>
             ) : null}
           </header>
@@ -811,7 +863,7 @@ export default function FlowShell(props: FlowShellProps) {
               <h1 className="v3fs-hero-title">{program.name}</h1>
               {days != null ? (
                 <p className="v3fs-hero-line">
-                  <b>{days}</b> day{Math.abs(days) === 1 ? "" : "s"} {days >= 0 ? "to first demo" : "past the first-demo target"}
+                  <b>{demoCountdown(days).magnitude}</b> day{demoCountdown(days).magnitude === 1 ? "" : "s"} {demoCountdown(days).phrase}
                 </p>
               ) : null}
             </>
@@ -1437,7 +1489,13 @@ function FlowToday({ program, ledger, programs, onSelectProgram, onResolveDecisi
                 <span className="v3fs-vc pen">Role to clarify</span>
                 <span className="v3fs-dec-mv">{person.name}{person.movementId ? ` · ${person.movementId.charAt(0).toUpperCase()}${person.movementId.slice(1)}` : ""}</span>
               </div>
-              <p className="v3fs-dec-s">&ldquo;{person.role}&rdquo; isn&rsquo;t a role this programme recognises. Map it to a known role, or accept it as a new one — the person can&rsquo;t be placed in coverage until it&rsquo;s settled.</p>
+              {/* Two vocabularies, one word. The Discovery Kit's CAST is the
+                  list of roles the programme will interview; the ledger routes
+                  open questions to FUNCTIONS. Saying "this programme doesn't
+                  recognise Finance" while five open questions sit with Finance
+                  is the app contradicting itself, so the message names the list
+                  the role is actually missing from. */}
+              <p className="v3fs-dec-s">&ldquo;{person.role}&rdquo; isn&rsquo;t a role this programme recognises. Map it to a known role, or accept it as a new one.</p>
               <div className="v3fs-dec-rec-b">mapping or accepting resolves it; it keeps clarifying until you do</div>
               <div className="v3fs-dec-cta">
                 {onSaveInputs ? (
@@ -1744,7 +1802,7 @@ function FlowMission({ program, fleet, loadMovementSpend, onSetHaltAll, onToggle
           <div className="v3fs-guard-row">
             <div className="v3fs-row-g">
               <div className="v3fs-row-n">Auto-build artifacts on input</div>
-              <div className="v3fs-row-m">off by default — evidence stales the affected artifacts and waits for you to press Regenerate. When on, AURA regenerates them automatically as soon as their inputs arrive.</div>
+              <div className="v3fs-row-m">off by default — evidence stales the affected artifacts and waits for you to press Regenerate. When on, AURA regenerates them automatically as soon as their inputs arrive. Either way, filing evidence runs the contradiction sweep, so conflicts still reach your Inbox.</div>
             </div>
             <button type="button" role="switch" aria-checked={!!(autoBuildOn ?? autoBuildEnabled(program))}
               className={`v3fs-switch${(autoBuildOn ?? autoBuildEnabled(program)) ? " on" : ""}`} disabled={busy}
@@ -2017,9 +2075,20 @@ function FlowPortfolio({ programs, activeId, onSelectProgram, onHydratePrograms,
               </div>
             </div>
           ) : (
+            /* OPEN and RENAME are separate affordances: the card head opens the
+               programme, and renaming is armed only by its own pencil. The card
+               is the most-clicked thing on the page, so the default gesture must
+               never be the destructive-by-accident one. The target check is what
+               makes that true for the KEYBOARD too — the pencil's click handler
+               stops propagation, but a keydown on a nested control still bubbles
+               here, so pressing Enter on Rename used to arm the rename and then
+               navigate straight off the card. */
             <div className="v3fs-pf-head" role="button" tabIndex={0} aria-label={`Open ${entry.name}`}
               onClick={() => onSelectProgram(entry.id)}
-              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelectProgram(entry.id); } }}>
+              onKeyDown={(e) => {
+                if (e.target !== e.currentTarget) return;
+                if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelectProgram(entry.id); }
+              }}>
               <span className="v3fs-pf-id">
                 <span className="v3fs-pf-eyebrow sm">
                   {depth > 0
@@ -2041,7 +2110,7 @@ function FlowPortfolio({ programs, activeId, onSelectProgram, onHydratePrograms,
               <span className="v3fs-pf-head-r">
                 {isCollapsed ? (
                   <span className="v3fs-pf-mini">
-                    {s.days != null ? `${s.days}d to demo` : "no demo date"}{s.total ? ` · ${s.heard}/${s.total} heard` : ""}
+                    {demoCountdown(s.days).short}{s.total ? ` · ${s.heard}/${s.total} heard` : ""}
                   </span>
                 ) : null}
                 <span className={`v3fs-pf-status ${tone}`}>
@@ -2058,14 +2127,21 @@ function FlowPortfolio({ programs, activeId, onSelectProgram, onHydratePrograms,
             <div className="v3fs-pf-detail" id={`${headId}-detail`}>
               <div className="v3fs-pf-stats">
                 <div className="v3fs-pf-stat">
-                  <b>{s.days != null ? s.days : "—"}</b>
-                  <small>{s.days != null ? "days to demo" : "no demo date"}</small>
+                  <b>{s.days != null ? demoCountdown(s.days).magnitude : "—"}</b>
+                  <small>{s.days == null ? "no demo date" : demoCountdown(s.days).overdue ? "days overdue" : "days to demo"}</small>
                 </div>
-                <div className="v3fs-pf-stat">
-                  <b>{s.heard}<i>/{s.total || "?"}</i></b>
-                  <small>stakeholders heard</small>
-                  {s.pct != null ? <span className="v3fs-pf-bar"><span style={{ width: `${s.pct}%` }} /></span> : null}
-                </div>
+                {(() => {
+                  // Same rule as Pulse: no roster means no honest denominator,
+                  // so the card says so rather than printing "0/?".
+                  const heard = kpiRatio(s.heard, s.total, "stakeholders heard", "no stakeholders on the roster yet");
+                  return (
+                    <div className="v3fs-pf-stat">
+                      <b>{heard.value}{heard.of ? <i>{heard.of}</i> : null}</b>
+                      <small>{heard.label}</small>
+                      {s.pct != null ? <span className="v3fs-pf-bar"><span style={{ width: `${s.pct}%` }} /></span> : null}
+                    </div>
+                  );
+                })()}
                 <div className="v3fs-pf-stat">
                   <b>{s.tracksTotal ? (s.stalled || s.tracksTotal) : "—"}</b>
                   <small>{s.tracksTotal ? (s.stalled ? `stalled of ${s.tracksTotal}` : "tracks on pace") : "no tracks yet"}</small>
@@ -2239,6 +2315,14 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
   // lives in ONE place (dedupePeopleRows) so the People page, its tests and any
   // future reader can never disagree about who is who.
   const dedup = useMemo(() => dedupePeopleRows(roster, roles, added), [roster, added, roles]);
+  // Two humans really do share a name here. Both rows survive (dedupePeopleRows
+  // stopped keying identity on the name alone), and this marks them so the
+  // operator reads two people rather than a rendering glitch — the Role column
+  // beside it is what tells them apart. Nothing is invented to distinguish them.
+  const sharedName = (name: string) => dedup.ambiguousNames.has(personKey(name));
+  const sharedNameTag = (name: string) => (sharedName(name) ? (
+    <span className="v3fs-vc pen" title="Another person on this programme has the same name — their role tells them apart">same name</span>
+  ) : null);
   // Remove a ROLE from the cast (operator judgement, attested). Named people
   // are never removed this way — people outrank roles.
   const removeRole = async (role: string) => {
@@ -2285,56 +2369,42 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
   };
 
   // ── Reconcile with the Discovery Kit ─────────────────────────────────────
-  // The kit is the cast's source of truth. One explicit gesture makes this
-  // page mirror it: internal personas the kit lists but People doesn't gain a
-  // row; operator-added Listen rows the kit no longer knows are removed.
+  // The kit PROPOSES; the operator DISPOSES. Internal personas the kit lists
+  // but People doesn't gain a row in ONE gesture — adding invents nobody.
+  // People the kit doesn't name are NOT removed by that gesture: an
+  // operator-asserted human outranks a generated artifact, so each one is
+  // flagged with its reason and removed only when confirmed individually.
   // External personas stay display-only — they're heard through whoever faces
-  // them, not interviewed. ONE batched write; counts shown before and after.
-  const kitIdentity = useMemo(() => {
-    const s = new Set<string>();
-    const raw = (program.rawData ?? {}) as Record<string, unknown>;
-    const inner = (typeof raw.data === "object" && raw.data !== null ? raw.data : raw) as Record<string, unknown>;
-    const kit = inner.discoveryKit;
-    if (kit && typeof kit === "object" && !Array.isArray(kit)) {
-      const k = kit as Record<string, unknown>;
-      for (const iv of Array.isArray(k.interviews) ? k.interviews : []) {
-        if (!iv || typeof iv !== "object") continue;
-        const row = iv as Record<string, unknown>;
-        for (const v of [row.role, row.stakeholder]) { const id = labelIdentity(String(v ?? "")); if (id) s.add(id); }
-      }
-      for (const p of Array.isArray(k.personas) ? k.personas : []) {
-        if (!p || typeof p !== "object") continue;
-        const id = labelIdentity(String((p as Record<string, unknown>).name ?? "")); if (id) s.add(id);
-      }
-    }
-    // People added on the kit's coverage matrix are part of the kit too.
-    for (const r of readListenPlan(program).roles) { const id = labelIdentity(r); if (id) s.add(id); }
-    return s;
-  }, [program]);
-  const reconcile = useMemo(() => ({
-    toAdd: personas.filter((p) => p.kind !== "external"),
-    toRemove: added.filter((p) => p.movementId === "listen"
-      && !kitIdentity.has(labelIdentity(p.name)) && !kitIdentity.has(labelIdentity(p.role))),
-  }), [personas, added, kitIdentity]);
+  // them, not interviewed. The comparison itself lives in flowStakeholders.
+  const reconcile = useMemo(() => reconcilePeopleWithKit(program, personas, added), [program, personas, added]);
   const [reconBusy, setReconBusy] = useState(false);
   const [reconNote, setReconNote] = useState<string | null>(null);
+  const [armedDrop, setArmedDrop] = useState<string | null>(null);
   const runReconcile = async () => {
-    if (!onSaveInputs || (!reconcile.toAdd.length && !reconcile.toRemove.length)) return;
+    if (!onSaveInputs || !reconcile.toAdd.length) return;
     setReconBusy(true);
     try {
-      const dropIds = new Set(reconcile.toRemove.map((p) => p.id));
-      const kept = readDirectoryPeople(program).filter((p) => !dropIds.has(p.id));
-      const stamp = Date.now().toString(36);
-      const additions = reconcile.toAdd.map((p, i) => ({
-        id: `dp-${stamp}-${i}-${p.name.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 8)}`,
-        name: p.name, role: p.name, email: undefined, movementId: "listen",
-        roleResolved: validateProgramRole(program, p.name).known,
-      }));
-      await onSaveInputs("listen", { _directoryPeople: JSON.stringify([...kept, ...additions]) }, {
-        attest: { action: "People reconciled with the Discovery Kit", detail: `${additions.length} added, ${reconcile.toRemove.length} removed` },
+      const next = reconcileDirectoryWrite(readDirectoryPeople(program), reconcile.toAdd, {
+        stamp: Date.now().toString(36),
+        roleResolved: (role) => validateProgramRole(program, role).known,
       });
-      setReconNote(`${additions.length} added · ${reconcile.toRemove.length} removed — People now mirrors the kit.`);
+      await onSaveInputs("listen", { _directoryPeople: JSON.stringify(next) }, {
+        attest: { action: "People reconciled with the Discovery Kit", detail: `${reconcile.toAdd.length} added; nobody removed` },
+      });
+      setReconNote(`${reconcile.toAdd.length} added — the kit's cast is now on the page.`);
     } finally { setReconBusy(false); }
+  };
+  // Removing a flagged person is its own act, per person, on the operator's
+  // judgement — never a side effect of accepting the kit's additions.
+  const dropFlaggedPerson = async (person: { id: string; name: string; role: string }) => {
+    if (!onSaveInputs) return;
+    setArmedDrop(null);
+    setBusyRow(person.id);
+    try {
+      await onSaveInputs("listen", { _directoryPeople: JSON.stringify(removeDirectoryPerson(readDirectoryPeople(program), person.id)) }, {
+        attest: { action: `Person removed — ${person.name} (${person.role})`, detail: "operator confirmed individually after the Discovery Kit flagged them" },
+      });
+    } finally { setBusyRow(null); }
   };
 
   // ── Inline editing ──────────────────────────────────────────────────────
@@ -2465,10 +2535,11 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
         <td>{row.role}</td>
         <td>
           {onRenamePerson ? (
-            <input className="v3fs-dir-in" defaultValue={row.name} aria-label={`Name for ${row.name}`}
+            <input className="v3fs-dir-in" defaultValue={row.name} aria-label={`Name for ${row.name}${sharedName(row.name) ? ` (${row.role})` : ""}`}
               key={`rn-${i}-${row.name}`} disabled={busyRow === `listen:${row.name}` || busyRow === `rename:${row.name}`}
               onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== row.name) void renamePerson(row.name, v); }} />
           ) : row.name}
+          {sharedNameTag(row.name)}
         </td>
         <td>
           {onSaveInputs ? (
@@ -2486,10 +2557,11 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
       <td>{row.role}</td>
       <td>
         {row.name && onRenamePerson ? (
-          <input className="v3fs-dir-in" defaultValue={row.name} aria-label={`Name for ${row.name}`}
+          <input className="v3fs-dir-in" defaultValue={row.name} aria-label={`Name for ${row.name}${sharedName(row.name) ? ` (${row.role})` : ""}`}
             key={`dn-${i}-${row.name}`} disabled={busyRow === `${row.where.toLowerCase()}:${row.name}` || busyRow === `rename:${row.name}`}
             onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== row.name) void renamePerson(row.name, v); }} />
         ) : row.name || <em>unbound — name them on the {row.where} collect card</em>}
+        {row.name ? sharedNameTag(row.name) : null}
       </td>
       <td>
         {row.name && onSaveInputs && !row.isSponsor ? (
@@ -2529,9 +2601,10 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
         </select>
       </td>
       <td>
-        <input className="v3fs-dir-in" defaultValue={row.name} aria-label={`Name for ${row.name}`}
+        <input className="v3fs-dir-in" defaultValue={row.name} aria-label={`Name for ${row.name}${sharedName(row.name) ? ` (${row.role})` : ""}`}
           key={`name-${row.id}-${row.name}`} disabled={!onSaveInputs || busyRow === row.id}
           onBlur={(e) => { if (e.target.value.trim() && e.target.value.trim() !== row.name) void editAdded(row.id, { name: e.target.value }); }} />
+        {sharedNameTag(row.name)}
       </td>
       <td>
         <input className="v3fs-dir-in" type="email" placeholder="add email" defaultValue={row.email ?? ""} aria-label={`Email for ${row.name}`}
@@ -2577,22 +2650,51 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
       ) : null}
       {onSaveInputs ? (
         <div className="v3fs-panel v3fs-panel-wide">
-          <div className="v3fs-ph"><h3>Reconcile with the Discovery Kit</h3><span>make this cast mirror the kit — internal personas the kit lists gain a row; operator-added Listen rows the kit doesn&rsquo;t know are removed</span></div>
+          <div className="v3fs-ph"><h3>Reconcile with the Discovery Kit</h3><span>the kit proposes, you dispose — internal personas the kit lists gain a row in one gesture; people the kit doesn&rsquo;t name are flagged for you to judge, never removed for you</span></div>
           <div className="v3fs-recon">
-            {reconcile.toAdd.length || reconcile.toRemove.length ? (
+            {reconcile.toAdd.length ? (
               <>
                 <span className="v3fs-recon-sum">
-                  {reconcile.toAdd.length ? <>＋ {reconcile.toAdd.length} to add: {reconcile.toAdd.map((p) => p.name).slice(0, 4).join(", ")}{reconcile.toAdd.length > 4 ? ` +${reconcile.toAdd.length - 4} more` : ""}</> : null}
-                  {reconcile.toAdd.length && reconcile.toRemove.length ? <b> · </b> : null}
-                  {reconcile.toRemove.length ? <>− {reconcile.toRemove.length} to remove: {reconcile.toRemove.map((p) => p.name).slice(0, 4).join(", ")}{reconcile.toRemove.length > 4 ? ` +${reconcile.toRemove.length - 4} more` : ""}</> : null}
+                  ＋ {reconcile.toAdd.length} to add: {reconcile.toAdd.map((p) => p.name).slice(0, 4).join(", ")}{reconcile.toAdd.length > 4 ? ` +${reconcile.toAdd.length - 4} more` : ""}
                 </span>
                 <button type="button" className="v3fs-btn pri" disabled={reconBusy}
-                  onClick={() => void runReconcile()}>{reconBusy ? "Reconciling…" : "Reconcile"}</button>
+                  onClick={() => void runReconcile()}>{reconBusy ? "Adding…" : `Add ${reconcile.toAdd.length} from the kit`}</button>
               </>
             ) : (
-              <span className="v3fs-recon-sum ok">✓ In sync with the Discovery Kit{reconNote ? ` (${reconNote})` : ""}</span>
+              <span className="v3fs-recon-sum ok">✓ Everyone the kit lists is on this page{reconNote ? ` (${reconNote})` : ""}</span>
             )}
           </div>
+          {/* Absences are FLAGGED, never bundled: a person the operator typed in
+              outranks a generated document, so the kit's silence is a prompt to
+              look, not a licence to delete. Each is removed on its own confirm. */}
+          {reconcile.flagged.length ? (
+            <div className="v3fs-recon-flags">
+              <p className="v3fs-addp-note">
+                {reconcile.flagged.length} {reconcile.flagged.length === 1 ? "person is" : "people are"} on this page but not in the kit.
+                They stay until you say otherwise — regenerate the Discovery Kit to fold them in, or remove them one at a time here.
+              </p>
+              {reconcile.flagged.map(({ person, reason }) => (
+                <div key={person.id} className="v3fs-row">
+                  <div className="v3fs-row-g">
+                    <div className="v3fs-row-n">{person.name} <span className="v3fs-vc pen">{person.role}</span></div>
+                    <div className="v3fs-row-m">{reason}</div>
+                  </div>
+                  {armedDrop === person.id ? (
+                    <span className="v3fs-pf-arm">
+                      <span className="v3fs-pf-arm-q">Remove {person.name} from the programme?</span>
+                      <button type="button" className="v3fs-btn danger" disabled={busyRow === person.id}
+                        onClick={() => void dropFlaggedPerson(person)}>Remove</button>
+                      <button type="button" className="v3fs-btn" onClick={() => setArmedDrop(null)}>Keep</button>
+                    </span>
+                  ) : (
+                    <button type="button" className="v3fs-btn quiet" disabled={busyRow === person.id}
+                      title="Remove this person — a deliberate call, not something the kit decides"
+                      onClick={() => setArmedDrop(person.id)}>Remove…</button>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : null}
         </div>
       ) : null}
       {suggested.length ? (
@@ -2943,7 +3045,7 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
                   <span className="v3fs-ev-gname">{person.replace(/[-_]+/g, " ").replace(/\s+/g, " ").trim()}</span>
                   <span className="v3fs-ev-gcount">{(() => {
                     const words = items.reduce((n, e) => n + (e.text ? e.text.trim().split(/\s+/).length : 0), 0);
-                    return words >= 100 ? `${(words / 1000).toFixed(words >= 10000 ? 0 : 1)}k words` : `${items.length} item${items.length === 1 ? "" : "s"}`;
+                    return evidenceVolume(words, items.length);
                   })()}</span>
                   <span className="v3fs-ev-gwhen">{items[0]?.capturedAt ?? ""}</span>
                 </button>
@@ -3039,9 +3141,12 @@ function FlowPulse({ program, programs, onSelectProgram, onMintBrief }: { progra
   // The family: this programme's drill-downs, each with its steering numbers.
   const family = programs ? listChildDrilldowns(program, programs) : [];
   const days = daysToFirstDemo(program);
+  const countdown = demoCountdown(days);
   const coverage = listenCoverage(program);
   const demos = demoAcceptance(program);
-  const words = wordsOfEvidence(program);
+  // Delivery progress for the fourth KPI, read from the SAME summary the
+  // Portfolio card renders (computePfStats) so the two screens can't disagree.
+  const pf = computePfStats(program);
   const kpis = readMetricRegistry(program);
   const metricHealth = metricConsistency(program);
   const [packOpen, setPackOpen] = useState(false);
@@ -3071,7 +3176,7 @@ function FlowPulse({ program, programs, onSelectProgram, onMintBrief }: { progra
               <button key={child.id} type="button" className="v3fs-pulse-fam-chip" onClick={() => onSelectProgram?.(child.id)}>
                 <span className="v3fs-dd-lens">◇ {anchor ? drillKindMeta(anchor.kind).noun : "scope"}</span>
                 <b>{anchor?.label ?? child.name}</b>
-                <span className="v3fs-pulse-fam-m">{days != null ? `${days}d to demo` : "no demo date"}{waiting ? ` · ${waiting} waiting` : ""}</span>
+                <span className="v3fs-pulse-fam-m">{demoCountdown(days).short}{waiting ? ` · ${waiting} waiting` : ""}</span>
               </button>
             );
           })}
@@ -3079,20 +3184,32 @@ function FlowPulse({ program, programs, onSelectProgram, onMintBrief }: { progra
       ) : null}
       <div className="v3fs-stats">
         <div className={`v3fs-stat hero${days == null ? " empty" : ""}`}>
-          <div className="v3fs-stat-n">{days != null ? <b>{days}</b> : <b>—</b>}{days != null ? <small> days</small> : null}</div>
-          <div className="v3fs-stat-l">{days != null ? "to first demo" : "first-demo date unset"}</div>
+          <div className="v3fs-stat-n">{countdown.known ? <b>{countdown.magnitude}</b> : <b>—</b>}{countdown.known ? <small> days</small> : null}</div>
+          <div className="v3fs-stat-l">{countdown.phrase}</div>
         </div>
+        {/* A KPI never renders a "?" where a denominator should be — with
+            nothing on the ledger there is no honest total to show, so the
+            number stands down and the label says why. */}
+        {[
+          kpiRatio(coverage.done, coverage.total, "stakeholders engaged", "no stakeholders on the roster yet"),
+          kpiRatio(demos.accepted, demos.total, "demonstrations accepted", "no demonstrations scheduled yet"),
+        ].map((stat, i) => {
+          const pct = i === 0 ? engagedPct : demoPct;
+          return (
+            <div key={stat.label} className="v3fs-stat">
+              <div className="v3fs-stat-n"><b>{stat.value}</b>{stat.of ? <small>{stat.of}</small> : null}</div>
+              <div className="v3fs-stat-l">{stat.label}</div>
+              {pct != null ? <span className="v3fs-pf-bar"><span style={{ width: `${pct}%` }} /></span> : null}
+            </div>
+          );
+        })}
+        {/* Volume of text is not an outcome — 19,314 words says nothing about
+            whether the programme is moving. The fourth KPI is delivery pace,
+            the same number the Portfolio card shows. */}
         <div className="v3fs-stat">
-          <div className="v3fs-stat-n"><b>{coverage.done}</b><small>/{coverage.total || "?"}</small></div>
-          <div className="v3fs-stat-l">stakeholders engaged</div>
-          {engagedPct != null ? <span className="v3fs-pf-bar"><span style={{ width: `${engagedPct}%` }} /></span> : null}
+          <div className="v3fs-stat-n"><b>{pf.tracksTotal ? (pf.stalled || pf.tracksTotal) : "—"}</b></div>
+          <div className="v3fs-stat-l">{pf.tracksTotal ? (pf.stalled ? `tracks stalled of ${pf.tracksTotal}` : "tracks on pace") : "no tracks yet"}</div>
         </div>
-        <div className="v3fs-stat">
-          <div className="v3fs-stat-n"><b>{demos.accepted}</b><small>/{demos.total || "?"}</small></div>
-          <div className="v3fs-stat-l">demonstrations accepted</div>
-          {demoPct != null ? <span className="v3fs-pf-bar"><span style={{ width: `${demoPct}%` }} /></span> : null}
-        </div>
-        <div className="v3fs-stat"><div className="v3fs-stat-n"><b>{words.toLocaleString()}</b></div><div className="v3fs-stat-l">words of evidence</div></div>
       </div>
       <div className="v3fs-grid2">
         <div className="v3fs-panel">
