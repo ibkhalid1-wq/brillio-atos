@@ -623,6 +623,152 @@ function ListenWorkflowSurface({ review, stakeholder, programme, objective, subm
   );
 }
 
+/* ------------------------------------------------------------------ *
+ * The DESIGN REVIEW ROUND's page — the stakeholder's half of the loop
+ * ------------------------------------------------------------------ */
+
+/** The round stamp a design-round link carries (`designRoundReviewInput`). Read
+ *  only for what it says on the page; the round itself is the operator's record. */
+export interface DesignRoundReviewStamp {
+  kind: string;
+  roundId?: string;
+  ordinal?: number;
+  designVersion?: string;
+  prototypeTitle?: string;
+  hasDemoScripts?: boolean;
+}
+
+/** The verdict vocabulary the QUARANTINE already speaks. `accepted` and `rework` are
+ *  the words the operator's inbox stores and `inboxItemRoundAttribution` maps onto
+ *  the round's own `approved`/`changes` — so this page invents no third spelling of
+ *  "yes". "Accepted with changes" is deliberately absent: the round has two answers,
+ *  and a maybe that reads as a yes is what the gate exists to prevent. */
+export type DesignRoundVerdict = "accepted" | "rework";
+
+/**
+ * THE REVIEW PAGE for one stakeholder in a design review round: the prototype they
+ * are being asked about, the demo script cut for their workflow, and the two things
+ * the round needs back — approve, or ask for changes, plus what they actually think.
+ *
+ * It WRITES NOTHING to the round. The send goes through the same portal channel as
+ * every other response and lands in the operator's quarantine inbox; the round only
+ * hears about it when the operator ingests it. That is the whole quarantine
+ * discipline, and a client-facing page is exactly where it must not be shortcut.
+ */
+export function DesignRoundReviewSurface({
+  stamp, stakeholder, programme, objective, prototype, script, submitting, error, onSubmit, draftKey, afterIntro,
+}: {
+  stamp: DesignRoundReviewStamp;
+  stakeholder: string;
+  programme?: string;
+  objective?: string;
+  /** The built prototype (or the honest gap saying why there isn't one), rendered by
+   *  the page that owns the pilot frame — never a second copy of it here. */
+  prototype?: React.ReactNode;
+  /** THEIR demo script — the walk narrated for their workflow. */
+  script?: { openingQuote?: string; scenario?: string; acceptanceAsk?: string; steps?: Array<{ beat?: string; say?: string; callback?: string }> };
+  submitting: boolean;
+  error: string | null;
+  onSubmit: (verdict: DesignRoundVerdict, text: string) => void;
+  draftKey?: string;
+  afterIntro?: React.ReactNode;
+}) {
+  const [verdict, setVerdict] = usePersistentState<DesignRoundVerdict | "">(draftKey, "drVerdict", "");
+  const [text, setText] = usePersistentState(draftKey, "drText", "");
+  const greeting = greetingName(stakeholder);
+  const coreGoal = objective ? objective.split(/\s+[—–]\s+/)[0].trim().replace(/[.\s]+$/, "") : "";
+  const round = Number(stamp.ordinal) || 0;
+  // Asking for changes without saying what to change is not a review — the operator
+  // would have a red light and nothing to act on. An approval may stand on its own.
+  const ready = verdict === "accepted" || (verdict === "rework" && text.trim().length > 0);
+
+  return (
+    <>
+      <header className="v3fs-rvw-top">
+        <div className="v3fs-rvw-brandline"><img src="/brillio-logo.png" alt="Brillio" className="v3fs-portal-brandimg" /> · AURA</div>
+        {programme ? <div className="v3fs-rvw-prog">{programme}</div> : null}
+        {greeting ? <h1 className="v3fs-rvw-hi">Hi {greeting},</h1> : null}
+        <p className="v3fs-rvw-lede">
+          We&rsquo;re building <b>{programme || "this programme"}</b> — an agentic solution{coreGoal ? <> built to {coreGoal.charAt(0).toLowerCase() + coreGoal.slice(1)}</> : ""}.
+        </p>
+        <p className="v3fs-rvw-sub">
+          This is <b>{stamp.prototypeTitle || "the prototype"}</b>{round ? <> — round {round} of the design review</> : null}.
+          Have a look, then tell us whether you approve this design as the one we build on.
+        </p>
+        <div className="v3fs-rvw-ask">
+          We need one of two answers from you: <b>approve it</b>, or <b>tell us what to change</b>. The
+          design isn&rsquo;t finished until everyone we asked has answered.
+        </div>
+      </header>
+      {afterIntro}
+
+      {prototype ? <div className="v3fs-dr-proto">{prototype}</div> : null}
+
+      {script && (script.openingQuote || script.scenario || script.steps?.length) ? (
+        <section className="v3fs-rvw-wf plain v3fs-dr-script">
+          <div className="v3fs-rvw-wf-h">
+            <b>Your demo script</b>
+            <span className="v3fs-rvw-trigger">The walk we cut for your workflow</span>
+          </div>
+          {script.openingQuote ? <blockquote className="v3fs-portal-quote">{script.openingQuote}</blockquote> : null}
+          {script.scenario ? <p className="v3fs-dr-scenario">{script.scenario}</p> : null}
+          {script.steps?.length ? (
+            <ol className="v3fs-dr-beats">
+              {script.steps.map((step, i) => (
+                <li key={i}>
+                  {step.beat ? <b>{step.beat}</b> : null}
+                  {step.say ? <span className="v3fs-dr-say">{step.say}</span> : null}
+                  {step.callback ? <span className="v3fs-dr-callback">{step.callback}</span> : null}
+                </li>
+              ))}
+            </ol>
+          ) : null}
+        </section>
+      ) : null}
+
+      <section className="v3fs-rvw-wf v3fs-dr-verdict">
+        <div className="v3fs-rvw-wf-h">
+          <b>{script?.acceptanceAsk || "Do you approve this design as the one we build on?"}</b>
+        </div>
+        <div className="v3fs-portal-verdicts" role="radiogroup" aria-label="Your answer on this design">
+          <button type="button" role="radio" aria-checked={verdict === "accepted"}
+            className={`v3fs-portal-verdict${verdict === "accepted" ? " on" : ""}`}
+            onClick={() => setVerdict("accepted")}>
+            I approve this design
+          </button>
+          <button type="button" role="radio" aria-checked={verdict === "rework"}
+            className={`v3fs-portal-verdict${verdict === "rework" ? " on" : ""}`}
+            onClick={() => setVerdict("rework")}>
+            Not yet — I&rsquo;m asking for changes
+          </button>
+        </div>
+        <label className="v3fs-rvw-bq">
+          <span>{verdict === "rework"
+            ? "What needs to change? — required, so the team knows what to fix"
+            : "Anything you want the team to know — optional"}</span>
+          <div className="v3fs-rvw-field">
+            <textarea rows={4} value={text} onChange={(e) => setText(e.target.value)} />
+            <DictationButton label="Speak your feedback" onText={(spoken) => setText((cur) => joinDictation(cur, spoken))} />
+          </div>
+        </label>
+        {draftKey && (verdict || text.trim()) ? <p className="v3fs-rvw-saved">✓ Saved on this device — you can close this and come back</p> : null}
+        {error ? <p className="v3fs-portal-err">{error}</p> : null}
+        <div className="v3fs-portal-sendgroup">
+          <button type="button" className="v3fs-btn pri v3fs-rvw-send" disabled={submitting || !ready}
+            title={ready ? undefined : verdict === "rework" ? "Say what needs to change" : "Choose approve or ask for changes"}
+            onClick={() => { if (ready && verdict) onSubmit(verdict, text.trim()); }}>
+            {submitting ? "Sending…" : verdict === "rework" ? "Send my changes" : "Send my answer"}
+          </button>
+          <p className="v3fs-portal-foot">
+            Your answer goes to the programme team, who record it against this review round.
+            Nothing enters the record until they have read it.
+          </p>
+        </div>
+      </section>
+    </>
+  );
+}
+
 export default function FlowReviewSurface({ review, stakeholder, submitting, error, onSubmit, draftKey, programme, objective, returning, afterIntro, clip, questionModel, store, roster }: {
   review: ReviewPayload; stakeholder: string; submitting: boolean; error: string | null;
   /** The pack's LOCUS-BACKED questions, rendered through the ONE renderer with

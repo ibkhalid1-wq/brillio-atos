@@ -40,6 +40,12 @@ const META_KEYS = new Set([
   "flowapprovalpacks",
   "flowportalinbox",
   "flowoperatoroverrides",
+  // The DESIGN REVIEW ROUND (`flowDesignRound.ts`) is the same shape of append-only
+  // side-channel as the packs above: opening a round writes `flowDesignRounds` plus an
+  // attestation and nothing else, so a round opened against a half-hydrated programme
+  // would make an otherwise-empty payload read as real content — the exact 2026-07-13
+  // clobber shape with a different key on it.
+  "flowdesignrounds",
   "programsnapshots",
 ]);
 

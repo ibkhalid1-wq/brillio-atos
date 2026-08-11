@@ -103,6 +103,12 @@ interface TheLineProps {
    * Classic's own handlers; the parent re-checks criteria at write time. */
   onRecordGate?: (movementId: string) => Promise<void>;
   onReopenGate?: (movementId: string, reason: string) => Promise<void>;
+  /** THE review mint — the durable link a design review round hands out is the same
+   *  one every other review share uses, stamped with the round. Pass-through. */
+  onMintReview?: (input: { movementId: string; who: string; role: string; captureField: string; reviewKind: string; review: unknown; questions: string[]; intro: string; unnamed?: boolean; loci?: string[]; designRoundId?: string }) => Promise<string | null>;
+  /** The design review round's write verbs (`flowDesignRound.ts`), one handler.
+   *  Pass-through to the Design Loop band; omitted ⇒ the round reads read-only. */
+  onDesignRound?: ComponentProps<typeof DesignLoopZones>["onDesignRound"];
   /** Mint a no-login sign-off link for an artifact — returns the URL. */
   onSendForApproval?: (input: {
     artifactId: string; movementId: string; artifactTitle: string;
@@ -346,7 +352,7 @@ function packFor(program: ProgramSummary, who: string, movementId: "frame" | "li
   return shown.find(linkIsOpen) ?? shown[shown.length - 1];
 }
 
-export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenameRole, onMintFollowUp, onCloseLink, onScheduleFollowUp, onRunAgent, onRecordGate, onReopenGate, onSendForApproval }: TheLineProps) {
+export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenameRole, onMintFollowUp, onMintReview, onCloseLink, onScheduleFollowUp, onRunAgent, onRecordGate, onReopenGate, onSendForApproval, onDesignRound }: TheLineProps) {
   const model = useMemo(() => buildLineModel(program), [program]);
   // The ONE in-browser ledger read every surface here shares (read-only migrate).
   const ledger = useProgramLedger(program);
@@ -456,6 +462,19 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
   const filteredCast = areaFilter && castAreas.includes(areaFilter)
     ? cast.filter((row) => row.areas.includes(areaFilter))
     : cast;
+
+  // Who the Design Loop's review round may ask — THE cast, not a second resolution
+  // of the roster. Passed down so the round and Discover can never disagree about
+  // who is on this programme.
+  const roundRoster = useMemo(
+    () => cast.map((row) => ({
+      name: row.label,
+      role: row.role,
+      isRole: row.isRole,
+      email: stakeholderEmail(program, row.label) ?? undefined,
+    })),
+    [cast, program],
+  );
 
   // ── Discover as an engagement dashboard: each person's DOMINANT actionable state,
   // computed from the ledger (operator assignments + roster signal). Ageing on
@@ -1069,10 +1088,13 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
             // ownership zones keyed to source class (operator builds · stakeholders
             // shape · joint), convergence promoted to real closures. See
             // DesignLoopZones.tsx and docs/aura/surface-redesign.md.
-            <DesignLoopZones band={band} ledger={ledger}
+            <DesignLoopZones band={band} program={program} ledger={ledger}
+              roster={roundRoster}
               onOpen={openStation}
               onRegen={onRunAgent ? regenerate : undefined}
               onGenerate={onRunAgent ? generate : undefined}
+              onMintReview={onMintReview}
+              onDesignRound={onDesignRound}
               regenBusy={regenBusy} genBusy={genBusy} />
           ) : (
           <div className={`v3ln-stns n${band.stations.length + (band.id === "frame" && onSaveInputs ? 1 : 0)}`}>

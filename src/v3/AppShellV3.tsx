@@ -48,6 +48,13 @@ import { scheduleFollowUp, discoveryKitCoverageGuidance } from "@/v3/components/
 import { listenCanonicalCastGuidance, kitAreaEntityGuidance, atlasAreaEntityGuidance, areaVocabularyGuidance, ontologyAreaCoverageGuidance } from "@/v3/components/flow/listenCoverage";
 import { mintFollowUpPack, closeDurableLink, latestPackFor, portalLinkFor, mintReviewPack, latestReviewPackFor } from "@/v3/components/flow/flowPortal";
 import { mintBrief, briefLinkFor } from "@/v3/components/flow/flowBriefs";
+// The design review round's verbs — every one of them a pure blob transform, run
+// through `persistFlowMutation` like every other Flow write.
+import {
+  openDesignRound, attachDesignRoundLinks, recordDesignRoundVerdict,
+  waiveDesignRoundParticipant, delegateDesignRoundParticipant, closeDesignRound,
+  recordInboxResponseOnRound,
+} from "@/v3/components/flow/flowDesignRound";
 import FlowRespond from "@/v3/components/flow/FlowRespond";
 import FlowBrief from "@/v3/components/flow/FlowBrief";
 import FlowApprove from "@/v3/components/flow/FlowApprove";
@@ -2921,7 +2928,17 @@ export default function AppShellV3() {
                   mintedLink = `${window.location.origin}${window.location.pathname}?flowRespond=${encodeURIComponent(`${program.id}.${last.token}`)}`;
                 }
               }
-              return blob;
+              // A DESIGN-ROUND share records its own back-reference IN THE SAME
+              // MUTATION. Called afterwards as a separate write it would run against
+              // this render's `activeProgram` — the state as it was BEFORE the mint —
+              // find no pack stamped with the round, and quietly write nothing, which
+              // is exactly what happened the first time this ran against a live
+              // programme. Chained, `attachDesignRoundLinks` sees the pack the line
+              // above just minted. Idempotent and additive: every other review share
+              // passes no `designRoundId` and this branch never runs.
+              if (!input.designRoundId) return blob;
+              const base = blob ? { ...program, rawData: blob } : program;
+              return attachDesignRoundLinks(base, input.designRoundId, actor) ?? blob;
             });
             if (!mintedLink && activeProgram) {
               // A standing review link already covers this person — reuse it.
@@ -2929,6 +2946,26 @@ export default function AppShellV3() {
               if (existing) mintedLink = portalLinkFor(activeProgram.id, existing);
             }
             return mintedLink;
+          }}
+          onDesignRound={async (op) => {
+            // The DESIGN REVIEW ROUND's write verbs, each landing on
+            // `flowDesignRound.ts`'s own function through the ONE flow-mutation path
+            // (pre-hydration guard, compare-and-set, rebase-on-conflict). Nothing is
+            // decided here: every refusal — no prototype, an empty roster, an
+            // operator capture with no stated basis, a waiver with no reason, a close
+            // on an incomplete round — belongs to the model, which returns null and
+            // writes nothing.
+            const actor = currentUser?.email || "you";
+            await persistFlowMutation((program) => {
+              switch (op.op) {
+                case "open": return openDesignRound(program, { roster: op.roster, note: op.note }, actor);
+                case "link": return attachDesignRoundLinks(program, op.roundId, actor);
+                case "verdict": return recordDesignRoundVerdict(program, op, actor);
+                case "waive": return waiveDesignRoundParticipant(program, op, actor);
+                case "delegate": return delegateDesignRoundParticipant(program, op, actor);
+                case "close": return closeDesignRound(program, op.roundId, actor);
+              }
+            });
           }}
           onRecordShowPass={async (trackId, pass) => {
             await persistFlowMutation((program) => recordShowPass(program, trackId, pass));
@@ -2967,7 +3004,26 @@ export default function AppShellV3() {
             const regenGuidance = areas.length
               ? `AREA-FOCUSED REGENERATION: new evidence just arrived from ${who} in the ${areas.join(" / ")} area. Re-derive faithfully from ALL evidence, giving special attention to ${areas[0]}; keep the workflows and entities of OTHER areas intact where their evidence is unchanged.`
               : undefined;
-            await persistFlowMutation((program) => ingestPortalResponse(program, itemId, actor));
+            // THE ROUND FIRST, THEN THE INGEST — in that order, because
+            // `recordInboxResponseOnRound` reads the inbox item and the ingest
+            // CONSUMES it. Reversed, the item is gone and the stakeholder's own
+            // approval never reaches the round it answered. It is a no-op (null,
+            // nothing written) for every response that is not a round reply: the
+            // attribution is the round-stamped link the sender holds, never a name
+            // match, so an ordinary interview answer writes nothing here. The
+            // quarantine discipline is untouched — this records the verdict the
+            // operator is already ingesting, it does not admit the evidence.
+            await persistFlowMutation((program) => {
+              const onRound = recordInboxResponseOnRound(program, itemId, actor);
+              // ONE write, not two. Two `persistFlowMutation` calls would both read
+              // the same in-memory `activeProgram`, so the second would be composed
+              // from a blob that never saw the first — recoverable only through the
+              // conflict rebase, and silently lost without it. Chaining the blobs
+              // keeps the order the model asks for AND keeps the compare-and-set
+              // honest: the whole thing re-runs from fresh state on a conflict.
+              const next = onRound ? { ...program, rawData: onRound } : program;
+              return ingestPortalResponse(next, itemId, actor) ?? onRound;
+            });
             // Name the DESTINATION. The row simply vanished from the Inbox and
             // nothing said where it went, so the operator had no way to tell
             // "filed" from "lost" — and with auto-build off, the stale
