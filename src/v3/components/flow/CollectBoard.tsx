@@ -233,8 +233,15 @@ export function IntervieweeDiscovery({ program, movementId, captureField, areaFi
   onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
   onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string; unnamed?: boolean; loci?: string[]; scripted?: boolean }) => Promise<string | null>;
   /** Mint a shareable REVIEW link (workflow-agentify or ontology+atlas) — the
-   * projected payload is built on the client and stored on the pack. */
-  onMintReview?: (input: { movementId: string; who: string; role: string; captureField: string; reviewKind: string; review: unknown; questions: string[]; intro: string; unnamed?: boolean }) => Promise<string | null>;
+   * projected payload is built on the client and stored on the pack.
+   *
+   * `loci` mirrors the follow-up hop above exactly (same name, same optionality,
+   * same trailing placement) because both mints write the SAME `questionLoci`
+   * field on the SAME durable pack. Index-aligned with `questions` when passed:
+   * `loci[i]` is the point `questions[i]` closes. THIS caller passes none — see
+   * `inviteArea`: nothing in this component's scope holds a ledger, so there is
+   * no locus to align, and the miss stays visible rather than invented. */
+  onMintReview?: (input: { movementId: string; who: string; role: string; captureField: string; reviewKind: string; review: unknown; questions: string[]; intro: string; unnamed?: boolean; loci?: string[] }) => Promise<string | null>;
   onMintPacks?: () => Promise<void>;
   onScheduleFollowUp?: (movementId: string, who: string, date: string) => Promise<void>;
   /** Mint a sign-off link for ONE stakeholder × artifact — approval lives on
@@ -832,8 +839,14 @@ function IntervieweeCard({ program, movementId, stakeholder, captureField, coll,
   onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string } }) => Promise<void>;
   onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string; unnamed?: boolean; loci?: string[]; scripted?: boolean }) => Promise<string | null>;
   /** Mint the ONE unified link for Listen/Envision — their questions folded into
-   * a projected visual review (their workflow + the domain terms). */
-  onMintReview?: (input: { movementId: string; who: string; role: string; captureField: string; reviewKind: string; review: unknown; questions: string[]; intro: string; unnamed?: boolean }) => Promise<string | null>;
+   * a projected visual review (their workflow + the domain terms).
+   *
+   * `loci` mirrors the follow-up hop above exactly, and for the same reason: one
+   * durable pack, one `questionLoci` field, one edge pass-through. Index-aligned
+   * with `questions` when passed. THIS caller passes none — `linkQuestions` is
+   * operator asks plus the kit script, both plain strings with no point in the
+   * model behind them, so there is nothing to align and nothing to invent. */
+  onMintReview?: (input: { movementId: string; who: string; role: string; captureField: string; reviewKind: string; review: unknown; questions: string[]; intro: string; unnamed?: boolean; loci?: string[] }) => Promise<string | null>;
   /** Put the meeting on the programme calendar (attested) — the .ics download
    * is the invite; this is the record of it. */
   onScheduleFollowUp?: (movementId: string, who: string, date: string) => Promise<void>;

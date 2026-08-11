@@ -118,7 +118,12 @@ interface FlowShellProps {
   onScheduleFollowUp: (movementId: string, who: string, date: string) => Promise<void>;
   /** Mint a follow-up link (AURA asks the gaps itself); resolves to the URL. */
   onMintFollowUp: (input: { movementId: string; who: string; questions: string[]; captureField: string; unnamed?: boolean; loci?: string[]; scripted?: boolean }) => Promise<string | null>;
-  onMintReview: (input: { movementId: string; who: string; role: string; captureField: string; reviewKind: string; review: unknown; questions: string[]; intro: string; unnamed?: boolean }) => Promise<string | null>;
+  /** `loci` for the same reason as the follow-up hop above: the review pack rides
+   * the SAME durable link, the SAME `questionLoci` field and the SAME edge
+   * pass-through, so an ask minted through a hop that does not declare the field
+   * can never carry a locus however much the caller holds. Optional and additive
+   * — a caller with no ledger in hand mints exactly the pack it always did. */
+  onMintReview: (input: { movementId: string; who: string; role: string; captureField: string; reviewKind: string; review: unknown; questions: string[]; intro: string; unnamed?: boolean; loci?: string[] }) => Promise<string | null>;
   /** Mint a shareable sponsor brief (dated board-pack snapshot); resolves to the URL. */
   onMintBrief: () => Promise<string | null>;
   /** Send an artifact to a chosen approver — mints a no-login link, returns it. */
