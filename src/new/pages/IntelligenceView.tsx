@@ -460,7 +460,7 @@ const AI_PROVIDERS: Array<{
       { id: "claude-fable-5",    label: "Claude Fable 5",    description: "Most capable model, for the hardest reasoning. Highest cost per run." },
       { id: "claude-haiku-4-5",  label: "Claude Haiku 4.5",  description: "Faster, lower-cost runs for lightweight tasks." },
       { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6 (superseded)", description: "Superseded by Sonnet 5. Kept selectable for programmes already pinned to it." },
-      { id: "claude-opus-4-1",   label: "Claude Opus 4.1 (superseded)",   description: "Superseded by Opus 4.8. Kept selectable for programmes already pinned to it." },
+      { id: "claude-opus-4-1",   label: "Claude Opus 4.1 (retired)",      description: "Retired by Anthropic on 2026-08-05 — new runs on this id will fail. Move to Opus 4.8." },
       { id: "claude-3-5-haiku-latest", label: "Claude Haiku 3.5 (retired)", description: "Retired by Anthropic — new runs on this id will fail. Move to Haiku 4.5." },
     ],
   },
