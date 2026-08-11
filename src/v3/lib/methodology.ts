@@ -1368,7 +1368,11 @@ export const ATOS_FLOW: MethodologyDefinition = {
           "Ontology-driven data model for the Blueprint",
           "A build pack and a clickable prototype assembled from the Experience Design — the runnable app the team refines and Show demonstrates",
         ],
-        readyWhen: "A direction is chosen, the Blueprint survives its review, and a clickable prototype is built and ready to demonstrate.",
+        // The Design Loop closes on APPROVAL, not on documents existing. A direction, a
+        // Blueprint and a built prototype are what make a design review ROUND possible;
+        // the round — every stakeholder approving, or waived/delegated on the record —
+        // is what closes the loop. See `flowDesignRound.ts`.
+        readyWhen: "A direction is chosen, the Blueprint survives its review, a clickable prototype is built — and every stakeholder in the current design review round has approved it (or been waived or delegated on the record).",
       },
       inputFields: [
         {
@@ -1408,7 +1412,11 @@ export const ATOS_FLOW: MethodologyDefinition = {
           "The clickable prototype built in Envision, served to each stakeholder on their own seeded data",
           "Demo feedback ingestion — reactions become Blueprint diffs and a rebuilt prototype",
         ],
-        readyWhen: "Every stakeholder has seen their workflow run and accepted — objections addressed or logged.",
+        // "Accepted" is now a recorded, attributed verdict in the design review round —
+        // each stakeholder's own answer on their own link, or an operator capture that
+        // stays marked as such. Objections open the next round rather than being
+        // out-voted by a majority. See `flowDesignRound.ts`.
+        readyWhen: "Every stakeholder in the current design review round has seen their workflow run and approved it — or been waived or delegated on the record; objections open the next round.",
       },
       inputFields: [
         {
