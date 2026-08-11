@@ -23,6 +23,7 @@
 import type { LedgerStore } from "./store";
 import type { LedgerElement } from "./types";
 import { elementIdOf, slotOf, isLive } from "./types";
+import { READING_SLOT_PREFIX } from "./migrate";
 
 export type Audience = "stakeholder" | "operator";
 
@@ -82,6 +83,34 @@ function scalarAt(store: LedgerStore, about: string): string | null {
   return live ? String((live.value as { value: unknown }).value) : null;
 }
 
+/**
+ * The COMPETING READINGS the ledger holds for an element's meaning — the
+ * `semantics.reading.*` claims a migrated terminology collision leaves beside the
+ * `#semantics` unknown. Live scalars only, document order, deduped.
+ */
+function conflictingReadings(store: LedgerStore, elementId: string): string[] {
+  const out: string[] = [];
+  for (const c of store.claims()) {
+    if (!isLive(c) || c.value.kind !== "scalar") continue;
+    if (elementIdOf(c.about) !== elementId || !slotOf(c.about).startsWith(READING_SLOT_PREFIX)) continue;
+    const v = String(c.value.value).trim();
+    if (v && !out.includes(v)) out.push(v);
+  }
+  return out;
+}
+
+/**
+ * The meaning question. When the ledger RECORDS rival readings for this element —
+ * a terminology collision migrated from the ontology's `ambiguities[]` — they are
+ * NAMED, because nobody can choose between readings they were never shown. Fewer
+ * than two recorded readings ⇒ the plain ask: a rival is never invented to fill the
+ * template, so the question is honest either way.
+ */
+const meaningQuestion = (name: string, readings: readonly string[]): string =>
+  readings.length > 1
+    ? `What does ${name} mean, exactly? The record carries it ${readings.length} ways — ${readings.map((r) => `“${r}”`).join(" · ")} — which meaning should it adopt?`
+    : `What does ${name} mean, exactly?`;
+
 /** Element display name, ORIGINAL casing, attribute qualified by its parent —
  *  full, never truncated (display ellipsis is the surface's job). */
 function nameFor(store: LedgerStore, el: LedgerElement | undefined, elementId: string, byId: Map<string, LedgerElement>): string {
@@ -131,7 +160,7 @@ export function renderQuestion(store: LedgerStore, about: string, audience: Audi
         : kind === "valueSet" ? `What values can ${name} take?`
           : kind === "dataType" ? `What type of value is ${name}?`
             : kind === "optionality" ? `Is ${name} required or optional?`
-              : kind === "semantics" ? `What does ${name} mean, exactly?`
+              : kind === "semantics" ? meaningQuestion(name, conflictingReadings(store, elementId))
                 : kind === "trigger" ? `What starts "${name}"?`
                   : kind === "owner" ? `Who owns ${name}?`
                     : kind === "systemOfRecord" ? `Which system is the source of record for ${name}?`

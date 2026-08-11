@@ -15,6 +15,11 @@ import { listShipLanes, shipLaneProgress } from "@/v3/components/flow/flowShip";
 import { stakeholderPrimaryArea, GENERAL_AREA } from "@/v3/components/flow/flowAreas";
 import { frameSorReadiness, parseDeclaredSors, type ArtifactAskMark } from "@/v3/lib/ledger/artifactAsks";
 import { readDictionarySources } from "@/v3/lib/ledger/dictionary";
+import { migrate, ambiguityLoci, type Snapshot } from "@/v3/lib/ledger/migrate";
+import { renderQuestion } from "@/v3/lib/ledger/renderQuestion";
+import { readOperatorActions, decidedFates, type CaptureAction } from "@/v3/lib/ledger/operatorActions";
+import { aboutOf } from "@/v3/lib/ledger/types";
+import type { LedgerStore } from "@/v3/lib/ledger/store";
 
 /**
  * Find a quoted claim inside a source transcript, tolerantly: curly quotes
@@ -1305,30 +1310,85 @@ export interface OpenIssue {
 }
 
 /**
+ * The programme's read-only ledger, migrated once per blob.
+ *
+ * `movementOpenIssues` asks it two things it can get nowhere else: whether a
+ * migrated terminology collision is still open, and — through `renderQuestion` —
+ * how to phrase it. The gate is consulted many times per render (once per
+ * movement, once per approvable artifact), and `migrate` is O(claims²), so the
+ * store is memoized on the data root: one migration per programme version, and
+ * NONE at all for a programme whose ontology records no ambiguities.
+ */
+const LEDGER_BY_ROOT = new WeakMap<Record<string, unknown>, LedgerStore>();
+function programLedger(program: ProgramSummary): LedgerStore {
+  const root = dataRoot(program);
+  const cached = LEDGER_BY_ROOT.get(root);
+  if (cached) return cached;
+  const doc = (key: string): Record<string, unknown> => {
+    const v = root[key];
+    return v && typeof v === "object" && !Array.isArray(v) ? v as Record<string, unknown> : {};
+  };
+  const snapshot: Snapshot = {
+    ontology: doc(FORMAL_ARTIFACT_FIELD_KEYS["domain-ontology"]),
+    atlas: doc(FORMAL_ARTIFACT_FIELD_KEYS["current-state-atlas"]),
+    overrides: Array.isArray(root.flowOperatorOverrides) ? root.flowOperatorOverrides as Array<Record<string, unknown>> : [],
+  };
+  const store = migrate(snapshot);
+  LEDGER_BY_ROOT.set(root, store);
+  return store;
+}
+
+/**
  * Everything a movement's documents still ASK: unresolved ambiguities
  * (terminology collisions with no adopted meaning) and open questions. These
  * resolve through evidence — they flow into the follow-up scripts, and the
  * gate holds until the record stops asking.
+ *
+ * AMBIGUITIES ARE LEDGER LOCI, not blob rows. Each one is a `#semantics` unknown
+ * (`migrate.ts` → `ambiguityLoci`), which is what gives it a human closure path:
+ * before, an ambiguity left this list only when a REGENERATION rewrote the
+ * document's `resolution` field — no studio editor writes it — so the gate below
+ * could be held by a question nobody could answer. Now it is released the way
+ * every other ledger question is: an operator ruling it out of scope, an answer
+ * recorded against the locus, or any substantive claim landing on it. Its TEXT
+ * comes from `renderQuestion` — this module composes none.
  */
 export function movementOpenIssues(program: ProgramSummary, movement: PhaseDefinition): OpenIssue[] {
   const root = dataRoot(program);
   const issues: OpenIssue[] = [];
+  let closure: { fateOut: Set<string>; answered: Set<string> } | null = null;
+  const operatorClosures = () => {
+    if (!closure) {
+      const actions = readOperatorActions(readMovementInputs(program, "listen"));
+      closure = {
+        // An out-of-scope ruling takes the locus to `n/a`; an ESCALATION deliberately
+        // does not — an escalated question is still being asked, of someone senior.
+        fateOut: new Set([...decidedFates(actions).values()].filter((f) => f.decision === "out-of-scope").map((f) => f.about)),
+        // An answer recorded against the locus — the same pair TheLine reads to mark a
+        // person's question done. Operator-entered, so it is NOT counted as heard; it
+        // is still an answer on the record, and the record has stopped asking.
+        answered: new Set(actions.filter((a): a is CaptureAction => a.kind === "capture").map((a) => a.about)),
+      };
+    }
+    return closure;
+  };
   for (const def of getPhaseArtifactDefs(movement.id)) {
     const mirror = root[FORMAL_ARTIFACT_FIELD_KEYS[def.id]];
     if (!mirror || typeof mirror !== "object" || Array.isArray(mirror)) continue;
     const doc = mirror as Record<string, unknown>;
-    if (Array.isArray(doc.ambiguities)) {
-      for (const row of doc.ambiguities) {
-        if (!row || typeof row !== "object") continue;
-        const entry = row as Record<string, unknown>;
-        const resolution = String(entry.resolution ?? "").trim();
-        if (resolution && !/unresolved/i.test(resolution)) continue;
-        const meanings = Array.isArray(entry.conflictingMeanings) ? entry.conflictingMeanings.map(String).join(" vs ") : "";
+    const ambiguities = ambiguityLoci(doc);
+    if (ambiguities.length) {
+      const store = programLedger(program);
+      const { fateOut, answered } = operatorClosures();
+      for (const amb of ambiguities) {
+        const about = aboutOf(amb.elementId, "semantics");
+        const stillOpen = store.liveClaimsAbout(about).some((c) => c.status === "open" || c.status === "blocked");
+        if (!stillOpen || fateOut.has(about) || answered.has(about)) continue;
         issues.push({
           artifactId: def.id,
           artifactTitle: def.label,
           kind: "ambiguity",
-          text: `Two teams use “${String(entry.term ?? "")}” differently${meanings ? ` (${meanings})` : ""} — which meaning should the record adopt?`,
+          text: renderQuestion(store, about, "stakeholder").question,
         });
       }
     }
