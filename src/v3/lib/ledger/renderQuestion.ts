@@ -189,7 +189,13 @@ export function renderQuestion(store: LedgerStore, about: string, audience: Audi
     question =
       kind === "cardinality" ? `Can one ${from} have many ${to}, or just one?`
         : kind === "optionality" ? `Does every ${from} need a ${to}, or is that optional?`
-          : kind === "semantics" ? `In ${your} world, what does the connection between ${from} and ${to} mean, exactly?`
+          // No "in your/the world" preamble. It read as filler to a stakeholder
+          // and as broken English to an operator, for whom `your` resolves to
+          // "the" — "In the world, what does the connection…". Dropping it also
+          // makes a RELATION's meaning question parallel with an entity's
+          // ("What does X mean, exactly?"), which is the same question asked of
+          // a different kind of thing and should sound like it.
+          : kind === "semantics" ? `What does the connection between ${from} and ${to} mean, exactly?`
             : `About the connection between ${from} and ${to} — ${fallbackTail(kind)}`;
   } else {
     // Entities, attributes, workflows — names verbatim, original casing.
