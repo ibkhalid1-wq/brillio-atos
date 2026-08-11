@@ -24,6 +24,7 @@
 import { describe, expect, it } from "vitest";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
+import { enclosingExport } from "./helpers/sourceGuards";
 
 const SRC = resolve(__dirname, "../..");
 const ENTRY = "main.jsx";
@@ -130,18 +131,10 @@ const importedSymbolsOf = (target: string, importers: Iterable<string>): Set<str
  * it. If that one is not exported, the offset is inside a local host and the answer is
  * `null` — which makes the render site not-live, the fail-safe direction.
  */
-const TOP_LEVEL_DECL = /^(export\s+)?(default\s+)?(?:async\s+)?(?:function|const|class)\s+(\w+)/gm;
-
-const enclosingExport = (src: string, offset: number): { name: string; isDefault: boolean } | null => {
-  let found: { name: string; isDefault: boolean } | null = null;
-  for (const m of src.matchAll(TOP_LEVEL_DECL)) {
-    if (m.index! > offset) break;
-    // A non-exported declaration CLOSES the previous export as far as this offset is
-    // concerned — it cannot be nested inside it, because it starts at column zero.
-    found = m[1] ? { name: m[3], isDefault: !!m[2] } : null;
-  }
-  return found;
-};
+// `enclosingExport` now lives in ./helpers/sourceGuards, where it can be fed its own
+// bypasses — see sourceGuards.test.ts "H8". It walks the AST instead of matching
+// column-zero text, because the local-host distinction is structural and a relaxed anchor
+// turns correct code red (the reasoning is in the helper's doc comment).
 
 /** Every place `<Control` is rendered, with the exported symbol that holds it. */
 const renderSites = (control: string) =>

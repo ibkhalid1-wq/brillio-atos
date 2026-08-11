@@ -228,6 +228,35 @@ describe("(b) the import adapters invent no owner", () => {
     expect(found).toEqual([]);
   });
 
+  it("SOURCE: the Deno mirror is scanned too — a constant owner there was invisible to every gate", () => {
+    // THE BLIND SPOT THIS CLOSES. The scan above walks src/v3/lib/ledger only, so
+    // supabase/functions/_shared — the Deno mirror that mints claims on the server side —
+    // was read by no guard at all. Not hypothetical: overrideAdapter.ts held
+    // `const OP_OWNER: Owner = { kind: "role", role: "Sales Leaders" }` and stamped it on
+    // every claim built from an override log while F4/F5/F6 printed PASS. The same
+    // fabrication the client side is guarded against, on the other side of the boundary.
+    //
+    // No exemption list: the mirror has no dictionary.ts neutral band and no migrate pin,
+    // so anything found here is a finding. `readModule` is supplied because these modules
+    // import each other by relative path — which is exactly how a constant can be moved
+    // one file away and vanish from a single-file scan.
+    const dir = resolve(__dirname, "../../../supabase/functions/_shared");
+    const files = readdirSync(dir).filter((f) => f.endsWith(".ts")).sort();
+    expect(files.length, "the _shared scan found no modules — the path is wrong").toBeGreaterThan(5);
+    const readModule = (spec: string): string | null => {
+      if (!spec.startsWith(".")) return null;                    // remote/npm: not ours to read
+      try { return readFileSync(resolve(dir, spec.replace(/\.ts$/, "") + ".ts"), "utf8"); }
+      catch { return null; }
+    };
+    const found: string[] = [];
+    for (const f of files) {
+      for (const role of literalRoleOwners(readFileSync(resolve(dir, f), "utf8"), { readModule, ownerShapeOnly: true })) {
+        found.push(`${f}: ${role}`);
+      }
+    }
+    expect(found, `\nConstant role owners in the Deno mirror:\n${found.join("\n")}\n`).toEqual([]);
+  });
+
   it("SOURCE: migrate's one constant area call is confined to CLOSED override claims", () => {
     // `ownerFor("sales")` survives on the override-log path (removed / edited entities).
     // It is inert — every one of those asserts is born `status: "weak"` with a closure,
