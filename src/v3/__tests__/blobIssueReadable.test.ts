@@ -22,6 +22,47 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { validateProgramBlob, formatBlobIssues } from "@/v3/lib/blobGuard";
 
+describe("the design-round key is validated, and validated at the right depth", () => {
+  it("a well-formed round passes", () => {
+    expect(validateProgramBlob({
+      flowDesignRounds: [{ id: "r1", ordinal: 1, participants: [{ name: "Priya", role: "Delivery" }] }],
+    })).toEqual([]);
+  });
+
+  it("a round with no id is malformed — it cannot be addressed", () => {
+    const issues = validateProgramBlob({ flowDesignRounds: [{ ordinal: 1 }] });
+    expect(issues.map((i) => i.key)).toContain("flowDesignRounds");
+  });
+
+  it("a participant with no name is malformed — it resolves to nobody", () => {
+    const issues = validateProgramBlob({
+      flowDesignRounds: [{ id: "r1", participants: [{ role: "Delivery" }] }],
+    });
+    expect(issues.map((i) => i.key)).toContain("flowDesignRounds");
+  });
+
+  it("the whole key being the wrong TYPE is caught", () => {
+    expect(validateProgramBlob({ flowDesignRounds: { id: "r1" } }).map((i) => i.key))
+      .toContain("flowDesignRounds");
+  });
+
+  it("HISTORY is not malformed — a row written before a later field existed still parses", () => {
+    // The same rule flowAttestations follows. A verdict with no `attestation`
+    // is an OLD row, not a corrupt one; refusing to WRITE one without it is the
+    // round module's job, and enforcing it here would flag real history as
+    // broken and send an operator hunting for damage that isn't there.
+    expect(validateProgramBlob({
+      flowDesignRounds: [{ id: "r1", participants: [{ name: "Priya", response: { at: "2026-08-11", verdict: "approved" } }] }],
+    })).toEqual([]);
+  });
+
+  it("an unknown FUTURE field is fine — the guard is forward compatible", () => {
+    expect(validateProgramBlob({
+      flowDesignRounds: [{ id: "r1", participants: [{ name: "Priya" }], somethingAddedLater: true }],
+    })).toEqual([]);
+  });
+});
+
 describe("blob issues are reported readably", () => {
   it("renders every issue as text naming the key and the reason", () => {
     // A pack list that is not a list, and comments whose entries lack an id —

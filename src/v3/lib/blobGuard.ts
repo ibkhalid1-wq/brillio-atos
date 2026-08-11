@@ -88,6 +88,19 @@ const KNOWN_KEYS: Record<string, z.ZodTypeAny> = {
   claimTags: z.array(z.object({ id: z.string(), quote: z.string() }).loose()),
   // Anchored comments — discussion attached to an artifact, on the record.
   flowComments: z.array(z.object({ id: z.string(), text: z.string() }).loose()),
+  // Design review rounds — the roster asked to approve a design VERSION, and
+  // each participant's state. Validated to the depth that carries meaning and no
+  // further: a round with no `id` cannot be addressed and a participant with no
+  // `name` cannot be resolved to a person, so those two are required. Everything
+  // else is `.loose()` for the same reason flowAttestations is — a row written
+  // before a later field existed must read as HISTORY, not as malformed. The
+  // ATTESTATION of a verdict is deliberately not required here: an older row
+  // without one is not corrupt, and the round module refuses to WRITE one, which
+  // is where that rule belongs.
+  flowDesignRounds: z.array(z.object({
+    id: z.string(),
+    participants: z.array(z.object({ name: z.string() }).loose()).optional(),
+  }).loose()),
 };
 
 export interface BlobIssue {
