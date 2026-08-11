@@ -224,7 +224,12 @@ textarea:-webkit-autofill {
        warning #d97706  3.19:1  (the rail's waiting badge — white on amber)
        danger  #dc2626  4.83:1 on white but 4.26:1 on --v3-surface-2
      Brillio's brand green --br-green stays #2cc84d: it marks the brand, it is not
-     status ink. Every pair is measured in __tests__/a11yContrast.test.ts. */
+     status ink — and that is exactly why it no longer sets `color:` anywhere. It was
+     drawn as TEXT by seven rules in the classic namespace at 2.22:1 on white, which is
+     a real AA failure that no brand argument covers. The brand colour is unchanged and
+     still fills, borders and glows the mark; the seven text rules now take --v3-green,
+     the audited status ink (5.49:1 light / 7.59:1 dark). Kept apart by
+     __tests__/a11yContrast.test.ts. Every pair is measured there. */
   --color-success: #1b792f;   /* hsl(133,64%,47.8% → 29%) — 4.85:1 worst case */
   --color-warning: #9f5704;   /* hsl(32,95%,44% → 32%)    — 4.83:1 worst case */
   --color-danger:  #ca2121;   /* hsl(0,72%,50% → 46%)     — 4.94:1 worst case */
@@ -835,7 +840,7 @@ select {
 }
 
 .v3-program-dropdown-item.active {
-  color: var(--br-green);
+  color: var(--v3-green);
 }
 
 [data-theme="light"] .v3-topbar-status-pill.is-warning,
@@ -889,7 +894,7 @@ select {
 }
 
 .v3-nav-tab.active {
-  color: var(--br-green);
+  color: var(--v3-green);
 }
 
 .v3-nav-tab.active span:first-child {
@@ -1070,7 +1075,7 @@ select {
 
 .v3-action-icon.action {
   background: var(--v3-green-soft);
-  color: var(--br-green);
+  color: var(--v3-green);
   border-color: rgba(44, 200, 77, 0.2);
 }
 
@@ -1337,7 +1342,7 @@ button.v3-chip:focus-visible,
 
 .v3-phase-row.is-active .v3-phase-number {
   border-color: var(--br-green);
-  color: var(--br-green);
+  color: var(--v3-green);
   background: var(--v3-green-soft);
 }
 
@@ -1369,7 +1374,7 @@ button.v3-chip:focus-visible,
 
 /* Brillio: type carries no glow/shadow/effects — colour alone signals state. */
 .v3-health-cell-value.green {
-  color: var(--br-green);
+  color: var(--v3-green);
 }
 
 .v3-health-cell-value.amber {
@@ -1502,7 +1507,7 @@ button.v3-chip:focus-visible,
 
 .v3-embedded-view .adam-badge.green {
   background: var(--v3-green-soft);
-  color: var(--br-green);
+  color: var(--v3-green);
 }
 
 .v3-embedded-view .adam-badge.amber {
@@ -2231,7 +2236,7 @@ button.v3-chip:focus-visible,
 }
 
 .v3-readiness-gauge-hint.is-ready {
-  color: var(--br-green);
+  color: var(--v3-green);
 }
 
 /* ─── PhaseStatusRings — canonical embedded 3-ring phase status ───────────────
@@ -7316,21 +7321,23 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-seam-edit-acts .v3fs-a {font-size:11px;font-weight:600}
 .v3fs-seam-del {font:inherit;font-size:11px;font-weight:600;color:var(--v3-red);background:none;border:none;padding:0;cursor:pointer;margin-left:auto}
 .v3fs-seam-del:hover {text-decoration:underline}
-.v3fs-seam-wf-editbtn {font:inherit;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--v3-text-secondary);background:var(--fs-card);border:1px solid var(--v3-border-soft);border-radius:6px;padding:3px 8px;cursor:pointer;flex:none;margin-left:auto}
-.v3fs-seam-wf-editbtn[aria-pressed="true"]{color:var(--v3-accent);border-color:color-mix(in srgb,var(--v3-accent) 45%,var(--fs-line));background:color-mix(in srgb,var(--v3-accent) 8%,var(--fs-card))}
-.v3fs-seam-wf-editbtn:focus-visible{outline:2px solid var(--v3-accent-2);outline-offset:2px}
-.v3fs-seam-wfedit {display:grid;grid-template-columns:repeat(3,1fr);gap:9px 14px;padding:12px 14px;background:var(--v3-surface-2);border-bottom:1px solid var(--fs-line)}
-.v3fs-seam-wfedit label {display:flex;flex-direction:column;gap:4px;font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--v3-text-muted)}
-.v3fs-seam-wfedit label.wide {grid-column:span 3}
-.v3fs-seam-wfedit input,.v3fs-seam-wfedit select {font:inherit;font-size:12.5px;font-weight:400;letter-spacing:0;text-transform:none;color:var(--v3-text-primary);background:var(--fs-card);border:1px solid var(--fs-line);border-radius:6px;padding:6px 8px}
-.v3fs-seam-wfedit input:focus,.v3fs-seam-wfedit select:focus {outline:2px solid var(--v3-accent-2);outline-offset:1px}
-@media (max-width:680px){.v3fs-seam-wfedit{grid-template-columns:1fr 1fr}.v3fs-seam-wfedit label.wide{grid-column:span 2}}
-.v3fs-seam-wf-del {font:inherit;font-size:12px;line-height:1;color:var(--v3-text-muted);background:none;border:1px solid var(--v3-border-soft);border-radius:6px;width:22px;height:22px;cursor:pointer;flex:none;margin-left:2px}
-.v3fs-seam-wf-del:hover {color:var(--v3-red);border-color:color-mix(in srgb,var(--v3-red) 45%,transparent)}
-.v3fs-seam-wf-del:focus-visible {outline:2px solid var(--v3-accent-2);outline-offset:2px}
+/* The workflow row's own dismiss control — a reason-bearing removal, not a ✕. */
+.v3fs-seam-wf-dismiss {display:inline-flex;align-items:center;flex:none;margin-left:auto}
+.v3fs-seam-wf-dismiss .v3fs-btn {font-size:10px;padding:3px 9px}
+.v3fs-seam-wf-dismiss .v3fs-dismiss {flex-wrap:wrap;gap:6px}
+.v3fs-seam-wf-dismiss .v3fs-dismiss-in {min-width:210px}
+/* OPEN INLINE — the workflow's summary, swimlane and step inspector, expanded
+   inside its own row. Set apart from the seam grid above it, never a new page. */
+.v3fs-seam-wfdetail {padding:14px 14px 16px;border-top:1px solid var(--fs-line);
+  background:linear-gradient(180deg,color-mix(in srgb,var(--v3-accent-2) 4%,var(--v3-surface-2)),var(--fs-card))}
+.v3fs-seam-wf.open {border-color:color-mix(in srgb,var(--v3-accent) 40%,var(--fs-line));
+  box-shadow:var(--fs-shadow),0 0 0 1px color-mix(in srgb,var(--v3-accent) 16%,transparent)}
 .v3fs-seam-addwf {align-self:flex-start;font:inherit;font-size:12px;font-weight:650;color:var(--v3-accent);background:var(--fs-card);border:1px dashed color-mix(in srgb,var(--v3-accent) 40%,var(--fs-line));border-radius:10px;padding:9px 16px;cursor:pointer;transition:background .12s ease,border-color .12s ease}
 .v3fs-seam-addwf:hover {background:color-mix(in srgb,var(--v3-accent) 7%,var(--fs-card));border-color:var(--v3-accent)}
 .v3fs-seam-addwf:focus-visible {outline:2px solid var(--v3-accent-2);outline-offset:2px}
+/* A mark-dropped step stays drawn (its claims stay findable) but reads as struck. */
+.v3fs-seam-tile.dropped {opacity:.55}
+.v3fs-seam-tile.dropped .v3fs-seam-tile-act {text-decoration:line-through}
 /* When editable, tiles invite the click. */
 .v3fs-seam-tile {cursor:pointer}
 
@@ -7371,6 +7378,8 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-seam-wf-open:focus-visible {outline:2px solid var(--v3-accent-2);outline-offset:2px;border-radius:3px}
 .v3fs-seam-wf-open-i {font-size:9px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--v3-accent-2);opacity:0;transition:opacity .14s ease}
 .v3fs-seam-wf-open:hover .v3fs-seam-wf-open-i,.v3fs-seam-wf-open:focus-visible .v3fs-seam-wf-open-i {opacity:.9}
+.v3fs-seam-wf-open[aria-expanded="true"] {color:var(--v3-accent)}
+.v3fs-seam-wf-open[aria-expanded="true"] .v3fs-seam-wf-open-i {color:var(--v3-accent);opacity:1}
 /* ── Atlas lifecycle grid (area × derived phase) ───────────────────────────── */
 .v3fs-lgrid {display:flex;flex-direction:column;gap:13px}
 .v3fs-lgrid-ctx {display:flex;flex-direction:column;gap:7px;font-size:12px;line-height:1.5;color:var(--v3-text-secondary)}
@@ -7494,7 +7503,6 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3lc-uss-seam{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:600;color:var(--mv);background:color-mix(in srgb,var(--mv) 9%,transparent);border:1px solid color-mix(in srgb,var(--mv) 35%,var(--fs-line));border-left:3px double var(--mv);border-radius:6px;padding:1px 7px}
 .v3lc-uss-seam-n{font-weight:800;margin-left:3px;font-variant-numeric:tabular-nums}
 .v3lc-uss-more{font-size:10.5px;font-weight:650;color:var(--v3-text-muted);cursor:default}
-.v3fs-wf-editor-h {margin:22px 0 12px;font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--v3-text-muted);border-top:1px solid var(--fs-line);padding-top:15px}
 /* Business-event chips — the ontology's events referenced on a step or a
    trigger; amber to read as "something happens", vs the indigo entity nouns. */
 .v3fs-wf-evt {font:inherit;font-size:9.5px;font-weight:650;border:none;border-radius:99px;padding:2px 8px;cursor:pointer;

@@ -39,10 +39,15 @@ interface Props {
   onGenerate?: (card: ArtifactCardModel) => void;
   regenBusy: Record<string, boolean>;
   genBusy: Record<string, boolean>;
-  /** The owning role a stakeholder question routes to (operator decisions are
-   *  questioned, never edited). Surfaced per tile; the interactive capture lives
-   *  on the stakeholder link (FlowRespond) — see docs/aura/surface-redesign.md. */
-  onQuestion?: (station: LineStation, owningRole: string) => void;
+  /* NO `onQuestion`. A stakeholder QUESTIONS an operator decision, and a stakeholder is
+   * not who is standing here: this is the operator's own board. The prop existed, took a
+   * `(station, owningRole)` callback and drew a "? question → {role}" button — and
+   * TheLine, its only caller, never passed it, so the button could not be reached in the
+   * running app and the branch below always fell to the note. The capture genuinely lives
+   * on the stakeholder's link (FlowRespond); routing one from here would need an operator
+   * write the read-only migrate does not have. So the tile states the routing as FACT —
+   * "questionable → routes to {role}" — which is true, instead of offering a verb this
+   * surface cannot perform. Guarded by designLoopZonesProps.test.ts. */
 }
 
 /** Which zone each loop station belongs to, and (for the operator zone) the role
@@ -58,10 +63,10 @@ const ZONE_OF: Record<string, { zone: "operator" | "stakeholder" | "joint"; role
 /** One operator-built artifact: decided-with-basis, not a refreshable blob. No
  *  "needs refresh" — its state reads as present/draft + ownership, and a
  *  stakeholder may question it (routes, never edits). */
-function OperatorTile({ station, role, onOpen, onRegen, onGenerate, regenerating, generating, onQuestion }: {
+function OperatorTile({ station, role, onOpen, onRegen, onGenerate, regenerating, generating }: {
   station: LineStation; role: string;
   onOpen: Props["onOpen"]; onRegen?: Props["onRegen"]; onGenerate?: Props["onGenerate"];
-  regenerating: boolean; generating: boolean; onQuestion?: Props["onQuestion"];
+  regenerating: boolean; generating: boolean;
 }) {
   const present = !!station.card?.present;
   const canGen = !present && !!station.canGenerate && !!station.card && !!onGenerate;
@@ -107,19 +112,17 @@ function OperatorTile({ station, role, onOpen, onRegen, onGenerate, regenerating
             {regenerating ? "rebuilding…" : <><span aria-hidden="true">↻ </span>rebuild from claims</>}
           </button>
         ) : null}
-        {/* stakeholders question-but-don't-edit: the affordance names the owning role */}
+        {/* stakeholders question-but-don't-edit. A STATEMENT, not a control: the person
+            who may question this is the stakeholder, on their own link — see Props. */}
         <span className="v3dl-question" title={`A stakeholder can question this decision — it routes to ${role} as a proposal, and never edits the artifact. The capture lives on their link.`}>
-          {onQuestion && station.card
-            ? <button type="button" className="v3dl-mini ghost" aria-label={`Question the ${station.title} decision — routes to ${role}`}
-                onClick={() => onQuestion(station, role)}><span aria-hidden="true">? </span>question<span aria-hidden="true"> → </span>{role}</button>
-            : <span className="v3dl-question-note">questionable<span aria-hidden="true"> → </span>routes to {role}</span>}
+          <span className="v3dl-question-note">questionable<span aria-hidden="true"> → </span>routes to {role}</span>
         </span>
       </div>
     </div>
   );
 }
 
-export default function DesignLoopZones({ band, ledger, onOpen, onRegen, onGenerate, regenBusy, genBusy, onQuestion }: Props) {
+export default function DesignLoopZones({ band, ledger, onOpen, onRegen, onGenerate, regenBusy, genBusy }: Props) {
   const stationOf = (id: string) => band.stations.find((s) => s.id === id);
   const opStations = band.stations.filter((s) => ZONE_OF[s.id]?.zone === "operator");
   const validation = stationOf("validation");
@@ -177,8 +180,7 @@ export default function DesignLoopZones({ band, ledger, onOpen, onRegen, onGener
           {opStations.map((s) => (
             <OperatorTile key={s.id} station={s} role={ZONE_OF[s.id]?.role ?? "Design team"}
               onOpen={onOpen} onRegen={onRegen} onGenerate={onGenerate}
-              regenerating={!!(s.card && regenBusy[s.card.id])} generating={!!(s.card && genBusy[s.card.id])}
-              onQuestion={onQuestion} />
+              regenerating={!!(s.card && regenBusy[s.card.id])} generating={!!(s.card && genBusy[s.card.id])} />
           ))}
         </div>
       </section>

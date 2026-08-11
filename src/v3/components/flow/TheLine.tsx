@@ -25,7 +25,7 @@ import {
   approvalLinkFor, canSendForApproval, stakeholderApprovalItems, type StakeholderApprovalItem,
 } from "@/v3/components/flow/flowApprovals";
 import { displayPersonLabel, resolveMovementStakeholders, type MovementStakeholder } from "@/v3/components/flow/flowStakeholders";
-import { listInterviewPacks, linkIsOpen, portalLinkFor } from "@/v3/components/flow/flowPortal";
+import { listInterviewPacks, linkIsOpen, visibleLinks, portalLinkFor } from "@/v3/components/flow/flowPortal";
 import { stakeholderCollection } from "@/v3/components/flow/CollectBoard";
 // Recording → reviewable text, in the capture dialog. TranscribeButton's only
 // other render site sits inside CollectBoard's IntervieweeDiscovery, which
@@ -314,13 +314,33 @@ function GateSheet({ band, approved, onClose, onRecord, onReopen }: {
   );
 }
 
-/** Pack matching: newest pack whose stakeholder name matches,
- * scoped to Listen (durable kit links carry no movementId). */
+/**
+ * THE LINK THIS ROW IS ABOUT — read through `visibleLinks`, the ONE rule for which of a
+ * person's packs a surface shows: the newest OPEN one (the live ask) and the newest
+ * CLOSED one (the record that they finished). The row then prefers the OPEN link.
+ *
+ * It used to be `[...packs].reverse().find(matches)` — LAST IN THE BLOB wins, closure
+ * never consulted. Blob order is not mint order: `capInterviewPacks` re-sorts on
+ * DURABILITY, and its `isDurable` test is `askUpdatedAt || submissions || live review`.
+ * A link that has been ANSWERED carries `submissions`, so it is durable and moves to the
+ * TAIL; a link that has never been answered and predates `askUpdatedAt` is not durable
+ * and stays at the head. So the ordering systematically promotes a person's FINISHED
+ * link above their OPEN one, and the row read "link closed · ↺ reopen" while their live
+ * link was still taking answers — with `⎘ link` copying the dead token, which is how an
+ * operator ends up chasing someone on a URL that refuses their answer. An OPEN link is
+ * what the row is about; a closed one only when there is nothing live.
+ *
+ * Scoped to the person and movement BEFORE `visibleLinks`, because that function groups
+ * per PERSON: a Frame link and a Listen link for one voice are two different asks and
+ * must not compete for the same slot.
+ */
 function packFor(program: ProgramSummary, who: string, movementId: "frame" | "listen") {
   const key = who.trim().toLowerCase();
-  return [...listInterviewPacks(program)].reverse().find((pack) =>
+  const theirs = listInterviewPacks(program).filter((pack) =>
     pack.stakeholder.trim().toLowerCase() === key
     && (movementId === "listen" ? (!pack.movementId || pack.movementId === "listen") : pack.movementId === movementId));
+  const shown = visibleLinks(theirs);
+  return shown.find(linkIsOpen) ?? shown[shown.length - 1];
 }
 
 export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenameRole, onMintFollowUp, onCloseLink, onScheduleFollowUp, onRunAgent, onRecordGate, onReopenGate, onSendForApproval }: TheLineProps) {
