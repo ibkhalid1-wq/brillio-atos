@@ -415,6 +415,30 @@ picker copy and any future guard read it. (b) is the shape the rest of this file
 
 ---
 
+## 5. DEPLOYED 2026-08-11 — no longer gated
+
+**`flow-portal` v38 and `run-agent` v217 are ACTIVE on `vudqrrqpipnkxzxslbim` (Brillio - ADAM),
+deployed from `06a8c43`, which is pushed.** The branch and production are in sync — the
+previous hazard (production running code that existed only on one machine) is closed.
+
+What went live with them:
+- **O-10** — `flow-portal` forwards `questionLoci`, so a stakeholder's page renders through
+  the one renderer instead of frozen strings.
+- **L6** — the `scripted` flag reaches the page, so a person with no owned loci is told so.
+- **§8(a)** — the deterministic assembly is what stakeholders now see. The upload manifest
+  confirms the cluster is genuinely bundled: `prototypePilot`, `prototypeAssembly`,
+  `prototypeDesignSystem`, `seedData`, `semanticRoles`, `fabric`.
+- **O-19 / O-20** and the tightened `resolution` contract, in `run-agent`.
+
+Smoke-checked: `flow-portal` answers with its OWN handled message ("This link is malformed…")
+rather than a platform error, so it boots and runs.
+
+> **The upload manifest is still the truth about what a function bundles.** Neither manifest
+> contains `ledgerGenerator`, `optionA` or `overrideAdapter` — independent confirmation that
+> the generator path is dormant, exactly as §6 records.
+
+<details><summary>original entry (what was gated, and why)</summary>
+
 ## 5. GATED ON AN EDGE DEPLOY — source is committed, effect is zero
 
 **These are finished in the repo and invisible in production.** Do not re-implement them.
