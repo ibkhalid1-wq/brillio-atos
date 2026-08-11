@@ -646,6 +646,16 @@ export interface DesignRoundReviewStamp {
 export type DesignRoundVerdict = "accepted" | "rework";
 
 /**
+ * HOW THE WORDS WERE PRODUCED — the stakeholder typed them, spoke them, or spoke
+ * them and then corrected the transcript. Carried alongside the feedback because a
+ * transcript is a machine's reading of what someone said, and evidence that reads
+ * as their writing when it is a machine's reading of their speech overstates itself.
+ * Lockstepped with `CAPTURE_MODES` in `supabase/functions/flow-portal/index.ts`,
+ * which is the only place the value is allowed to land on the record.
+ */
+export type CaptureMode = "typed" | "dictated" | "mixed";
+
+/**
  * THE REVIEW PAGE for one stakeholder in a design review round: the prototype they
  * are being asked about, the demo script cut for their workflow, and the two things
  * the round needs back — approve, or ask for changes, plus what they actually think.
@@ -656,7 +666,7 @@ export type DesignRoundVerdict = "accepted" | "rework";
  * discipline, and a client-facing page is exactly where it must not be shortcut.
  */
 export function DesignRoundReviewSurface({
-  stamp, stakeholder, programme, objective, prototype, script, submitting, error, onSubmit, draftKey, afterIntro,
+  stamp, stakeholder, programme, objective, prototype, script, scriptGap, submitting, error, onSubmit, draftKey, afterIntro,
 }: {
   stamp: DesignRoundReviewStamp;
   stakeholder: string;
@@ -665,19 +675,32 @@ export function DesignRoundReviewSurface({
   /** The built prototype (or the honest gap saying why there isn't one), rendered by
    *  the page that owns the pilot frame — never a second copy of it here. */
   prototype?: React.ReactNode;
-  /** THEIR demo script — the walk narrated for their workflow. */
-  script?: { openingQuote?: string; scenario?: string; acceptanceAsk?: string; steps?: Array<{ beat?: string; say?: string; callback?: string }> };
+  /** THEIR demo script — the walk narrated for their workflow. `matchedBy` says
+   *  whether the edge resolved it from their NAME or from their ROLE. */
+  script?: { openingQuote?: string; scenario?: string; acceptanceAsk?: string; matchedBy?: string; steps?: Array<{ beat?: string; say?: string; callback?: string }> };
+  /** No script resolved — the edge's sentence saying so. Rendered INSTEAD of the
+   *  script section, never alongside an empty one. */
+  scriptGap?: string;
   submitting: boolean;
   error: string | null;
-  onSubmit: (verdict: DesignRoundVerdict, text: string) => void;
+  onSubmit: (verdict: DesignRoundVerdict, text: string, capture?: CaptureMode) => void;
   draftKey?: string;
   afterIntro?: React.ReactNode;
 }) {
   const [verdict, setVerdict] = usePersistentState<DesignRoundVerdict | "">(draftKey, "drVerdict", "");
   const [text, setText] = usePersistentState(draftKey, "drText", "");
+  // Where the words in the box came from, tracked as it happens rather than guessed
+  // at send time. Dictation writes through `setText` and never fires the field's
+  // onChange, so "they spoke it" and "they touched it themselves" stay independent —
+  // and speaking then editing reads as `mixed`, which is the transcript being
+  // CORRECTED by its author and the strongest form of the evidence.
+  const [spoke, setSpoke] = usePersistentState(draftKey, "drSpoke", false);
+  const [edited, setEdited] = usePersistentState(draftKey, "drEdited", false);
+  const capture: CaptureMode = spoke ? (edited ? "mixed" : "dictated") : "typed";
   const greeting = greetingName(stakeholder);
   const coreGoal = objective ? objective.split(/\s+[—–]\s+/)[0].trim().replace(/[.\s]+$/, "") : "";
   const round = Number(stamp.ordinal) || 0;
+  const scriptShown = !!script && !!(script.openingQuote || script.scenario || script.steps?.length);
   // Asking for changes without saying what to change is not a review — the operator
   // would have a red light and nothing to act on. An approval may stand on its own.
   const ready = verdict === "accepted" || (verdict === "rework" && text.trim().length > 0);
@@ -704,11 +727,16 @@ export function DesignRoundReviewSurface({
 
       {prototype ? <div className="v3fs-dr-proto">{prototype}</div> : null}
 
-      {script && (script.openingQuote || script.scenario || script.steps?.length) ? (
+      {script && scriptShown ? (
         <section className="v3fs-rvw-wf plain v3fs-dr-script">
           <div className="v3fs-rvw-wf-h">
             <b>Your demo script</b>
-            <span className="v3fs-rvw-trigger">The walk we cut for your workflow</span>
+            {/* The page says WHICH claim matched. A walk written for the role is not
+                the same promise as one written for the person, and reading it as the
+                latter is how a stakeholder concludes we misunderstood their job. */}
+            <span className="v3fs-rvw-trigger">{script?.matchedBy === "role"
+              ? "The walk we cut for your role"
+              : "The walk we cut for your workflow"}</span>
           </div>
           {script.openingQuote ? <blockquote className="v3fs-portal-quote">{script.openingQuote}</blockquote> : null}
           {script.scenario ? <p className="v3fs-dr-scenario">{script.scenario}</p> : null}
@@ -724,7 +752,21 @@ export function DesignRoundReviewSurface({
             </ol>
           ) : null}
         </section>
-      ) : null}
+      ) : (
+        /* NO SCRIPT — said out loud, never left blank. A stakeholder looking at an
+           empty space cannot tell "nobody wrote me a walkthrough" from "this page
+           failed to load", and they are being asked to approve a design on what
+           they can see. The absence is stated with what to do instead, and the
+           heading stays so the missing thing has a name. */
+        <section className="v3fs-rvw-wf plain v3fs-dr-script v3fs-dr-scriptgap">
+          <div className="v3fs-rvw-wf-h">
+            <b>Your demo script</b>
+            <span className="v3fs-rvw-trigger">Not written for you</span>
+          </div>
+          <p className="v3fs-dr-scriptgap-note">{scriptGap
+            || "No walkthrough was written for you, so there is no script to follow here. Take the prototype in whatever order makes sense for your work — your answer counts the same."}</p>
+        </section>
+      )}
 
       <section className="v3fs-rvw-wf v3fs-dr-verdict">
         <div className="v3fs-rvw-wf-h">
@@ -747,16 +789,27 @@ export function DesignRoundReviewSurface({
             ? "What needs to change? — required, so the team knows what to fix"
             : "Anything you want the team to know — optional"}</span>
           <div className="v3fs-rvw-field">
-            <textarea rows={4} value={text} onChange={(e) => setText(e.target.value)} />
-            <DictationButton label="Speak your feedback" onText={(spoken) => setText((cur) => joinDictation(cur, spoken))} />
+            {/* The transcript lands HERE, in the same editable box — nothing is sent
+                from the microphone. Same rule as a Discover attachment: what a
+                machine extracted is not evidence until the person confirms it. */}
+            <textarea rows={4} value={text}
+              onChange={(e) => { setEdited(true); setText(e.target.value); }} />
+            <DictationButton label="Speak your feedback"
+              onText={(spoken) => { setSpoke(true); setText((cur) => joinDictation(cur, spoken)); }} />
           </div>
         </label>
+        {spoke ? (
+          <p className="v3fs-rvw-dictnote">
+            Dictated — read it back and correct anything before you send. It goes on the record as
+            {capture === "mixed" ? " dictated and corrected by you" : " dictated"}, not as your writing.
+          </p>
+        ) : null}
         {draftKey && (verdict || text.trim()) ? <p className="v3fs-rvw-saved">✓ Saved on this device — you can close this and come back</p> : null}
         {error ? <p className="v3fs-portal-err">{error}</p> : null}
         <div className="v3fs-portal-sendgroup">
           <button type="button" className="v3fs-btn pri v3fs-rvw-send" disabled={submitting || !ready}
             title={ready ? undefined : verdict === "rework" ? "Say what needs to change" : "Choose approve or ask for changes"}
-            onClick={() => { if (ready && verdict) onSubmit(verdict, text.trim()); }}>
+            onClick={() => { if (ready && verdict) onSubmit(verdict, text.trim(), text.trim() ? capture : undefined); }}>
             {submitting ? "Sending…" : verdict === "rework" ? "Send my changes" : "Send my answer"}
           </button>
           <p className="v3fs-portal-foot">

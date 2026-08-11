@@ -1,35 +1,62 @@
 /**
- * The Design Loop as a LEDGER SURFACE — three ownership zones keyed to source
- * class, replacing the old "four artifact cards with needs-refresh buttons over a
- * 0-of-10-converged counter".
+ * The Design Loop as a LEDGER SURFACE — the operator's board for one question:
+ * WHAT DO I DO NOW.
  *
- * The ledger already encodes who-does-what by SOURCE CLASS; this surface reads it
- * rather than inventing a taxonomy:
- *   · Operator builds it   — decision/dispositioned (Architecture, Blueprint,
- *     Prototype generation). Decided-with-basis, not refreshable blobs. A
- *     stakeholder can QUESTION a decision (routes as a proposal naming the owning
- *     role) but can't edit.
- *   · Stakeholders shape it — asserted (Validation sign-off = the loop's GOAL
- *     state, promoted out of the footer; answering owned unknowns = the queue).
- *   · Joint                — a locus with both (Experience Design as intent-
- *     asserted vs design-rendered, the deviation register between them; Prototype
- *     refinement, where a stakeholder assertion wins over operator regeneration).
+ * The ledger encodes who-does-what by SOURCE CLASS, and this surface reads it rather
+ * than inventing a taxonomy. It used to draw that reading as THREE standing zones and
+ * eight blocks, of which two carried live state; the rest were paragraphs explaining
+ * things that were not there. It now draws:
+ *
+ *   · Operator builds it   — the four decided-with-basis artifacts in dependency order
+ *     (Architecture → Experience Design → Blueprint → Prototype). Experience Design
+ *     joined them: it is BUILT here and only its DEVIATIONS are joint, so a standing
+ *     "joint" zone that hosted no work was the wrong home for its open-link.
+ *   · Stakeholders approve it — the design review round, STAGED to the loop's own
+ *     sequence (build → ask → collect → approve). One stage is drawn at a time; the
+ *     rest recede.
+ *   · Deviations to settle — drawn ONLY when there are deviations to adjudicate. It is
+ *     a place you go when there is something there, not a permanent explanation of a
+ *     precedence rule.
+ *
+ * THREE RULES THIS FILE NOW OBEYS
+ *
+ *  (1) ONE VOICE PER FACT. `designRoundGate` is the band's single status line. The
+ *      round's own hand-written "No design review round has been opened…" paragraph
+ *      said the same thing one line below the gate's own empty state, in a second
+ *      voice that could drift from the model. The gate won: it is derived, tone-coded,
+ *      and carries the next action.
+ *
+ *  (2) A ZERO-COUNT SECTION IS HIDDEN (the 2026-08-10 empty-state decision the Inbox
+ *      follows). The deviation register, the asserted-intent count and the prototype-
+ *      refinement count are drawn when there is something in them and not otherwise.
+ *      What is NOT drawn is named once, quietly, at the foot of the band — so a blank
+ *      space reads as "nothing on record yet" and never as "this surface is broken".
+ *      EMPTY ≠ UNKNOWN there: 0 deviations is a real zero, while 0 stakeholder
+ *      assertions is the gated write path and says so.
+ *
+ *  (3) RULES ARE NOT STATUS. "An asserted refinement wins over the operator's re-gen"
+ *      is true on every render and worth reading once, so it lives behind a real
+ *      disclosure button per zone instead of competing with the state beside it.
+ *
+ * AND ONE THING MOVED OUT. "N open unknowns owned by a role · blocking · answerable"
+ * is Listen's burn-down, not the design round's; hosting it inside the approval zone
+ * gave that zone two unrelated jobs. It is one line at the foot of the band now, and
+ * the line's button lands on Discover, where the questions are actually worked.
  *
  * HONESTY: read-only in-browser migrate. Stakeholder `asserted` closures arrive
- * through the store write path, not wired here — so the "stakeholders shape it"
- * zone reads 0 assertions today. That 0 is the truth of the read model, marked
- * provisional/gated, NEVER dressed up as convergence the ledger doesn't have.
+ * through the store write path, not wired here — so stakeholder assertions read 0
+ * today. That 0 is marked provisional and named as UNKNOWN, never dressed up as
+ * convergence the ledger does not have.
  */
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import type { ProgramSummary } from "@/new/types";
 import type { LineBand, LineStation } from "@/v3/lib/lineModel";
 import type { ArtifactCardModel } from "@/v3/components/flow/flowShellData";
 import type { ProgramLedger } from "@/v3/lib/ledger/useProgramLedger";
-import { renderQuestion } from "@/v3/lib/ledger/renderQuestion";
-import type { Routing } from "@/v3/lib/ledger/projections";
 import {
   DESIGN_LOOP_MOVEMENT_IDS, designRoundGate, designRoundReviewInput, readDesignVersion,
-  type DesignParticipantState, type DesignRoundPerson,
+  type DesignParticipantState, type DesignRoundPerson, type DesignRoundRollup,
+  type DesignVersion,
 } from "@/v3/components/flow/flowDesignRound";
 import {
   OwnershipTag, HeardReadout, ConvergenceReadout, ProvisionalMark,
@@ -69,6 +96,10 @@ interface Props {
   /** Open / link / record / waive / delegate / close. Omitted ⇒ the round reads
    *  read-only, which is what a lens without write rights should see. */
   onDesignRound?: (op: DesignRoundOp) => Promise<void>;
+  /** Go to Discover — where role-owned open questions are actually worked (links
+   *  minted, per person). The band states the count and hands the work over; it does
+   *  not run Listen's burn-down from inside the design-approval zone. */
+  onGoDiscover?: () => void;
   regenBusy: Record<string, boolean>;
   genBusy: Record<string, boolean>;
   /* NO `onQuestion`. A stakeholder QUESTIONS an operator decision, and a stakeholder is
@@ -82,21 +113,45 @@ interface Props {
    * surface cannot perform. Guarded by designLoopZonesProps.test.ts. */
 }
 
-/** Which zone each loop station belongs to, and (for the operator zone) the role
- *  a question routes to — the ledger's owner for that class of decision. */
-const ZONE_OF: Record<string, { zone: "operator" | "stakeholder" | "joint"; role?: string }> = {
-  "architecture-strategy": { zone: "operator", role: "Architect" },
-  "agentic-blueprint": { zone: "operator", role: "Architect" },
-  prototype: { zone: "operator", role: "Design team" },
+/**
+ * Which zone each loop station belongs to, the role a question about it routes to, and
+ * the ownership class its tile wears.
+ *
+ * EXPERIENCE DESIGN sits in the build zone now, with a JOINT tag. It is rendered by the
+ * operator like the other three and it lands in the same dependency chain
+ * (Architecture → Experience Design → Blueprint → Prototype); what is joint about it is
+ * the gap between stakeholder-asserted intent and that render, and a gap is a thing you
+ * adjudicate when it exists — the deviation section below — not a permanent zone.
+ */
+const ZONE_OF: Record<string, { zone: "operator" | "stakeholder"; role?: string; owned?: "operator" | "joint" }> = {
+  "architecture-strategy": { zone: "operator", role: "Architect", owned: "operator" },
+  "experience-design": { zone: "operator", role: "Design team", owned: "joint" },
+  "agentic-blueprint": { zone: "operator", role: "Architect", owned: "operator" },
+  prototype: { zone: "operator", role: "Design team", owned: "operator" },
   validation: { zone: "stakeholder" },
-  "experience-design": { zone: "joint", role: "Design team" },
 };
+
+/**
+ * A RULE, behind a real button. Teaching copy is true on every render and is therefore
+ * not status; a zone that prints it beside its state makes the reader separate the two
+ * every time. `aria-expanded` on a genuine <button> — the a11y suites reach this band.
+ */
+function ZoneHelp({ label, children }: { label: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button type="button" className="v3dl-help" aria-expanded={open}
+        onClick={() => setOpen((on) => !on)}>{label}</button>
+      {open ? <div className="v3dl-helpbody">{children}</div> : null}
+    </>
+  );
+}
 
 /** One operator-built artifact: decided-with-basis, not a refreshable blob. No
  *  "needs refresh" — its state reads as present/draft + ownership, and a
  *  stakeholder may question it (routes, never edits). */
-function OperatorTile({ station, role, onOpen, onRegen, onGenerate, regenerating, generating }: {
-  station: LineStation; role: string;
+function OperatorTile({ station, role, owned, onOpen, onRegen, onGenerate, regenerating, generating }: {
+  station: LineStation; role: string; owned: "operator" | "joint";
   onOpen: Props["onOpen"]; onRegen?: Props["onRegen"]; onGenerate?: Props["onGenerate"];
   regenerating: boolean; generating: boolean;
 }) {
@@ -110,7 +165,7 @@ function OperatorTile({ station, role, onOpen, onRegen, onGenerate, regenerating
         onClick={() => { if (present && station.card) onOpen(station.card); else if (canGen && !generating) onGenerate!(station.card!); }}>
         <span className="v3dl-tile-h">
           <span className="v3dl-tile-n">{station.title}</span>
-          <OwnershipTag cls="operator" showLabel={false} />
+          <OwnershipTag cls={owned} showLabel={false} />
         </span>
         <span className="v3dl-tile-sub">{station.subtitle}</span>
         {/* claim state replaces "needs refresh": present decisions read decided;
@@ -119,7 +174,7 @@ function OperatorTile({ station, role, onOpen, onRegen, onGenerate, regenerating
         <span className="v3dl-tile-state">
           {present ? (
             evidenceMoved ? (
-              <span className="v3dl-moved" title="the claims this decision rests on have moved — rebuild to re-ground it">
+              <span className="v3dl-moved" title="the claims this decision rests on have moved — rebuild to re-derive it">
                 <ClaimStatus state="weak" /> evidence moved underneath
               </span>
             ) : (
@@ -155,7 +210,7 @@ function OperatorTile({ station, role, onOpen, onRegen, onGenerate, regenerating
 }
 
 /* ------------------------------------------------------------------ *
- * The DESIGN REVIEW ROUND — zone 2's whole content
+ * The DESIGN REVIEW ROUND — zone 2's whole content, STAGED
  * ------------------------------------------------------------------ */
 
 /** One word per participant state, in the operator's language. The rollup decides
@@ -168,6 +223,60 @@ const STATE_WORD: Record<DesignParticipantState, string> = {
   waived: "waived",
   delegated: "delegated",
 };
+
+/**
+ * WHERE THE LOOP STANDS — build → ask → collect → approve, and the one detour
+ * (changes requested) that sends you back to build.
+ *
+ * Derived from the model's own two readers and NOTHING else: `readDesignVersion` says
+ * whether there is a design to review, `designRoundRollup` says where the round got to.
+ * The stage decides what the zone draws, so the zone answers "what do I do now" instead
+ * of listing everything that could ever be true.
+ */
+type LoopStage = "build" | "ask" | "collect" | "changes" | "approved";
+
+function loopStage(design: DesignVersion, rollup: DesignRoundRollup): LoopStage {
+  if (!design.hasPrototype) return "build";
+  if (!rollup.round) return "ask";
+  if (rollup.state === "objections") return "changes";
+  if (rollup.state === "in-flight") return "collect";
+  return "approved";
+}
+
+/** The four steps a reader sees. "changes" is not a fifth step — it is the collect
+ *  step going wrong, and the gate beside the rail names who asked for what. */
+const RAIL = [
+  { id: "build", word: "Build" },
+  { id: "ask", word: "Ask" },
+  { id: "collect", word: "Collect" },
+  { id: "approved", word: "Approve" },
+] as const;
+const RAIL_STEP: Record<LoopStage, (typeof RAIL)[number]["id"]> = {
+  build: "build", ask: "ask", collect: "collect", changes: "collect", approved: "approved",
+};
+
+/** Whose row the operator is actually looking for at this stage. Ordering only — every
+ *  participant is still drawn, so nothing is hidden behind the stage. */
+const STAGE_FOCUS: Record<LoopStage, DesignParticipantState[]> = {
+  build: [], ask: [],
+  collect: ["asked", "responded"],
+  changes: ["objected"],
+  approved: [],
+};
+
+function StageRail({ stage }: { stage: LoopStage }) {
+  const nowAt = RAIL.findIndex((s) => s.id === RAIL_STEP[stage]);
+  return (
+    <ol className="v3dl-rail" aria-label="Where this design loop stands">
+      {RAIL.map((step, i) => (
+        <li key={step.id} aria-current={i === nowAt ? "step" : undefined}
+          className={`v3dl-railstep${i === nowAt ? " is-now" : i < nowAt ? " is-done" : ""}`}>
+          {step.word}
+        </li>
+      ))}
+    </ol>
+  );
+}
 
 /**
  * WHO SAID IT, on screen. Invariant (a) of `flowDesignRound.ts` is only worth
@@ -205,6 +314,7 @@ function DesignRoundZone({ program, roster, locked, onMintReview, onDesignRound 
   // What is built RIGHT NOW — the model's own reader, so "there is nothing to review"
   // is the same fact here and inside `openDesignRound`.
   const design = readDesignVersion(program);
+  const stage = loopStage(design, rollup);
   // A superseded or closed round takes no more answers — the model refuses them, so
   // the surface must not offer them either.
   const live = !!round && !round.closedAt && !round.supersededBy;
@@ -232,6 +342,14 @@ function DesignRoundZone({ program, roster, locked, onMintReview, onDesignRound 
     [roster],
   );
   const chosen = rosterChoices.filter((person) => picked[person.name]);
+
+  // The stage decides WHOSE ROW YOU ARE LOOKING FOR. A stable sort, so within the
+  // focused group the round's own order survives and nobody is dropped.
+  const people = useMemo(() => {
+    const focus = STAGE_FOCUS[stage];
+    if (!focus.length) return rollup.people;
+    return [...rollup.people].sort((a, b) => Number(focus.includes(b.state)) - Number(focus.includes(a.state)));
+  }, [rollup.people, stage]);
 
   const run = async (op: DesignRoundOp, told: string) => {
     if (!onDesignRound || busy) return;
@@ -263,16 +381,72 @@ function DesignRoundZone({ program, roster, locked, onMintReview, onDesignRound 
     !!openFor[person.name] || (meeting && (person.state === "asked" || person.state === "responded"));
 
   return (
-    <div className="v3dr">
-      {/* THE GATE, in the band. Tone, label and detail come from designRoundGate —
-          no second sentence about the same fact. */}
+    <div className={`v3dr stage-${stage}`}>
+      <StageRail stage={stage} />
+
+      {/* THE GATE, in the band, and the ONLY sentence about where the round stands.
+          Tone, label and detail come from designRoundGate — there is deliberately no
+          second paragraph restating it underneath in the surface's own words. */}
       <div className={`v3dr-gate tone-${gate.tone}`} role="note" aria-label="Design review round gate">
         <span className="v3dr-gate-dot" aria-hidden="true" />
         <span className="v3dr-gate-l">{gate.label}</span>
         {gate.detail ? <span className="v3dr-gate-d">{gate.detail}</span> : null}
       </div>
 
-      {round ? (
+      {/* STAGE 1 · NOTHING BUILT — the gate has already said "build the prototype
+          first". A roster picker for a design that does not exist is a control the
+          model would refuse, so the stage draws nothing else at all. */}
+      {stage === "build" ? null : !round ? (
+        /* STAGE 2 · BUILT, NO ROUND — the roster picker and one verb. */
+        <div className="v3dr-ask">
+          {locked ? (
+            <p className="v3dr-note">This movement&rsquo;s gate is recorded, so the round is frozen — reopen the gate to ask anybody.</p>
+          ) : !canWrite ? null : !rosterChoices.length ? (
+            <p className="v3dr-note">No named stakeholder on the roster yet — cast the Discovery Kit first.</p>
+          ) : (
+            <>
+              <button type="button" className="v3dl-mini" aria-expanded={picking}
+                onClick={() => setPicking((on) => !on)}
+                title="Pick who reviews the design, then open the round">
+                open a design review round
+              </button>
+              {picking ? (
+                <div className="v3dr-pick">
+                  <ul className="v3dr-picklist" aria-label="Who to ask to approve the design">
+                    {rosterChoices.map((person) => (
+                      <li key={person.name}>
+                        <label className="v3dr-pickrow">
+                          <input type="checkbox" checked={!!picked[person.name]}
+                            aria-label={`Ask ${person.name}${person.role && person.role !== person.name ? `, ${person.role},` : ""} to approve the design${person.isRole ? " — a role with nobody named to it yet" : ""}`}
+                            onChange={(e) => setPicked((prev) => ({ ...prev, [person.name]: e.target.checked }))} />
+                          <span className="v3dr-name">{person.name}</span>
+                          {person.role && person.role !== person.name ? <span className="v3dr-role">{person.role}</span> : null}
+                          {person.isRole ? <span className="v3dr-role is-slot">a role — nobody named to it yet</span> : null}
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                  <label className="v3dr-field">
+                    <span>A note for the round — optional</span>
+                    <input value={note} onChange={(e) => setNote(e.target.value)} />
+                  </label>
+                  <button type="button" className="v3dl-mini" disabled={busy || !chosen.length}
+                    title={chosen.length ? `Open the round and ask ${chosen.length} stakeholder${chosen.length === 1 ? "" : "s"} at once` : "Pick at least one stakeholder"}
+                    onClick={() => void run({
+                      op: "open",
+                      roster: chosen.map((person) => ({ name: person.name, role: person.role, email: person.email })),
+                      note: note.trim() || undefined,
+                    }, "Round opened.")}>
+                    open the round with {chosen.length} stakeholder{chosen.length === 1 ? "" : "s"}
+                  </button>
+                </div>
+              ) : null}
+              {said ? <span className="v3dr-said" role="status">{said}</span> : null}
+            </>
+          )}
+        </div>
+      ) : (
+        /* STAGES 3-5 · A ROUND EXISTS — the rollup, per person, by name. */
         <>
           <div className="v3dr-counts">
             <span className="v3dr-count"><b>{rollup.asked}</b> asked</span>
@@ -321,8 +495,11 @@ function DesignRoundZone({ program, roster, locked, onMintReview, onDesignRound 
             </p>
           ) : null}
 
-          <ul className="v3dr-people" aria-label={`Round ${rollup.ordinal} — every stakeholder asked`}>
-            {rollup.people.map((person) => {
+          <ul className="v3dr-people"
+            aria-label={stage === "changes" ? `Round ${rollup.ordinal} — everyone asked, the changes to act on first`
+              : stage === "collect" ? `Round ${rollup.ordinal} — everyone asked, those still to answer first`
+                : `Round ${rollup.ordinal} — every stakeholder asked`}>
+            {people.map((person) => {
               const answeredThemselves = person.attestation === "self";
               const canRecord = canWrite && live && !person.resolution && !answeredThemselves;
               const open = panelOpen(person);
@@ -432,97 +609,25 @@ function DesignRoundZone({ program, roster, locked, onMintReview, onDesignRound 
             })}
           </ul>
         </>
-      ) : (
-        /* NO ROUND — not started. Never a pass, never a count that isn't there. */
-        <div className="v3dr-empty">
-          <p className="v3dr-empty-t">No design review round has been opened. Nothing is approved and nothing has failed — nobody has been asked.</p>
-          {canWrite ? (
-            <>
-              <button type="button" className="v3dl-mini" aria-expanded={picking}
-                disabled={!design.hasPrototype || !rosterChoices.length}
-                onClick={() => setPicking((on) => !on)}
-                title={!design.hasPrototype
-                  ? "Build the prototype first — a round is about a design version"
-                  : !rosterChoices.length ? "No named stakeholder on the roster yet"
-                    : "Pick who reviews the design, then open the round"}>
-                open a design review round
-              </button>
-              {picking ? (
-                <div className="v3dr-pick">
-                  <ul className="v3dr-picklist" aria-label="Who to ask to approve the design">
-                    {rosterChoices.map((person) => (
-                      <li key={person.name}>
-                        <label className="v3dr-pickrow">
-                          <input type="checkbox" checked={!!picked[person.name]}
-                            aria-label={`Ask ${person.name}${person.role && person.role !== person.name ? `, ${person.role},` : ""} to approve the design${person.isRole ? " — a role with nobody named to it yet" : ""}`}
-                            onChange={(e) => setPicked((prev) => ({ ...prev, [person.name]: e.target.checked }))} />
-                          <span className="v3dr-name">{person.name}</span>
-                          {person.role && person.role !== person.name ? <span className="v3dr-role">{person.role}</span> : null}
-                          {person.isRole ? <span className="v3dr-role is-slot">a role — nobody named to it yet</span> : null}
-                        </label>
-                      </li>
-                    ))}
-                  </ul>
-                  {rosterChoices.length ? null : <p className="v3dr-empty-t">No named stakeholder on the roster yet — cast the Discovery Kit first.</p>}
-                  <label className="v3dr-field">
-                    <span>A note for the round — optional</span>
-                    <input value={note} onChange={(e) => setNote(e.target.value)} />
-                  </label>
-                  <button type="button" className="v3dl-mini" disabled={busy || !chosen.length}
-                    title={chosen.length ? `Open the round and ask ${chosen.length} stakeholder${chosen.length === 1 ? "" : "s"} at once` : "Pick at least one stakeholder"}
-                    onClick={() => void run({
-                      op: "open",
-                      roster: chosen.map((person) => ({ name: person.name, role: person.role, email: person.email })),
-                      note: note.trim() || undefined,
-                    }, "Round opened.")}>
-                    open the round with {chosen.length} stakeholder{chosen.length === 1 ? "" : "s"}
-                  </button>
-                </div>
-              ) : null}
-              {said ? <span className="v3dr-said" role="status">{said}</span> : null}
-            </>
-          ) : null}
-        </div>
       )}
     </div>
   );
 }
 
-export default function DesignLoopZones({ band, program, ledger, roster, onOpen, onRegen, onGenerate, onMintReview, onDesignRound, regenBusy, genBusy }: Props) {
+export default function DesignLoopZones({ band, program, ledger, roster, onOpen, onRegen, onGenerate, onMintReview, onDesignRound, onGoDiscover, regenBusy, genBusy }: Props) {
   const stationOf = (id: string) => band.stations.find((s) => s.id === id);
   const opStations = band.stations.filter((s) => ZONE_OF[s.id]?.zone === "operator");
   const validation = stationOf("validation");
-  const experience = stationOf("experience-design");
-  const proto = stationOf("prototype");
 
-  // stakeholder queue: open unknowns owned by a role (not unowned/blocked) — the
-  // discovery-kit questions a stakeholder answers. Assertions on record = the
-  // honest heard-count (0 stakeholder asserts in the read-only model).
+  // stakeholder queue: open unknowns owned by a role (not unowned/blocked) — Listen's
+  // burn-down, stated here as ONE line with a way to the surface that works it.
+  // Assertions on record = the honest heard-count (0 stakeholder asserts in the
+  // read-only model, which is UNKNOWN rather than none — see the foot).
   const stakeholderOpen = ledger.queue.counts.blocking + ledger.queue.counts["answerable-without-a-meeting"];
   const stakeholderAsserts = ledger.ownership.stakeholder; // 0 in-browser (write path gated)
   // A movement whose gate is recorded has its inputs frozen — the same rule the Kit
   // matrix reads. A locked Design Loop opens no round and records no verdict.
   const locked = DESIGN_LOOP_MOVEMENT_IDS.some((id) => program.gateReviews?.[id]?.status === "approved");
-
-  // ── the stakeholder queue as a WORK QUEUE — each headline number drills through
-  // to the questions it counts (not a dead affordance). "owned" = blocking+answerable
-  // (the role-owned open set); each segment filters to its routing set. Filtered off
-  // the one queue projection, phrased plain-language. ──
-  const [drill, setDrill] = useState<null | "owned" | Routing>(null);
-  const drillItems = useMemo(() => {
-    if (!drill) return [];
-    const match = (r: Routing) => drill === "owned" ? (r === "blocking" || r === "answerable-without-a-meeting") : r === drill;
-    return ledger.queue.items.filter((i) => match(i.routing) && i.owner.kind === "role")
-      .map((i) => { const r = renderQuestion(ledger.store, i.about, "operator"); return { ...i, question: r.question, typeTag: r.label, name: r.elementName }; });
-  }, [drill, ledger.queue.items, ledger.store]);
-  const DrillBtn = ({ k, n, label }: { k: "owned" | Routing; n: number; label: string }) => (
-    <button type="button" className={`v3dl-drillbtn${drill === k ? " on" : ""}`} aria-pressed={drill === k}
-      disabled={n === 0}
-      title={n === 0 ? `No ${label} questions` : `Show the ${n} ${label} question${n === 1 ? "" : "s"}`}
-      onClick={() => setDrill(drill === k ? null : k)}>
-      <b>{n}</b> {label}{n > 0 ? <span className="v3dl-drillchev" aria-hidden="true">{drill === k ? " ▴" : " ▾"}</span> : null}
-    </button>
-  );
 
   return (
     <div className="v3dl">
@@ -538,16 +643,34 @@ export default function DesignLoopZones({ band, program, ledger, roster, onOpen,
         </div>
       </div>
 
-      {/* ZONE 1 — operator builds it */}
+      {/* ZONE 1 — operator builds it, in dependency order */}
       <section className="v3dl-zone is-operator" aria-label="Operator builds it">
         <header className="v3dl-zone-h">
           <OwnershipTag cls="operator" />
           <span className="v3dl-zone-t">Operator builds it</span>
-          <span className="v3dl-zone-d">decided with basis — Architecture, Blueprint, Prototype. Questionable, not editable.</span>
+          <ZoneHelp label="how the build zone works">
+            <p>
+              Each of these is <b>decided with basis</b> — a decision re-derived from the claims under
+              it, not a blob that goes stale and gets refreshed. A stakeholder may <b>question</b> one:
+              it routes to the owning role as a proposal and never edits the artifact, and the capture
+              lives on their own link.
+            </p>
+            <p>
+              Experience Design is <b>joint</b>. Stakeholders assert what the experience must do; this
+              document is what actually renders. Where the two disagree the gap is a deviation, and the
+              deviation section appears below as soon as there is one to settle.
+            </p>
+            <p>
+              A stakeholder&rsquo;s <SourceTag source="asserted" /> refinement wins over the
+              operator&rsquo;s <SourceTag source="generated" /> regeneration — the ledger keeps the
+              assertion, never the re-gen.
+            </p>
+          </ZoneHelp>
         </header>
         <div className="v3dl-tiles">
           {opStations.map((s) => (
             <OperatorTile key={s.id} station={s} role={ZONE_OF[s.id]?.role ?? "Design team"}
+              owned={ZONE_OF[s.id]?.owned ?? "operator"}
               onOpen={onOpen} onRegen={onRegen} onGenerate={onGenerate}
               regenerating={!!(s.card && regenBusy[s.card.id])} generating={!!(s.card && genBusy[s.card.id])} />
           ))}
@@ -567,86 +690,97 @@ export default function DesignLoopZones({ band, program, ledger, roster, onOpen,
               open Validation
             </button>
           ) : null}
-          <span className="v3dl-zone-d">The prototype and their demo scripts go out — jointly in a meeting or each on their own link — and the loop closes when every stakeholder in the round has approved, or is waived or delegated on the record.</span>
+          <ZoneHelp label="how the review round works">
+            <p>
+              The prototype and each stakeholder&rsquo;s demo script go out — jointly in a meeting or
+              each on their own link — and the loop closes when every stakeholder in the round has
+              approved, or is waived or delegated on the record.
+            </p>
+            <p>
+              A verdict you record is <b>attested by you</b> and is kept apart from the person&rsquo;s own
+              word permanently. Waive and delegate are the only ways past someone who will not answer,
+              and both need a reason that stays on the record.
+            </p>
+          </ZoneHelp>
         </header>
         <DesignRoundZone program={program} roster={roster} locked={locked}
           onMintReview={onMintReview} onDesignRound={onDesignRound} />
-        <div className="v3dl-shape one">
-          <div className="v3dl-queue">
-            <span className="v3dl-queue-t">Owned questions awaiting a stakeholder — a work queue, click to drill in</span>
-            {/* THE work — each number drills to the questions it counts, filtered by
-                that operator action. Not a dead affordance. */}
-            <span className="v3dl-queue-n"><DrillBtn k="owned" n={stakeholderOpen} label="open unknowns owned by a role" /></span>
-            <span className="v3dl-queue-sub">
-              <ClaimStatus state="open" showLabel={false} />
-              <DrillBtn k="blocking" n={ledger.queue.counts.blocking} label="blocking — gates the Architect" /> ·
-              <DrillBtn k="answerable-without-a-meeting" n={ledger.queue.counts["answerable-without-a-meeting"]} label="answerable — send a link now" /> ·
-              <DrillBtn k="blocked" n={ledger.queue.counts.blocked} label="blocked — needs unsticking" />
-            </span>
-            {drill ? (
-              <ul className="v3dl-drilllist" aria-label={`${drill} questions`}>
-                {drillItems.slice(0, 24).map((it) => (
-                  <li key={it.about} title={it.about}>
-                    <span className="v3dl-drill-type">{it.typeTag}</span>
-                    <span className="v3dl-drill-q">{it.question}</span>
-                    <span className="v3dl-drill-owner"><span aria-hidden="true">→ </span>owner: {it.ownerLabel}</span>
-                  </li>
-                ))}
-                {drillItems.length > 24 ? <li className="v3dl-drill-more">+{drillItems.length - 24} more — work them in the Discover inbox</li> : null}
-              </ul>
-            ) : null}
-          </div>
-        </div>
       </section>
 
-      {/* ZONE 3 — joint (Experience Design split + Prototype refinement) */}
-      <section className="v3dl-zone is-joint" aria-label="Joint — operator and stakeholder">
-        <header className="v3dl-zone-h">
-          <OwnershipTag cls="joint" />
-          <span className="v3dl-zone-t">Joint — designed together</span>
-          <span className="v3dl-zone-d">Experience Design as intent vs render, with the deviation register between them.</span>
-        </header>
-        <div className="v3dl-split">
-          <div className="v3dl-split-col">
-            <span className="v3dl-split-lbl"><OwnershipTag cls="stakeholder" showLabel={false} /> Intent — asserted</span>
-            <p className="v3dl-split-body">What stakeholders said the experience must do. Asserted intent wins over a render that drifts from it.</p>
-            <span className="v3dl-split-num"><b>{stakeholderAsserts}</b> asserted intents <ProvisionalMark what="intent assertions arrive on the stakeholder write path (gated)" /></span>
+      {/* ZONE 3 — DEVIATIONS, and only when there are some. A precedence rule is not a
+          place you go; an as-is → to-be gap between asserted intent and the rendered
+          design is. With none on record this section does not draw, and the foot below
+          says so by name. */}
+      {ledger.devs.length ? (
+        <section className="v3dl-zone is-joint" aria-label="Deviations to settle — asserted intent against the rendered design">
+          <header className="v3dl-zone-h">
+            <OwnershipTag cls="joint" />
+            <span className="v3dl-zone-t">Deviations to settle</span>
+            <span className="v3dl-zone-d">
+              {ledger.devs.length} on record{stakeholderAsserts ? ` · ${stakeholderAsserts} asserted intent${stakeholderAsserts === 1 ? "" : "s"}` : ""}
+            </span>
+            <ZoneHelp label="how a deviation is settled">
+              <p>
+                What stakeholders asserted the experience must do is <b>intent</b>; what the Experience
+                Design document renders is the <b>design</b>. Asserted intent wins over a render that
+                drifts from it, and every gap between the two is listed here until it is settled.
+              </p>
+            </ZoneHelp>
+          </header>
+          <div className="v3dl-devreg">
+            <span className="v3dl-devreg-t">recorded deviations</span>
+            <ul className="v3dl-devlist">
+              {ledger.devs.slice(0, 5).map((d) => (
+                <li key={d.about}>
+                  <code>{d.about.replace(/^el:/, "")}</code>
+                  <span className="v3dl-devvals">{d.asIs} <span aria-hidden="true">→</span> <span className="v3lc-sr">becomes </span>{d.toBe}</span>
+                  <DeviationMarker classification={d.classification} stillReferenced={d.stillReferenced} />
+                </li>
+              ))}
+              {ledger.devs.length > 5 ? <li className="v3dl-devmore">+{ledger.devs.length - 5} more on the Experience Design document</li> : null}
+            </ul>
           </div>
-          <div className="v3dl-devreg" aria-label="deviation register">
-            <span className="v3dl-devreg-t">Deviation register</span>
-            {ledger.devs.length ? (
-              <ul className="v3dl-devlist">
-                {ledger.devs.slice(0, 5).map((d) => (
-                  <li key={d.about}>
-                    <code>{d.about.replace(/^el:/, "")}</code>
-                    <span className="v3dl-devvals">{d.asIs} <span aria-hidden="true">→</span> <span className="v3lc-sr">becomes </span>{d.toBe}</span>
-                    <DeviationMarker classification={d.classification} stillReferenced={d.stillReferenced} />
-                  </li>
-                ))}
-              </ul>
-            ) : <p className="v3dl-devempty">No as-is → to-be deviations on record for this program.</p>}
-          </div>
-          <div className="v3dl-split-col">
-            <span className="v3dl-split-lbl"><OwnershipTag cls="operator" showLabel={false} /> Render — designed</span>
-            <p className="v3dl-split-body">What the Experience Design document actually renders. A render deviating from asserted intent shows up in the register.</p>
-            {experience?.card ? (
-              <button type="button" className="v3dl-mini" onClick={() => onOpen(experience.card!)}
-                title="Open Experience Design">open Experience Design<span aria-hidden="true"> →</span></button>
-            ) : <span className="v3dl-split-num"><ClaimStatus state="open" showLabel={false} /> not rendered yet</span>}
-          </div>
-        </div>
-        <div className="v3dl-refine">
-          <span className="v3dl-refine-t">Prototype refinement</span>
-          <span className="v3dl-refine-body">
-            A stakeholder&apos;s <SourceTag source="asserted" /> refinement wins over the operator&apos;s <SourceTag source="generated" /> regeneration —
-            the ledger keeps the assertion, never the re-gen.
-          </span>
-          <span className="v3dl-refine-num">
-            <b>{stakeholderAsserts}</b> stakeholder refinements · {proto?.card?.present ? "prototype built (generated)" : "prototype not built"}
-            <ProvisionalMark what="refinement is a stakeholder assertion on the gated write path; all prototype content is generated today" />
-          </span>
-        </div>
-      </section>
+        </section>
+      ) : null}
+
+      {/* THE FOOT — two quiet lines, and each one earns its place.
+          (1) WHAT IS NOT DRAWN, named. A hidden zero-count section is the house rule,
+              but a blank space with no account of itself is indistinguishable from a
+              broken surface. This says which sections are absent and why, and it keeps
+              EMPTY apart from UNKNOWN: no deviations is a real zero; no stakeholder
+              assertion is a write path that is not wired.
+          (2) WHERE THE OTHER LOOP IS. Role-owned open questions are Listen's burn-down.
+              One line, one number, one way there — not a second copy of Discover's own
+              split, and not a second job for the approval zone above. */}
+      <div className="v3dl-foot">
+        {!ledger.devs.length || !stakeholderAsserts ? (
+          <p className="v3dl-quiet" role="note">
+            <span className="v3dl-quiet-l">Not drawn — nothing on record</span>
+            {!ledger.devs.length ? (
+              <span className="v3dl-quiet-i">the deviation register: no as-is to-be deviation on this programme</span>
+            ) : null}
+            {!stakeholderAsserts ? (
+              <span className="v3dl-quiet-i">
+                asserted intent and prototype refinements: the stakeholder write path is not wired in
+                the browser, so this reads unknown rather than none
+                {" "}<ProvisionalMark what="intent assertions and refinements arrive on the stakeholder write path (gated)" />
+              </span>
+            ) : null}
+          </p>
+        ) : null}
+        {stakeholderOpen > 0 ? (
+          <p className="v3dl-elsewhere">
+            <b>{stakeholderOpen}</b> open questions are owned by a role and still unanswered — that is
+            Listen&rsquo;s burn-down, not this design round.
+            {onGoDiscover ? (
+              <button type="button" className="v3dl-golink" onClick={onGoDiscover}
+                title="Go to Discover — every owned question, per person, with the link that carries it">
+                work them in Discover<span aria-hidden="true"> →</span>
+              </button>
+            ) : null}
+          </p>
+        ) : null}
+      </div>
     </div>
   );
 }

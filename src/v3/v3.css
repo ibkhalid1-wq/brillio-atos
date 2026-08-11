@@ -5605,6 +5605,16 @@ button.v3fs-stale-tag {font-family:inherit;border:none;cursor:pointer}
 .v3fs-portal-q textarea:focus {outline:2px solid var(--v3-accent-2);outline-offset:1px}
 .v3fs-mic {font:inherit;font-size:11.5px;font-weight:600;align-self:flex-start;margin-top:7px;border:1px solid var(--fs-line);border-radius:99px;padding:6px 13px;background:var(--fs-card);color:var(--v3-text-secondary);cursor:pointer;transition:border-color .15s ease,color .15s ease}
 .v3fs-mic:hover {border-color:var(--v3-accent-2);color:var(--v3-accent-2)}
+/* The record-and-transcribe fallback, with the note it shows when a recording
+   came back with no text — the mic never fails silently. */
+.v3fs-mic-wrap {display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
+/* "You dictated this — read it back before you send." The transcript is a
+   machine's reading of what they said, and the page says so before it becomes
+   evidence, not after. */
+.v3fs-rvw-dictnote {margin:8px 0 0;font-size:11.5px;line-height:1.55;color:var(--v3-amber)}
+/* NO SCRIPT WAS WRITTEN — stated, not left blank. Muted rather than alarming:
+   it is an absence to be honest about, not an error the stakeholder caused. */
+.v3fs-dr-scriptgap-note {margin:10px 0 0;font-size:12.5px;line-height:1.65;color:var(--v3-text-muted)}
 .v3fs-mic.on {border-color:var(--v3-amber);color:var(--v3-amber);animation:v3fs-mic-pulse 1.6s ease-in-out infinite}
 /* Compact mic that sits inside a field — voice input on any review answer. */
 .v3fs-rvw-field {position:relative;display:block}

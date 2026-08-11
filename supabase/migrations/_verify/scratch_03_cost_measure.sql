@@ -89,7 +89,7 @@ do $$
 declare sz text; full_ms numeric; base_ms numeric; nofp_ms numeric;
 begin
   update public.adam_programs set data = public._gen_blob(200, 20, 200) where id='cost-1';
-  select pg_size_pretty(pg_column_size(data)) into sz from public.adam_programs where id='cost-1';
+  select pg_size_pretty(pg_column_size(data)::bigint) into sz from public.adam_programs where id='cost-1';
   full_ms := public._measure('cost-1', 20);
   execute 'alter table public.adam_programs disable trigger aura_audit_programs';
   base_ms := public._measure('cost-1', 20);
@@ -111,7 +111,7 @@ do $$
 declare sz text; full_ms numeric; base_ms numeric; nofp_ms numeric;
 begin
   update public.adam_programs set data = public._gen_blob(500, 40, 250) where id='cost-1';
-  select pg_size_pretty(pg_column_size(data)) into sz from public.adam_programs where id='cost-1';
+  select pg_size_pretty(pg_column_size(data)::bigint) into sz from public.adam_programs where id='cost-1';
   full_ms := public._measure('cost-1', 10);
   execute 'alter table public.adam_programs disable trigger aura_audit_programs';
   base_ms := public._measure('cost-1', 10);
@@ -133,7 +133,7 @@ do $$
 declare sz text; full_ms numeric; base_ms numeric; nofp_ms numeric;
 begin
   update public.adam_programs set data = public._gen_blob(800, 60, 300) where id='cost-1';
-  select pg_size_pretty(pg_column_size(data)) into sz from public.adam_programs where id='cost-1';
+  select pg_size_pretty(pg_column_size(data)::bigint) into sz from public.adam_programs where id='cost-1';
   full_ms := public._measure('cost-1', 6);
   execute 'alter table public.adam_programs disable trigger aura_audit_programs';
   base_ms := public._measure('cost-1', 6);

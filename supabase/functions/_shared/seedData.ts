@@ -16,11 +16,15 @@
  * Every cardinality/optionality the generator must ASSUME is emitted in the
  * assumptions list — direct input to the Listen sessions.
  */
-import { deriveRoles, type ValueRole } from "./semanticRoles.ts";
+import { deriveRoles, readsLikeATitle, type ValueRole } from "./semanticRoles.ts";
+import { deriveOntologyGraph, type OntologyGraph } from "./ontologyGraph.ts";
 
-export interface SeedRecord { id: string; _synthetic: true; _classification: "SYNTHETIC-SEED"; [k: string]: unknown; }
+/** `_display` is what a person would call this record. It is present only when
+ *  the ontology gives the entity no name-like attribute to call it by — see the
+ *  `display-name` assumption, which sends that gap to Listen. */
+export interface SeedRecord { id: string; _synthetic: true; _classification: "SYNTHETIC-SEED"; _display?: string; [k: string]: unknown; }
 export interface SeedAssumption {
-  kind: "optionality" | "fan-out" | "relation-verb" | "orphan-entity";
+  kind: "optionality" | "fan-out" | "relation-verb" | "orphan-entity" | "display-name";
   subject: string;
   assumed: string;
   listenQuestion: string;
@@ -29,6 +33,12 @@ export interface SeedResult {
   records: Record<string, SeedRecord[]>;
   assumptions: SeedAssumption[];
   counts: Record<string, number>;
+  /** The structure the generation walked — roots, parents/children, depth and
+   *  fan-in. It used to be built here, used for the insert order, and thrown
+   *  away; every consumer that needed shape then had to guess (or, in the
+   *  assembler's case, sort by row count). Derived in `ontologyGraph`, returned
+   *  here so a caller gets content AND the shape it was generated from. */
+  graph: OntologyGraph;
 }
 
 // ── deterministic PRNG ──
@@ -45,22 +55,43 @@ const STATUSES = ["Open", "In progress", "Blocked", "Closed", "On hold"];
 // stakeholder a demo isn't real.
 const PEOPLE = ["A. Whitfield", "R. Osei", "M. Lindqvist", "S. Nakamura", "D. Ferreira", "K. Abadi", "J. Mbeki", "L. Petrov", "T. Halvorsen", "N. Chaudhry", "C. Delacroix", "P. Okonkwo", "E. Vargas", "H. Sørensen", "B. Ramachandran", "F. Novak"];
 
+// Neutral enum LABELS for a category/type/tier/segment column. A category is a
+// word a person reads, so it has to look like one — the failing column showed
+// PRA-5570, a handle, because a category shared the `code` branch.
+const CATEGORIES = ["Standard", "Core", "Extended", "Strategic", "Enterprise", "Regional", "Global", "Priority", "Emerging", "Established", "Tier 1", "Tier 2"];
+
 const singular = (name: string) => name.replace(/s$/i, "");
 
 /** A synthetic value for one attribute, driven by its semantic role, deterministic. */
-function valueFor(role: ValueRole | undefined, entity: string, attr: string, i: number, rnd: () => number): unknown {
+function valueFor(
+  role: ValueRole | undefined,
+  entity: string,
+  attr: string,
+  i: number,
+  rnd: () => number,
+  refValue: () => string | undefined,
+): unknown {
   switch (role) {
     case "monetary": return Math.round((rnd() * 480000 + 2000) / 500) * 500;
     case "quantity": return Math.floor(rnd() * 200);
+    // A share of a whole cannot exceed the whole. The bound IS the role.
+    case "percent": return Math.floor(rnd() * 101);
+    // Rotated by the attribute's own name so an entity carrying six category
+    // columns (tier, region, industry, type, segment, category) doesn't print
+    // one word six times across a row.
+    case "category": return CATEGORIES[(hashSeed(attr) + Math.floor(rnd() * 4)) % CATEGORIES.length];
     case "date": { const m = 1 + Math.floor(rnd() * 12); const d = 1 + Math.floor(rnd() * 27); return `2026-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`; }
     case "boolean": return rnd() > 0.5;
     case "status": return STATUSES[Math.floor(rnd() * STATUSES.length)];
     case "code": return `${entity.slice(0, 3).toUpperCase()}-${String(1000 + Math.floor(rnd() * 8999))}`;
     case "person-ref": return PEOPLE[Math.floor(rnd() * PEOPLE.length)];
-    // A reference to another record reads as that record's name — the bare
-    // organisation. Sharing the generic filler put "Northwind review" in an
-    // Account column, which names an activity, not an account.
-    case "parent-ref": return COMPANIES[Math.floor(rnd() * COMPANIES.length)];
+    // A reference to another record reads as THAT RECORD'S name. When the
+    // ontology names the entity being referenced, the value is the actual title
+    // of the actual row the FK points at — so an Opportunity column on a
+    // forecast split says what the split's own opportunity is called, instead of
+    // "Northwind sync", which names an activity, not an opportunity. Without a
+    // named target it falls back to the bare organisation.
+    case "parent-ref": case "cross-ref": return refValue() ?? COMPANIES[Math.floor(rnd() * COMPANIES.length)];
     case "title": return `${COMPANIES[i % COMPANIES.length]} ${singular(entity)} ${i + 1}`;
     // An identifier is a HANDLE, not a second copy of the title. Sharing the
     // title's branch printed the same string into two adjacent columns.
@@ -77,46 +108,57 @@ export function generateSeed(ontology: Record<string, unknown>, version: string,
   const maxPerEntity = opts.maxPerEntity ?? 120;
   const roles = deriveRoles(ontology);
   const entities = (Array.isArray(ontology.entities) ? ontology.entities : []) as Array<Record<string, unknown>>;
-  const relations = (Array.isArray(ontology.relations) ? ontology.relations : []) as Array<Record<string, unknown>>;
-  const names = entities.map((e) => String(e.name ?? "")).filter(Boolean);
   const attrsOf = (name: string) => {
     const e = entities.find((x) => String(x.name) === name);
     return (Array.isArray(e?.attributes) ? e!.attributes : []).map((a) => (typeof a === "string" ? a : String((a as { name?: unknown })?.name ?? ""))).filter(Boolean);
   };
   const roleOf = new Map(roles.attributeRoles.map((r) => [`${r.entity} ${r.attribute}`, r.role] as const));
+  const refOf = new Map(roles.attributeRoles.filter((r) => r.refEntity).map((r) => [`${r.entity} ${r.attribute}`, r.refEntity!] as const));
 
-  // parent → child edges from cardinality (FK ownership)
-  interface Edge { parent: string; child: string; card: string; }
-  const edges: Edge[] = [];
+  // The parent→child structure, derived ONCE in ontologyGraph. This used to be
+  // rebuilt here from `relations` and then discarded; now the same result is
+  // returned to the caller, which is what lets the navigation be ordered by the
+  // ontology instead of by how many rows this function happened to generate.
+  const graph = deriveOntologyGraph(ontology);
+  const { edges, order } = graph;
   const assumptions: SeedAssumption[] = [];
-  for (const r of relations) {
-    const from = String(r.from ?? ""), to = String(r.to ?? ""), card = String(r.cardinality ?? "").toUpperCase().replace(/\s/g, "");
-    const verb = String(r.relation ?? "");
-    if (!names.includes(from) || !names.includes(to)) continue;
-    let parent = from, child = to;
-    if (card === "N:1") { parent = to; child = from; }
-    if (card === "N:M" || card === "M:N") { assumptions.push({ kind: "fan-out", subject: `${from}↔${to}`, assumed: "skipped (no junction generated)", listenQuestion: `Is ${from}↔${to} a true many-to-many needing a join table?` }); continue; }
-    edges.push({ parent, child, card });
+  for (const j of graph.junctions) {
+    assumptions.push({ kind: "fan-out", subject: `${j.from}↔${j.to}`, assumed: "skipped (no junction generated)", listenQuestion: `Is ${j.from}↔${j.to} a true many-to-many needing a join table?` });
+  }
+  for (const e of edges) {
+    const { parent, child, cardinality: card, relation: verb } = e;
     // optionality is absent on every relation — assume child-optional/parent-optional
     assumptions.push({ kind: "optionality", subject: `${parent} → ${child} [${card}]`, assumed: "child-optional, parent-optional (default)", listenQuestion: `Must every ${child} have a ${parent}? Can a ${parent} have zero ${child}?` });
-    if (card.endsWith(":N") || card === "1:N") assumptions.push({ kind: "fan-out", subject: `${parent} → ${child}`, assumed: `0–${maxFanOut} per ${parent}`, listenQuestion: `Realistic count of ${child} per ${parent}?` });
+    if (card.endsWith(":N")) assumptions.push({ kind: "fan-out", subject: `${parent} → ${child}`, assumed: `0–${maxFanOut} per ${parent}`, listenQuestion: `Realistic count of ${child} per ${parent}?` });
     if (verb && verb.toLowerCase() === "produces") assumptions.push({ kind: "relation-verb", subject: `${parent} → ${child}`, assumed: 'generic verb "produces" treated as parent→child FK', listenQuestion: `Is ${parent}→${child} a composition, a reference, or a lifecycle transition?` });
   }
-  // topological order (Kahn); break cycles by dropping a back-edge
-  const childrenOf = new Map<string, Edge[]>();
-  const indeg = new Map<string, number>(names.map((n) => [n, 0]));
-  for (const e of edges) { (childrenOf.get(e.parent) ?? childrenOf.set(e.parent, []).get(e.parent)!).push(e); indeg.set(e.child, (indeg.get(e.child) ?? 0) + 1); }
-  const order: string[] = []; const q = names.filter((n) => (indeg.get(n) ?? 0) === 0);
-  const seenDeg = new Map(indeg);
-  while (q.length) { const n = q.shift()!; order.push(n); for (const e of childrenOf.get(n) ?? []) { const d = (seenDeg.get(e.child) ?? 1) - 1; seenDeg.set(e.child, d); if (d === 0) q.push(e.child); } }
-  for (const n of names) if (!order.includes(n)) order.push(n); // cycle remnants
-  const isRoot = new Set(names.filter((n) => (indeg.get(n) ?? 0) === 0));
-  for (const n of names) if (isRoot.has(n) && !edges.some((e) => e.parent === n)) assumptions.push({ kind: "orphan-entity", subject: n, assumed: "seeded standalone (no relation in the ontology)", listenQuestion: `What does ${n} connect to?` });
-
+  // An entity with NO name-like attribute has no way to introduce one of its
+  // records to a person: the display name gets taken from whichever attribute
+  // came first, so the demo shows account names under a "Category" heading.
+  // That is a gap in the ontology, not a rendering choice — it goes to Listen.
+  const needsDisplayName = new Set(graph.entities.filter((n) => {
+    const attrs = attrsOf(n);
+    return attrs.length > 0 && !attrs.some((a) => readsLikeATitle(a));
+  }));
+  for (const n of needsDisplayName) {
+    assumptions.push({ kind: "display-name", subject: n, assumed: "no name-like attribute; a synthetic display name was supplied",
+      listenQuestion: `What does a user call a single ${n}? It has no name, title or label attribute.` });
+  }
+  const isRoot = new Set(graph.nodes.filter((n) => n.isRoot).map((n) => n.name));
+  for (const n of graph.nodes) {
+    if (n.parents.length === 0 && n.children.length === 0) {
+      assumptions.push({ kind: "orphan-entity", subject: n.name, assumed: "seeded standalone (no relation in the ontology)", listenQuestion: `What does ${n.name} connect to?` });
+    }
+  }
   // generate
   const records: Record<string, SeedRecord[]> = {};
-  const parentEdgesOf = new Map<string, Edge[]>(); // child -> its parent edges
+  const parentEdgesOf = new Map<string, typeof edges>(); // child -> its parent edges
   for (const e of edges) (parentEdgesOf.get(e.child) ?? parentEdgesOf.set(e.child, []).get(e.child)!).push(e);
+  // What a REFERENCE to one of an entity's rows should read as: its title
+  // attribute, else the display name this generator supplied for it.
+  const titleAttrOf = (name: string) => attrsOf(name).find((a) => roleOf.get(`${name} ${a}`) === "title")
+    ?? (needsDisplayName.has(name) ? "_display" : undefined)
+    ?? attrsOf(name).find((a) => roleOf.get(`${name} ${a}`) === "identifier");
   let planted = false;
   for (const name of order) {
     const rnd = mulberry32(hashSeed(`${version}::${name}`));
@@ -133,12 +175,29 @@ export function generateSeed(ontology: Record<string, unknown>, version: string,
     const rows: SeedRecord[] = [];
     const mk = (i: number, parentIds: Record<string, string>): SeedRecord => {
       const rec: SeedRecord = { id: `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${String(i + 1).padStart(4, "0")}`, _synthetic: true, _classification: "SYNTHETIC-SEED" };
-      attrs.forEach((a) => { rec[a] = valueFor(roleOf.get(`${name} ${a}`), name, a, i, rnd); });
+      if (needsDisplayName.has(name)) rec._display = `${COMPANIES[i % COMPANIES.length]} ${singular(name)} ${i + 1}`;
+      attrs.forEach((a) => {
+        // What a reference column should SAY: the title of the row it points at.
+        // When this record has an FK to that entity, it is that exact row — the
+        // column and the relation agree, which is the whole point of a reference.
+        const refValue = () => {
+          const target = refOf.get(`${name} ${a}`);
+          if (!target) return undefined;
+          const pool = records[target] ?? [];
+          if (!pool.length) return undefined;
+          const ta = titleAttrOf(target);
+          const linked = parentIds[target] ? pool.find((p) => p.id === parentIds[target]) : undefined;
+          const row = linked ?? pool[i % pool.length];
+          const v = ta ? row[ta] : undefined;
+          return typeof v === "string" && v ? v : String(row.id);
+        };
+        rec[a] = valueFor(roleOf.get(`${name} ${a}`), name, a, i, rnd, refValue);
+      });
       // FK columns
       for (const [pName, pid] of Object.entries(parentIds)) rec[`${pName.toLowerCase()}Id`] = pid;
       // planted edge cases (once, on the first non-root entity with attributes)
       if (!planted && !isRoot.has(name) && attrs.length) {
-        if (i === 0) { const t = attrs.find((a) => (roleOf.get(`${name} ${a}`) === "title" || roleOf.get(`${name} ${a}`) === "identifier")) ?? attrs[0]; rec[t] = `${rec[t]} — an unusually long synthetic label used to stress the layout of ${name} rows and columns`; }
+        if (i === 0) { const t = titleAttrOf(name) ?? attrs.find((a) => roleOf.get(`${name} ${a}`) === "identifier") ?? attrs[0]; rec[t] = `${rec[t]} — an unusually long synthetic label used to stress the layout of ${name} rows and columns`; }
         if (i === 1) { const opt = attrs[attrs.length - 1]; rec[opt] = null; } // missing optional
         if (i === 2) { const money = attrs.find((a) => roleOf.get(`${name} ${a}`) === "monetary"); if (money) rec[money] = 0; } // boundary
         if (i === 2) planted = true;
@@ -153,7 +212,7 @@ export function generateSeed(ontology: Record<string, unknown>, version: string,
       let idx = 0;
       pRows.forEach((p, pi) => {
         // deliberately include the extremes: first parent gets 0, second gets max
-        const k = pi === 0 ? 0 : pi === 1 ? maxFanOut : (primary?.card === "1:1" ? 1 : Math.floor(rnd() * (maxFanOut + 1)));
+        const k = pi === 0 ? 0 : pi === 1 ? maxFanOut : (primary?.parentToChild === "1:1" ? 1 : Math.floor(rnd() * (maxFanOut + 1)));
         for (let j = 0; j < k && rows.length < entityCap; j += 1) {
           const parentIds: Record<string, string> = { [primary!.parent]: String(p.id) };
           for (const pe of parents.slice(1)) { const alt = records[pe.parent] ?? []; if (alt.length) parentIds[pe.parent] = String(alt[(idx + j) % alt.length].id); }
@@ -166,5 +225,5 @@ export function generateSeed(ontology: Record<string, unknown>, version: string,
   }
   const counts: Record<string, number> = {};
   for (const [k, v] of Object.entries(records)) counts[k] = v.length;
-  return { records, assumptions, counts };
+  return { records, assumptions, counts, graph };
 }

@@ -218,6 +218,16 @@ async function loadPack(token: string): Promise<{ reason: string } | {
 
 const DEMO_VERDICTS = new Set(["accepted", "accepted-with-changes", "rework"]);
 
+/**
+ * HOW THE WORDS WERE PRODUCED. A transcript is a machine's reading of what
+ * someone said; the record must not present it as if they had written it. The
+ * respondent's page states which of the three happened and the operator reads
+ * it on the quarantined item — no inference, and an old client that sends
+ * nothing stamps nothing rather than being assumed to have typed.
+ * Mirrored client-side in `FlowReviewSurface.tsx` (`CaptureMode`).
+ */
+const CAPTURE_MODES = new Set(["typed", "dictated", "mixed"]);
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
@@ -273,6 +283,39 @@ Deno.serve(async (req: Request) => {
           respondedAt,
         });
       }
+      // ONE comparison key for people and roles: case, punctuation and spacing
+      // folded away, nothing else. Comparisons on it are WHOLE-STRING and exact
+      // — never substring, never token-overlap. A programme once matched
+      // "Surgical Operations" onto the Sales Operations record that way, and a
+      // stakeholder being handed someone else's walkthrough is the same class
+      // of error: confidently wrong, and invisible to the person reading it.
+      const cmpKey = (value: unknown): string => String(value ?? "")
+        .toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+      /** Two keys name the same person when one is the other, or is its leading
+       *  words ("Priya" ↔ "Priya Nair"). "Sales director" and "Sales reps
+       *  markets" share a first word and are NOT the same thing. */
+      const sameWho = (a: string, b: string): boolean =>
+        !!a && !!b && (a === b || a.startsWith(`${b} `) || b.startsWith(`${a} `));
+      /** The role the kit roster holds for a named person. */
+      const rosterRoleFor = (who: string): string => {
+        const key = cmpKey(who);
+        if (!key) return "";
+        const kitDoc = isRecord(hit.inner.discoveryKit) ? hit.inner.discoveryKit as Record<string, unknown> : null;
+        const people = (kitDoc && Array.isArray(kitDoc.interviews) ? kitDoc.interviews : []).filter(isRecord);
+        const found = people.find((person) => sameWho(cmpKey(stripUnnamedSuffix(String(person.stakeholder ?? ""))), key));
+        return found ? String(found.role ?? "").trim() : "";
+      };
+      /**
+       * The link holder's REAL business role — the thing a demo script is filed
+       * under. A REVIEW link stores the review KIND in `role`
+       * ("review:design-round") and a follow-up stores "Follow-up"; neither is a
+       * role, so both resolve from the kit roster instead.
+       */
+      const holderRole: string = (() => {
+        const stored = String(hit.pack.role ?? "").trim();
+        if (stored && !stored.startsWith("review:") && !/follow-?up/i.test(stored)) return stored;
+        return rosterRoleFor(String(hit.pack.stakeholder ?? ""));
+      })();
       // The INTERPRETIVE PROTOTYPE slice: when an Experience Design exists,
       // links that show the prototype carry its flows + the screens they
       // reference — capped and stripped, nothing else leaves. Rides demo
@@ -283,16 +326,7 @@ Deno.serve(async (req: Request) => {
         if (!isRecord(xd) || !Array.isArray(xd.screens) || !Array.isArray(xd.flows)) return undefined;
         // PERSONA-FIRST: the holder of this link lands on THEIR flow — flows
         // whose persona matches the pack's stakeholder/role sort ahead, so
-        // the walker opens on their own workflow. Follow-up packs carry the
-        // role "Follow-up", so the REAL role is resolved from the kit roster.
-        let holderRole = String(hit.pack.role ?? "");
-        if (!holderRole || /follow-?up/i.test(holderRole)) {
-          const kitDoc = isRecord(hit.inner.discoveryKit) ? hit.inner.discoveryKit as Record<string, unknown> : null;
-          const holderKey = String(hit.pack.stakeholder ?? "").trim().toLowerCase();
-          const rosterHit = (kitDoc && Array.isArray(kitDoc.interviews) ? kitDoc.interviews : []).filter(isRecord)
-            .find((interview) => String(interview.stakeholder ?? "").trim().toLowerCase() === holderKey);
-          if (rosterHit) holderRole = String(rosterHit.role ?? "");
-        }
+        // the walker opens on their own workflow.
         const who = `${String(hit.pack.stakeholder ?? "")} ${holderRole}`.toLowerCase();
         const affinity = (flow: Record<string, unknown>): number => {
           const persona = String(flow.persona ?? "").trim().toLowerCase();
@@ -346,17 +380,51 @@ Deno.serve(async (req: Request) => {
           ...(showBucket._liveDemoAgents === "on" ? { liveDemo: true } : {}),
         };
       };
+      /**
+       * WHOSE SCRIPT IS THIS. A programme's demo scripts are not reliably filed
+       * under a person: the generator writes `stakeholder` + `role`, and on real
+       * programmes `stakeholder` often holds a ROLE ("Sales reps - Markets",
+       * "Leader - Marketing"). A round minted for the named person "Ibrahim
+       * Khalid" therefore matched nothing and the review page shipped no script
+       * at all — the stakeholder was asked to approve a design and shown none of
+       * the walkthrough written for them.
+       *
+       * So the holder is matched on BOTH claims they carry, most specific first:
+       *   1. their NAME, against either field — a script filed under this person
+       *      is a claim about this person and outranks anything role-shaped;
+       *   2. their ROLE, against either field, EXACT on `cmpKey`.
+       *
+       * Tier 2 is deliberately not clever. Substring or token-overlap matching
+       * would hand one person another person's walkthrough on a coincidence of
+       * wording, which is worse than showing none: a wrong script reads as the
+       * team having misunderstood their job.
+       */
+      const scriptMatch = (): { entry: Record<string, unknown>; by: "name" | "role" } | null => {
+        const doc = hit.inner.demoScripts;
+        if (!isRecord(doc) || !Array.isArray(doc.scripts)) return null;
+        const entries = (doc.scripts as unknown[]).filter(isRecord);
+        const nameKey = cmpKey(hit.pack.stakeholder);
+        if (nameKey) {
+          const byName = entries.find((entry) => sameWho(cmpKey(entry.stakeholder), nameKey)
+            || sameWho(cmpKey(entry.name), nameKey));
+          if (byName) return { entry: byName, by: "name" };
+        }
+        const roleKey = cmpKey(holderRole);
+        if (roleKey) {
+          const byRole = entries.find((entry) => cmpKey(entry.role) === roleKey
+            || cmpKey(entry.stakeholder) === roleKey);
+          if (byRole) return { entry: byRole, by: "role" };
+        }
+        return null;
+      };
       // THEIR demo script narrates the walk: opening quote, scenario, the
       // per-beat talk track and callbacks, and the closing acceptance ask.
+      // `matchedBy` travels with it so the page can say whether this walk was
+      // written for THEM or for their role — the page states what it knows.
       const scriptSlice = (): Record<string, unknown> | undefined => {
-        const doc = hit.inner.demoScripts;
-        if (!isRecord(doc) || !Array.isArray(doc.scripts)) return undefined;
-        const key = String(hit.pack.stakeholder ?? "").trim().toLowerCase();
-        const script = (doc.scripts as unknown[]).filter(isRecord).find((entry) => {
-          const name = String(entry.stakeholder ?? "").trim().toLowerCase();
-          return name && (name === key || name.split(/\s+/)[0] === key.split(/\s+/)[0]);
-        });
-        if (!script) return undefined;
+        const found = scriptMatch();
+        if (!found) return undefined;
+        const script = found.entry;
         return {
           openingQuote: String(script.openingQuote ?? "").slice(0, 300),
           scenario: String(script.scenario ?? "").slice(0, 400),
@@ -366,24 +434,36 @@ Deno.serve(async (req: Request) => {
             say: String(step.say ?? "").slice(0, 300),
             callback: String(step.callback ?? "").slice(0, 200),
           })),
+          matchedBy: found.by,
         };
+      };
+      /**
+       * NOTHING MATCHED — and the page has to SAY so. Rendering an empty block
+       * leaves the stakeholder unable to tell "no script was written for me"
+       * from "this page is broken", and they are being asked to approve a design
+       * on what they can see. Mirrors `pilotGap`: the absence is stated, with
+       * what to do instead.
+       */
+      const scriptGapSlice = (): string => {
+        const doc = hit.inner.demoScripts;
+        const written = isRecord(doc) && Array.isArray(doc.scripts)
+          && (doc.scripts as unknown[]).filter(isRecord).length > 0;
+        return written
+          ? "No walkthrough was written for your role, so there is no script to follow here. Take the prototype in whatever order makes sense for your work — your answer counts the same."
+          : "No demo script has been written for this prototype yet, so there is no walkthrough to follow here. Take it in whatever order makes sense for your work — your answer counts the same.";
       };
       // The recipient's business AREA — lets the walker default to their own
       // area's flow and name it ("This demo covers your area — X"), the Show
       // parallel to Listen's area-scoped reviews. Prefer the value stamped on the
       // invite; fall back to the matched demo script's area (Show follow-up packs
-      // carry no invite). Empty/General → no scoping (a graceful no-op).
+      // carry no invite) — matched by name OR role, the same way the script is,
+      // so a round link for a named person scopes to their area too. Empty or
+      // General → no scoping (a graceful no-op).
       const recipientAreaSlice = (): string => {
         const stamped = String(hit.pack.recipientArea ?? "").trim();
         if (stamped) return stamped;
-        const doc = hit.inner.demoScripts;
-        if (!isRecord(doc) || !Array.isArray(doc.scripts)) return "";
-        const key = String(hit.pack.stakeholder ?? "").trim().toLowerCase();
-        const script = (doc.scripts as unknown[]).filter(isRecord).find((entry) => {
-          const name = String(entry.stakeholder ?? "").trim().toLowerCase();
-          return name && (name === key || name.split(/\s+/)[0] === key.split(/\s+/)[0]);
-        });
-        const area = script ? String(script.area ?? "").trim() : "";
+        const found = scriptMatch();
+        const area = found ? String(found.entry.area ?? "").trim() : "";
         return area && area !== "General" ? area : "";
       };
       // The prototype the pilot validates is EITHER an external build (a linked
@@ -409,7 +489,7 @@ Deno.serve(async (req: Request) => {
         // takes over: `pilot` is empty then, so the page shows the demoUrl.
         return jsonResponse({
           ...(design ? { design } : {}),
-          ...(script ? { script } : {}),
+          ...(script ? { script } : { scriptGap: scriptGapSlice() }),
           ...(design ? runSlice() : {}),
           ...(recipientArea ? { recipientArea } : {}),
           ...pilot,
@@ -530,7 +610,11 @@ Deno.serve(async (req: Request) => {
         roster,
         ...(objective ? { objective } : {}),
         ...(interviewDesign ? { design: interviewDesign } : {}),
-        ...(interviewScript ? { script: interviewScript } : {}),
+        // The script, or the STATED absence of one. Only on packs that were
+        // meant to carry a walk (Show links, which is where a design round's
+        // links live) — elsewhere no script was ever expected and nothing is
+        // missing, so nothing is claimed.
+        ...(interviewScript ? { script: interviewScript } : (wantsDesign ? { scriptGap: scriptGapSlice() } : {})),
         ...(interviewDesign ? runSlice() : {}),
         ...(interviewArea ? { recipientArea: interviewArea } : {}),
         // A Show follow-up carries the prototype so the pilot renders in place
@@ -978,6 +1062,9 @@ Return ONLY JSON: {"topic":"design"|"other","answer":"..."}.`,
             // no verdict (an ordinary interview answer) is unchanged: the key is
             // absent, not empty, and nothing downstream sees a new field.
             ...(isRecord(body) && DEMO_VERDICTS.has(String(body.verdict)) ? { verdict: String(body.verdict) } : {}),
+            // TYPED OR DICTATED — see `CAPTURE_MODES`. Absent on every client
+            // that doesn't say, and the operator then reads no claim either way.
+            ...(isRecord(body) && CAPTURE_MODES.has(String(body.capture)) ? { capture: String(body.capture) } : {}),
             ...(documents.length ? { documents } : {}),
             ...(deferrals.length ? { deferrals } : {}),
             ...(suggestedVoices.length ? { suggestedVoices } : {}),

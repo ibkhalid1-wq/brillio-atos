@@ -291,10 +291,21 @@ const renderQuestionTouchers = (): string[] => {
 
 describe("(a) question text comes only from renderQuestion.ts", () => {
   it("SOURCE: every ledger question surface renders through the one producer", () => {
-    for (const f of ["v3/components/flow/TheLine.tsx", "v3/components/flow/OperatorInbox.tsx", "v3/components/flow/DesignLoopZones.tsx"]) {
+    // `DesignLoopZones.tsx` used to be on this list. It drew a routing-filtered drill
+    // list of role-owned open questions inside the design-approval zone — Listen's
+    // burn-down, hosted by the wrong loop. That block is gone (2026-08-11): the band
+    // states the count on one line and hands the work to Discover, which is where the
+    // questions are actually worked. It renders NO question text at all now, so the
+    // requirement below would be vacuous for it — and the case underneath, which scans
+    // the whole directory rather than a list, is what stops a literal creeping back in.
+    for (const f of ["v3/components/flow/TheLine.tsx", "v3/components/flow/OperatorInbox.tsx"]) {
       expect(src(f)).toMatch(/from "@\/v3\/lib\/ledger\/renderQuestion"/);
     }
     expect(src("v3/lib/ledger/kitProjection.ts")).toContain('from "./renderQuestion"');
+    // …and the band genuinely renders none: no import, and therefore no second producer.
+    const band = src("v3/components/flow/DesignLoopZones.tsx");
+    expect(band).not.toMatch(/from "@\/v3\/lib\/ledger\/renderQuestion"/);
+    expect(band, "the band prints question text again — put it back on the list above").not.toMatch(/question:\s*["`]/);
   });
 
   it("SOURCE: NO module that touches renderQuestion assigns a question STRING of its own", () => {

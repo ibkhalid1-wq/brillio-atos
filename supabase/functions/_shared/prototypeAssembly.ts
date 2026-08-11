@@ -55,7 +55,9 @@ function renderCell(role: ValueRole | undefined, value: unknown): string {
   switch (role) {
     case "monetary": return `<span style="font-variant-numeric:tabular-nums">${money(value)}</span>`;
     case "quantity": return `<span style="font-variant-numeric:tabular-nums">${esc(value)}</span>`;
-    case "status": return `<span class="m-badge">${esc(value)}</span>`;
+    // A percent shows its unit — the number alone is what let 145 pass for a share.
+    case "percent": return `<span style="font-variant-numeric:tabular-nums">${esc(value)}%</span>`;
+    case "status": case "category": return `<span class="m-badge">${esc(value)}</span>`;
     case "health": case "priority": return `<span class="m-pill m-pill--warn"><span class="m-dot m-dot--warn"></span>${esc(value)}</span>`;
     case "boolean": return value ? `<span class="m-dot m-dot--good"></span> Yes` : `<span class="m-dot"></span> No`;
     case "parent-ref": case "cross-ref": case "person-ref": return `<span class="m-chip">${esc(value)}</span>`;
@@ -76,11 +78,24 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
     const e = entities.find((x) => String(x.name) === name);
     return (Array.isArray(e?.attributes) ? e!.attributes : []).map((a) => (typeof a === "string" ? a : String((a as { name?: unknown })?.name ?? ""))).filter(Boolean);
   };
-  // present the entities that carry rows first (a populated screen is the instrument)
-  const ordered = [...names].sort((a, b) => (seed.counts[b] ?? 0) - (seed.counts[a] ?? 0));
+  // ORDER BY STRUCTURE. This line used to sort by `seed.counts` — by how many
+  // rows the generator happened to make — so a 120-row forecast-split junction
+  // table led the navigation of a CRM and Account sat 20 rows down. Row volume
+  // is an artefact of generation; the information architecture is the ontology's
+  // shape, so it comes from the graph: roots first, each entity's children
+  // beneath it, depth-first.
+  const graph = fabric.graph;
+  const ordered = graph.navOrder.filter((n) => names.includes(n));
   const es = new Map(names.map((n) => [n, slug(n)]));
   let regionCount = 0;
   const region = (id: string, inner: string) => { regionCount += 1; return `<div data-fabric-id="${esc(id)}">${inner}</div>`; };
+  /** What to CALL one record — its title attribute, else the display name the
+   *  seed supplied because the ontology gives the entity none, else its id. */
+  const displayNameOf = (entity: string, r: Record<string, unknown>): string => {
+    const t = attrsOf(entity).find((a) => roleOf.get(`${entity} ${a}`) === "title");
+    const v = t ? r[t] : undefined;
+    return String((typeof v === "string" && v ? v : undefined) ?? r._display ?? r.id ?? "");
+  };
 
   // ── one list screen per entity ──
   const listScreen = (name: string): string => {
@@ -91,12 +106,17 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
     // `buyingRole` where the contact's name belongs.
     const all = attrsOf(name);
     const titleAttr = all.find((a) => roleOf.get(`${name} ${a}`) === "title");
-    const cols = (titleAttr ? [titleAttr, ...all.filter((a) => a !== titleAttr)] : all).slice(0, 5);
-    const head = cols.map((c) => `<th class="m-th-sort${c === cols[0] ? " is-desc" : ""}">${esc(humanizeField(c))}</th>`).join("") + `<th style="text-align:right">Actions</th>`;
+    // When the ontology names no title attribute, the lead column is the
+    // record's DISPLAY NAME, headed with the entity. It used to be whatever
+    // attribute came first, which put account names under "Category" and
+    // opportunity names under "Stage" — and buried the real value of both.
+    const cols = (titleAttr ? [titleAttr, ...all.filter((a) => a !== titleAttr)] : ["_display", ...all]).slice(0, 5);
+    const headOf = (c: string) => (c === "_display" ? name : humanizeField(c));
+    const head = cols.map((c) => `<th class="m-th-sort${c === cols[0] ? " is-desc" : ""}">${esc(headOf(c))}</th>`).join("") + `<th style="text-align:right">Actions</th>`;
     const body = rows.length ? rows.slice(0, 24).map((r) => {
       const flagged = Object.values(r).some((v) => v === null);
       return `<tr${flagged ? ' class="is-flagged"' : ""}>` + cols.map((c, i) => i === 0
-        ? `<td><div class="m-cell-main">${esc(r[c])}</div><div class="m-cell-sub">${esc(r.id)}</div></td>`
+        ? `<td><div class="m-cell-main">${esc(r[c] ?? r._display ?? r.id)}</div><div class="m-cell-sub">${esc(r.id)}</div></td>`
         : `<td>${renderCell(roleOf.get(`${name} ${c}`), r[c])}</td>`).join("")
         + `<td class="m-row-actions"><button class="m-btn m-btn--secondary m-btn--sm" onclick="show('detail-${s}')">Open</button></td></tr>`;
     }).join("") : "";
@@ -115,17 +135,22 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
     const s = es.get(name)!; const rows = seed.records[name] ?? []; const r = rows[0]; const attrs = attrsOf(name);
     if (!r) return "";
     const dl = attrs.map((a) => `<div><dt>${esc(humanizeField(a))}</dt><dd>${renderCell(roleOf.get(`${name} ${a}`), r[a])}</dd></div>`).join("");
+    const headline = displayNameOf(name, r);
     // child collections from the fabric (region:{s}:{child})
     const childRegions = fabric.nodes.filter((n) => n.kind === "region" && n.id.startsWith(`region:${s}:`) && n.id !== `region:${s}:summary`);
     const children = childRegions.map((n) => {
       const childName = names.find((x) => es.get(x) === n.id.split(":")[2]);
       const crows = (childName ? seed.records[childName] ?? [] : []).filter((c) => String(c[`${name.toLowerCase()}Id`]) === String(r.id)).slice(0, 5);
       return region(n.id, `<section class="m-card" style="margin-top:16px"><div class="m-card-h"><div class="m-card-t">${esc(childName)}</div><span class="m-badge">${crows.length}</span></div>`
-        + (crows.length ? `<div class="m-dl">${crows.map((c) => `<div><dt>${esc(c.id)}</dt><dd>${esc(Object.values(c).find((v) => typeof v === "string" && v !== c.id) ?? "")}</dd></div>`).join("")}</div>` : `<div class="m-empty"><div class="m-empty-t">No ${esc(childName)} yet</div></div>`) + `</section>`);
+        // Each child row is named the way its own list screen names it. The
+        // first string on the record used to stand in for that, and the first
+        // string on every record is the classification marker — so every child
+        // collection in the demo read "SYNTHETIC-SEED".
+        + (crows.length ? `<div class="m-dl">${crows.map((c) => `<div><dt>${esc(c.id)}</dt><dd>${esc(displayNameOf(childName ?? "", c))}</dd></div>`).join("")}</div>` : `<div class="m-empty"><div class="m-empty-t">No ${esc(childName)} yet</div></div>`) + `</section>`);
     }).join("");
     return `<section class="m-screen" data-screen="detail-${s}" hidden>
-      <div class="m-crumbs"><a href="#" onclick="show('list-${s}')">${esc(name)}</a> / <span>${esc(r[attrs[0]] ?? r.id)}</span></div>
-      <header class="m-page-h"><div><div class="m-eyebrow">${esc(name)}</div><h1 class="m-title">${esc(r[attrs[0]] ?? r.id)}</h1></div>
+      <div class="m-crumbs"><a href="#" onclick="show('list-${s}')">${esc(name)}</a> / <span>${esc(headline)}</span></div>
+      <header class="m-page-h"><div><div class="m-eyebrow">${esc(name)}</div><h1 class="m-title">${esc(headline)}</h1></div>
       <div style="display:flex;gap:10px"><button class="m-btn m-btn--secondary" onclick="show('form-${s}')">Edit</button><button class="m-btn m-btn--danger">Delete</button></div></header>
       ${region(`region:${s}:summary`, `<section class="m-card"><div class="m-card-t" style="margin-bottom:14px">Details</div><dl class="m-dl">${dl}</dl></section>`)}
       ${children}</section>`;
@@ -148,16 +173,44 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
       <section class="m-card" style="max-width:620px">${fields}<div class="m-form-actions"><button class="m-btn m-btn--ghost" onclick="show('list-${s}')">Cancel</button><button class="m-btn m-btn--primary">Save</button></div></section></section>`;
   };
 
-  const nav = ordered.map((n, i) => `<div class="m-nav-item${i === 0 ? " is-active" : ""}" onclick="show('list-${es.get(n)}',this)">${esc(n)}<span class="m-nav-count">${seed.counts[n] ?? 0}</span></div>`).join("");
+  // ── navigation: the spine, then the whole tree ──
+  // The spine is the 5–7 entities the rest of the ontology points at (fan-in),
+  // in structural order. It is NOT a hardcoded CRM list: on a three-entity
+  // surgical ontology the spine is simply all three, because at that size a flat
+  // list is already the right answer.
+  const lead = graph.spine[0] ?? ordered[0];
+  const navItem = (n: string) =>
+    `<span class="m-nav-item${n === lead ? " is-active" : ""}" data-nav="list-${es.get(n)}" onclick="event.preventDefault();event.stopPropagation();show('list-${es.get(n)}')">${esc(n)}<span class="m-nav-count">${seed.counts[n] ?? 0}</span></span>`;
+  // Every entity keeps exactly ONE home in the tree — its shallowest parent — so
+  // nothing is listed twice and nothing is orphaned. The other parents are not
+  // lost: each still carries this entity as a child collection on its detail
+  // screen, which is where a second or third owner belongs.
+  const branch = (n: string, level: number): string => {
+    const kids = (graph.byName[n]?.treeChildren ?? []).filter((k) => names.includes(k));
+    if (!kids.length) return `<div class="m-nav-row">${navItem(n)}</div>`;
+    // 32 entities nested and pinned open is a wall; the top two levels are open,
+    // everything deeper starts collapsed and one click away.
+    return `<details class="m-nav-group"${level < 2 ? " open" : ""}><summary class="m-nav-row">${navItem(n)}</summary>`
+      + `<div class="m-nav-sub">${kids.map((k) => branch(k, level + 1)).join("")}</div></details>`;
+  };
+  const tree = graph.roots.filter((r) => names.includes(r)).map((r) => branch(r, 0)).join("");
+  const spineNav = graph.spine.filter((n) => names.includes(n)).map((n) => `<div class="m-nav-row">${navItem(n)}</div>`).join("");
+  const nav = graph.spine.length && graph.spine.length < ordered.length
+    ? `<div class="m-nav-sec">Primary</div>${spineNav}<div class="m-nav-sec">All records</div>${tree}`
+    : `<div class="m-nav-sec">Records</div>${tree}`;
   const screens = ordered.map((n) => listScreen(n) + detailScreen(n) + formScreen(n)).join("\n");
-  const firstList = `list-${es.get(ordered[0])}`;
+  const firstList = `list-${es.get(lead)}`;
 
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Prototype — assembled from ontology + atlas</title><style>${meridianStylesheet()}
 .m-screen[hidden]{display:none}.m-screen{display:block}</style></head><body>
-<div class="m-app"><aside class="m-side"><div class="m-brand"><span class="m-brand-dot"></span>Assembled</div><nav class="m-nav"><div class="m-nav-sec">Records</div>${nav}</nav></aside>
+<div class="m-app"><aside class="m-side"><div class="m-brand"><span class="m-brand-dot"></span>Assembled</div><nav class="m-nav">${nav}</nav></aside>
 <main class="m-main">${screens}</main></div>
-<script>function show(id,el){document.querySelectorAll('.m-screen').forEach(s=>s.hidden=s.getAttribute('data-screen')!==id);if(el){document.querySelectorAll('.m-nav-item').forEach(n=>n.classList.remove('is-active'));el.classList.add('is-active')}window.scrollTo(0,0)}show('${firstList}')</script>
+<script>function show(id){document.querySelectorAll('.m-screen').forEach(s=>s.hidden=s.getAttribute('data-screen')!==id);
+var m=document.querySelectorAll('.m-nav-item[data-nav="'+id+'"]');
+if(m.length){document.querySelectorAll('.m-nav-item').forEach(function(n){n.classList.remove('is-active')});
+m.forEach(function(n){n.classList.add('is-active');for(var p=n.parentElement;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true})}
+window.scrollTo(0,0)}show('${firstList}')</script>
 </body></html>`;
   return { html, fabric, regionCount };
 }

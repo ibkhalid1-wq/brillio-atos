@@ -122,7 +122,7 @@ a{color:var(--m-brand);text-decoration:none}
 
 /* App shell: fixed sidebar + scrolling main */
 .m-app{display:grid;grid-template-columns:244px 1fr;min-height:100vh}
-.m-side{background:var(--m-brand);color:#f3f1fa;display:flex;flex-direction:column;gap:var(--m-sp-2);padding:var(--m-sp-5) var(--m-sp-3);position:sticky;top:0;height:100vh}
+.m-side{background:var(--m-brand);color:#f3f1fa;display:flex;flex-direction:column;gap:var(--m-sp-2);padding:var(--m-sp-5) var(--m-sp-3);position:sticky;top:0;height:100vh;overflow-y:auto}
 .m-brand{display:flex;align-items:center;gap:9px;font-family:var(--m-font-display);font-weight:700;font-size:15px;padding:0 var(--m-sp-2) var(--m-sp-3)}
 .m-brand-dot{width:9px;height:9px;border-radius:var(--m-r-pill);background:#b3a6f7;flex:none;box-shadow:0 0 0 3px rgba(255,255,255,.12)}
 .m-nav{display:flex;flex-direction:column;gap:2px;margin-top:var(--m-sp-2)}
@@ -131,6 +131,20 @@ a{color:var(--m-brand);text-decoration:none}
 .m-nav-item:hover{background:rgba(255,255,255,.06);color:#f3f1fa}
 .m-nav-item.is-active{background:rgba(255,255,255,.09);color:#fff;border-left-color:#b3a6f7}
 .m-nav-count{margin-left:auto;font-size:11px;font-weight:600;color:#948dbb}
+/* Nested navigation: a child entity sits under its parent, and a branch collapses.
+   A tree of 30+ entities that cannot be closed is as unusable as a flat list of
+   30+ entities, so every branch is a native <details> — keyboard-operable and
+   working with JavaScript off. The disclosure triangle toggles; the label
+   navigates (its handler preventDefaults, so the two never fight). */
+.m-nav-row{display:flex;align-items:center;gap:2px;list-style:none}
+.m-nav-row::-webkit-details-marker{display:none}
+.m-nav-row::before{content:"";flex:none;width:0;height:0;margin:0 3px 0 4px;border-left:4px solid transparent;border-top:4px solid transparent;border-bottom:4px solid transparent}
+.m-nav-group>summary{cursor:pointer;border-radius:var(--m-r-sm)}
+.m-nav-group>summary::before{border-left-color:#948dbb;transition:transform var(--m-dur) var(--m-ease)}
+.m-nav-group[open]>summary::before{transform:rotate(90deg)}
+.m-nav-group>summary:focus-visible{box-shadow:var(--m-ring)}
+.m-nav-row>.m-nav-item{flex:1;min-width:0}
+.m-nav-sub{margin-left:11px;padding-left:5px;border-left:1px solid rgba(255,255,255,.14)}
 .m-main{min-width:0;padding:var(--m-sp-6) var(--m-sp-8)}
 
 /* Page header */
