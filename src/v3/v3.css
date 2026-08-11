@@ -8848,3 +8848,15 @@ select.v3fs-dir-in {cursor:pointer}
   font-variant-numeric: tabular-nums;
 }
 body { text-rendering: optimizeLegibility; }
+
+/* The nothing-heard caveat on the convergence readout: quiet, never alarming — it
+   qualifies a number, it does not report a fault. Same muted weight as the sub-label
+   it sits beside, so it reads as part of the figure rather than as a warning. */
+.v3lc-conv-nh {
+  margin-left: .4rem;
+  font-size: .78em;
+  opacity: .72;
+  font-style: italic;
+  white-space: nowrap;
+  cursor: help;
+}
