@@ -302,3 +302,45 @@ describe("declared systemsOfRecord is consumed by the artifacts that claim it (O
     expect(atlas).toContain("steps[].system stays null unless the evidence places that system at that step");
   });
 });
+
+// ── the ambiguity `resolution` field must not accept a restated question ────────────
+/**
+ * THE DEFECT THIS PINS. `resolution` was specified as "proposed resolution or
+ * 'unresolved'", and the generator wrote a restated QUESTION into it — on the real Laila
+ * snapshot, both collisions read "To confirm if 'Account' always refers to…".
+ *
+ * The reader's predicate is `!resolution || /unresolved/i`, so a sentence that merely
+ * *describes* the collision does not match "unresolved" and is therefore counted as a
+ * RESOLUTION. The ambiguity is marked settled, nobody is ever asked, and the approval gate
+ * that should have held opens. A field that accepts the question as its own answer is the
+ * fabrication shape this codebase exists to prevent — the miss did not stay visible.
+ *
+ * Fixing the READER would mean guessing at English intent ("To confirm…", "Need to
+ * check…"), which silently reclassifies stored data. So the fix is at the SOURCE: the
+ * schema now demands the literal 'unresolved' or an ADOPTED meaning, and says plainly that
+ * a restated question is the collision, not its resolution.
+ */
+describe("ambiguities: 'resolution' cannot be the question restated", () => {
+  const RUN_AGENT = readFileSync(
+    resolve(__dirname, "../../../supabase/functions/run-agent/index.ts"), "utf8");
+
+  it("the schema demands the literal 'unresolved' or an adopted meaning", () => {
+    const line = RUN_AGENT.split("\n").find((l) => l.includes('"ambiguities": [ {'));
+    expect(line, "the ambiguities schema line is gone — find where it moved").toBeTruthy();
+    expect(line!).toMatch(/exact string 'unresolved'/);
+    expect(line!).toMatch(/adopt/i);
+  });
+
+  it("…and says explicitly that a restated question is NOT one", () => {
+    const line = RUN_AGENT.split("\n").find((l) => l.includes('"ambiguities": [ {'))!;
+    expect(line).toMatch(/NEVER a restated question/);
+    // the loose old wording must be gone, or the model has both contracts to choose from
+    expect(line).not.toMatch(/"proposed resolution or 'unresolved'"/);
+  });
+
+  it("the prose explains WHY, so the rule survives a reword", () => {
+    // A schema rule with no reason attached gets 'simplified' by the next editor.
+    expect(RUN_AGENT).toMatch(/silently closes it/);
+    expect(RUN_AGENT).toMatch(/only resolved when one meaning is ADOPTED/i);
+  });
+});
