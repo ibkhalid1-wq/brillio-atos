@@ -112,8 +112,9 @@ Prices in that table were checked against the published catalog and are correct;
 
 ## 3. STATE AT HANDOFF (2026-08-10)
 
-**HEAD `d9113e1`, branch `reimagined-ui`, pushed, working tree clean.** All measured this
-session, not copied forward:
+**HEAD `d9113e1` at the time this table was written; the session has since landed the
+commits listed under §4. Re-measure rather than trusting the row below.** All measured
+this session, not copied forward:
 
 | Gate | Result |
 |---|---|
@@ -137,6 +138,15 @@ since then is undeployed**, which is why three otherwise-finished features are i
 
 ## 4. WORK QUEUE — in dependency order
 
+### W-1 · Adjudicate double-counts a locus — RESOLVED `4e1aa20`
+**Fixed at the sum, in `unfrozenQueues`, read by BOTH the badge and the page** — filtering in
+either one alone was the drift F7 exists to catch. A seam whose every question is frozen
+stops being a seam. Both halves mutation-tested: reverting only the sum fails 3 tests,
+reverting only the page fails the ORDERING TRAP test. Pinned as L8 in `operatorQueueTruth`.
+The original entry follows, for the reasoning.
+
+<details><summary>original entry</summary>
+
 ### W-1 · Adjudicate double-counts a locus — `operatorQueue.ts:90`
 `const total = assign + sessionQuestions + adjudicate + pinned + inFlight + chase;` — the
 terms are not disjoint. A locus carrying both a live contradiction and a live open/blocked
@@ -156,6 +166,16 @@ a frozen-aware `sessionQuestionCount` (`operatorQueue.ts:49-50`). **Do not** fil
 
 Reachability today: **zero** (§2.1). This is latent, not absent — it went live the moment
 the gate moved to `> 0`.
+
+### W-2 · The Sessions term of `badge === page` is vacuous — RESOLVED `907fca6`
+**The recorded fix was not enough and the entry said so.** Counting `li.v3ib-seam` rows is
+the same quantity again, because each row prints its own `abouts.length`. Fixed with an
+INDEPENDENT WITNESS: the joint-question total recomputed from the queue ITEMS, which never
+touches an `abouts` array. Mutation-tested against a wrong SET (swapping the typing/joint
+order in useProgramLedger's loop) — summary and rows still agree, so the old assertion stays
+green and the new one fails. The original entry follows.
+
+<details><summary>original entry</summary>
 
 ### W-2 · The Sessions term of `badge === page` is vacuous — `inboxBadgeIsThePage.test.ts:186`
 Both sides are `sessionQuestionCount(sessionQueue)`, so the assertion is arithmetically
@@ -193,6 +213,29 @@ argument binds to this test rather than being inert.
 > module top so the transform is charged to collection instead of to the test. That is a
 > bigger change to a 229-test file and was not worth it for a 10% flake.
 
+### W-4 · The fabrication scan still launders owners — RESOLVED `f28ac23`
+**Both predicates now parse instead of matching text.** `literalRoleOwners` resolves
+bindings transitively (AST unioned with the old regex, since the AST cannot read the bare
+fragments the tests use); `enclosingExport` walks the tree. Scan extended to
+`supabase/functions/_shared`, verified by planting W-7's exact constant back.
+
+> **The recorded interim for `enclosingExport` must NOT be taken.** Relaxing `^` to
+> `^[ \t]*` makes every ordinary indented `const` inside an exported component close its
+> own export, so live render sites resolve to null and the guard goes RED on correct code.
+> Pinned as H8d.
+
+> **The `codeOnly` wrap for invariant (b) turned out to be unnecessary.** Comments are
+> trivia and never AST nodes, and the regex pass is fed `codeOnly` inside the predicate, so
+> the call site is unchanged.
+
+> **`_shared` needs `ownerShapeOnly`.** "role" is overloaded: `{ role: "user" }` and
+> `{ role: "system" }` there are LLM chat-message roles, not owners. Scanning on the bare
+> key reported four owners that do not exist. Keyed on the `kind: "role"` discriminant.
+
+The original entry follows.
+
+<details><summary>original entry</summary>
+
 ### W-4 · The fabrication scan still launders owners — `sourceGuards.ts:81`
 The gap is **wider than recorded**. A constant role-owner escapes F5/F6 when it takes two
 const hops, comes from another module, sits behind a member/index expression, is followed
@@ -211,6 +254,47 @@ for the export check. **Cheap interim:** add `|let|var` and change `^` to `^[ \t
 Also `finalGateInvariants.test.ts:223`: `codeOnly` is applied to invariant (c) but **not**
 to the (b) owner scan — so a *comment* quoting `role: "Sales Ops"` (exactly how this
 codebase documents its own fixes) turns F5 red for prose. One-line wrap.
+
+### W-5 · The question-text cluster — L4/L7/L6 RESOLVED `25f1dbf`, **L5 OPEN (decision)**
+L4, L7 and L6 are done, each pinned by a test proved to fail without it. The edge half of
+L6 (`flow-portal` forwarding `scripted`) is invisible until that function is deployed —
+same gate as O-10; source is complete.
+
+**L5 REMAINS, and it is a decision, not a lookup. Recommendation: (a) migrate
+`ambiguities[]` into the ledger — do NOT drop the branch.** Evidence:
+
+1. **The data is already in migrate's hand.** `Snapshot.ontology` (`migrate.ts:95`) is the
+   whole domain-ontology doc and `ambiguities` is a top-level key on it
+   (`run-agent/index.ts:1363`). (a) needs no new plumbing — only that `migrate` opens
+   `#semantics` on ENTITIES, where `:152` today opens it solely on `el:rel:*` with
+   `relation === "produces"` (which hits `renderQuestion.ts:124`, never `:134`).
+2. **The inline string is itself the violation.** `flowShellData.ts:1331` composes question
+   text outside `renderQuestion.ts` — a second producer, which the one-renderer invariant
+   forbids outright. Dropping the branch also deletes the only place a generator-detected
+   terminology collision is ever raised, and `run-agent/index.ts:1351` asks the model to
+   record those collisions precisely because the Blueprint's data contracts must resolve them.
+3. **It is a gate with no human closure path.** `flowApprovals.ts:104` blocks movement
+   approval while `movementOpenIssues(...).length > 0`, and an ambiguity only leaves that
+   list when `entry.resolution` stops being "unresolved" (`flowShellData.ts:1324-1325`).
+   Grepping `ambiguit` across `src/` returns only `flowShellData.ts` and a `docOrder`
+   registry line — **no studio editor writes `resolution`**. So today the gate can only be
+   released by the model rewriting the field on a regeneration. In the ledger it becomes
+   closable the same three ways everything else is.
+
+> **TWO COSTS TO PRICE IN FIRST.** `renderQuestion.ts:134` renders "What does ${name} mean,
+> exactly?" and DROPS `conflictingMeanings` — the rival readings and who holds them, which
+> the inline string carries today. Extend that one template to read the competing values
+> from the ledger, or the migrated question is WEAKER than what it replaces. Do not keep
+> the inline string alongside: that re-creates the second producer.
+>
+> And one new open claim per ambiguous term moves the burn-down denominator, so
+> `inboxReconciliation.test.ts` and the E-series conservation checks need a DELIBERATE
+> re-baseline. Note also that `migrate()` is `@deprecated` (`migrate.ts:98-102`) in favour
+> of the Option A generator path, and per §6 the `ledgerGenerator.ts` mirror has no edge
+> importer — so a change landed only in `migrate.ts` is invisible in production, the same
+> trap the owner-derivation fix fell into.
+
+<details><summary>original entry</summary>
 
 ### W-5 · The question-text cluster
 Order matters: **L4 → L7 → L6 → L5.**
@@ -241,6 +325,24 @@ Order matters: **L4 → L7 → L6 → L5.**
   `renderQuestion.ts:124`, not `:134`), or drop the branch so the record stops asking a
   question nothing can close.
 
+### W-6 · `D3` index desync — RESOLVED `dc437e9`
+Fixed by an `alignedAsk` helper that zips question with locus, filters on the question, then
+unzips — mirroring the edge, which already cuts both arms together. The additive contract
+and the deliberate `questionLoci: undefined` safety at the kit-agenda refresh are both
+preserved and tested.
+
+> **RESIDUAL:** the edge has NO blank-question filter at all (`flow-portal/index.ts:509`
+> maps and slices without `.filter(Boolean)`). The two sides now agree on ALIGNMENT but
+> still differ on BLANK HANDLING. No user-visible failure today.
+
+> **JUDGEMENT CALL:** a short loci array is padded with `""` rather than truncating the
+> questions, so no question can inherit a neighbour's locus; a padded row degrades to its
+> stored string. Truncating would silently drop asks.
+
+The original entry follows.
+
+<details><summary>original entry</summary>
+
 ### W-6 · `D3` index desync — `src/v3/components/flow/flowPortal.ts:125`
 `questions` is `.filter(Boolean)`-ed, `questionLoci` is copied through unfiltered, so one
 blank question makes every later locus point at the wrong question — violating the contract
@@ -253,12 +355,40 @@ the way the edge already does (`flow-portal/index.ts:509+519`).
 > (`questionLoci: undefined`) so a re-mint can never leave stale loci pointing at new
 > questions.
 
+### W-7 · `D2` constant owner — RESOLVED `33bb6aa`
+`overridesToBatch` and `buildOptionABatch` now take the owner as a REQUIRED parameter with
+no default. Parity with `migrate`'s `ownerFor("sales")` holds BY CONSTRUCTION — the new
+`scripts/ledger/overrideOwner.ts` derives it from the exported `ownerRoleLabelForArea`,
+so the two paths are one mapping rather than two copies pinned by a comment.
+
+> **THIS IS WHY W-4 MATTERED.** The constant survived because no guard had ever read
+> `supabase/functions/_shared`. That blind spot is closed in `f28ac23`.
+
+> **RESIDUAL:** the DB harnesses (`override-round`, `retire-migrate`, `optiona-multiround`)
+> were type-checked but NOT executed — `DATABASE_URL` is unset and the local 5433 listener
+> rejects an empty password. The in-process proof covers the owner-parity property their
+> comment pinned, not their reconcile/precedence assertions.
+
+The original entry follows.
+
+<details><summary>original entry</summary>
+
 ### W-7 · `D2` constant owner — `overrideAdapter.ts:13`
 `const OP_OWNER: Owner = { kind: "role", role: "Sales Leaders" }` stamped on every imported
 override claim. Dormant (script-only, see §6). Fix: derive from the roster, or take it as a
 parameter of `overridesToBatch` with no default. Note it is pinned by comment to
 `migrate`'s `ownerFor("sales")` — changing one without the other breaks the parity the
 `scripts/ledger/*.ts` comparison scripts assert.
+
+### W-8 · The picker offers a retired model as selectable — RESOLVED `ef9766b`
+Took option (b): `retired?: true` is now a field distinct from `legacy`, because the two
+are different facts — a legacy model still WORKS and staying pinned to it is defensible; a
+retired one 404s. Both retired ids STAY in the catalog so an already-pinned programme keeps
+resolving its real price. Guarded in the lockstep test (must say "retired", must not carry
+the "kept selectable" wording, never a default or auto-routing target), mutation-tested by
+restoring the old label.
+
+<details><summary>original entry</summary>
 
 ### W-8 · The picker offers a retired model as selectable — `IntelligenceView.tsx:463`
 `claude-opus-4-1` passed its retirement date on **2026-08-05**; runs on it now 404. The
