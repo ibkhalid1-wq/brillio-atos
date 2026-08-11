@@ -619,9 +619,31 @@ export async function streamClaudeText(
   throw lastError instanceof Error ? lastError : new Error("AI provider call failed across all configured providers.");
 }
 
+/**
+ * Thread history → Anthropic `messages`.
+ *
+ * A `CopilotThreadMessage` may carry `role: "system"`. The Messages API takes the system
+ * prompt as a TOP-LEVEL parameter, not a message role, so those are dropped here rather
+ * than sent. (The OpenAI branch of `openAiPayload` does prepend `{ role: "system" }` — that
+ * is correct for OpenAI and is a different wire format, not an inconsistency.)
+ *
+ * The predicate is a TYPE GUARD rather than a plain filter. `Array.prototype.filter` does
+ * not narrow its element type on its own, so the `.map` below still saw
+ * `"user" | "assistant" | "system"` and this function did not type-check against its own
+ * declared return type. The runtime was always correct; this makes the compiler agree.
+ *
+ * Worth fixing rather than suppressing: `deno check` is the ONLY type gate this file has —
+ * `tsconfig.json` includes `src/**` only, so `tsc --noEmit` never reads it. A module whose
+ * check always fails is a module where the NEXT error is invisible.
+ */
+const isSendableToClaude = (
+  message: CopilotThreadMessage,
+): message is CopilotThreadMessage & { role: ClaudeMessage["role"] } =>
+  message.role === "user" || message.role === "assistant";
+
 export function toClaudeMessages(messages: CopilotThreadMessage[]): ClaudeMessage[] {
   return messages
-    .filter((message) => message.role === "user" || message.role === "assistant")
+    .filter(isSendableToClaude)
     .map((message) => ({
       role: message.role,
       content: message.content,
