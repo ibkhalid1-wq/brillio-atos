@@ -16,6 +16,13 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.8";
 import { stripUnnamedSuffix } from "../_shared/unnamedSuffix.ts";
 import { extractDocumentText, extractRelevant } from "../_shared/extractText.ts";
 import { completeClaudeText } from "../_shared/claudeClient.ts";
+// THE STAKEHOLDER'S PROTOTYPE. `pilotSliceFor` assembles it deterministically from
+// the committed ontology + atlas via the SAME `assemblePrototype` the operator's
+// studio renders — not a Deno copy of it. `_shared` is importable from both runtimes
+// (Deno by relative path, Vite/vitest via the `@shared` alias), which is why the
+// assembly cluster lives there and nowhere else. The stored, model-authored
+// `prototypeBuild.html` stays operator-only; see the module's own doc comment.
+import { pilotSliceFor, type PilotSlice } from "../_shared/prototypePilot.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -372,32 +379,32 @@ Deno.serve(async (req: Request) => {
         return area && area !== "General" ? area : "";
       };
       // The prototype the pilot validates is EITHER an external build (a linked
-      // URL) OR the in-app generated build — never both. When an external URL
-      // is set it wins: send it as demoUrl and SUPPRESS the internal pilotHtml,
-      // so the linked page shows "Open the prototype" pointing at the external
-      // build (which commonly can't be iframed) instead of the internal one.
+      // URL) OR the in-app one — never both. When an external URL is set it wins:
+      // send it as demoUrl and SUPPRESS the internal pilot entirely (no html, and
+      // no gap either — nothing is missing, the build simply lives elsewhere), so
+      // the linked page shows "Open the prototype" pointing at the external build
+      // (which commonly can't be iframed) instead of the internal one.
       const showPhaseInputs = isRecord(hit.inner.phaseInputs) && isRecord((hit.inner.phaseInputs as Record<string, unknown>).show)
         ? (hit.inner.phaseInputs as Record<string, Record<string, unknown>>).show
         : {};
       const externalProtoUrl = typeof showPhaseInputs.prototypeLocation === "string" ? showPhaseInputs.prototypeLocation.trim() : "";
-      const internalPilotHtml = externalProtoUrl ? "" : (isRecord(hit.inner.prototypeBuild) ? String((hit.inner.prototypeBuild as Record<string, unknown>).html ?? "") : "");
+      const pilot: PilotSlice = externalProtoUrl ? {} : pilotSliceFor(hit.inner);
       if (hit.kind === "demo") {
         const showInputs = showPhaseInputs;
         const design = designSlice();
         const script = scriptSlice();
         const recipientArea = recipientAreaSlice();
-        // The BUILT prototype (the generated clickable app) is the pilot the
-        // stakeholder validates — closest to production. When present it renders
-        // as the whole experience; the interpreted walk is the fallback. An
-        // external build (linked URL) takes over: internalPilotHtml is "" then,
-        // so the page shows the external demoUrl instead.
-        const pilotHtml = internalPilotHtml;
+        // The ASSEMBLED prototype (deterministic, derived from the record) is the
+        // pilot the stakeholder validates — closest to production. When present it
+        // renders as the whole experience; the interpreted walk is the fallback,
+        // and `pilotGap` explains any absence. An external build (linked URL)
+        // takes over: `pilot` is empty then, so the page shows the demoUrl.
         return jsonResponse({
           ...(design ? { design } : {}),
           ...(script ? { script } : {}),
           ...(design ? runSlice() : {}),
           ...(recipientArea ? { recipientArea } : {}),
-          ...(pilotHtml ? { pilotHtml } : {}),
+          ...pilot,
           kind: "demo",
           programme: hit.programName,
           stakeholder: String(hit.pack.stakeholder ?? "Stakeholder"),
@@ -534,9 +541,10 @@ Deno.serve(async (req: Request) => {
         ...(interviewArea ? { recipientArea: interviewArea } : {}),
         // A Show follow-up carries the prototype so the pilot renders in place
         // of the interpreted walk: the external build's URL when one is linked,
-        // otherwise the in-app build. External wins — never both.
+        // otherwise the assembly derived from the record (or the gap saying why
+        // there isn't one). External wins — never both.
         ...(isShowPack && externalProtoUrl ? { demoUrl: externalProtoUrl } : {}),
-        ...(isShowPack && internalPilotHtml ? { pilotHtml: internalPilotHtml } : {}),
+        ...(isShowPack ? pilot : {}),
         // Re-projection inputs (kind + area + the recipient name via `stakeholder`
         // above) and the live slices, so the client rebuilds the current review.
         // A Listen QUESTION pack ships reviewKind "listen-workflow" too, so the

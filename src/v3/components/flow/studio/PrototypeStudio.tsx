@@ -9,7 +9,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { asArray, asRecord, asStrings, asText, type StudioProps } from "./StudioKit";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
-import { assemblePrototype } from "@/v3/lib/prototypeAssembly";
+import { assemblePrototype } from "@shared/prototypeAssembly.ts";
 import { buildPrototypeProject, downloadPrototypeZip, importPrototypeProject, projectSlug } from "./prototypeExport";
 import PrototypeCommandBar from "@/v3/components/flow/PrototypeCommandBar";
 
@@ -49,6 +49,11 @@ export default function PrototypeStudio({ doc, onChange, program, onRefineProtot
   // Meridian → seed data), derived from the committed ontology + atlas with ZERO
   // model tokens for structure. This is the default render; the model-authored
   // build (when present) is the refined layer behind an explicit toggle.
+  //
+  // `assemblePrototype` is imported from `_shared` — the same module the edge
+  // (`flow-portal`) imports to build the STAKEHOLDER's prototype. One copy, so
+  // what the operator reviews here and what the client opens on their link cannot
+  // drift. The "Refined build" toggle is operator-only: it never leaves the app.
   const assembled = useMemo(() => {
     if (!program) return null;
     try {
@@ -112,7 +117,7 @@ export default function PrototypeStudio({ doc, onChange, program, onRefineProtot
               the layer on top, reachable when it exists. */}
           {assembled && html ? (<>
             <button type="button" className={effectiveView === "fabric" ? "on" : ""} title="Deterministic assembly from the ontology + atlas — fabric → semantic roles → Meridian → seed data" onClick={() => { setView("fabric"); setMode("preview"); }}>◇ Assembled (fabric)</button>
-            <button type="button" className={effectiveView === "build" ? "on" : ""} title="The model-refined build stored on the record" onClick={() => setView("build")}>✦ Refined build</button>
+            <button type="button" className={effectiveView === "build" ? "on" : ""} title="The model-refined build stored on the record — an internal working layer. Stakeholders on a Show link always get the assembled (fabric) prototype; this one never leaves the app." onClick={() => setView("build")}>✦ Refined build</button>
           </>) : null}
           {/* Open the running prototype in a real browser tab (its own URL), so it
               can be walked full-screen, shared, or opened on another device. */}

@@ -16,7 +16,7 @@ fabric; no ontology knowledge here; no content in either.
 ATOS rename did. There is no client, product, or vendor name in any token, class prefix (`m-`), or
 file name. This one header line is the only place provenance is recorded.
 
-**Source of truth:** [`src/v3/lib/prototypeDesignSystem.ts`](../../src/v3/lib/prototypeDesignSystem.ts).
+**Source of truth:** [`supabase/functions/_shared/prototypeDesignSystem.ts`](../../supabase/functions/_shared/prototypeDesignSystem.ts) — in the shared layer so the operator's studio (Vite) and the stakeholder's portal (Deno) render the same one.
 `meridianStylesheet(theme?)` returns the full sheet; `MERIDIAN_TOKENS` is the default theme;
 `resolveTheme()` merges a partial governed theme over the defaults. The reference page
 [`public/prototype-design-system.html`](../../public/prototype-design-system.html) is generated

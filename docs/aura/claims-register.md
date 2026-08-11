@@ -41,6 +41,7 @@ FULLY TRUE**.
 | 11 | platform is **auditable** (not yet asserted in UI) | NOT YET TRUE | Fix at Step 1 (guard against premature claim) |
 | 12 | a computed **grounding** figure | NOT YET TRUE + ceiling | Fix at Step 5; state the ceiling |
 | 13 | **reproducible / deterministic** (not asserted anywhere) | WILL NEVER BE FULLY TRUE | Never claim "deterministic"; guard |
+| 17 | stakeholder prototype: "every screen, field and menu item comes from the domain model and process map we agreed" | **TRUE** (deploy-gated) | None — keep the presentation caveat |
 
 **Applied 2026-08-07** — rows **1–5** edited to the phrasing below and re-statused
 **TRUE** (see each row for file, before→after). No surface in the repo now asserts
@@ -178,6 +179,43 @@ into those steps' definitions of done — not touched here.
   because the kit is a Frame artifact and every locus derives from Listen-phase documents that
   do not exist yet.
 
+### 17 · Stakeholder prototype: "every screen, field and menu item comes from the domain model and process map we agreed"
+- **Where:** `src/v3/components/flow/FlowRespond.tsx` — the provenance line under the pilot
+  link on a Show/demo response page, shown only when `pilotSource === "assembled"`.
+  Also the doc comments on `Pack.pilotSource` / `Pack.pilotHtml` in the same file.
+- **Added 2026-08-10.** Until now the linked page served the stored `prototypeBuild.html`,
+  which the Prototype Build **agent wrote**. The page made no provenance claim then, and
+  could not have made this one. `flow-portal` now assembles the prototype from the committed
+  `domainOntology` + `currentStateAtlas` via `_shared/prototypeAssembly.ts` — the same module
+  the operator's studio renders — so the claim became available at the moment the artefact
+  changed. **Deploy-gated:** true of the code, not of production, until `flow-portal` is
+  redeployed.
+- **True today?** Yes, as worded, and deliberately narrower than the artefact would allow:
+  - **Screens / fields / navigation — derived.** One list+detail+form screen per ontology
+    entity, one field per attribute, one nav item per entity. No model call in the path
+    (`validate-pipeline.sh` G1 greps the assembler for `fetch|anthropic|claude`).
+  - **Presentation of a value — a guess, and the copy says so.** `semanticRoles.ts` tags every
+    role `derived` or `heuristic`; the widget a value renders as (badge, pill, plain text) is
+    frequently the heuristic branch — a name-pattern match. Hence *"how an individual value is
+    presented is partly inferred from its name."* Overclaiming here would be the row-12 defect.
+  - **Records — synthetic, and labelled.** `seedData.ts` marks every row `_synthetic` /
+    `SYNTHETIC-SEED`; the copy says "synthetic samples" so no client mistakes a seeded row
+    for their own data.
+- **Relationship to row 13.** Row 13 forbids a *determinism* claim about **model generation**,
+  and that stands. This row is about the **assembly**, which is pure derivation — no model, no
+  clock, no `Math.random` (a seeded mulberry32 keyed on the ontology version), byte-identical
+  for the same input, pinned by a test asserting the studio's HTML and the portal's are the
+  same bytes. The user-facing copy still avoids the word *"deterministic"*: it says where the
+  screens came from, which is the checkable statement, not a property claim.
+- **The claim NOT made is also the point.** When the record cannot produce an assembly, the
+  page prints a **gap** naming the missing artefact. It does **not** fall back to the stored
+  model-authored build — a substitution nobody outside could detect while this provenance line
+  was on the page. Pinned by `src/v3/__tests__/prototypeAssemblySource.test.ts`.
+- **Status:** **TRUE** (as worded), deploy-gated on `flow-portal`.
+- **Remediation:** none while the copy keeps the presentation caveat. If the heuristic role
+  table is ever replaced by declared attribute types, the caveat can be dropped — and this row
+  re-statused, not silently reworded.
+
 ---
 
 ## External claims we cannot verify from the repo — human check needed
@@ -196,4 +234,5 @@ Three mechanisms, most-mechanical first:
 
 ---
 
-*Last swept: 2026-08-10 — rows 14-16 added for the O-19/O-20 generator-prompt changes.*
+*Last swept: 2026-08-10 — row 17 added: the stakeholder-facing prototype became the
+deterministic assembly, so the linked page can state its provenance for the first time.*

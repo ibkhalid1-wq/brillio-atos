@@ -1,7 +1,7 @@
 /**
  * Regenerate public/prototype-assembled.html from Laila's committed ontology+atlas
  * snapshot, so the assembled-prototype demo can't drift from the modules. Run:
- *   npx esbuild src/v3/lib/prototypeAssembly.ts --bundle --format=esm --outfile=.tmp-assemble.mjs
+ *   npx esbuild supabase/functions/_shared/prototypeAssembly.ts --bundle --format=esm --outfile=.tmp-assemble.mjs
  *   node scripts/build-prototype-demo.mjs && rm .tmp-assemble.mjs
  */
 import { readFileSync, writeFileSync } from "node:fs";

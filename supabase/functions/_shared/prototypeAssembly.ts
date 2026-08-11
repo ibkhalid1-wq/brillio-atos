@@ -10,10 +10,10 @@
  * tagged `data-fabric-id` with its fabric node id (stable, non-positional) so an
  * incremental delta can resolve to exactly the regions it touches.
  */
-import { deriveFabric, type Fabric } from "./fabric";
-import { deriveRoles, type ValueRole } from "./semanticRoles";
-import { generateSeed } from "./seedData";
-import { meridianStylesheet } from "./prototypeDesignSystem";
+import { deriveFabric, type Fabric } from "./fabric.ts";
+import { deriveRoles, type ValueRole } from "./semanticRoles.ts";
+import { generateSeed } from "./seedData.ts";
+import { meridianStylesheet } from "./prototypeDesignSystem.ts";
 
 const esc = (s: unknown) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
 const slug = (s: unknown) => String(s ?? "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "x";

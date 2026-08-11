@@ -7,7 +7,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   MERIDIAN_TOKENS, resolveTheme, meridianStylesheet, meridianRootVars,
-} from "@/v3/lib/prototypeDesignSystem";
+} from "@shared/prototypeDesignSystem.ts";
 
 describe("Meridian design system", () => {
   it("resolveTheme fills every gap from the defaults", () => {

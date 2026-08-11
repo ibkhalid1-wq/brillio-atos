@@ -36,6 +36,9 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
+      // The Deno-importable shared layer. One copy of the prototype assembly,
+      // imported by BOTH runtimes — see supabase/functions/_shared/prototypeAssembly.ts.
+      '@shared': fileURLToPath(new URL('./supabase/functions/_shared', import.meta.url)),
     },
   },
   server: {
