@@ -9,7 +9,8 @@ import { migrate, type Snapshot } from "@/v3/lib/ledger/migrate";
 import { reconcile } from "@/v3/lib/ledger/merge";
 import {
   parseDictionaryCsv, dictionaryToClaims, TYPING_SLOTS,
-  readDictionarySources, writeDictionaryField, type ParsedDictionary,
+  readDictionarySources, writeDictionaryField, pickDictionarySheet, isSpreadsheetName,
+  type ParsedDictionary,
 } from "@/v3/lib/ledger/dictionary";
 import { isLive, slotOf } from "@/v3/lib/ledger/types";
 import type { LedgerStore } from "@/v3/lib/ledger/store";
@@ -144,5 +145,62 @@ describe("the dictionary field: keyed per SoR, additively", () => {
     expect(source.sor).toBe("CRM");
     applyDict(store, source.dict);
     expect(typingOpen(store)).toBeLessThan(before);
+  });
+});
+
+// ── spreadsheet uploads — the promise the Inbox was already making ──────────────────
+/**
+ * `OperatorInbox.tsx` told the operator "CSV/XLSX dictionaries parse now" while the file
+ * input accepted `.csv,.tsv,.txt`, and `xlsx` sat in package.json with ZERO importers.
+ * An operator exporting from Salesforce — where XLSX is the default — was told it worked
+ * and then could not select the file. These build real workbooks and read them back.
+ */
+describe("spreadsheet dictionaries", () => {
+  const wb = async (sheets: Record<string, string[][]>): Promise<ArrayBuffer> => {
+    const XLSX = await import("xlsx");
+    const book = XLSX.utils.book_new();
+    for (const [name, rows] of Object.entries(sheets)) {
+      XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet(rows), name);
+    }
+    return XLSX.write(book, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
+  };
+  const DICT = [
+    ["Entity", "Field", "Type", "Values", "Required"],
+    ["Account", "isClientOrPartner", "picklist", "client;partner", "yes"],
+    ["Account", "region", "text", "", "no"],
+  ];
+
+  it("an .xlsx export parses through the SAME parser as a .csv one", async () => {
+    const picked = await pickDictionarySheet(await wb({ Dictionary: DICT }));
+    expect(picked.sheet).toBe("Dictionary");
+    const parsed = parseDictionaryCsv(picked.csv, "export");
+    expect(parsed.fields).toHaveLength(2);
+    expect(parsed.fields[0]).toMatchObject({ entity: "Account", field: "isClientOrPartner" });
+  });
+
+  it("a cover sheet does not win — the sheet that PARSES is chosen, not sheet zero", () => {
+    // This is the real shape of an export: notes first, data second. Taking
+    // SheetNames[0] would parse zero fields and report "nothing matches", which reads
+    // as a data problem rather than the wrong sheet.
+    return wb({
+      "Read me": [["Exported 2026-08-10"], ["Confidential"]],
+      "Data Dictionary": DICT,
+    }).then(async (bytes) => {
+      const picked = await pickDictionarySheet(bytes);
+      expect(picked.sheet).toBe("Data Dictionary");
+      expect(picked.sheets).toEqual(["Read me", "Data Dictionary"]);
+      expect(parseDictionaryCsv(picked.csv, "x").fields).toHaveLength(2);
+    });
+  });
+
+  it("when NOTHING parses, a named sheet comes back — never an unexplained blank", async () => {
+    const picked = await pickDictionarySheet(await wb({ Notes: [["just prose"]] }));
+    expect(picked.sheet).toBe("Notes");                    // the operator can go and look
+    expect(parseDictionaryCsv(picked.csv, "x").fields).toEqual([]);
+  });
+
+  it("extension detection covers the formats the input accepts, and nothing else", () => {
+    for (const n of ["a.xlsx", "A.XLSX", "b.xlsm", "c.xlsb", "d.xls"]) expect(isSpreadsheetName(n)).toBe(true);
+    for (const n of ["a.csv", "b.tsv", "c.txt", "d.xlsx.csv"]) expect(isSpreadsheetName(n)).toBe(false);
   });
 });
