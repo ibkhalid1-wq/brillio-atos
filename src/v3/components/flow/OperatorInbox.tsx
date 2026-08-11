@@ -24,7 +24,7 @@ import { readableName } from "@/v3/lib/ledger/phrasing";
 import { renderQuestion } from "@/v3/lib/ledger/renderQuestion";
 import { ClaimStatus, OwnershipTag, ProvisionalMark, SourceTag } from "@/v3/components/flow/studio/ledgerPrimitives";
 import { asksNeedingChase, isSystemOwner, type ArtifactAskMark } from "@/v3/lib/ledger/artifactAsks";
-import { operatorQueueCounts, sessionQuestionCount } from "@/v3/lib/ledger/operatorQueue";
+import { operatorQueueCounts, sessionQuestionCount, unfrozenQueues } from "@/v3/lib/ledger/operatorQueue";
 import { parseDictionaryCsv } from "@/v3/lib/ledger/dictionary";
 import { retractProposal } from "@/v3/lib/ledger/curation";
 import { displayPersonLabel } from "@/v3/components/flow/flowStakeholders";
@@ -182,15 +182,25 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
   // dictionary, closed by one upload from the system owner, never assigned to a person. So
   // burn-down `unownedOpen` decomposes into assignQueue + the unowned slice of typingLoci —
   // no double-count, no drop (both still open, both still in the 106 burn-down).
-  const unowned = ledger.assignQueue;
+  //
+  // FROZEN LOCI ARE DRAWN ONCE. A locus held by contradicting live claims belongs to the
+  // adjudicate section and to nothing else — it cannot be routed to an owner or taken to a
+  // session until it is unfrozen. `unfrozenQueues` is the ONE place that subtraction is
+  // written, and the rail badge counts these very lists, so the page and the badge cannot
+  // disagree about what is waiting. (Drawing a frozen row here while the badge excluded it
+  // is exactly the drift F7 exists to catch.)
+  const unfrozen = unfrozenQueues(ledger);
+  const unowned = unfrozen.assign;
   // Group unowned questions by their element (the area-cascade shape): one "assign an
   // owner" per group that cascades to the questions under it, not N inbox cards.
   const unownedGroups = new Map<string, typeof unowned>();
   for (const it of unowned) (unownedGroups.get(groupOf(it.about)) ?? unownedGroups.set(groupOf(it.about), []).get(groupOf(it.about))!).push(it);
 
   // The session queue is the ONE source (ledger.sessionQueue) — seam questions,
-  // jointly owned, grouped by function pair. Never recomputed here.
-  const sessionQueue = ledger.sessionQueue;
+  // jointly owned, grouped by function pair. Never recomputed here; only the frozen
+  // loci are subtracted, by the same call the badge uses (see `unfrozen` above), so a
+  // question awaiting adjudication is not also offered as one to schedule.
+  const sessionQueue = unfrozen.sessions;
   // A "schedule" action = the seam is on the session plan (intent). It carries NO
   // date — scheduling is gated — so the open item on every seam is a DATE. Only the
   // pair is needed downstream (planned or not), so the section takes the set, not the
