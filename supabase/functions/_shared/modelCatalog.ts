@@ -54,6 +54,22 @@ export interface ModelCatalogEntry {
    */
   legacy?: true;
   /**
+   * PAST ITS RETIREMENT DATE — the provider no longer serves this id, so a call
+   * returns 404. Distinct from `legacy`, and the distinction is the whole point:
+   * a legacy model still WORKS and is a defensible thing to stay pinned to, while
+   * a retired one cannot run at all. Collapsing them is how the picker came to
+   * tell an operator that `claude-opus-4-1` was "kept selectable for programmes
+   * already pinned to it" five days after it stopped answering — a promise the
+   * API will not keep, one line above an entry that stated the honest version.
+   *
+   * Retired implies not auto-routed (see `modelForTier`), and the surface must
+   * say so rather than offering it as an ordinary choice. The entry STAYS in the
+   * catalog regardless: an already-pinned programme must keep resolving its real
+   * price and rendering honestly instead of falling through to provider-default
+   * pricing — the same reason `legacy` entries are kept at all.
+   */
+  retired?: true;
+  /**
    * This entry's list price is PROVISIONAL — the numbers below are real
    * published list prices (never placeholders, so tier and routing math stay
    * sound), but they are not what a call actually bills right now, e.g. a
@@ -106,10 +122,12 @@ export const MODEL_CATALOG: ModelCatalogEntry[] = [
   { id: "claude-sonnet-5", provider: "anthropic", tier: "tier2", inputPricePerM: 3, outputPricePerM: 15, costMultiplier: 1, priceUnverified: true, capabilities: ANTHROPIC_NO_SAMPLING_PARAMS },
   { id: "claude-fable-5", provider: "anthropic", tier: "tier2", inputPricePerM: 10, outputPricePerM: 50, costMultiplier: 3.33, capabilities: ANTHROPIC_NO_SAMPLING_PARAMS },
   { id: "claude-opus-4-8", provider: "anthropic", tier: "tier3", inputPricePerM: 5, outputPricePerM: 25, costMultiplier: 1.67, capabilities: ANTHROPIC_NO_SAMPLING_PARAMS },
-  // ── Anthropic (superseded) ── selectable, priced, but never auto-routed.
+  // ── Anthropic (superseded / retired) ── priced and resolvable, never auto-routed.
+  // `retired` means the id 404s: opus-4-1 passed its date on 2026-08-05, haiku-3-5 on
+  // 2026-02-19. They stay so an already-pinned programme resolves its real price.
   { id: "claude-sonnet-4-6", provider: "anthropic", tier: "tier2", inputPricePerM: 3, outputPricePerM: 15, costMultiplier: 1, legacy: true, capabilities: PROVIDER_DEFAULT_CAPABILITIES.anthropic },
-  { id: "claude-opus-4-1", provider: "anthropic", tier: "tier3", inputPricePerM: 15, outputPricePerM: 75, costMultiplier: 5, legacy: true, capabilities: PROVIDER_DEFAULT_CAPABILITIES.anthropic },
-  { id: "claude-3-5-haiku-latest", provider: "anthropic", tier: "tier1", inputPricePerM: 0.8, outputPricePerM: 4, costMultiplier: 0.27, legacy: true, capabilities: PROVIDER_DEFAULT_CAPABILITIES.anthropic },
+  { id: "claude-opus-4-1", provider: "anthropic", tier: "tier3", inputPricePerM: 15, outputPricePerM: 75, costMultiplier: 5, legacy: true, retired: true, capabilities: PROVIDER_DEFAULT_CAPABILITIES.anthropic },
+  { id: "claude-3-5-haiku-latest", provider: "anthropic", tier: "tier1", inputPricePerM: 0.8, outputPricePerM: 4, costMultiplier: 0.27, legacy: true, retired: true, capabilities: PROVIDER_DEFAULT_CAPABILITIES.anthropic },
   // ── OpenAI ──
   { id: "gpt-4o-mini", provider: "openai", tier: "tier1", inputPricePerM: 0.15, outputPricePerM: 0.6, costMultiplier: 0.05, capabilities: PROVIDER_DEFAULT_CAPABILITIES.openai },
   { id: "gpt-4o", provider: "openai", tier: "tier2", inputPricePerM: 2.5, outputPricePerM: 10, costMultiplier: 0.83, capabilities: PROVIDER_DEFAULT_CAPABILITIES.openai },
@@ -170,7 +188,7 @@ export function modelsForProvider(provider: AIProvider): ModelCatalogEntry[] {
  */
 export function modelForTier(provider: AIProvider, tier: ModelTier): string | undefined {
   const candidates = MODEL_CATALOG
-    .filter((entry) => entry.provider === provider && entry.tier === tier && !entry.legacy)
+    .filter((entry) => entry.provider === provider && entry.tier === tier && !entry.legacy && !entry.retired)
     .sort((a, b) => a.costMultiplier - b.costMultiplier);
   return candidates[0]?.id;
 }

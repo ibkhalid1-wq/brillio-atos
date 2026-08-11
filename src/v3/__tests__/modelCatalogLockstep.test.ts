@@ -36,6 +36,7 @@ interface CatalogEntry {
   outputPricePerM: number;
   costMultiplier: number;
   legacy: boolean;
+  retired: boolean;
   priceUnverified: boolean;
   /** The capability-profile SYMBOL the entry references, e.g. `ANTHROPIC_NO_SAMPLING_PARAMS`. */
   capabilities: string;
@@ -61,6 +62,7 @@ function parseCatalog(): CatalogEntry[] {
         outputPricePerM: num("outputPricePerM"),
         costMultiplier: num("costMultiplier"),
         legacy: /legacy: true/.test(rest),
+        retired: /retired: true/.test(rest),
         priceUnverified: /priceUnverified: true/.test(rest),
         capabilities: rest.match(/capabilities: ([A-Za-z0-9_.]+)/)?.[1] ?? "",
       };
@@ -269,5 +271,56 @@ describe("catalog integrity — legacy routing, pricing honesty, one multiplier 
     expect(declaration, "priceUnverified flag missing from ModelCatalogEntry").toBeTruthy();
     expect(EDGE).toMatch(/PROVISIONAL/);
     expect(EDGE).toMatch(/DOLLARS/);
+  });
+});
+
+describe("retired models — the picker must not offer a 404 as an ordinary choice", () => {
+  // `legacy` and `retired` are different facts and the picker has to say which. A legacy
+  // model still WORKS, so "kept selectable for programmes already pinned to it" is true of
+  // it. A retired one 404s, so that same sentence is a promise the API will not keep — and
+  // it was live on claude-opus-4-1 for five days after its retirement date, one line above
+  // claude-3-5-haiku-latest, which stated the honest version.
+  const retired = () => CATALOG.filter((entry) => entry.retired);
+
+  it("the split is real, or every assertion below is vacuous", () => {
+    expect(retired().length).toBeGreaterThan(0);
+    expect(CATALOG.some((entry) => !entry.retired)).toBe(true);
+  });
+
+  it("a retired model is never auto-routed", () => {
+    const fn = EDGE.match(/export function modelForTier\([\s\S]*?\n\}/);
+    expect(fn, "modelForTier not found").toBeTruthy();
+    expect(fn![0]).toContain("!entry.retired");
+  });
+
+  it("a retired model is never a provider default", () => {
+    for (const provider of PROVIDERS) {
+      const entry = CATALOG.find((candidate) => candidate.id === parseDefault(provider));
+      expect(entry?.retired, `${provider} defaults to a retired model`).toBeFalsy();
+    }
+  });
+
+  it("every retired model SAYS SO in the picker, and none is sold as merely superseded", () => {
+    const offending: string[] = [];
+    for (const entry of retired()) {
+      // the label/description pair the picker renders for this id
+      const block = CLIENT.match(new RegExp(`\\{ id: "${entry.id}",[^}]*\\}`));
+      if (!block) continue;                       // not offered at all is also honest
+      if (!/retired/i.test(block[0])) offending.push(`${entry.id}: not labelled retired`);
+      if (/kept selectable/i.test(block[0])) offending.push(`${entry.id}: sold as merely superseded`);
+    }
+    expect(
+      offending,
+      `\n${offending.join("\n")}\n` +
+      `A retired id returns 404. Say so, or drop it from the picker — do not offer it as a\n` +
+      `model an operator may reasonably stay pinned to.\n`,
+    ).toEqual([]);
+  });
+
+  it("but it STAYS in the catalog, so an already-pinned programme still resolves its real price", () => {
+    for (const entry of retired()) {
+      expect(entry.inputPricePerM).toBeGreaterThan(0);
+      expect(entry.outputPricePerM).toBeGreaterThan(0);
+    }
   });
 });
