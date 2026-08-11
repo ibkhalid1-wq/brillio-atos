@@ -17,7 +17,8 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { migrate, functionOf, type Snapshot } from "@/v3/lib/ledger/migrate";
+import { migrate, functionOf, type Snapshot, ownerFor } from "@/v3/lib/ledger/migrate";
+import { ownerLabel, normalizeOwner } from "@/v3/lib/ledger/types";
 import { buildUnknownQueue } from "@/v3/lib/ledger/projections";
 import { TYPING_SLOTS } from "@/v3/lib/ledger/dictionary";
 
@@ -31,16 +32,17 @@ describe("functionOf — most-specific wins, no broad swallow, no default", () =
     expect(functionOf("Sales Operations")).toBe("Sales Ops");
   });
 
-  it("a label naming SEVERAL functions resolves to none of them — it is unowned", () => {
+  it("a label naming SEVERAL functions resolves to no SINGLE one", () => {
     // DELIBERATE RE-BASELINE. This case previously asserted `.not.toBeNull()`, which
     // encoded the old whole-string first-match-wins behaviour: "Sales / Sales Ops /
     // Practices" resolved to Practices purely because `/practice|…/` sits first in the
     // table. On the Laila snapshot that sent 78 questions — all of Practices'
     // entity-derived load — to a function the label names third.
     //
-    // Picking any one of several named functions is a fabricated owner, so the record
-    // now says what it actually knows: nothing. `ownerFor` turns null into `unowned` and
-    // an operator routes it. Assertions above still hold, so the Sales Ops fix is intact.
+    // Picking any one of several named functions is a fabricated owner. `functionOf`
+    // therefore answers "not a single owner" — which is NOT the same as "no owner":
+    // `ownerFor` turns several into a JOINT owner (§6b below), because that is what the
+    // record says. Assertions above still hold, so the Sales Ops fix is intact.
     expect(functionOf("Sales / Sales Ops / Practices")).toBeNull();
     expect(functionOf("Sales / Practices / Delivery / Marketing / Legal / Finance")).toBeNull();
     // ONE recognised function is still an answer, even beside names we do not know.
@@ -152,5 +154,51 @@ describe("Laila — conservation + no dataType constant-owner fabrication", () =
     // Before the fix every dataType was ownerFor("sales ops") — a single owner.
     // After: they spread across the entities' real area owners (and unowned).
     expect(dataTypeOwners.size).toBeGreaterThan(1);
+  });
+});
+
+// ── §6b · a locus shared by N functions is a seam, not a guess and not a gap ─────────
+/**
+ * `Owner`'s joint arm was a PAIR, so a label naming three or more functions had no
+ * representable owner. It got flattened to one (first-regex-wins, which handed Practices
+ * 78 questions the record never gave it) or to `unowned` — honest, but it made an operator
+ * route work the record had already answered.
+ *
+ * `Owner.parties` holds N. These pin the three things that must stay true: the record's
+ * own shape survives, one seam has one identity however the label was ordered, and a claim
+ * stored under the old `{a, b}` shape still reads.
+ */
+describe("§6b — shared ownership beyond a pair", () => {
+  it("a label naming several functions becomes a SEAM carrying all of them", () => {
+    const o = ownerFor("Sales / Practices / Delivery");
+    expect(o.kind).toBe("joint");
+    expect(o.kind === "joint" && o.parties).toEqual(["Delivery", "Practices", "Sales Leaders"]);
+    expect(ownerLabel(o)).toBe("Delivery ⋈ Practices ⋈ Sales Leaders");
+  });
+
+  it("one seam has ONE identity — order and repetition in the label cannot fork it", () => {
+    // Two orderings of the same parties must not read as two different seams: the label is
+    // the interchange format the session queue groups by.
+    expect(ownerLabel(ownerFor("Practices / Sales"))).toBe(ownerLabel(ownerFor("Sales / Practices")));
+    expect(ownerLabel(ownerFor("Sales / Practices / Sales"))).toBe(ownerLabel(ownerFor("Practices / Sales")));
+  });
+
+  it("one function is still a role, and none is still unowned — neither becomes a seam", () => {
+    expect(ownerFor("Finance").kind).toBe("role");
+    expect(ownerFor("Delivery / Talent Acquisition").kind).toBe("role");   // one RECOGNISED
+    expect(ownerFor("Surgical Operations").kind).toBe("unowned");          // still no fabrication
+    expect(ownerFor("").kind).toBe("unowned");
+  });
+
+  it("LEGACY: a claim stored as {a, b} still rehydrates — no backfill needed", () => {
+    // pgStore casts a stored JSON blob straight into the Claim type, so rows written before
+    // `parties` carry the pair. Without normalisation `ownerLabel` would throw on them.
+    const legacy = normalizeOwner({ kind: "joint", a: "Sales", b: "Finance" });
+    expect(legacy.kind === "joint" && legacy.parties).toEqual(["Finance", "Sales"]);
+    expect(ownerLabel(legacy)).toBe("Finance ⋈ Sales");
+    // and the new shape round-trips unchanged
+    expect(ownerLabel(normalizeOwner({ kind: "joint", parties: ["B", "A"] }))).toBe("A ⋈ B");
+    expect(normalizeOwner({ kind: "role", role: "Legal" })).toEqual({ kind: "role", role: "Legal" });
+    expect(normalizeOwner(undefined).kind).toBe("unowned");
   });
 });

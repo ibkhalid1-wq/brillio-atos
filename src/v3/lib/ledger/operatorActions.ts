@@ -35,7 +35,8 @@ export interface AssignAction {
 export interface ScheduleAction {
   kind: "schedule";
   pair: string;                  // "A ⋈ B" — the seam owner label
-  parties: [string, string];
+  /** The seam's parties — N, not a pair, since a locus can be shared by more. */
+  parties: string[];
   abouts: string[];              // the loci the session covers
   by: string;
   at: string;

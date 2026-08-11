@@ -42,7 +42,7 @@ export type ClaimValue =
   | { kind: "unresolved-ref"; name: string; why: string }
   | { kind: "unknown" }
   | { kind: "na" };
-export type Owner = { kind: "role"; role: string } | { kind: "joint"; a: string; b: string } | { kind: "unowned" };
+export type Owner = { kind: "role"; role: string } | { kind: "joint"; parties: string[] } | { kind: "unowned" };
 
 /** A generated claim = AssertInput minus everything the store computes. No id,
  *  supersededBy, contradicts, escalateTo, or closedBy — those are the store's and
@@ -97,7 +97,7 @@ const ownerFor = (area: string): Owner => {
 // No fabricated fallback (mirrors migrate.ts): a double-miss stays UNOWNED and visible.
 const jointOrOwner = (areaA: string, areaB: string): Owner => {
   const a = functionOf(areaA), b = functionOf(areaB);
-  if (a && b && a !== b) { const [x, y] = [a, b].sort(); return { kind: "joint", a: x, b: y }; }
+  if (a && b && a !== b) return { kind: "joint", parties: [a, b].sort() };
   return a ? ownerFor(areaA) : b ? ownerFor(areaB) : { kind: "unowned" };
 };
 // A role owner STATED BY THE DATA (workflow.owner / step.actor, verbatim) — used only

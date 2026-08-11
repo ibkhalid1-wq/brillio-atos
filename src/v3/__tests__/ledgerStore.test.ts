@@ -9,7 +9,7 @@ import { isLive, type ClaimValue, type Owner } from "@/v3/lib/ledger/types";
 const scalar = (v: string | number | boolean): ClaimValue => ({ kind: "scalar", value: v });
 const unknown: ClaimValue = { kind: "unknown" };
 const salesOps: Owner = { kind: "role", role: "Sales Ops" };
-const jointMS: Owner = { kind: "joint", a: "Marketing", b: "Sales" };
+const jointMS: Owner = { kind: "joint", parties: ["Marketing", "Sales"] };
 
 describe("ledger store", () => {
   it("asserts, and an incoming value fills an open unknown on the same locus", () => {
