@@ -2492,7 +2492,17 @@ describe("artifact studio registry", () => {
       expect(entry, `no studio for ${artifactId}`).toBeTruthy();
       expect(entry.fieldKey, `no field key for ${artifactId}`).toBeTruthy();
     }
-  });
+    // Per-test timeout, deliberately NOT a global `testTimeout` bump: raising it
+    // globally would mask genuinely hung tests everywhere else.
+    // The two dynamic imports above pull a 16-import React studio barrel from
+    // INSIDE the test body, so the whole transform is charged to this test —
+    // ~2380 ms cold against vitest's 5000 ms default. Standalone that headroom
+    // holds; under full-suite parallelism it does not. Measured: 1 failure in 10
+    // full-suite runs ("Test timed out in 5000ms") vs 0 in 8 standalone runs, and
+    // the failing run's environment time was 158.65 s against 64–76 s across the
+    // nine that passed. So the trigger is contention, not a slow assertion — the
+    // body below is pure map lookups over ~13 ids.
+  }, 20000);
 });
 
 describe("regeneration guard — artifactDocs decision payload", () => {

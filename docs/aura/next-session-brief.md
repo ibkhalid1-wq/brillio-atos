@@ -170,15 +170,28 @@ renders zero rows while collapsed, `OperatorInbox.tsx:117`).
 
 **Land after W-1** — W-1 changes the expected number.
 
-### W-3 · `flowLibs.test.ts` timeout headroom — `flowLibs.test.ts:2485`
-**Not reproduced this session** (one full run, passed) — describe it as thin headroom, not
-confirmed flake. Measured: the single test costs **2380 ms cold** against vitest's
-**5000 ms** default, and the file goes 560 ms standalone → 2231 ms under 8-way parallel.
-It dynamically imports a 16-import React studio barrel *inside the test body*, so the whole
-transform is charged to the test.
+### W-3 · `flowLibs.test.ts` timeout headroom — RESOLVED (`flowLibs.test.ts:2505`)
+**Now reproduced and fixed.** The earlier entry said "not reproduced this session (one full
+run, passed) — thin headroom, not confirmed flake." One run was not enough to see it.
 
-**Fix:** per-test timeout — `}, 20000);` at `flowLibs.test.ts:2495`. Do not raise the
-global; that would mask genuinely hung tests.
+**Measured over 10 full-suite runs: 1 failure ("Test timed out in 5000ms"), 9 passes — and
+0 failures in 8 standalone runs of the same file.** The failing test is
+`artifact studio registry > covers every atos-flow required artifact with a resolvable
+field key`. The failing run's `environment` time was **158.65 s** against **64–76 s** across
+the nine that passed, so the trigger is contention, not a slow assertion — the test body is
+pure map lookups over ~13 ids. Cause is as previously diagnosed: two dynamic imports pull a
+16-import React studio barrel from *inside* the test body, charging the whole transform to
+the test (~2380 ms cold against vitest's 5000 ms default).
+
+**Fixed:** per-test `}, 20000);` at `flowLibs.test.ts:2505`, with the measurement recorded
+in a comment above it. Global `testTimeout` deliberately untouched — raising it would mask
+genuinely hung tests everywhere else. Verified by mutation: shrinking the argument to
+`}, 1);` fails with "Test timed out in 1ms" and restoring it passes, which proves the
+argument binds to this test rather than being inert.
+
+> If this flakes again, the real fix is to hoist the two `await import(...)` calls to the
+> module top so the transform is charged to collection instead of to the test. That is a
+> bigger change to a 229-test file and was not worth it for a 10% flake.
 
 ### W-4 · The fabrication scan still launders owners — `sourceGuards.ts:81`
 The gap is **wider than recorded**. A constant role-owner escapes F5/F6 when it takes two
