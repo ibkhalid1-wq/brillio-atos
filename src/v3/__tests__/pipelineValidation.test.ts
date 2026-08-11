@@ -11,10 +11,10 @@ import { migrate, type Snapshot } from "@/v3/lib/ledger/migrate";
 import { buildUnknownQueue, buildKitView, openOwnerQuestions, dictionaryBucket } from "@/v3/lib/ledger/projections";
 import { projectKitQuestions } from "@/v3/lib/ledger/kitProjection";
 import { renderQuestion } from "@/v3/lib/ledger/renderQuestion";
-import { assemblePrototype } from "@/v3/lib/prototypeAssembly";
-import { deriveFabric } from "@/v3/lib/fabric";
+import { assemblePrototype } from "@shared/prototypeAssembly.ts";
+import { deriveFabric } from "@shared/fabric.ts";
 import { diffFabric } from "@/v3/lib/fabricDelta";
-import { deriveRoles } from "@/v3/lib/semanticRoles";
+import { deriveRoles } from "@shared/semanticRoles.ts";
 import { TYPING_SLOTS } from "@/v3/lib/ledger/dictionary";
 import { displayPersonLabel, UNNAMED_SUFFIX_RE } from "@/v3/components/flow/flowStakeholders";
 
@@ -126,7 +126,11 @@ describe("[G3] both prototypes Meridian-styled from the SAME table; generic nami
   }
   it('mapping code + Meridian carry zero "laila" (generically named end to end)', () => {
     for (const f of ["prototypeAssembly.ts", "prototypeDesignSystem.ts", "semanticRoles.ts", "fabric.ts", "seedData.ts"]) {
-      const src = readFileSync(resolve(__dirname, `../lib/${f}`), "utf8");
+      // The cluster lives in the Deno-importable shared layer — ONE copy, imported
+      // by the studio (client) and by flow-portal (edge). Read from there, not from
+      // src/v3/lib, so this check keeps covering the file that actually runs.
+      const path = resolve(__dirname, `../../../supabase/functions/_shared/${f}`);
+      const src = readFileSync(path, "utf8");
       expect(/laila/i.test(src), `${f} mentions the source app`).toBe(false);
     }
   });

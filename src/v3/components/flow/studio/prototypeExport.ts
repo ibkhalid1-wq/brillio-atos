@@ -8,7 +8,7 @@
  * externally modifiable with normal tooling instead of a lone blob.
  */
 import JSZip from "jszip";
-import { resolveTheme, meridianStylesheet, type PrototypeTheme } from "@/v3/lib/prototypeDesignSystem";
+import { resolveTheme, meridianStylesheet, type PrototypeTheme } from "@shared/prototypeDesignSystem.ts";
 
 export interface PrototypeProjectInput {
   html: string;

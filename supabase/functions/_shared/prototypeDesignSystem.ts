@@ -12,8 +12,11 @@
  * no per-engagement styling work; a governed `theme` (see `PrototypeTheme`) can
  * re-skin it by overriding `:root` custom properties without touching markup.
  *
- * Buildable/testable now (client-side). The one gated piece — teaching the edge
- * generator to EMIT `.m-*` markup — is recorded in docs/aura/artifact-schema-findings.md.
+ * Lives in `_shared` because BOTH runtimes render it: the operator's studio (Vite,
+ * via the `@shared` alias) and flow-portal (Deno, by relative path). One copy — the
+ * stakeholder's prototype and the operator's are the same bytes by construction.
+ * That closes the gap recorded in docs/aura/artifact-schema-findings.md, where the
+ * edge emitting `.m-*` markup was the outstanding piece.
  */
 
 /** The governed, overridable token surface. Matches the shape the Experience

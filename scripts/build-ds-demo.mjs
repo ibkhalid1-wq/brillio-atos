@@ -1,7 +1,7 @@
 /**
  * Regenerate public/prototype-design-system.html from the Meridian module, so the
  * reference page can never drift from the codified system. Run:
- *   npx esbuild src/v3/lib/prototypeDesignSystem.ts --format=esm > .tmp-ds.mjs
+ *   npx esbuild supabase/functions/_shared/prototypeDesignSystem.ts --format=esm > .tmp-ds.mjs
  *   node scripts/build-ds-demo.mjs
  */
 import { writeFileSync } from "node:fs";

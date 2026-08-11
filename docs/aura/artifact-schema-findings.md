@@ -220,7 +220,7 @@ are real domain gaps for Listen, not a universal baseline.
 self-contained HTML document the edge generator authors, and `experienceDesign.theme` has **no
 default** (`?? {}`) — so colour, type, and component styling are whatever the model improvises per
 run, inconsistent across engagements and runs. A reusable design system now exists
-(**Meridian** — `src/v3/lib/prototypeDesignSystem.ts`, documented in
+(**Meridian** — `supabase/functions/_shared/prototypeDesignSystem.ts`, documented in
 `docs/aura/prototype-design-system.md`), extracted from a coherent reference app and made
 engagement-neutral, but the generator does not use it.
 
@@ -228,6 +228,16 @@ engagement-neutral, but the generator does not use it.
 export now ships `meridian.css` (the appearance layer) plus a complete `design-tokens.json` — so a
 coding agent handed the export can apply the house system. Verified by rendering
 `public/prototype-design-system.html` in the preview against the source app.
+
+**SUPERSEDED for the stakeholder-facing artefact (2026-08-10).** The route taken was not
+"teach the generator to emit `.m-*`" but "stop serving the generator's HTML to stakeholders."
+`flow-portal` now builds the linked prototype with `_shared/prototypePilot.ts` →
+`assemblePrototype`, which emits Meridian markup by construction from the ontology + atlas — so
+the client's prototype is `.m-*`-styled with zero prompt change and zero model tokens for
+structure. The generator's own output survives as the operator-side refine loop only. The
+proposal below stays on record because it is still the answer *if* the model path is ever
+re-pointed at a stakeholder; it is no longer on the critical path. (Deploy-gated: true of the
+code, not of production, until `flow-portal` is redeployed.)
 
 **Proposed generator change (gated — specify, do not make):** the prototype-build prompt in
 `supabase/functions/run-agent/index.ts` should instruct the model to (a) link/inline
@@ -363,7 +373,7 @@ built and tested.
 | **F-B** decision points | Yes for judgment steps | Generator does; optional field means readers don't | Optional field + inspector editor (client) |
 | **F-C** cross-artifact coherence | Yes (silent incoherence) | **No** — pure client derivation | Client coherence pass + in-diagram marks (already surfaced by the multi-area swimlane) |
 | **F-D** ontology discards types/optionality | Indirectly (keeps generation generative) | Schema + generator do; readers don't | Attribute-`type` + relation-`optionality` fields; generator proposes types, Listen confirms optionality |
-| **F-E** generator ignores the design system | No (appearance) | Generator does; client export does not | `meridian.css` in every export (done); generator emits `.m-*` markup (gated) |
+| **F-E** generator ignores the design system | No (appearance) | Generator does; client export does not | `meridian.css` in every export (done); the stakeholder's prototype is now the Meridian **assembly**, not the generator's HTML (done, deploy-gated); generator emits `.m-*` markup (gated, no longer on the critical path) |
 | **F-F** attributes have no value set | Yes (stage sets unrenderable) | Schema does; **members are a Listen ask** | `valueSet` field + enum-as-pipeline reader (client); ordered members captured in Listen |
 | **F-G** workflows have no phase | Yes (vertical axis has no field) | Schema does; grid derives now | Optional `phase` field (gated write); grid reads asserted, falls to the derivation |
 

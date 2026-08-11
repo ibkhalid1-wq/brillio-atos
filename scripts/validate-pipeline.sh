@@ -29,7 +29,13 @@ run_tests "A3 three surfaces one set (cold)" src/v3/__tests__/pipelineValidation
 say "B. ROUTING"
 # B1/B2 — no fabricated/default owners; most-specific wins; miss -> unowned
 run_tests "B1/B2 owner routing (no default owner, specific wins)" src/v3/__tests__/ownerRoutingRegression.test.ts
-grep -qn 'ownerFor("sales ops")\|fallback: string' src/v3/lib/ledger/migrate.ts && fail "B1 default-owner branch present in migrate.ts" || pass "B1 no default-owner branch (grep)"
+# The file must EXIST before its contents are judged: a missing file makes grep exit
+# non-zero, which the `&& fail || pass` shape reports as PASS. Deleting migrate.ts would
+# have printed "no default-owner branch" — a guard passing because its subject vanished.
+B1_SRC=src/v3/lib/ledger/migrate.ts
+if [ ! -f "$B1_SRC" ]; then fail "B1 subject missing at $B1_SRC"
+elif grep -qn 'ownerFor("sales ops")\|fallback: string' "$B1_SRC"; then fail "B1 default-owner branch present in migrate.ts"
+else pass "B1 no default-owner branch (grep)"; fi
 # B3 — partition (also in pipelineValidation) + conservation
 run_tests "B3 partition + conservation" src/v3/__tests__/inboxReconciliation.test.ts
 # B4 — in-flight-with-0-sent unrepresentable (guard is in the row builder)
@@ -52,7 +58,11 @@ run_tests "E3 convergence = real closures only" src/v3/__tests__/convergenceBurn
 
 say "F. REGRESSION SENTRIES"
 # F2 — zero-count sections hidden by request (2026-08-10) — assert no resurrected collapsed rows
-grep -qn "v3ib-collapsed-row" src/v3/components/flow/OperatorInbox.tsx && fail "F2 collapsed rows resurrected" || pass "F2 zero sections hidden (by request), none resurrected"
+# Same existence guard as B1 — a deleted OperatorInbox would have printed PASS.
+F2_SRC=src/v3/components/flow/OperatorInbox.tsx
+if [ ! -f "$F2_SRC" ]; then fail "F2 subject missing at $F2_SRC"
+elif grep -qn "v3ib-collapsed-row" "$F2_SRC"; then fail "F2 collapsed rows resurrected"
+else pass "F2 zero sections hidden (by request), none resurrected"; fi
 # F4 — ONE fossil regression, and the label says so. This greps a single fixed string;
 #      it does NOT check "no constant-owner fabrication in ledger paths", which is what
 #      it used to claim. Two fabricated constant owners planted on the live path during
@@ -83,11 +93,27 @@ run_tests "F6 the F5 guards catch their own bypasses" src/v3/__tests__/sourceGua
 run_tests "F7 the badge equals the rendered Inbox page (DOM)" src/v3/__tests__/inboxBadgeIsThePage.test.ts
 
 say "G. FABRIC -> MERIDIAN"
-# G1 — assembler reachable from the studio; no model call in the render path
+# G1 — assembler reachable from the studio; no model call in the render path.
+# ONE copy of the assembler, in the Deno-importable shared layer: the studio
+# (Vite) and flow-portal (Deno) import the same file, so operator and stakeholder
+# cannot drift apart. src/v3/lib is deliberately NOT a mirror — see
+# src/v3/__tests__/prototypeAssemblySource.test.ts.
+ASSEMBLER=supabase/functions/_shared/prototypeAssembly.ts
 grep -qn "assemblePrototype" src/v3/components/flow/studio/PrototypeStudio.tsx && pass "G1 assembler wired into the studio render path" || fail "G1 assembler unreachable"
-grep -qn "fetch\|anthropic\|claude" src/v3/lib/prototypeAssembly.ts && fail "G1 model/network call in the render path" || pass "G1 zero model tokens for structure (no model/network call)"
+# The file must EXIST before its contents are judged. A missing assembler makes the
+# content grep exit non-zero, which the old one-liner reported as PASS.
+if [ ! -f "$ASSEMBLER" ]; then fail "G1 assembler missing at $ASSEMBLER"
+elif grep -qn "fetch\|anthropic\|claude" "$ASSEMBLER"; then fail "G1 model/network call in the render path"
+else pass "G1 zero model tokens for structure (no model/network call)"; fi
+# G1b — the STAKEHOLDER-facing page renders the same deterministic assembly, and the
+# portal no longer reaches for the stored model-authored prototypeBuild.html. Both
+# halves are asserted: importing the pilot is not enough if the old path survives.
+PROTO_BUILD_READS=$(grep -n "prototypeBuild" supabase/functions/flow-portal/index.ts | grep -v "^[0-9]*: *//" || true)
+if ! grep -qn "_shared/prototypePilot.ts" supabase/functions/flow-portal/index.ts; then fail "G1 stakeholder path not wired to the assembly"
+elif [ -n "$PROTO_BUILD_READS" ]; then fail "G1 portal still reads the model-authored prototypeBuild: $PROTO_BUILD_READS"
+else pass "G1 assembler wired into the stakeholder (portal) render path"; fi
 # G2/G3/G4 — fallback honesty, both programs one table, tokens, incremental
-run_tests "G2-G4 assembly (generic fallback, AA tokens, no leakage, diffFabric)" src/v3/__tests__/pipelineValidation.test.ts src/v3/__tests__/prototypeAssembly.test.ts src/v3/__tests__/prototypeDesignSystem.test.ts src/v3/__tests__/fabric.test.ts src/v3/__tests__/fabricDelta.test.ts
+run_tests "G2-G4 assembly (generic fallback, AA tokens, no leakage, diffFabric)" src/v3/__tests__/pipelineValidation.test.ts src/v3/__tests__/prototypeAssembly.test.ts src/v3/__tests__/prototypeDesignSystem.test.ts src/v3/__tests__/fabric.test.ts src/v3/__tests__/fabricDelta.test.ts src/v3/__tests__/prototypeAssemblySource.test.ts
 
 say "RESULT"
 if [ "$FAIL" -eq 0 ]; then echo "ALL SCRIPTED CHECKS PASS"; else echo "FAILURES PRESENT (see above)"; fi

@@ -16,7 +16,7 @@
  * Every cardinality/optionality the generator must ASSUME is emitted in the
  * assumptions list — direct input to the Listen sessions.
  */
-import { deriveRoles, type ValueRole } from "./semanticRoles";
+import { deriveRoles, type ValueRole } from "./semanticRoles.ts";
 
 export interface SeedRecord { id: string; _synthetic: true; _classification: "SYNTHETIC-SEED"; [k: string]: unknown; }
 export interface SeedAssumption {

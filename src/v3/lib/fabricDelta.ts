@@ -21,7 +21,7 @@
  * new derivation — the honest limit stated in the spec. A refinement is therefore
  * never silently destroyed: it is preserved or surfaced for a human.
  */
-import type { Fabric, FabricNode } from "./fabric";
+import type { Fabric, FabricNode } from "@shared/fabric.ts";
 
 export interface FabricDelta {
   added: FabricNode[];

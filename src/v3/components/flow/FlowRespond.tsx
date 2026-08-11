@@ -98,8 +98,17 @@ interface Pack {
   liveDemo?: boolean;
   /** The BUILT prototype — the generated clickable app. When present it IS the
    * pilot the stakeholder validates (closest to production); it renders in place
-   * of the interpreted walk. */
+   * of the interpreted walk. Assembled deterministically from the committed
+   * ontology + atlas by the edge (`_shared/prototypeAssembly.ts`) — the same
+   * module the operator's studio renders. */
   pilotHtml?: string;
+  /** Provenance of `pilotHtml`. "assembled" = derived from the record, zero model
+   * tokens for structure. Stated on the page so the claim is checkable. */
+  pilotSource?: "assembled";
+  /** Why there is NO prototype on a link that would otherwise carry one. Shown
+   * verbatim: the gap is the honest answer when the record can't produce an
+   * assembly. Never a stand-in for model-authored HTML. */
+  pilotGap?: string;
   /** A projected REVIEW surface — workflow-agentify or ontology+atlas. When
    * present, the page renders the visual review instead of the plain form; its
    * composed response still submits through the interview `answers` path.
@@ -598,9 +607,10 @@ export default function FlowRespond({ token }: { token: string }) {
                   // The built prototype IS the experience — use it, then give a
                   // verdict. No walk, no explorer: as close to production as we can
                   // get you before we ship it.
-                  <PilotFrame pilotHtml={state.pack.pilotHtml} />
+                  <PilotFrame pilotHtml={state.pack.pilotHtml} pilotSource={state.pack.pilotSource} />
                 ) : (
                   <>
+                    <PilotGap gap={state.pack.pilotGap} />
                     {state.pack.demoUrl ? (
                       <a className="v3fs-btn pri v3fs-portal-send" href={state.pack.demoUrl} target="_blank" rel="noreferrer">
                         ▶ Open the prototype
@@ -736,10 +746,13 @@ export default function FlowRespond({ token }: { token: string }) {
                 ) : null}
               </header>
               <div className="v3fs-portal-qs">
+                {/* No prototype where one was expected: say why, above whatever
+                    fallback follows. Never silently nothing, never a substitute. */}
+                {state.pack.pilotHtml ? null : <PilotGap gap={state.pack.pilotGap} />}
                 {state.pack.pilotHtml ? (
                   // A Show follow-up: the built prototype itself, above the
                   // questions it informs — use it, then answer.
-                  <PilotFrame pilotHtml={state.pack.pilotHtml} />
+                  <PilotFrame pilotHtml={state.pack.pilotHtml} pilotSource={state.pack.pilotSource} />
                 ) : state.pack.demoUrl ? (
                   // Externally-built prototype — link out to it (external hosts
                   // commonly can't be iframed), then answer below.
@@ -1227,7 +1240,7 @@ function FollowUpBanner({ stakeholder, submissions, changes, newCount }: {
  * tab, the way they'd experience the shipped product; the verdict is recorded
  * back on this page. Renders when the generated prototype (pilotHtml) is
  * present. */
-function PilotFrame({ pilotHtml }: { pilotHtml: string }) {
+function PilotFrame({ pilotHtml, pilotSource }: { pilotHtml: string; pilotSource?: "assembled" }) {
   // The blob URL is minted AT CLICK TIME, inside the user gesture — a URL
   // created at render and held in an href goes dead the moment anything
   // revokes it (React StrictMode's simulated unmount did exactly that in dev,
@@ -1251,10 +1264,42 @@ function PilotFrame({ pilotHtml }: { pilotHtml: string }) {
       <div className="v3fs-portal-pilotlink-t">
         <b>The prototype is ready for you to try</b>
         <p>It opens full-screen in a new tab — click through it exactly as you would the real product, then come back to this page and record your verdict below.</p>
+        {/* Provenance, stated to the person being asked to validate it — scoped to
+            what is actually derived. Screens/fields/navigation come straight from the
+            ontology + atlas; how a single value is PRESENTED is partly a name-pattern
+            guess (semanticRoles tags each role derived vs heuristic), so the copy says
+            so rather than overclaiming. Register row 17. */}
+        {pilotSource === "assembled" ? (
+          <p className="v3fs-portal-pilotlink-prov">
+            Every screen, field and menu item here comes from the domain model and process
+            map we agreed with you — one screen per thing your business tracks, one field
+            per detail it records. How an individual value is <em>presented</em> is partly
+            inferred from its name. All the records you see are synthetic samples.
+          </p>
+        ) : null}
       </div>
       <button type="button" className="v3fs-btn pri v3fs-portal-send" onClick={openPilot}>
         ↗ Open the prototype
       </button>
+    </div>
+  );
+}
+
+/** THE GAP, SHOWN. The prototype is assembled from the committed ontology + atlas;
+ * when the record can't produce one there is nothing honest to display, so the page
+ * says which piece is missing. It does NOT quietly fall back to the model-authored
+ * build stored on the record — that would hand a stakeholder model-written HTML
+ * while everyone believes they are looking at the record. A visible gap is the
+ * answer; the interpreted walk, if there is one, still renders below it. */
+function PilotGap({ gap }: { gap?: string }) {
+  if (!gap) return null;
+  return (
+    <div className="v3fs-portal-pilotgap" role="status">
+      <span className="v3fs-portal-pilotgap-i" aria-hidden="true">◇</span>
+      <div>
+        <b>No prototype to show you yet</b>
+        <p>{gap}</p>
+      </div>
     </div>
   );
 }

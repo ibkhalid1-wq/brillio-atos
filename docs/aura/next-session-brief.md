@@ -544,12 +544,41 @@ Nothing in the repo can settle these. Each names what would.
 
 ## 8. PRODUCT DECISIONS (not bugs — someone must choose)
 
+- **RESOLVED — the stakeholder now gets the deterministic assembly, and it is not a
+  second copy.** The premise "Deno cannot import from `src/v3/lib`, so serving the
+  assembly means porting it" was half right: the boundary is real but one-directional.
+  `supabase/functions/_shared` is importable from Deno (relative path) **and** from
+  Vite/vitest, so the whole cluster — `prototypeAssembly` + `fabric` + `semanticRoles` +
+  `seedData` + `prototypeDesignSystem` — MOVED there and both runtimes import the one
+  copy. No mirror, so no lockstep test; instead
+  `src/v3/__tests__/prototypeAssemblySource.test.ts` forbids a second declaration of any
+  of the five exports anywhere under `src/` or `supabase/functions/`, and asserts the
+  studio's HTML and the portal's are the same bytes for the same input. The client
+  reaches it through a new `@shared/*` alias (tsconfig + vite + both vitest configs,
+  mirroring how `@` is already declared).
+  - **The model refine loop is KEPT, and demoted to operator-only.** `run-agent`'s
+    `prototypeBuild` path, the studio's ✦ Refined build toggle, the source editor and the
+    project export/import all still work exactly as before. What changed is that
+    `flow-portal` no longer reads `prototypeBuild` at all — the refined build never
+    leaves the app. Retiring the loop was not necessary to stop a stakeholder seeing
+    model-authored HTML; removing it from the *portal* was.
+  - **Missing ontology/atlas is a VISIBLE GAP, never a substitution.** `pilotSliceFor`
+    (`_shared/prototypePilot.ts`) returns `pilotGap` naming the missing artefact, which
+    `FlowRespond`'s `PilotGap` prints above whatever design-derived walk exists. It does
+    NOT fall back to the stored model build — that fallback would be undetectable from
+    outside while the page carries a provenance claim. Claims register row 17 covers the
+    new copy.
+  - **DEPLOY-GATED.** `supabase functions deploy flow-portal` has not been run, so
+    production still serves the old blob until it is.
+  <details><summary>original entry</summary>
+
 - **Stakeholder-facing prototype is still model-authored.** Confirmed both halves:
   `flow-portal/index.ts:382,390` serves the stored `prototypeBuild.html`, while the
   deterministic ontology+atlas assembly is operator-only. Serving the assembly means
   porting `assemblePrototype` into an edge-importable shared module — it currently lives
   in the client bundle and Deno cannot import from `src/v3/lib`. Keeping the model path
   preserves the refine loop; retiring it kills it.
+  </details>
 - **RESOLVED `d8f2d7e` — the `— TBC` suffix now has one definition per runtime** (client
   `UNNAMED_SUFFIX_RE`, Deno `_shared/unnamedSuffix.ts`), pinned by a lockstep test that also
   forbids a third copy. It was written out SIX times, twice inside the file that already

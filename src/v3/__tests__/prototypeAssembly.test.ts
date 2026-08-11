@@ -5,7 +5,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { assemblePrototype } from "@/v3/lib/prototypeAssembly";
+import { assemblePrototype } from "@shared/prototypeAssembly.ts";
 
 const snap = (f: string) => JSON.parse(readFileSync(resolve(__dirname, `../../../docs/laila/snapshot-2026-08-07/${f}`), "utf8"));
 const ontology = snap("domain-ontology.json");

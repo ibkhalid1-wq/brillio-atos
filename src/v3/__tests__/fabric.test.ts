@@ -5,8 +5,8 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { deriveFabric } from "@/v3/lib/fabric";
-import { deriveRoles, roleDerivationSplit } from "@/v3/lib/semanticRoles";
+import { deriveFabric } from "@shared/fabric.ts";
+import { deriveRoles, roleDerivationSplit } from "@shared/semanticRoles.ts";
 
 const snap = (f: string) => JSON.parse(readFileSync(resolve(__dirname, `../../../docs/laila/snapshot-2026-08-07/${f}`), "utf8"));
 const ontology = snap("domain-ontology.json");

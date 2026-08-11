@@ -124,7 +124,7 @@ explicitly out of scope; the partial answer (detect + preserve + escalate) is th
 ## Measured claim (NOW MEASURED — the fabric is implemented)
 
 > **Update: this was modelled; it is now measured.** The fabric, seed data, and a deterministic
-> prototype assembler are implemented (`src/v3/lib/fabric.ts`, `seedData.ts`, `prototypeAssembly.ts`)
+> prototype assembler are implemented (`supabase/functions/_shared/fabric.ts`, `seedData.ts`, `prototypeAssembly.ts`)
 > and run on Laila's real committed artifacts. The earlier modelled "~7–9×" is superseded by the
 > measured result below — which is *stronger*, not weaker.
 

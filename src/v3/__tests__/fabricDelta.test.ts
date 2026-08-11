@@ -7,7 +7,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { deriveFabric } from "@/v3/lib/fabric";
+import { deriveFabric } from "@shared/fabric.ts";
 import { diffFabric, reEmitCount, reconcileRefinements, type Refinement } from "@/v3/lib/fabricDelta";
 
 const snap = (f: string) => JSON.parse(readFileSync(resolve(__dirname, `../../../docs/laila/snapshot-2026-08-07/${f}`), "utf8"));

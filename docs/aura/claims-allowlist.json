@@ -1,6 +1,6 @@
 {
   "_doc": "Hash-based guard for docs/aura/claims-register.md, enforced by src/v3/__tests__/claimsRegister.test.ts. Regenerate with: npm run claims:regen. Each key is a claim-surface file; each value is the sha1-16 hashes of its claim-bearing lines, normalized by src/v3/lib/claimsGuard.ts (the ONE definition, shared with the test). The test fails when a claim line is added or reworded (new hash) or a new surface introduces claim vocabulary. registerHash pins the register content at generation time so regen cannot silently re-bless a claim the register has not re-statused. DO NOT hand-edit; run npm run claims:regen.",
-  "registerHash": "2757fcb13b059864292af24fb1c25680eb58dbf2",
+  "registerHash": "adac5c8614d8809aaf4d173a3052b35bc8a25a54",
   "surfaces": {"componentsDir":"src/v3/components","componentsExt":".tsx","libFiles":["src/v3/lib/agentMeta.ts","src/v3/lib/methodology.ts","src/v3/lib/adamUserGuide.ts"],"edgeFunctionsDir":"supabase/functions"},
   "vocab": ["traceab","grounded","grounding","auditable","provenance","reproducib","evidence-based","end-to-end","governed","verifiab","single source of truth","source of truth"],
   "hashes": {
@@ -10,7 +10,7 @@
     "src/v3/components/flow/CollectBoard.tsx": ["87547ecd9731b6b0","899bd455e15e366b","5c9e70670b5a39e2","4779dea990da1ccf","a161fbefe7092bc0","15fce55c5af30839","5438e3c74e0572e1","4f171f80852cbaf9","3d9853e2093cb4bc","a7ae0d99779554a2","037fbce049e67ae9","586675293ef83755","47ad96787c8a12e5","18c70264115415b8"],
     "src/v3/components/flow/EvidenceReader.tsx": ["7acabebdb55f1bc6"],
     "src/v3/components/flow/FlowGrounding.tsx": ["d932c91c2402f38d","131e5ba5ef63884a","5301e1ce5ddb93dd","e6e33d70c15d0f61","378b5f8714690e44","3cbaab3ed631a5d9","78b78c245b89ea41","c2b8c62193177638"],
-    "src/v3/components/flow/FlowRespond.tsx": ["2e8ad8d99af39b84","d531fe1bb6176db7"],
+    "src/v3/components/flow/FlowRespond.tsx": ["0db4704af787af29","2e8ad8d99af39b84","d531fe1bb6176db7","e63a5e14832a1b63"],
     "src/v3/components/flow/FlowShell.tsx": ["deafe33bf5f63645","83e5079d87b6ed9c","b8919eb837d196e2","df042d94302835e4","0e1ad772cf821333","c4424582fd95f96b","759da0a1726b95ed","5a4158b54836a73b","5ecf60b491052b72","1037e224231d2e0a","b3333bf7c2f6f65f","b89a464b0d05edd4","58aec86f9b0bc7a9","a1a7b89ef6c9db87","c7fd8f272e066e80","d0a98653ecaad0ac","3c7545aadf856127","ffeb85aa2b372390","ccd314ae1b2eaa6c","5df879e97c6fef3e"],
     "src/v3/components/flow/TheLine.tsx": ["9458ea76a68070d7","a99dce5c98df0e1f","ef2cfd5da368f908"],
     "src/v3/components/flow/studio/DocumentView.tsx": ["80ec35d03791375b"],
