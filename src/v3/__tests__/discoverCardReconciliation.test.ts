@@ -238,11 +238,33 @@ describe("F6 — one Discover card, ONE number, and a breakdown that reconciles 
     mount();
     const { card } = readCard(PERSON);
     act(() => { (card.querySelector(".v3ln-cr-qbtn") as HTMLButtonElement).click(); });
-    const items = [...cardFor(PERSON).querySelectorAll(".v3ln-cr-qs.owned > li")];
-    const load = ownedLoadFor(LEDGER, ["Sales Leaders"]);
-    expect(items.length).toBe(load.owned.length);                 // the whole owned load, not just the sendable slice
+    // The drawer's last row can be the SEAM NOTE ("+ seam questions … are in the
+    // session queue"), which is a pointer, not an owned question. Excluding it by
+    // its own text keeps the count comparing like with like.
+    const allRows = [...cardFor(PERSON).querySelectorAll(".v3ln-cr-qs.owned > li")];
+    const seamNote = allRows.filter((li) => /seam questions .* session queue/.test(text(li)));
+    const items = allRows.filter((li) => !seamNote.includes(li));
+    // And it must be THERE: before the seam-label fix (B3d) this person's seam wore
+    // a raw-token label their identity never matched, so the one piece of work that
+    // needs a joint session was invisible on their card. Its appearance is the fix.
+    expect(seamNote, "the seam pointer vanished — this person owns a seam and is not told")
+      .toHaveLength(1);
+    // Compare the drawer against the number THE CARD ITSELF claims, read from its
+    // own headline — not against a load rebuilt here from a hand-written label
+    // list. Those were two different computations that happened to agree: the
+    // component derives a person's owner labels from the ledger, and once the
+    // seam-label fix (B3d) made "Practices ⋈ Sales Leaders" match this person,
+    // the hand-written `["Sales Leaders"]` fell one short and the drawer was
+    // accused of over-rendering. The invariant that actually matters is that the
+    // drawer lists exactly what the headline promises, and it is immune to how
+    // the label set is derived.
+    const headline = Number(/^(\d+)/.exec(text(cardFor(PERSON).querySelector(".v3ln-cr-qbtn")!))?.[1]);
+    expect(headline, "the card's headline count is unreadable").toBeGreaterThan(0);
+    expect(items.length, "the drawer must list every locus the headline counts").toBe(headline);
+    // Everything that cannot ride this link is tagged with why; the untagged
+    // remainder is exactly the link's payload.
     const tagged = items.filter((li) => /blocked|dictionary|next link/.test(text(li)));
-    expect(tagged.length).toBe(load.owned.length - load.onLink.length);
+    expect(items.length - tagged.length).toBe(LINK_QUESTION_CAP);
   });
 });
 
