@@ -255,7 +255,9 @@ Also `finalGateInvariants.test.ts:223`: `codeOnly` is applied to invariant (c) b
 to the (b) owner scan — so a *comment* quoting `role: "Sales Ops"` (exactly how this
 codebase documents its own fixes) turns F5 red for prose. One-line wrap.
 
-### W-5 · The question-text cluster — L4/L7/L6 RESOLVED `25f1dbf`, **L5 OPEN (decision)**
+### W-5 · The question-text cluster — ALL RESOLVED (L4/L7/L6 `25f1dbf`, L5 `cf5b0b8`)
+**L5 was decided (a) and implemented** — see §8 for what it left open upstream. The
+recommendation below is kept as the reasoning behind that choice, not as a pending question.
 L4, L7 and L6 are done, each pinned by a test proved to fail without it. The edge half of
 L6 (`flow-portal` forwarding `scripted`) is invisible until that function is deployed —
 same gate as O-10; source is complete.
