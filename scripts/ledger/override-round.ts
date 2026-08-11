@@ -12,6 +12,7 @@ import { migrate, type Snapshot } from "../../src/v3/lib/ledger/migrate";
 import { PgLedger } from "../../src/v3/lib/ledger/pgStore";
 import { generateClaimsBatch, validateBatch, type Batch } from "../../supabase/functions/_shared/ledgerGenerator";
 import { overridesToBatch } from "../../supabase/functions/_shared/overrideAdapter";
+import { migrateOverrideOwner } from "./overrideOwner";
 import type { AssertInput, LedgerStore } from "../../src/v3/lib/ledger/store";
 import type { LedgerElement } from "../../src/v3/lib/ledger/types";
 
@@ -28,7 +29,9 @@ async function main() {
   const otherBefore = (await pool.query("select md5(coalesce(string_agg(id||program_id||coalesce(superseded_by,''),'|' order by program_id,id),'')) h from ledger_claims where program_id not like 'ovr-%'")).rows[0].h;
 
   // ── 1. build the override batch + validate through the shared validator (import mode) ──
-  const ovr = overridesToBatch(S.overrides);
+  // owner is an explicit argument now, derived from migrate's own mapping so the §4
+  // equivalence below compares two paths that agree on the override-log owner.
+  const ovr = overridesToBatch(S.overrides, migrateOverrideOwner());
   const IMPORT_OPTS = { allowedSources: ["dispositioned", "code-derived"], requireSlotCompleteness: false, allowClosedBy: true, checkElementIds: false };
   const v = validateBatch(ovr.batch, IMPORT_OPTS);
   console.log("# Override-log import adapter — real Laila\n");

@@ -5,7 +5,7 @@
 // Each source's sub-batch is validated at ITS OWN boundary (the generator by generator
 // rules, the override log by import rules) — then merged for the proven reconcile. A batch
 // that fails its boundary is rejected here, never reconciled and cleaned up after.
-import { generateClaimsBatch, validateBatch, type Batch, type BatchClaim, type GeneratedElement, type ValidationResult, type GenSource } from "./ledgerGenerator.ts";
+import { generateClaimsBatch, validateBatch, type Batch, type BatchClaim, type GeneratedElement, type Owner, type ValidationResult, type GenSource } from "./ledgerGenerator.ts";
 import { overridesToBatch, type OverrideEntry } from "./overrideAdapter.ts";
 
 export interface OptionASource extends GenSource { overrides?: OverrideEntry[]; }
@@ -27,11 +27,18 @@ const IMPORT_OPTS = { allowedSources: ["dispositioned", "code-derived"], require
  * Build the Option-A batch from Laila's source artifacts + override log. Validates each
  * sub-batch at its boundary; throws if either fails (with the errors). The returned batch
  * is what the caller feeds straight into reconcile(claims, elements).
+ *
+ * `overrideOwner` is REQUIRED and has NO default — it is passed straight through to
+ * `overridesToBatch`, whose docblock explains why (the override log states a person, not
+ * an owning role, so nothing here can derive one; a caller with no real owner passes
+ * `{ kind: "unowned" }` and the miss stays visible). It is deliberately a parameter and
+ * not a field of `OptionASource`: the source artifacts are the engagement's DATA, and the
+ * owner is a decision made about them.
  */
-export function buildOptionABatch(source: OptionASource): OptionABatch {
+export function buildOptionABatch(source: OptionASource, overrideOwner: Owner): OptionABatch {
   const gen = generateClaimsBatch(source);
   const genV = validateBatch(gen as Batch);
-  const ovr = overridesToBatch(source.overrides ?? []);
+  const ovr = overridesToBatch(source.overrides ?? [], overrideOwner);
   const ovrV = validateBatch(ovr.batch, IMPORT_OPTS);
   if (!genV.ok) throw new Error(`generator batch invalid: ${genV.errors.slice(0, 3).map((e) => e.code).join(",")}`);
   if (!ovrV.ok) throw new Error(`override batch invalid: ${ovrV.errors.slice(0, 3).map((e) => e.code).join(",")}`);

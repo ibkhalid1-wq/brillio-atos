@@ -9,6 +9,7 @@ import { Pool } from "pg";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { buildOptionABatch, type OptionASource } from "../../supabase/functions/_shared/optionA";
+import { migrateOverrideOwner } from "./overrideOwner";
 import { PgLedger } from "../../src/v3/lib/ledger/pgStore";
 import type { AssertInput } from "../../src/v3/lib/ledger/store";
 import type { LedgerElement } from "../../src/v3/lib/ledger/types";
@@ -45,7 +46,9 @@ async function main() {
 
   const rows: Array<{ label: string; c: any; oRep: number; oQ: number; ins: number; el: number }> = [];
   const round = async (label: string, src: OptionASource) => {
-    const b = buildOptionABatch(src);
+    // same override owner every round (migrate's mapping) — a round-to-round owner change
+    // would show up as churn in the counts below and confound the invariants
+    const b = buildOptionABatch(src, migrateOverrideOwner());
     const rep = await led.reconcile(b.claims as AssertInput[], b.elements as LedgerElement[]);
     const oQ = (await led.orphanedClosures()).length;
     rows.push({ label, c: await counts(), oRep: rep.orphanedClosures.length, oQ, ins: await auditIns(), el: await els() });
