@@ -31,7 +31,7 @@ import { renderQuestion, affordanceOptions } from "@/v3/lib/ledger/renderQuestio
 import {
   portalQuestionModel, composeLocusAnswers, parseLocusAnswers, answeredLocusCount,
 } from "@/v3/components/flow/portalQuestionModel";
-import { mintFollowUpPack, listInterviewPacks } from "@/v3/components/flow/flowPortal";
+import { mintFollowUpPack, mintReviewPack, listInterviewPacks } from "@/v3/components/flow/flowPortal";
 import type { ProgramSummary } from "@/new/types";
 
 const lailaSnap = (f: string) => JSON.parse(readFileSync(resolve(__dirname, `../../../docs/laila/snapshot-2026-08-07/${f}`), "utf8"));
@@ -384,5 +384,89 @@ describe("mint — loci ride the pack additively", () => {
     expect(mintFollowUpPack(program(firstPacks), {
       movementId: "listen", who: "Ada", captureField: "x", questions: ["Q1"], loci: ["el:step:a#phase"],
     }, "you")).toBeNull();
+  });
+});
+
+/**
+ * REGRESSION — the REVIEW path can carry loci at all.
+ *
+ * `mintReviewPack` has accepted `loci` since the loci landed, and the edge
+ * pass-through is pack-kind-agnostic (`flow-portal/index.ts:526`), but the React
+ * hops that reach it declared `questions` and no `loci`. A field a prop type does
+ * not name cannot be passed through it: every review link was structurally
+ * incapable of carrying a locus, whatever the caller held. That is a HALF-WIRE,
+ * and it is invisible at runtime because the mint on the far side looks complete.
+ *
+ * Both mints write the SAME `questionLoci` field on the SAME durable pack, so the
+ * two hops have to declare the same field or the paths silently drift. Pinned by
+ * text-parse (the `edgeLockstep` idiom used above for `scripted`) because the gap
+ * is in a TYPE — tsc is the only other thing that would see it, and it stays
+ * quiet about a field nobody passes.
+ */
+describe("the review path is wired for loci exactly as the follow-up path is", () => {
+  const hops: Array<[string, string]> = [
+    ["../components/flow/FlowShell.tsx", "onMintReview"],
+    ["../components/flow/CollectBoard.tsx", "onMintReview"],
+  ];
+  // `onMintReview?: (input: { … })` — the inline input type of each declaration.
+  const inputTypesOf = (source: string, prop: string): string[] =>
+    [...source.matchAll(new RegExp(`${prop}\\??: \\(input: \\{([^}]*)\\}`, "g"))].map((m) => m[1]);
+
+  it("every hop that reaches mintReviewPack declares `loci?: string[]`", () => {
+    for (const [file, prop] of hops) {
+      const source = readFileSync(resolve(__dirname, file), "utf8");
+      const declared = inputTypesOf(source, prop);
+      expect(declared.length).toBeGreaterThan(0);            // the hop exists to be checked
+      for (const input of declared) expect(input).toContain("loci?: string[]");
+    }
+  });
+
+  it("it MIRRORS the follow-up hop — same name, same optionality, same placement", () => {
+    for (const [file] of hops) {
+      const source = readFileSync(resolve(__dirname, file), "utf8");
+      const followUp = inputTypesOf(source, "onMintFollowUp");
+      const review = inputTypesOf(source, "onMintReview");
+      expect(followUp.length).toBe(review.length);           // the paths stay in lockstep
+      for (const input of [...followUp, ...review]) {
+        // trailing, after `unnamed?`, in both — so a reader comparing the two
+        // sees one shape rather than two conventions.
+        expect(input).toMatch(/unnamed\?: boolean; loci\?: string\[\]/);
+      }
+    }
+  });
+
+  it("loci in ⇒ stored index-aligned on the REVIEW pack, read back by the same reader", () => {
+    const program = ({ id: "p1", name: "P", rawData: { data: { flowInterviewPacks: [] } } } as unknown as ProgramSummary);
+    const blob = mintReviewPack(program, {
+      movementId: "listen", who: "Ada", role: "Ops", captureField: "x",
+      reviewKind: "listen-workflow", review: { kind: "listen-workflow" }, intro: "hello",
+      questions: ["Q1", "Q2"], loci: ["el:step:a#automationDisposition", "el:attr:b.c#valueSet"],
+    }, "you")!;
+    const read = listInterviewPacks({ rawData: blob } as unknown as ProgramSummary);
+    expect(read[0].questions).toEqual(["Q1", "Q2"]);
+    expect(read[0].questionLoci).toEqual(["el:step:a#automationDisposition", "el:attr:b.c#valueSet"]);
+  });
+
+  /**
+   * NOT fabricated. Neither review call site has a locus to pass: `CollectBoard`
+   * imports no ledger module, and its `linkQuestions` are operator asks plus the
+   * kit script — plain strings with no point in the model behind them. The wire
+   * is now there; the miss stays VISIBLE as an absent field rather than being
+   * filled with a synthesised locus that would mis-attribute an answer.
+   */
+  it("a review mint with no loci is byte-identical to before — absence is the honest state", () => {
+    const program = ({ id: "p1", name: "P", rawData: { data: { flowInterviewPacks: [] } } } as unknown as ProgramSummary);
+    const blob = mintReviewPack(program, {
+      movementId: "listen", who: "Ada", role: "Ops", captureField: "x",
+      reviewKind: "listen-workflow", review: { kind: "listen-workflow" }, intro: "hello",
+      questions: ["Q1"],
+    }, "you")!;
+    const packs = (blob.data as Record<string, unknown>).flowInterviewPacks as Array<Record<string, unknown>>;
+    expect("questionLoci" in packs[0]).toBe(true);        // always SET, as on the follow-up…
+    expect(packs[0].questionLoci).toBeUndefined();        // …undefined ⇒ dropped on serialise
+    expect(JSON.parse(JSON.stringify(packs[0]))).not.toHaveProperty("questionLoci");
+    // and the call sites pass none, because they hold none.
+    const board = readFileSync(resolve(__dirname, "../components/flow/CollectBoard.tsx"), "utf8");
+    expect(board).not.toMatch(/onMintReview\(\{[^}]*loci:/s);
   });
 });
