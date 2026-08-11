@@ -13,7 +13,7 @@
 import type { Pool, PoolClient } from "pg";
 import { resolvePrecedence } from "./precedence";
 import { type LedgerStore, type AssertInput } from "./store";
-import { type Claim, type ClaimValue, contentId, isLive, type LedgerElement } from "./types";
+import { type Claim, type ClaimValue, contentId, isLive, type LedgerElement, normalizeOwner } from "./types";
 // buildReadModel lives in a pg-free module so the client never bundles this persistence
 // layer (which sets aura.intent); PgLedger.loadReadModel reuses it here.
 import { buildReadModel } from "./readModel";
@@ -37,7 +37,7 @@ const isAttributedClosure = (c: Claim): boolean => ATTRIBUTED.has(c.source) && (
 const rowToClaim = (r: Record<string, unknown>): Claim => ({
   id: r.id as string, about: r.about as string, value: r.value as ClaimValue, world: r.world as Claim["world"],
   layer: r.layer as Claim["layer"], source: r.source as Claim["source"], status: r.status as Claim["status"],
-  ownerWhileOpen: r.owner as Claim["ownerWhileOpen"], closedBy: (r.closed_by ?? undefined) as Claim["closedBy"],
+  ownerWhileOpen: normalizeOwner(r.owner),   // rows written before Owner.parties carry {a,b} closedBy: (r.closed_by ?? undefined) as Claim["closedBy"],
   supersededBy: (r.superseded_by ?? undefined) as string | undefined,
   contradicts: (r.contradicts ?? []) as string[], escalateTo: (r.escalate_to ?? undefined) as Claim["escalateTo"],
   blockedReason: (r.blocked_reason ?? undefined) as string | undefined,

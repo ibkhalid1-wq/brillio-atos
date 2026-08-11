@@ -493,7 +493,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
         sessionQueue={sessionQueue}
         plannedPairs={plannedPairs}
         busy={busy}
-        onPropose={(pair, abouts) => void run(pair, { kind: "schedule", pair, parties: pair.split("⋈").map((s) => s.trim()) as [string, string], abouts, by, at: nowISO() })}
+        onPropose={(pair, abouts) => void run(pair, { kind: "schedule", pair, parties: pair.split("⋈").map((s) => s.trim()), abouts, by, at: nowISO() })}
       />
 
       {/* 3 · CONFLICTS → ADJUDICATE (read-side; resolution gated) */}

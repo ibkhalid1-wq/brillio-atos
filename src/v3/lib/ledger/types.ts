@@ -21,8 +21,49 @@ export type ClaimValue =
 /** Ownership — A ⋈ B (joint) is a first-class owner (A8: unowned falls through to a domain authority). */
 export type Owner =
   | { kind: "role"; role: string }
-  | { kind: "joint"; a: string; b: string }
+  /**
+   * SHARED BETWEEN N PARTIES, not two.
+   *
+   * This was `{ a, b }`, which could not express what the record routinely says: a Laila
+   * entity's area reads "Sales / Practices / Delivery / Marketing / Legal / Finance", and
+   * **73 of the 78** questions on multi-function elements name three or more functions. A
+   * pair forced every one of those into a worse answer — either a fabricated single owner
+   * (the old first-regex-wins, which handed Practices 78 questions the record never gave
+   * it) or `unowned`, which is honest but makes an operator route work the record already
+   * describes as shared.
+   *
+   * `parties` is kept SORTED and de-duplicated at construction so one seam has one
+   * identity: the label `A ⋈ B ⋈ C` is the interchange format nearly every surface
+   * actually consumes, and two orderings of the same parties must not read as two seams.
+   *
+   * LEGACY SHAPE: claims persisted before this carry `{ a, b }`. `normalizeOwner` below
+   * accepts both and is applied at the one rehydration boundary (`pgStore`), so stored
+   * rows keep working without a data migration.
+   */
+  | { kind: "joint"; parties: string[] }
   | { kind: "unowned" };
+
+/** Build a joint owner with the one identity rule applied — sorted, de-duplicated. */
+export const jointOwner = (parties: readonly string[]): Owner =>
+  ({ kind: "joint", parties: [...new Set(parties.filter(Boolean))].sort() });
+
+/**
+ * Accept an owner from STORAGE, in either shape.
+ *
+ * `pgStore` casts a stored JSON blob straight into `Claim["ownerWhileOpen"]`, so a row
+ * written before the N-party change carries `{ kind: "joint", a, b }` and would otherwise
+ * rehydrate with `parties === undefined` — `ownerLabel` would throw rather than degrade.
+ * Normalising at the boundary keeps the type honest inside the core and needs no backfill.
+ */
+export const normalizeOwner = (raw: unknown): Owner => {
+  const o = (raw ?? {}) as Record<string, unknown>;
+  if (o.kind === "joint") {
+    if (Array.isArray(o.parties)) return jointOwner(o.parties.map(String));
+    return jointOwner([o.a, o.b].filter(Boolean).map(String));   // legacy pair
+  }
+  if (o.kind === "role") return { kind: "role", role: String(o.role ?? "") };
+  return { kind: "unowned" };
+};
 
 export interface Closure {
   method: ClosureMethod;
@@ -91,8 +132,9 @@ export function contentId(prefix: string, ...parts: unknown[]): string {
   return `${prefix}:${h.toString(16).padStart(8, "0")}`;
 }
 
+/** THE interchange format for a seam: `A ⋈ B`, `A ⋈ B ⋈ C`, … Surfaces split on `⋈`. */
 export const ownerLabel = (o: Owner): string =>
-  o.kind === "joint" ? `${o.a} ⋈ ${o.b}` : o.kind === "unowned" ? "unowned" : o.role;
+  o.kind === "joint" ? o.parties.join(" ⋈ ") : o.kind === "unowned" ? "unowned" : o.role;
 
 export const valueLabel = (v: ClaimValue): string => {
   switch (v.kind) {

@@ -12,7 +12,7 @@
  *  - a step entity-name that resolves to no element → a first-class `unresolved-ref` (no name join).
  */
 import { createLedgerStore, type LedgerStore } from "./store";
-import { contentId, aboutOf, type ClaimValue, type Owner, type Layer } from "./types";
+import { contentId, aboutOf, jointOwner, type ClaimValue, type Owner, type Layer } from "./types";
 import type { Source, World } from "./precedence";
 
 const slug = (s: unknown): string => String(s ?? "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "x";
@@ -48,35 +48,36 @@ const functionOfSegment = (segment: string): string | null => {
 };
 
 /**
- * The function that owns an area — or NULL when the record does not say.
+ * AREA LABEL → FUNCTION(S).
  *
- * The previous spelling tested the WHOLE label against the ordered table and returned the
- * first hit. That is fine for a single-function area and wrong for the shape this
- * programme actually produces: an entity whose area reads
- * "Sales / Practices / Delivery / Marketing / Legal / Finance" was routed entirely to
- * Practices — not because the record says so, but because `/practice|…/` happens to sit
- * first in the array. On the Laila snapshot that was 78 questions, every one of Practices'
+ * The original spelling tested the WHOLE label against the ordered table and returned the
+ * first hit. Fine for a single-function area; wrong for what this programme produces. An
+ * entity whose area reads "Sales / Practices / Delivery / Marketing / Legal / Finance" went
+ * entirely to Practices — not because the record says so, but because `/practice|…/` sits
+ * first in the array. On the Laila snapshot that was 78 questions, all of Practices'
  * entity-derived load, sent to a function the label names fifth.
  *
- * That is the fabricated-owner pattern in another costume: a plausible owner invented
- * where the record names six. So a label naming two or more RECOGNISED functions now
- * resolves to null, and `ownerFor` turns null into `unowned` — the miss stays visible and
- * an operator routes it from the assign queue, which is what that queue is for.
+ * Matching is now SEGMENT-WISE, and the table order still decides within a segment (so
+ * "Sales Ops" reaches `/sales ?op/` before the broader `/sales/`). A label naming several
+ * functions is no longer collapsed to one: `ownerFor` makes it a JOINT owner, which is what
+ * the record actually says. That became possible when `Owner.parties` replaced `{a, b}` —
+ * 73 of those 78 name three or more functions, so a pair could not hold them.
  *
- * NOT "first named wins": the order inside these labels is model-authored and nothing
- * makes the first name the accountable one, so that would swap one arbitrary rule for
- * another. NOT joint either — that is the right answer and it does not fit: `Owner`'s
- * joint arm is a PAIR (`{a, b}`), and 73 of those 78 name three or more functions. Widening
- * it is a frozen-core change (`types.ts`), raised as a finding rather than made here.
- *
- * A label naming ONE recognised function still resolves to it, even alongside names we do
- * not recognise ("Delivery / Talent Acquisition" → Delivery): one known owner is an answer,
- * two is a choice this module has no basis to make.
+ * `functionOf` therefore returns null for a multi-function label. That is not "no owner";
+ * it means "not a SINGLE owner", and callers that need one (the roster→loci routing in
+ * `ownerRoleLabelForArea`) correctly decline rather than pick.
  */
-export const functionOf = (area: string): string | null => {
-  const found = [...new Set(
+/** EVERY recognised function an area label names, de-duplicated, in table order. */
+export const functionsOf = (area: string): string[] =>
+  [...new Set(
     String(area || "").split("/").map((seg) => functionOfSegment(seg.trim())).filter(Boolean),
   )] as string[];
+
+/** The SINGLE function that owns an area, or null when the label names none — or several.
+ *  Several is not a failure to parse: it is the record describing shared ownership, which
+ *  `ownerFor` now expresses as a joint owner rather than collapsing to one name. */
+export const functionOf = (area: string): string | null => {
+  const found = functionsOf(area);
   return found.length === 1 ? found[0] : null;
 };
 /** Preserve the ledger's existing role labels for the function tokens. */
@@ -100,9 +101,23 @@ export const ownerRoleLabelForArea = (area: string): string | null => {
  * function (the fix: no more `return Sales Ops` fabrication), else a role token —
  * never a name join to a person.
  */
-const ownerFor = (area: string): Owner => {
-  const fn = functionOf(area);
-  return fn ? { kind: "role", role: ROLE_LABEL[fn] ?? fn } : { kind: "unowned" };
+/**
+ * The owner an area label states — one function, several, or none.
+ *
+ * SEVERAL IS A SEAM, not a failure. "Sales / Practices / Delivery" names three functions;
+ * the honest owner is all three jointly, which is now expressible (`Owner.parties`). Before
+ * that it had to be flattened to one — first-regex-wins, which handed Practices 78 questions
+ * the record never gave it — or to `unowned`, which is honest but hands an operator routing
+ * work the record had already answered.
+ *
+ * NONE is still unowned. A miss stays visible in burn-down and the inbox; it is never a
+ * fabricated fallback role.
+ */
+export const ownerFor = (area: string): Owner => {
+  const fns = functionsOf(area).map((fn) => ROLE_LABEL[fn] ?? fn);
+  if (fns.length === 0) return { kind: "unowned" };
+  if (fns.length === 1) return { kind: "role", role: fns[0] };
+  return jointOwner(fns);
 };
 
 /**
@@ -124,7 +139,7 @@ const statedOwner = (stated: unknown): Owner | null => {
  */
 const jointOrOwner = (areaA: string, areaB: string): Owner => {
   const a = functionOf(areaA), b = functionOf(areaB);
-  if (a && b && a !== b) { const [x, y] = [a, b].sort(); return { kind: "joint", a: x, b: y }; }
+  if (a && b && a !== b) return jointOwner([a, b]);
   return a ? ownerFor(areaA) : b ? ownerFor(areaB) : { kind: "unowned" };
 };
 
