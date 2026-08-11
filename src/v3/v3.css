@@ -7610,6 +7610,32 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-wf-dropped-tag {margin-left:8px;font-size:10px;font-weight:700;color:var(--v3-amber);border:1px solid color-mix(in srgb,var(--v3-amber) 45%,transparent);border-radius:4px;padding:0 5px}
 .v3fs-swim-tile.dropped {opacity:.5}
 .v3fs-swim-tile.dropped .v3fs-swim-action {text-decoration:line-through}
+/* DIRECT MANIPULATION on the swimlane — drag to reorder, add/drop on the tile.
+   The tile shows a grab cursor only where it is actually draggable ([draggable=true]
+   is absent on a locked/derived artifact and on Agentify), so the affordance and the
+   permission are the same fact. */
+.v3fs-swim-tile[draggable="true"] {cursor:grab}
+.v3fs-swim-tile[draggable="true"]:active {cursor:grabbing}
+.v3fs-swim-tile.dragging {opacity:.42;border-style:dashed;transform:none;box-shadow:none}
+/* The insertion marker: where the dragged step will land. Drawn in every lane of the
+   target column so it reads as one line BETWEEN two steps, not a hint on one row. */
+.v3fs-swim-ins {position:absolute;top:0;bottom:0;width:3px;border-radius:2px;z-index:4;pointer-events:none;
+  background:var(--v3-accent-2);box-shadow:0 0 0 3px color-mix(in srgb,var(--v3-accent-2) 22%,transparent)}
+.v3fs-swim-ins.before {left:1px}
+.v3fs-swim-ins.after {right:1px}
+/* The tile's own add / mark-dropped controls. Quiet until the step is hovered or
+   something inside the cell has focus — but always in the DOM and always tabbable,
+   so a keyboard user reaches them in the ordinary tab order. */
+.v3fs-swim-acts {position:absolute;top:1px;right:9px;z-index:3;display:flex;gap:3px;opacity:0;transition:opacity .13s ease}
+.v3fs-swim-cell:hover .v3fs-swim-acts,
+.v3fs-swim-acts:focus-within {opacity:1}
+@media (prefers-reduced-motion:reduce){.v3fs-swim-acts{transition:none}}
+.v3fs-swim-act {width:19px;height:19px;display:grid;place-items:center;padding:0;font-size:11px;line-height:1;
+  border:1px solid var(--fs-line);border-radius:6px;background:var(--fs-card);color:var(--v3-text-muted);
+  cursor:pointer;box-shadow:var(--fs-shadow)}
+.v3fs-swim-act:hover {border-color:var(--v3-accent-2);color:var(--v3-accent-2)}
+.v3fs-swim-act.drop:hover {border-color:var(--v3-amber);color:var(--v3-amber)}
+.v3fs-swim-act:focus-visible {outline:2px solid var(--v3-accent-2);outline-offset:1px}
 .v3fs-strat-board {display:grid;gap:12px}
 .v3fs-strat-col {position:relative;border:1.5px solid var(--fs-line);border-radius:13px;padding:14px 15px;background:var(--fs-card);display:flex;flex-direction:column;gap:9px}
 .v3fs-strat-col.rec {border-color:var(--v3-green);box-shadow:0 12px 30px -14px color-mix(in srgb, var(--v3-green) 40%, transparent)}

@@ -481,32 +481,103 @@ export default function WorkflowStudio({
     patchWorkflow({ steps: steps.map((step, i) => (i === index ? { ...step, ...patch } : step)) });
   }, [steps, patchWorkflow]);
 
-  const addStep = () => {
-    const at = selected != null ? selected + 1 : steps.length;
+  // ── THE THREE STEP WRITES ───────────────────────────────────────────────────
+  // One insert, one move, one drop-toggle — and every affordance goes through
+  // exactly one of them. The toolbar under the diagram and the controls ON a tile
+  // are two DOORS to the same three writes, never two implementations of them: a
+  // drag that reordered by its own path would be a second way for the document to
+  // change, and the first one to drift would do it silently.
+  const insertStep = useCallback((at: number, actor: string) => {
+    if (structureLocked) return;
     const next = [...steps];
-    next.splice(at, 0, { actor: selected != null ? asText(steps[selected].actor) : "", action: "New step", system: "", duration: "" });
+    next.splice(at, 0, { actor, action: "New step", system: "", duration: "" });
     patchWorkflow({ steps: next });
     setSelected(at);
-  };
-  const moveStep = (delta: number) => {
-    if (selected == null) return;
-    const to = selected + delta;
-    if (to < 0 || to >= steps.length) return;
+  }, [steps, patchWorkflow, structureLocked]);
+  /**
+   * Move the step at `from` to index `to`. The ONE reorder — `← Earlier`, `Later →`
+   * and a dropped tile all land here, so the keyboard path and the pointer path
+   * cannot disagree about what a move is.
+   *
+   * The step OBJECT is carried, never rebuilt: its `_atlasStepId` anchor (and hence
+   * the Agentify decision filed under that id) rides along with it. Dropped steps
+   * are ordinary members of the array here — they move like any other step and are
+   * neither skipped nor resurrected, because `dropped` is a flag on a step, not a
+   * separate list.
+   */
+  const reorderStep = useCallback((from: number, to: number) => {
+    if (structureLocked) return;
+    if (from === to) return;
+    if (from < 0 || to < 0 || from >= steps.length || to >= steps.length) return;
     const next = [...steps];
-    const [step] = next.splice(selected, 1);
+    const [step] = next.splice(from, 1);
     next.splice(to, 0, step);
     patchWorkflow({ steps: next });
     setSelected(to);
-  };
+  }, [steps, patchWorkflow, structureLocked]);
   // MARK-DROPPED, not hard-delete: a step can carry closed claims (its lineage),
   // and reconcile's element handling keeps a dropped element findable as an orphan
   // rather than destroying it. So "remove" sets a soft `dropped` flag — the step
   // stays in the document (and in the ledger, findable), rendered struck-through,
   // and is restorable. A true hard delete of a claim-carrying element is refused.
-  const dropStep = () => {
-    if (selected == null) return;
-    patchStep(selected, { dropped: !asRecord(steps[selected]).dropped });
+  const toggleDropped = useCallback((index: number) => {
+    if (structureLocked || !steps[index]) return;
+    patchStep(index, { dropped: !asRecord(steps[index]).dropped });
+  }, [steps, patchStep, structureLocked]);
+
+  const addStep = () => insertStep(
+    selected != null ? selected + 1 : steps.length,
+    selected != null ? asText(steps[selected].actor) : "",
+  );
+  const moveStep = (delta: number) => { if (selected != null) reorderStep(selected, selected + delta); };
+  const dropStep = () => { if (selected != null) toggleDropped(selected); };
+
+  // ── DIRECT MANIPULATION ─────────────────────────────────────────────────────
+  // Dragging a tile reorders the step. `drag` holds where the drag started and where
+  // it would LAND (an insertion index, 0…steps.length) — the landing point is drawn
+  // as a marker in the column, because a drag with no drop feedback is a guess.
+  //
+  // It is a POINTER CONVENIENCE and never the only way: HTML5 drag-and-drop cannot be
+  // reached from a keyboard at all, so `← Earlier` / `Later →` remain the keyboard
+  // path to the very same `reorderStep`. Nothing here is the sole route to anything.
+  const [drag, setDrag] = useState<{ from: number; at: number } | null>(null);
+  /** Our own drag, told apart from a file or a drag from elsewhere on the page. */
+  const DRAG_MIME = "application/x-atlas-step";
+  /**
+   * Which SLOT a pointer at this column means: before it, or after it. Halved on the
+   * column's own box, so the marker sits where the tile will actually go.
+   * A zero-width box (jsdom, or a column not yet laid out) reads as "before" — a
+   * defined answer rather than a coin toss.
+   */
+  const insertionAt = (e: React.DragEvent<HTMLElement>, index: number): number => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    return rect.width > 0 && e.clientX > rect.left + rect.width / 2 ? index + 1 : index;
   };
+  /**
+   * The whole COLUMN is the target, not just the tile: a step's tile sits in one
+   * lane, and dropping into the empty cells above or below it plainly means "here",
+   * so every cell of the column carries these. Locked/derived and Agentify get an
+   * empty object — no drop handler at all, rather than one that fails silently.
+   */
+  const dropZone = (index: number) => (structureLocked ? {} : {
+    onDragOver: (e: React.DragEvent<HTMLElement>) => {
+      if (!drag) return;                       // not our drag — let the page have it
+      e.preventDefault();                      // "yes, you may drop here"
+      if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+      const at = insertionAt(e, index);
+      setDrag((prev) => (prev && prev.at !== at ? { ...prev, at } : prev));
+    },
+    onDrop: (e: React.DragEvent<HTMLElement>) => {
+      if (!drag) return;
+      e.preventDefault();
+      const at = insertionAt(e, index);
+      const from = drag.from;
+      setDrag(null);
+      // An insertion index counts the gaps; an array index counts the steps. Pulling
+      // the dragged step out first shifts every gap after it down by one.
+      reorderStep(from, at > from ? at - 1 : at);
+    },
+  });
   // CREATE — the ＋ workflow affordance the removed panel's filter row carried,
   // now reachable from the seam view (and from the empty state). Authoring-gated
   // by the caller; the new workflow opens inline straight away.
@@ -667,15 +738,48 @@ export default function WorkflowStudio({
                 <div className="v3fs-swim-lane"><span className="v3fs-swim-av" aria-hidden="true">{laneInitials(lane)}</span>{lane}</div>
                 {steps.map((step, index) => {
                   const actor = asText(step.actor).trim() || "Unassigned";
-                  if (actor !== lane) return <div key={index} className="v3fs-swim-cell" aria-hidden="true" />;
+                  // THE INSERTION MARKER — where the dragged tile would land. Drawn in
+                  // every lane of the target column, so it reads as one full-height
+                  // line between two steps rather than a hint on one row.
+                  const marks = drag ? (
+                    <>
+                      {drag.at === index ? <span className="v3fs-swim-ins before" aria-hidden="true" /> : null}
+                      {drag.at === steps.length && index === steps.length - 1
+                        ? <span className="v3fs-swim-ins after" aria-hidden="true" /> : null}
+                    </>
+                  ) : null;
+                  if (actor !== lane) {
+                    // A lane this step does not touch: still part of the column, so
+                    // still a place you can drop into it. Hidden from the reading
+                    // order — a drop target is not something to announce.
+                    return <div key={index} className="v3fs-swim-cell" data-step={index} aria-hidden="true" {...dropZone(index)}>{marks}</div>;
+                  }
                   const pain = painForStep(step, pains);
                   const entities = asStrings(step.entities);
                   const stepEvents = eventsForStep(step, ontoEvents);
+                  const dropped = asRecord(step).dropped === true;
                   return (
-                    <div key={index} className="v3fs-swim-cell has">
+                    <div key={index} className="v3fs-swim-cell has" data-step={index} {...dropZone(index)}>
+                      {marks}
                       <button
                         type="button"
-                        className={`v3fs-swim-tile${selected === index ? " on" : ""}${pain ? ` pain-${pain.severity}` : ""}${asRecord(step).dropped ? " dropped" : ""}`}
+                        className={`v3fs-swim-tile${selected === index ? " on" : ""}${pain ? ` pain-${pain.severity}` : ""}${dropped ? " dropped" : ""}${drag?.from === index ? " dragging" : ""}`}
+                        // NOT draggable when the artifact is locked or derived, and not
+                        // on Agentify: a frozen tile cannot start a drag at all, rather
+                        // than starting one that is refused on drop.
+                        draggable={!structureLocked}
+                        onDragStart={(e) => {
+                          if (structureLocked) return;
+                          if (e.dataTransfer) {
+                            e.dataTransfer.effectAllowed = "move";
+                            // Firefox refuses to start a drag with no data on it.
+                            e.dataTransfer.setData?.(DRAG_MIME, String(index));
+                            e.dataTransfer.setData?.("text/plain", asText(step.action) || `Step ${index + 1}`);
+                          }
+                          setPeek(null);
+                          setDrag({ from: index, at: index });
+                        }}
+                        onDragEnd={() => setDrag(null)}
                         onClick={() => setSelected(selected === index ? null : index)}
                         onMouseEnter={showStepPeek(index)}
                         onMouseLeave={() => setPeek(null)}
@@ -716,6 +820,35 @@ export default function WorkflowStudio({
                           </span>
                         ) : null}
                       </button>
+                      {/* ADD AND DROP, ON THE TILE ITSELF — no select-then-toolbar
+                          dance. Real <button>s and SIBLINGS of the tile, never nested
+                          inside it: a button inside a button is invalid, and it is what
+                          makes the tile keyboard-operable AND these reachable by Tab.
+                          The toolbar below keeps both actions too — discoverability,
+                          not replacement.
+                          Each name says WHICH step it acts on, because twenty buttons
+                          all announcing "Add step" are individually named and
+                          collectively useless. */}
+                      {structureLocked ? null : (
+                        <span className="v3fs-swim-acts">
+                          <button type="button" className="v3fs-swim-act"
+                            aria-label={`Insert a new step after step ${index + 1}`}
+                            title={`Insert a new step after step ${index + 1}`}
+                            onClick={() => insertStep(index + 1, asText(step.actor))}>
+                            <span aria-hidden="true">＋</span>
+                          </button>
+                          <button type="button" className={`v3fs-swim-act${dropped ? " restore" : " drop"}`}
+                            aria-label={dropped
+                              ? `Restore step ${index + 1} — put it back in the workflow`
+                              : `Mark step ${index + 1} dropped — reversible, and it keeps its claims`}
+                            title={dropped
+                              ? "Restore this step — it was marked dropped, not deleted"
+                              : "Mark dropped — reversible. The step and its ledger claims stay on record; nothing is deleted."}
+                            onClick={() => toggleDropped(index)}>
+                            <span aria-hidden="true">{dropped ? "↩" : "⊘"}</span>
+                          </button>
+                        </span>
+                      )}
                       {index < steps.length - 1 ? <span className="v3fs-swim-arrow" aria-hidden="true">→</span> : null}
                     </div>
                   );
@@ -734,6 +867,9 @@ export default function WorkflowStudio({
       <div className="v3fs-wf-bar">
         <button type="button" className="v3fs-btn" onClick={addStep}>＋ Step{selected != null ? " after selected" : ""}</button>
         {selected == null ? <span className="v3fs-wf-hint">Select a step to edit it</span> : null}
+        {steps.length > 1 ? (
+          <span className="v3fs-wf-hint">Drag a tile to reorder it — or select one and use ← Earlier / Later →.</span>
+        ) : null}
       </div>
       )}
       {/* The step inspector travels WITH the diagram — a step is only
@@ -749,8 +885,10 @@ export default function WorkflowStudio({
                   <button type="button" className="v3fs-btn" disabled={selected === 0} onClick={() => moveStep(-1)}>← Earlier</button>
                   <button type="button" className="v3fs-btn" disabled={selected === steps.length - 1} onClick={() => moveStep(1)}>Later →</button>
                   <button type="button" className="v3fs-btn" onClick={dropStep}
-                    title={asRecord(steps[selected]).dropped ? "Restore this step" : "Mark dropped — the step's claims stay findable (not hard-deleted)"}>
-                    {asRecord(steps[selected]).dropped ? "↩ Restore" : "⊘ Mark dropped"}</button>
+                    title={asRecord(steps[selected]).dropped
+                      ? "Restore this step — it was marked dropped, not deleted"
+                      : "Mark dropped — reversible. The step and its ledger claims stay on record; nothing is deleted."}>
+                    {asRecord(steps[selected]).dropped ? "↩ Restore" : "⊘ Mark dropped (reversible)"}</button>
                 </span>
               )}
             </div>
