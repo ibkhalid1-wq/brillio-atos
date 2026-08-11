@@ -205,6 +205,29 @@ describe("mint — loci ride the pack additively", () => {
     expect(read[0].questionLoci![7]).toBe("el:step:s7#phase");
   });
 
+  it("a BLANK question is dropped from both arrays together — later loci don't shift", () => {
+    // A stored pack whose question list carries a blank (an empty agenda string
+    // that reached the blob). The reader drops the blank; the contract on
+    // `questionLoci` says index alignment survives, so Q2 must keep ITS locus
+    // rather than inheriting the dropped row's.
+    const read = listInterviewPacks({ rawData: { data: { flowInterviewPacks: [{
+      id: "pack-1", token: "t1", stakeholder: "Ada", role: "Ops", createdAt: "2026-01-01T00:00:00.000Z",
+      questions: ["Q0", "", "Q2"],
+      questionLoci: ["el:step:a#phase", "el:step:blank#phase", "el:step:c#phase"],
+    }] } } } as unknown as ProgramSummary);
+    expect(read[0].questions).toEqual(["Q0", "Q2"]);
+    expect(read[0].questionLoci).toEqual(["el:step:a#phase", "el:step:c#phase"]);
+    expect(read[0].questions).toHaveLength(read[0].questionLoci!.length);
+  });
+
+  it("a short loci array pads rather than shifting — a question never borrows a neighbour's locus", () => {
+    const read = listInterviewPacks({ rawData: { data: { flowInterviewPacks: [{
+      id: "pack-2", token: "t2", stakeholder: "Ada", role: "Ops", createdAt: "2026-01-01T00:00:00.000Z",
+      questions: ["Q0", "Q1"], questionLoci: ["el:step:a#phase"],
+    }] } } } as unknown as ProgramSummary);
+    expect(read[0].questionLoci).toEqual(["el:step:a#phase", ""]);   // "" ⇒ falls back to the stored string
+  });
+
   it("a later loci-less ask CLEARS the old loci — never left pointing at new questions", () => {
     const first = mintFollowUpPack(program(), {
       movementId: "listen", who: "Ada", captureField: "x", questions: ["Q1"], loci: ["el:step:a#phase"],

@@ -114,6 +114,31 @@ function innerData(program: ProgramSummary): Record<string, unknown> {
   return typeof raw.data === "object" && raw.data !== null ? (raw.data as Record<string, unknown>) : raw;
 }
 
+/** `questions` and `questionLoci` are ONE index-aligned pair (the contract on
+ * `FlowInterviewPack.questionLoci`), so any cut has to take BOTH together: zip,
+ * drop the blank questions, unzip. Dropping a blank from the strings alone would
+ * slide every later locus onto the wrong question — the exact desync the edge
+ * avoids by cutting both with the same `slice(0, 12)`
+ * (`supabase/functions/flow-portal/index.ts:509`+`:519`).
+ *
+ * Stays ADDITIVE: a pack with no stored loci (or an explicit `undefined`, which
+ * is how the kit-agenda refresh drops stale loci) yields no `questionLoci` key at
+ * all, exactly as before. A short loci array pads with "" rather than shifting —
+ * a falsy locus reads as "no locus for this one" downstream, so the row falls
+ * back to its stored string instead of borrowing a neighbour's point. */
+function alignedAsk(entry: Record<string, unknown>): { questions: string[]; questionLoci?: string[] } {
+  const rawQuestions = Array.isArray(entry.questions) ? entry.questions.map(String) : [];
+  const hasLoci = Array.isArray(entry.questionLoci) && entry.questionLoci.length > 0;
+  const rawLoci = hasLoci ? (entry.questionLoci as unknown[]).map(String) : [];
+  const pairs = rawQuestions
+    .map((question, i) => [question, rawLoci[i] ?? ""] as const)
+    .filter(([question]) => Boolean(question));
+  return {
+    questions: pairs.map(([question]) => question),
+    ...(hasLoci ? { questionLoci: pairs.map(([, locus]) => locus) } : {}),
+  };
+}
+
 export function listInterviewPacks(program: ProgramSummary): FlowInterviewPack[] {
   const list = innerData(program).flowInterviewPacks;
   if (!Array.isArray(list)) return [];
@@ -122,9 +147,7 @@ export function listInterviewPacks(program: ProgramSummary): FlowInterviewPack[]
     stakeholder: String(entry.stakeholder ?? ""),
     role: String(entry.role ?? ""),
     intro: String(entry.intro ?? ""),
-    questions: Array.isArray(entry.questions) ? entry.questions.map(String).filter(Boolean) : [],
-    ...(Array.isArray(entry.questionLoci) && entry.questionLoci.length
-      ? { questionLoci: entry.questionLoci.map(String) } : {}),
+    ...alignedAsk(entry),
     token: String(entry.token ?? ""),
     createdAt: String(entry.createdAt ?? ""),
     respondedAt: typeof entry.respondedAt === "string" ? entry.respondedAt : undefined,
