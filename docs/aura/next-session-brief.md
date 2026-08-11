@@ -526,6 +526,20 @@ That is a deliberate design change with a migration, not a cleanup.
 
 ## 7. BLOCKED ON THE LIVE DB / A BROWSER
 
+> **WHAT `.env.local` ACTUALLY CONTAINS (checked 2026-08-11): the browser's anon key, and
+> nothing else.** `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_SUPABASE_PROJECT_ID`
+> — no `DATABASE_URL`, no service-role key. Under RLS with no signed-in user that key reads
+> **zero rows** (`adam_programs` returns `200 []`), so it cannot do any of the data work below.
+> What would: a service-role key, or a signed-in user session, or a direct Postgres URL.
+>
+> **Deploy-readiness, measured while here:** every table `flow-portal` and `run-agent` touch
+> already exists on the live project — `adam_programs`, `adam_agent_events`,
+> `adam_agent_observations`, `adam_agent_runs`, `adam_autonomy_log`, `adam_autonomy_settings`,
+> `adam_document_attachments`, `adam_pattern_library`, `adam_program_artifacts`,
+> `adam_program_members`, `adam_program_texts`. So a deploy of either would not hit a missing
+> table. (`adam_agent_observations` answers 500 rather than 200 under the anon key — present,
+> but worth a look with real credentials.)
+
 Nothing in the repo can settle these. Each names what would.
 
 1. **Surgery: do the 61 "need an owner" questions drain?** The code half landed
@@ -546,7 +560,19 @@ Nothing in the repo can settle these. Each names what would.
    actually parses rather than sheet zero (a real export leads with a cover sheet; reading it
    would report "nothing matches", which looks like a data problem rather than a wrong pick).
    `xlsx` was already a dependency with ZERO importers. **This test is no longer blocked.**
-4. **`audit_events` for the three closure methods.** Blocked twice: even with a DB, the
+4. **`audit_events` for the three closure methods — BLOCKED EARLIER THAN RECORDED.**
+   **The table does not exist on the live project.** `public.audit_events` and
+   `public.aura_audit_config` are both created by `supabase/migrations/20260807_audit_events.sql`,
+   and both return PostgREST 404 ("not in the schema cache") on `vudqrrqpipnkxzxslbim`. That is a
+   SCHEMA miss, not a permission one — RLS returns `200` with zero rows (which is exactly what
+   `adam_programs` does under the anon key), never a 404. So this item is blocked *before* Step 1b:
+   there is nothing to write to.
+   > **Do NOT trust `supabase migration list` here.** These migration filenames are not 14-digit
+   > timestamps, so several collide on the same parsed version and the local/remote table
+   > mis-reports. It listed `20260715` as unapplied while that migration's table
+   > (`adam_program_texts`) is demonstrably present. Probe the TABLE, not the migration list.
+
+   *(original note follows)* Blocked twice: even with a DB, the
    browser never publishes `aura.intent` — the only `set_config` calls are in
    `pgStore.ts:59,129,197`, and `PgLedger` has no importer outside tests/scripts. Step 1b
    (client publishes `action_type`) is code, and comes first.
