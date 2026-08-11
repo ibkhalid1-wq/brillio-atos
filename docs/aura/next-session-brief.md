@@ -421,14 +421,47 @@ picker copy and any future guard read it. (b) is the shape the rest of this file
   `slice(0,12)` at `:509`. Undeployed, so a stakeholder still gets the old payload with no
   `questionLoci`; `FlowRespond.tsx:219` short-circuits and they read frozen strings.
   **One deploy, no source change.**
+- **O-19 — BLOCKED ARCHITECTURALLY, not merely undone (`7e7bf5c`).** The kit cannot render
+  from loci at all: it is a **Frame** artifact, while every ledger locus derives from the
+  **Listen**-phase ontology/atlas (`migrate.ts:95`'s `Snapshot` is exactly
+  `{ontology, atlas, overrides}`). At kit-generation time those documents do not exist, so
+  there is nothing to point a renderer at — and there is no renderer in the Deno bundle to
+  point it. Completing it needs kit generation moved after Listen, or a ledger-backed
+  regeneration pass. **The safe half landed:** agenda questions are demoted to a cache
+  AFTER both synthesis fallbacks, so the model's output and both stubs leave in one shape,
+  with `loci: []` and NO provenance note (this path has no ledger, so the absence is the
+  honest signal — writing the note would be L7 in the other direction).
+  <details><summary>original entry</summary>
+
 - **O-19 — `run-agent/index.ts:1269`** still asks the model for inline free-text
   `agenda[].questions`. `grep -n "loci\|questionLoci\|renderQuestion"` over the whole
   11k-line file returns **zero hits**. Same defect in both synthesis fallbacks
   (`:11082`, `:11124`) — they must change together or the paths diverge in shape.
+- **O-20 — RESOLVED `7e7bf5c`.** Both prompts consume it now, bounded so a declared system
+  is evidence the SYSTEM exists and never that an entity or step touches it.
+  **Correction to this entry:** the grounding loop cited below is the wrong one —
+  `:2138-2144` is `collectProvidedInputs`, which feeds only the quality reviewer. The
+  generator's is `buildGroundingFacts` (`:1944`), invoked at **`:3219`** over merged
+  frame+phase inputs. The conclusion (prompt-only, no plumbing missing) still holds.
+  <details><summary>original entry</summary>
+
 - **O-20 — `methodology.ts:1251`** declares `systemsOfRecord` feeds domain-ontology and
   current-state-atlas, but **neither prompt was changed**. Good news: the sponsor's names
   *do* reach the model anonymously via the grounding-facts loop
   (`run-agent/index.ts:2138-2144`), so **the fix is prompt-only** — no plumbing missing.
+- **PACK — RESOLVED `5ae6977`, and the real blocker is bigger.** The missing link was three
+  React prop types: a field a prop type does not name cannot be passed through it, so review
+  links were structurally incapable of carrying loci. Fixed by mirroring the follow-up hop.
+  No loci are passed at either call site and that is correct — CollectBoard imports no ledger
+  module, `_operatorAsks` stores plain strings with no `about`, so there is nothing
+  index-aligned to pass and the miss stays visible.
+
+  > **FINDING — `mintReviewPack` has NO live caller.** Verified directly:
+  > `IntervieweeDiscovery` is imported by nobody, and `FlowShell` declares `onMintReview`
+  > (`:126`) but never forwards it. Review links are not merely locus-less; they are not
+  > mintable from any rendered surface. That is upstream of the loci question.
+  <details><summary>original entry</summary>
+
 - **PACK — `flowPortal.ts:572`.** The loci pipeline is **half-wired**, which no earlier doc
   says: `mintFollowUpPack` **does** receive loci (`TheLine.tsx:693-698`), so follow-up
   links carry them today. `mintReviewPack` receives none — the prop type doesn't even
@@ -479,10 +512,12 @@ Nothing in the repo can settle these. Each names what would.
 3. **The dictionary path end to end.** Every link exists (`OperatorInbox.tsx:400` →
    `parseDictionaryCsv` → preview → `commitDictionary` → `writeDictionaryField` →
    `readDictionarySources` → `frameSorReadiness`) but none has met a real export.
-   **Blocker found this session:** `OperatorInbox.tsx:370` promises "CSV/XLSX dictionaries
-   parse now", but only CSV/TSV parse and the file input accepts `.csv,.tsv,.txt`. **An
-   operator exporting XLSX from Salesforce — the default — is told it works and then
-   cannot select the file.** Fix that before attempting the test.
+   ~~**Blocker found this session:** `OperatorInbox.tsx:370` promises "CSV/XLSX dictionaries
+   parse now", but only CSV/TSV parse…~~ **CLEARED `107db3c`.** Workbooks convert to CSV and
+   go through the same `parseDictionaryCsv`, and `pickDictionarySheet` chooses the sheet that
+   actually parses rather than sheet zero (a real export leads with a cover sheet; reading it
+   would report "nothing matches", which looks like a data problem rather than a wrong pick).
+   `xlsx` was already a dependency with ZERO importers. **This test is no longer blocked.**
 4. **`audit_events` for the three closure methods.** Blocked twice: even with a DB, the
    browser never publishes `aura.intent` — the only `set_config` calls are in
    `pgStore.ts:59,129,197`, and `PgLedger` has no importer outside tests/scripts. Step 1b
@@ -515,6 +550,12 @@ Nothing in the repo can settle these. Each names what would.
   porting `assemblePrototype` into an edge-importable shared module — it currently lives
   in the client bundle and Deno cannot import from `src/v3/lib`. Keeping the model path
   preserves the refine loop; retiring it kills it.
+- **RESOLVED `d8f2d7e` — the `— TBC` suffix now has one definition per runtime** (client
+  `UNNAMED_SUFFIX_RE`, Deno `_shared/unnamedSuffix.ts`), pinned by a lockstep test that also
+  forbids a third copy. It was written out SIX times, twice inside the file that already
+  exported it.
+  <details><summary>original entry</summary>
+
 - **The `— TBC` suffix regex is hand-written in at least four places**
   (`flowStakeholders.ts:578` is the named export; `FlowShell.tsx:1137`; twice in the edge).
   One definition, four copies — the exact smell this codebase exists to prevent.
@@ -522,6 +563,13 @@ Nothing in the repo can settle these. Each names what would.
 ---
 
 ## 9. TOOLCHAIN (learned the hard way)
+
+> **THE EDGE HAS NO TYPE GATE IN THIS ENVIRONMENT.** `tsconfig.json` includes only `src/**`,
+> so a clean `npx tsc --noEmit` says **nothing** about `supabase/functions/**`. `deno check`
+> works on `_shared` modules with no remote imports but fails on function ENTRYPOINTS with
+> `invalid peer certificate: UnknownIssuer` (sandbox TLS interception, not a code fault).
+> So edge changes are verified only by lockstep tests and the deploy bundler. Worth a real
+> gate.
 
 - node/npm: `$HOME/tools/node/bin`. deno 2.9.5: `$HOME/.deno/bin`. **Neither on PATH.**
 - Supabase CLI: `npx --yes supabase@latest` (v2.113.0). Session cached, project
