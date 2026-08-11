@@ -679,6 +679,15 @@ export function mintFollowUpPack(
   }, usesNestedData);
 }
 
+/** What each review kind IS, in the words the attestation trail uses. Unknown kinds
+ *  fall back to their own id rather than to some other kind's description. */
+const REVIEW_KIND_WORDS: Record<string, string> = {
+  agentify: "workflow agentification ",
+  "listen-workflow": "current-state workflow ",
+  "ontology-atlas": "ontology & current-state ",
+  "design-round": "design review round — prototype and demo script ",
+};
+
 /**
  * Mint a shareable REVIEW link — a visual input surface (workflow-agentify or
  * ontology+atlas) projected from the record and stored on the pack. The edge
@@ -762,7 +771,12 @@ export function mintReviewPack(
   const log = Array.isArray(inner.flowAttestations) ? (inner.flowAttestations as unknown[]) : [];
   const attestation = {
     ts: now, agentId: actor, phaseId: input.movementId, tier: 2,
-    action: `Shared a ${input.reviewKind === "agentify" ? "workflow agentification" : "ontology & current-state"} review — ${String(pack.stakeholder ?? "")}`,
+    // The kind is NAMED, not assumed. This was a two-branch ternary whose `else` said
+    // "ontology & current-state" for every kind that was not `agentify` — so a design
+    // review round's link went out and the log recorded that we had shared the
+    // ontology with that person. A record that says the wrong thing is worse than one
+    // that says nothing, and this one is read by the operator's own attestation trail.
+    action: `Shared a ${REVIEW_KIND_WORDS[input.reviewKind] ?? `${input.reviewKind} `}review — ${String(pack.stakeholder ?? "")}`,
   };
   return wrapProgramState(wrapper, {
     ...inner,

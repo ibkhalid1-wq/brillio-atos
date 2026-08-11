@@ -83,6 +83,10 @@ const shellProps = (): Props => ({
   onRecordShowPass: noop, onSaveArtifactDoc: noop,
   onIngestPortalItem: noop, onDismissPortalItem: noop, onRecordApproval: noop,
   onRenameProgram: () => {}, onDeleteProgram: () => {}, onTagClaim, onGoFlow: () => {},
+  // The Design Loop's review round is a WRITE surface: without this handler the band
+  // renders read-only and its controls never mount, so the audit would pass over a
+  // whole zone it has never seen.
+  onDesignRound: noop,
   presence: [],
 } as unknown as Props);
 

@@ -151,7 +151,19 @@ interface FlowShellProps {
    * pass-through, so an ask minted through a hop that does not declare the field
    * can never carry a locus however much the caller holds. Optional and additive
    * — a caller with no ledger in hand mints exactly the pack it always did. */
-  onMintReview: (input: { movementId: string; who: string; role: string; captureField: string; reviewKind: string; review: unknown; questions: string[]; intro: string; unnamed?: boolean; loci?: string[] }) => Promise<string | null>;
+  onMintReview: (input: { movementId: string; who: string; role: string; captureField: string; reviewKind: string; review: unknown; questions: string[]; intro: string; unnamed?: boolean; loci?: string[]; designRoundId?: string }) => Promise<string | null>;
+  /** The DESIGN REVIEW ROUND's write verbs (`flowDesignRound.ts`) as ONE handler,
+   *  declared inline in the `onMintReview` idiom so nothing outside TheLine has to
+   *  import from `DesignLoopZones` (`designLoopZonesProps.test.ts` pins it as the
+   *  only importer). Optional — a lens without it renders the round read-only. */
+  onDesignRound?: (op:
+    | { op: "open"; roster: Array<{ name: string; role?: string; email?: string }>; note?: string }
+    | { op: "link"; roundId: string }
+    | { op: "verdict"; roundId: string; who: string; verdict?: "approved" | "changes"; attestation: "self" | "operator"; text?: string; source?: string }
+    | { op: "waive"; roundId: string; who: string; reason: string }
+    | { op: "delegate"; roundId: string; who: string; to: { name: string; role?: string; email?: string }; reason: string }
+    | { op: "close"; roundId: string }
+  ) => Promise<void>;
   /** Mint a shareable sponsor brief (dated board-pack snapshot); resolves to the URL. */
   onMintBrief: () => Promise<string | null>;
   /** Send an artifact to a chosen approver — mints a no-login link, returns it. */
@@ -936,10 +948,11 @@ export default function FlowShell(props: FlowShellProps) {
         ) : view === "flow" ? (
           <TheLine program={program} onSaveInputs={props.onSaveInputs}
             onRenamePerson={props.onRenamePerson} onRenameRole={props.onRenameRole}
-            onMintFollowUp={props.onMintFollowUp} onCloseLink={props.onCloseLink} onScheduleFollowUp={props.onScheduleFollowUp}
+            onMintFollowUp={props.onMintFollowUp} onMintReview={props.onMintReview}
+            onCloseLink={props.onCloseLink} onScheduleFollowUp={props.onScheduleFollowUp}
             onRunAgent={props.onRunAgent}
             onRecordGate={props.onRecordGate} onReopenGate={props.onReopenGate}
-            onSendForApproval={props.onSendForApproval} />
+            onSendForApproval={props.onSendForApproval} onDesignRound={props.onDesignRound} />
         ) : view === "people" ? (
           <FlowPeople program={program} onSaveInputs={props.onSaveInputs} onRenamePerson={props.onRenamePerson} onGoInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }} />
         ) : view === "library" ? (

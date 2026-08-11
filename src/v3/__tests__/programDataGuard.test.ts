@@ -77,6 +77,16 @@ describe("action side-channels never count as substance", () => {
       flowInterviewPacks: [{ id: "pack-1", link: "https://x" }],
     })).toBe(false);
   });
+  it("an opened DESIGN REVIEW ROUND is a side-channel too — same shape, newer key", () => {
+    // `openDesignRound` appends `flowDesignRounds` + an attestation and nothing else.
+    // Left out of META_KEYS it would have been the 2026-07-13 clobber shape wearing a
+    // key the guard had never heard of.
+    expect(hasSubstantiveProgramData({
+      _syncedAt: "2026-08-10T09:00:00Z",
+      flowDesignRounds: [{ id: "round-1", ordinal: 1, participants: [{ name: "Priya" }] }],
+      flowAttestations: [{ action: "Opened design review round 1" }],
+    })).toBe(false);
+  });
   it("the same payload plus real inputs reads substantive", () => {
     expect(hasSubstantiveProgramData({
       flowInterviewPacks: [{ id: "pack-1" }],

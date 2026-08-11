@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ScreenCard } from "@/v3/components/flow/studio/ExperienceDesignStudio";
-import FlowReviewSurface, { greetingName } from "@/v3/components/flow/FlowReviewSurface";
+import FlowReviewSurface, {
+  greetingName, DesignRoundReviewSurface,
+  type DesignRoundReviewStamp, type DesignRoundVerdict,
+} from "@/v3/components/flow/FlowReviewSurface";
+// TYPE + CONSTANT only: the review-kind string a design-round link is stamped with.
+// The round itself is the operator's record; this page never touches it.
+import { DESIGN_ROUND_REVIEW_KIND } from "@/v3/components/flow/flowDesignRound";
 import { projectStakeholderReview, reviewDiff, type ReviewPayload } from "@/v3/components/flow/flowReviews";
 import {
   parseFixtures, fixturesForEntities, screenEntities, stepMetric, transitionForStep, isAgentActor, foldBeatRecords,
@@ -309,6 +315,18 @@ export default function FlowRespond({ token }: { token: string }) {
     [packQuestionModel, state],
   );
   const lociMode = questionModel.mode === "loci";
+  // THE DESIGN REVIEW ROUND. The link's `reviewKind` is what says so — the same stamp
+  // `designRoundReviewInput` puts on the mint, passed through by the edge — with the
+  // frozen `review` object as the fallback for a pack the edge served before it echoed
+  // the kind. Nothing here is guessed from the movement or the questions.
+  const roundStamp = useMemo<DesignRoundReviewStamp | null>(() => {
+    if (state.phase !== "ready") return null;
+    const frozen = state.pack.review as { kind?: string } | undefined;
+    if (state.pack.reviewKind !== DESIGN_ROUND_REVIEW_KIND && frozen?.kind !== DESIGN_ROUND_REVIEW_KIND) return null;
+    return (frozen?.kind === DESIGN_ROUND_REVIEW_KIND
+      ? frozen as DesignRoundReviewStamp
+      : { kind: DESIGN_ROUND_REVIEW_KIND });
+  }, [state]);
   // The review shown — rebuilt LIVE from the current artifacts the edge shipped,
   // falling back to the pack's frozen snapshot. Memoised so the surface's draft
   // key is stable within a load.
@@ -318,6 +336,11 @@ export default function FlowRespond({ token }: { token: string }) {
     // question-only rather than rendering the wrong surface.
     () => {
       if (state.phase !== "ready") return null;
+      // A DESIGN-ROUND link is not one of the input surfaces: it asks for a verdict on
+      // a built design, and its `review` carries the round stamp rather than workflows
+      // or terms. Routed to its own page below; letting it fall through here would
+      // hand the ontology surface an object with no `terms` to read.
+      if (roundStamp) return null;
       const chosen = reprojectFromPack(state.pack, lociMode ? questionModel.strings.map((s) => s.question) : null)
         ?? ((state.pack.review as { kind?: string } | undefined)?.kind === "agentify" ? null : state.pack.review)
         ?? null;
@@ -351,7 +374,7 @@ export default function FlowRespond({ token }: { token: string }) {
       }
       return chosen;
     },
-    [state, lociMode, questionModel],
+    [state, lociMode, questionModel, roundStamp],
   );
   // A regeneration can reshape the review while a draft is saved on-device; fold
   // a structural signature into the review draft key so a changed structure
@@ -647,7 +670,9 @@ export default function FlowRespond({ token }: { token: string }) {
     <div className="v3-shell v3fs-shell">
       <div className="v3fs-app">
         <div className="v3fs-wrap v3fs-portal">
-          {state.phase === "ready" && state.pack.kind !== "demo" && !state.pack.responded && !shownReview && state.pack.objective ? (
+          {/* …and NOT on a round link: its own header carries the objective in the
+              lede, so this aside printed the same sentence twice, above the greeting. */}
+          {state.phase === "ready" && state.pack.kind !== "demo" && !state.pack.responded && !shownReview && !roundStamp && state.pack.objective ? (
             <aside className="v3fs-portal-objective">
               <span className="lbl">About this programme</span>
               <p>{state.pack.objective}</p>
@@ -680,6 +705,51 @@ export default function FlowRespond({ token }: { token: string }) {
           ) : state.pack.responded ? (
             <RespondRecap stakeholder={greetName} submissions={state.pack.submissions ?? []}
               kind={state.pack.kind} />
+          ) : roundStamp ? (
+            /* THE DESIGN REVIEW ROUND: the prototype, their demo script, and the one
+               answer the round is waiting for. The pilot frame is the SAME one the
+               demo invite renders — the built app when the record can assemble one,
+               the honest gap (and the external URL) when it cannot. */
+            <DesignRoundReviewSurface stamp={roundStamp} stakeholder={greetName}
+              programme={state.pack.programme} objective={state.pack.objective}
+              script={state.pack.script}
+              submitting={submitting} error={error} draftKey={draftKey}
+              afterIntro={<MeetingRequestBar kind="prototype" sent={meetingSent} submitting={submitting}
+                onRequest={(pref) => void requestMeeting(pref, "prototype")} />}
+              prototype={state.pack.pilotHtml
+                ? <PilotFrame pilotHtml={state.pack.pilotHtml} pilotSource={state.pack.pilotSource} />
+                : (
+                  <>
+                    <PilotGap gap={state.pack.pilotGap} />
+                    {state.pack.demoUrl ? (
+                      <a className="v3fs-btn pri v3fs-portal-send" href={state.pack.demoUrl} target="_blank" rel="noreferrer">
+                        Open the prototype
+                      </a>
+                    ) : null}
+                    {state.pack.design ? <DemoWalker design={state.pack.design} script={state.pack.script}
+                      recipientArea={state.pack.recipientArea}
+                      beatVerdicts={beatVerdicts}
+                      onBeatVerdict={(key, value) => setBeatVerdicts((prev) => ({ ...prev, [key]: prev[key] === value ? "" : value }))}
+                      machines={state.pack.machines} fixtures={state.pack.fixtures} seedScenario={state.pack.seedScenario}
+                      onBeatRecord={(record) => setDemoRunRecords((prev) => [...prev, record])}
+                      fieldFlags={demoFieldFlags} onToggleFieldFlag={toggleFieldFlag} /> : null}
+                  </>
+                )}
+              onSubmit={(verdict: DesignRoundVerdict, feedback) => void submit({
+                // The QUARANTINE path, unchanged: this is an ordinary portal response
+                // that happens to carry a verdict. It lands in the operator's inbox
+                // and reaches the round only when they ingest it.
+                answers: [
+                  verdict === "accepted"
+                    ? "Design review round — I approve this design as the one we build on."
+                    : "Design review round — not yet; I am asking for changes.",
+                  feedback,
+                  demoRunBlock,
+                ].filter(Boolean).join("\n\n"),
+                // The word the inbox already stores for a demo verdict, so the round's
+                // own attribution maps it without a second vocabulary.
+                verdict,
+              })} />
           ) : shownReview ? (
             <>
               {/* A RETURN VISIT is any second look at an open link — a new ask
