@@ -542,6 +542,45 @@ Nothing in the repo can settle these. Each names what would.
 
 ---
 
+## 8. PRODUCT DECISIONS — ALL THREE TAKEN 2026-08-10
+
+**L5 → (a) `cf5b0b8`.** Ambiguities open a real `#semantics` locus; `renderQuestion`'s
+template was EXTENDED (not bypassed) to name the rival readings, so the migrated question is
+strictly stronger than both predecessors. The approval gate now reads ledger closure rather
+than `entry.resolution` — writing that field back was rejected because it would make ledger
+closure a writer of a generated artifact, clobbered by the next regeneration. Conservation
+held: `openUnknowns` 395 → 395 on Laila, no test re-baselined, delta pinned as arithmetic.
+
+> **STILL OPEN, upstream:** Laila's two collisions put a QUESTION in the `resolution` field
+> ("To confirm if 'Account' always refers to…"), which `/unresolved/i` does not match, so
+> both are treated as resolved and stay invisible. The predicate was preserved deliberately
+> rather than inventing a "…to confirm" heuristic. **The honest fix is the generator prompt**
+> (`run-agent/index.ts:1363`), which should require `resolution` to be `"unresolved"` or an
+> adopted meaning — never a restated question.
+
+> **BOUNDS ON THE GATE:** the inbox offers `decide-fate` only on UNOWNED rows and `capture`
+> only on assigned loci, so a role-owned ambiguity has no in-UI closure button until an
+> operator assigns it. Pre-existing for every owned open unknown, but it bounds how far this
+> loosened. And a stakeholder answer still cannot close a claim in-browser (the `asserted`
+> write path is unwired) — the `[locus: …]` tag now rides the ambiguity, so it closes the day
+> that path lands.
+
+**§6 → script-only, documented `0bdc227`.** `ledgerGenerator` / `optionA` / `overrideAdapter`
+stay as harness tooling: not wired, not deleted. Status headers on each, plus
+`dormantGeneratorPath.test.ts`, which fails if an entrypoint imports them — deliberately not
+a ban, just a guarantee the choice is made with a reviewer. **If it is ever wired,
+`ledgerGenerator` must gain the `ambiguityLoci` call or ambiguities silently stop being asked
+server-side.**
+
+**§8 → (a) `48ede9e`.** Stakeholders now get the deterministic assembly. **The premise in the
+old entry was half wrong** — the Deno boundary is ONE-DIRECTIONAL, `_shared` is already
+vitest-importable, so the cluster MOVED there and both runtimes import one copy. No mirror,
+no lockstep test to keep in step. The model refine loop is KEPT but operator-only; missing
+data prints a named gap and never falls back to the stored model HTML. **Deploy-gated:**
+production serves the old blob until `flow-portal` is deployed.
+
+<details><summary>original entry</summary>
+
 ## 8. PRODUCT DECISIONS (not bugs — someone must choose)
 
 - **RESOLVED — the stakeholder now gets the deterministic assembly, and it is not a
@@ -592,6 +631,14 @@ Nothing in the repo can settle these. Each names what would.
 ---
 
 ## 9. TOOLCHAIN (learned the hard way)
+
+> **A REAL TYPE ERROR IS SITTING IN DEPLOYED EDGE CODE.** `_shared/claudeClient.ts` fails
+> `deno check` with TS2322 — a `"system"` role assigned where the type allows only
+> `"user" | "assistant"`. Verified **pre-existing at `d9113e1`** via a worktree, so it is not
+> a regression from this session's work; it is what the missing gate below has been hiding.
+> Anthropic's Messages API takes a system prompt as a top-level parameter, not a message
+> role (mid-conversation `role: "system"` is Opus 4.8 only), so this is worth reading as a
+> possible live defect rather than a typing nit.
 
 > **THE EDGE HAS NO TYPE GATE IN THIS ENVIRONMENT.** `tsconfig.json` includes only `src/**`,
 > so a clean `npx tsc --noEmit` says **nothing** about `supabase/functions/**`. `deno check`
