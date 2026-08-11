@@ -33,18 +33,26 @@
  * Nothing is invented, and nothing is dropped: a locus an owner owns lands in exactly
  * one bucket, and `assertOwnedLoad` is the identity the tests hold it to.
  *
- * The cap is the pack's, not ours: `mintFollowUpPack` slices the ask to 8 questions, so
- * a card that promised more than 8 on a link was promising something the mint would
- * silently drop. `LINK_QUESTION_CAP` is the client-side name for that literal and
- * `ownedLoad.test.ts` holds the two in lockstep (the answerCapLockstep idiom).
+ * The cap is the pack's, not ours: the mint slices the ask to `LINK_QUESTION_CAP`
+ * questions, so a card that promised more than that on a link was promising something
+ * the mint would silently drop. There is exactly ONE declaration of that number — the
+ * export below — and `flowPortal.ts` IMPORTS it. It used to be a bare `8` in three
+ * places kept in step by a test that grepped the other file's source; a lockstep test is
+ * what you write when a boundary prevents a shared import, and there is no boundary here
+ * (all three sites are client-side TypeScript). The grep is gone; the import is the proof.
  */
 import type { QueueItem } from "./projections";
 import type { ProgramLedger } from "./useProgramLedger";
 
 /**
- * The pack's ask cap — `mintFollowUpPack` stores `input.questions.slice(0, 8)`.
- * A surface that shows a bigger number beside a "send a link" button is describing
- * a send that will not happen. Held in lockstep with flowPortal.ts by test.
+ * THE ask cap for a durable link — ONE DEFINITION, read by every site that caps.
+ *
+ * `mintFollowUpPack` and `mintReviewPack` slice their ask with this exact constant
+ * (`flowPortal.ts` imports it), the Discover card's `on this link` bucket is sliced
+ * with it here, and `BUCKET_NOTE` names it in the copy. A surface that shows a bigger
+ * number beside a "send a link" button is describing a send that will not happen, and
+ * the only way that can be true again is if this number is changed — which changes the
+ * card and the mint in the same edit.
  */
 export const LINK_QUESTION_CAP = 8;
 

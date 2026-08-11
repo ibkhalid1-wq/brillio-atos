@@ -37,7 +37,15 @@ const isAttributedClosure = (c: Claim): boolean => ATTRIBUTED.has(c.source) && (
 const rowToClaim = (r: Record<string, unknown>): Claim => ({
   id: r.id as string, about: r.about as string, value: r.value as ClaimValue, world: r.world as Claim["world"],
   layer: r.layer as Claim["layer"], source: r.source as Claim["source"], status: r.status as Claim["status"],
-  ownerWhileOpen: normalizeOwner(r.owner),   // rows written before Owner.parties carry {a,b} closedBy: (r.closed_by ?? undefined) as Claim["closedBy"],
+  // `normalizeOwner` accepts rows written before Owner.parties, which carry {a,b}.
+  // The comment saying so was appended to THIS line on 2026-08-11 (0012d4e) and
+  // swallowed the `closedBy:` property that sat behind it on the same line — a
+  // comment that silently deleted a field. tsc stayed quiet because `closedBy`
+  // is optional, and no test caught it because the Postgres path runs only
+  // against embedded-postgres. Every claim rehydrated from the store therefore
+  // lost its closure attribution: who closed it, by what method, in whose words.
+  ownerWhileOpen: normalizeOwner(r.owner),
+  closedBy: (r.closed_by ?? undefined) as Claim["closedBy"],
   supersededBy: (r.superseded_by ?? undefined) as string | undefined,
   contradicts: (r.contradicts ?? []) as string[], escalateTo: (r.escalate_to ?? undefined) as Claim["escalateTo"],
   blockedReason: (r.blocked_reason ?? undefined) as string | undefined,

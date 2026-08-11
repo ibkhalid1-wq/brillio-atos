@@ -90,6 +90,26 @@ function splitRow(line: string, sep: string): string[] {
 }
 
 /**
+ * THE PROVENANCE TOKEN for a dictionary claim — which named dictionary produced it.
+ *
+ * `Claim` has no dedicated provenance field; `closedBy.by` is the only place a claim
+ * records WHICH system/document it came from. `merge.ts` reads this token to tell
+ * "the SAME dictionary was re-uploaded with a correction" (supersede) from "a DIFFERENT
+ * system disagrees" (coexist) — N-4. It is therefore a shared definition, not a string
+ * literal in two places: the emitter below and the merge rule must agree exactly, or a
+ * correction silently degrades into a contradiction.
+ *
+ * STABILITY REQUIREMENT: for a re-upload to be recognised as a correction, the same
+ * system of record must yield the same `dict.name` on every upload. `readDictionarySources`
+ * guarantees that — it names each source from its stored key (`"<SoR> dictionary"`, or
+ * `"uploaded-dictionary"` for the global one), never from the uploaded FILE name, and
+ * `writeDictionaryField` matches keys case-insensitively so re-uploading for "crm" reuses
+ * the "CRM" entry. A caller that instead names a dictionary after the file it came from
+ * gets a NEW provenance on every upload, and the two readings correctly coexist.
+ */
+export const dictionaryProvenance = (name: string): string => `dictionary:${name}`;
+
+/**
  * Emit the dictionary as an AssertInput[] batch for reconcile — the SAME batch shape the
  * FHIR/Salesforce adapters produce. Closes dataType / valueSet / optionality unknowns as
  * `code-derived · weak · to-be`. Fields not already in the ontology are LOCAL EXTENSIONS:
@@ -101,7 +121,7 @@ function splitRow(line: string, sep: string): string[] {
 export function dictionaryToClaims(dict: ParsedDictionary, existingElementIds: Set<string>): { batch: AssertInput[]; elements: LedgerElement[] } {
   const batch: AssertInput[] = [];
   const elements: LedgerElement[] = [];
-  const by = `dictionary:${dict.name}`;
+  const by = dictionaryProvenance(dict.name);
   const closedBy = { method: "import" as const, by };
   const add = (about: string, value: ClaimValue) =>
     batch.push({ about, value, source: "code-derived", world: "to-be", layer: "configuration", ownerWhileOpen: OWNER, status: "weak", closedBy });

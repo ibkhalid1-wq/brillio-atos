@@ -108,7 +108,12 @@ promises the opposite — `writeDictionaryField`'s own test is titled *"re-uploa
 for a system REPLACES its dictionary"*. **The field replaces; the ledger
 accumulates.** An operator fixing a typo is punished for it. Needs a decision
 (extend recency to same-provenance `code-derived`, or say so in the UI) — not a
-safe local patch. **Reported, not fixed.**
+safe local patch. ~~**Reported, not fixed.**~~
+**DECIDED AND FIXED (2026-08-11)** — recency extended to same-provenance `code-derived`
+in `merge.ts`; provenance read from `closedBy.by` where `method === "import"`. A
+different system's disagreement still coexists. See `ledger-write-model.md` §"Rule 2"
+and `ledgerMergeProvenance.test.ts`. Does **not** yet reach the persisted path — see
+finding F4 (`pgStore.rowToClaim` drops `closedBy`).
 
 **N-5 · MODERATE — the same-value race inflates the settled denominator, and the
 doc says it doesn't.** Two writers closing one locus with the *same* value never
@@ -117,7 +122,13 @@ neither supersedes: two live rows for one answer. `ledger-write-model.md` calls 
 "a redundant row the projection hides — cosmetic". **It is not hidden** —
 `projections.ts:179-188` counts every live claim, so `pctClosed`/`pctSettled` both
 skew. Either the doc or the projection is wrong; they cannot both be right.
-**Reported, not fixed.**
+~~**Reported, not fixed.**~~
+**RESOLVED (2026-08-11) — the DOC was wrong.** `ledger-write-model.md` now states what
+the code does, with the arithmetic (`total 2 · closed 1 · pctClosed 50.0` where the
+honest answer is `100.0`). The duplicate is now **prevented at write time** on the
+`reconcile` path (`merge.ts` rule 3 / `collapsedDuplicates`) rather than hidden at read
+time; the root fix in the frozen `store.ts:97` is recorded as finding F1 with the exact
+edit, and the still-broken direct-`assert` path is pinned by a test.
 
 **N-6 · MODERATE — the renderer pass is quadratic.** `renderQuestion` is
 O(elements + claims) *per call*: it rebuilds `new Map(store.elements())` every call,
@@ -158,8 +169,12 @@ owner that was never true while it was open. Inert (every projection filters
 
 **N-11 · INFORMATIONAL** — `burnDown.open` counts `open` **or** `blocked` while kit,
 owner queue and dictionary bucket count `open` only. Pinned as an exact identity on
-both programmes so the divergence stays deliberate. `MergeReport.deviations` is a
-dead branch (unsatisfiable filter). A repeat import is derivable but never *stated*.
+both programmes so the divergence stays deliberate. ~~`MergeReport.deviations` is a
+dead branch (unsatisfiable filter).~~ **FIXED (2026-08-11) — made reachable, not
+deleted:** `reconcile` now compares the asserted claim against the live claims of the
+OTHER world using the same predicate `buildDeviationRegister` uses, so the merge and the
+register report one number instead of contradicting each other. A repeat import is
+derivable but never *stated* (unchanged — `corroborated`/`unchanged` still absent).
 `phaseSchedule.ts:205` has an unguarded division (different pipeline, out of scope).
 
 ---

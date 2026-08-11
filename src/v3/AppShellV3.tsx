@@ -46,7 +46,7 @@ import { operatorOverrideGuidance } from "@/v3/components/flow/flowOperatorOverr
 import { compileShipLanes, setShipLane, toggleShipItem } from "@/v3/components/flow/flowShip";
 import { scheduleFollowUp, discoveryKitCoverageGuidance } from "@/v3/components/flow/flowMeetings";
 import { listenCanonicalCastGuidance, kitAreaEntityGuidance, atlasAreaEntityGuidance, areaVocabularyGuidance, ontologyAreaCoverageGuidance } from "@/v3/components/flow/listenCoverage";
-import { mintFollowUpPack, latestPackFor, portalLinkFor, mintReviewPack, latestReviewPackFor } from "@/v3/components/flow/flowPortal";
+import { mintFollowUpPack, closeDurableLink, latestPackFor, portalLinkFor, mintReviewPack, latestReviewPackFor } from "@/v3/components/flow/flowPortal";
 import { mintBrief, briefLinkFor } from "@/v3/components/flow/flowBriefs";
 import FlowRespond from "@/v3/components/flow/FlowRespond";
 import FlowBrief from "@/v3/components/flow/FlowBrief";
@@ -2898,6 +2898,15 @@ export default function AppShellV3() {
               if (existing) mintedLink = portalLinkFor(activeProgram.id, existing);
             }
             return mintedLink;
+          }}
+          onCloseLink={async (who) => {
+            // The operator's half of the durable link's closure rule. Same
+            // flow-mutation path as every mint — a pure blob transform, persisted and
+            // version-checked once. `closeDurableLink` stamps `closedAt` and nothing
+            // else: no submission, inbox item or token is touched, and a later mint
+            // for the same person clears the stamp (re-minting IS the reopen).
+            const actor = currentUser?.email || "you";
+            await persistFlowMutation((program) => closeDurableLink(program, who, actor));
           }}
           onMintReview={async (input) => {
             const actor = currentUser?.email || "you";

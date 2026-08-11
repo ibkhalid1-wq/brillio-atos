@@ -154,7 +154,18 @@ describe("Sessions — the summary IS the rows added up", () => {
     mount();
     toggle();
     expect(rows()).toHaveLength(sessionQueue.length);
-    expect(rows().map((li) => li.querySelector(".v3ib-seam-h")!.textContent!.replace(/^⋈\s*/, "")))
+    // VISIBLE text, not raw textContent. The heading also carries a
+    // visually-hidden "joint seam: " prefix (`.v3ib-sr`) so a screen reader
+    // announces what the ⋈ glyph means to everyone else. `textContent` cannot
+    // tell the two apart — it concatenates what is shown with what is only
+    // spoken — so a correct accessibility change read here as a content change.
+    // Strip the sr-only nodes and the decorative glyph, then compare.
+    const visible = (el: Element): string => {
+      const clone = el.cloneNode(true) as Element;
+      clone.querySelectorAll(".v3ib-sr, [aria-hidden='true']").forEach((n) => n.remove());
+      return clone.textContent!.trim();
+    };
+    expect(rows().map((li) => visible(li.querySelector(".v3ib-seam-h")!)))
       .toEqual(sessionQueue.map((s) => s.pair));
   });
 

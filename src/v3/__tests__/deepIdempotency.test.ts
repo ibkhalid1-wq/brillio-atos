@@ -149,57 +149,62 @@ describe("[deep-I2] a NEAR-identical import — one row changed", () => {
     expect(moved.map((c) => c.about)).toEqual([PRIORITY]);
   });
 
-  it("FINDING: the corrected row does NOT supersede the stale one — two code-derived claims COEXIST", () => {
+  it("N-4 RESOLVED: the corrected row SUPERSEDES the stale one — ONE live code-derived claim", () => {
     /**
-     * `precedence.ts:100` — two equal-strength, non-human-decision sources COEXIST as a
-     * visible contradiction. `merge.ts` adds a recency rule for `generated` vs `generated`
-     * ONLY (mergeDecision, merge.ts:36-39), so a re-uploaded dictionary that CORRECTS a
-     * type leaves the old value live alongside the new one.
+     * WAS a finding: `precedence.ts:100` coexists two equal-strength machine sources, and
+     * `merge.ts`'s recency rule covered `generated` vs `generated` only, so a re-uploaded
+     * dictionary that CORRECTED a type left the old value live beside the new one — while
+     * `writeDictionaryField`'s own test promised "re-uploading for a system REPLACES its
+     * dictionary". The FIELD replaced; the LEDGER accumulated.
      *
-     * That is the lattice being honest (two machine readings disagree — route it), but it
-     * contradicts the dictionary field's own promise that "re-uploading for a system
-     * REPLACES its dictionary" (dictionary.ts:130 test / writeDictionaryField). The FIELD
-     * replaces; the LEDGER accumulates. Reported, not fixed — a recency rule for
-     * code-derived is a merge-semantics decision, not a safe local patch.
+     * DECIDED and implemented (merge.ts `recencySupersedes`): a later `code-derived` claim
+     * from the SAME import provenance on the SAME locus is a CORRECTION, so it supersedes.
+     * The stale row is kept as history (`supersededBy`), never deleted. A DIFFERENT
+     * system's disagreement still coexists — proved in ledgerMergeProvenance.test.ts.
      */
     const store = migrate(surgery());
     applyDict(store, parseDictionaryCsv(DICT_CSV, "ehr-dict"));
     const burnBefore = buildKitView(store).burnDown;
-    applyDict(store, parseDictionaryCsv(CHANGED_CSV, "ehr-dict"));
+    const stale = store.liveClaimsAbout(PRIORITY).find((c) => c.source === "code-derived")!;
+    const rep = applyDict(store, parseDictionaryCsv(CHANGED_CSV, "ehr-dict"));
 
     const live = store.liveClaimsAbout(PRIORITY).filter(isLive);
-    expect(live).toHaveLength(2);
-    expect(live.map((c) => (c.value as { value: string }).value).sort()).toEqual(["number", "text"]);
-    // and it is a VISIBLE contradiction, not a silent duplicate
-    const conflicts = store.resolve(PRIORITY).conflicts;
-    expect(conflicts).toHaveLength(1);
-    expect(conflicts[0].kind).toBe("coexist");
-    // the redundant row is counted, not hidden: settled total grows without a question closing
+    expect(live).toHaveLength(1);
+    expect(live.map((c) => (c.value as { value: string }).value)).toEqual(["number"]);
+    expect(rep.correctedReimports).toBe(1);
+    // the stale row is HISTORY, not deleted, and points at the row that corrected it
+    const staleNow = store.claimsAbout(PRIORITY).find((c) => c.id === stale.id)!;
+    expect(staleNow.supersededBy).toBe(live[0].id);
+    // it is NOT a contradiction any more
+    expect(store.resolve(PRIORITY).conflicts).toEqual([]);
+    // and the burn-down does NOT inflate: one answer, corrected, still one row counted
     const burnAfter = buildKitView(store).burnDown;
-    expect(burnAfter.open).toBe(burnBefore.open);                    // no question re-opened or re-closed
-    expect(burnAfter.weak).toBe(burnBefore.weak + 1);
-    expect(burnAfter.total).toBe(burnBefore.total + 1);
+    expect(burnAfter).toEqual(burnBefore);
   });
 
-  it("the unchanged rows are NOT re-litigated: no contradiction appears anywhere else", () => {
+  it("the unchanged rows are NOT re-litigated: no contradiction appears anywhere", () => {
     const store = migrate(surgery());
     applyDict(store, parseDictionaryCsv(DICT_CSV, "ehr-dict"));
     applyDict(store, parseDictionaryCsv(CHANGED_CSV, "ehr-dict"));
-    expect(store.allConflicts().map((c) => c.about)).toEqual([PRIORITY]);
+    expect(store.allConflicts().map((c) => c.about)).toEqual([]);   // N-4: the correction is not a conflict
     // and the queue is unmoved — a corrected type is not a new question
     expect(buildUnknownQueue(store).items.filter((i) => i.about === PRIORITY)).toEqual([]);
   });
 });
 
-describe("[deep-I3] what the report cannot tell you", () => {
+describe("[deep-I3] what the report can now tell you", () => {
   /**
-   * FINDING (dead branch): `MergeReport.deviations` can never be non-zero.
-   * merge.ts:68 filters `liveBefore` to `c.world === input.world`, then merge.ts:88 asks
-   * whether that same list contains an `as-is` claim while `input.world === "to-be"` —
-   * unsatisfiable. A real cross-world deviation is registered by
-   * `buildDeviationRegister` but reported as 0 by the merge that created it.
+   * WAS a dead branch (N-11): `MergeReport.deviations` could never be non-zero —
+   * `liveBefore` was filtered to `c.world === input.world` and then asked whether it
+   * contained an `as-is` claim while `input.world === "to-be"`. Unsatisfiable. A real
+   * cross-world deviation was registered by `buildDeviationRegister` and reported 0 by
+   * the merge that created it.
+   *
+   * FIXED, not deleted: `reconcile` now compares the asserted claim against the live
+   * claims of the OTHER world using the same predicate `buildDeviationRegister` uses, so
+   * the two numbers agree instead of contradicting each other.
    */
-  it("a genuine as-is/to-be deviation is registered by the projection and reported as 0 by reconcile", () => {
+  it("a genuine as-is/to-be deviation is registered by the projection AND reported by reconcile", () => {
     const store = migrate(surgery());
     const about = aboutOf("el:attr:case.priority", "dataType");
     // an as-is system export (adapters.ts shape) says the current field is a string
@@ -216,6 +221,14 @@ describe("[deep-I3] what the report cannot tell you", () => {
     const devAfter = buildDeviationRegister(store).filter((d) => d.about === about);
     expect(devAfter).toHaveLength(1);                                // the projection SEES the deviation
     expect(devAfter[0]).toMatchObject({ asIs: "string", toBe: "text" });
-    expect(rep.deviations).toBe(0);                                  // the merge report does NOT
+    expect(rep.deviations).toBe(1);                                  // and so does the merge report
+    expect(rep.deviations).toBe(devAfter.length);                    // ONE number, two readers
+  });
+
+  it("no cross-world claim on the locus ⇒ deviations stays 0 (the number MOVES, both ways)", () => {
+    const store = migrate(surgery());
+    const rep = applyDict(store, parseDictionaryCsv(DICT_CSV, "ehr-dict")); // to-be only; nothing as-is
+    expect(rep.deviations).toBe(0);
+    expect(buildDeviationRegister(store)).toEqual([]);
   });
 });

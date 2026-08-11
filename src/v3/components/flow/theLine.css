@@ -339,7 +339,7 @@
 .v3dl-zone{border:1px solid var(--fs-line);border-left:4px solid var(--fs-line);border-radius:12px;
   background:var(--fs-card);padding:12px 15px 14px;display:flex;flex-direction:column;gap:11px}
 .v3dl-zone.is-operator{border-left-color:var(--v3-accent-2)}
-.v3dl-zone.is-stakeholder{border-left-color:var(--v3-positive,#3f9d6b)}
+.v3dl-zone.is-stakeholder{border-left-color:var(--v3-positive)}
 .v3dl-zone.is-joint{border-left-color:var(--mv)}
 .v3dl-zone-h{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
 .v3dl-zone-t{font-size:14px;font-weight:750;color:var(--v3-text-primary)}
@@ -357,7 +357,7 @@
 .v3dl-tile-n{font-size:13px;font-weight:700;color:var(--v3-text-primary)}
 .v3dl-tile-sub{font-size:11px;color:var(--v3-text-muted);line-height:1.4}
 .v3dl-tile-state{font-size:11px;display:flex;align-items:center;gap:5px}
-.v3dl-decided{display:inline-flex;align-items:center;gap:5px;color:var(--v3-positive,#3f9d6b);font-weight:600}
+.v3dl-decided{display:inline-flex;align-items:center;gap:5px;color:var(--v3-positive);font-weight:600}
 .v3dl-moved{display:inline-flex;align-items:center;gap:5px;color:var(--v3-amber);font-weight:600}
 .v3dl-ready{display:inline-flex;align-items:center;gap:5px;color:var(--mv);font-weight:600}
 .v3dl-notseeded{display:inline-flex;align-items:center;gap:5px;color:var(--v3-text-muted)}
@@ -370,18 +370,20 @@
 .v3dl-mini{font:inherit;font-size:10.5px;font-weight:650;color:var(--mv);background:none;
   border:1px solid color-mix(in srgb,var(--mv) 40%,var(--fs-line));border-radius:6px;padding:2px 8px;cursor:pointer}
 .v3dl-mini:hover:not(:disabled){background:color-mix(in srgb,var(--mv) 8%,transparent)}
-.v3dl-mini:disabled{opacity:.6;cursor:default}
+/* was `opacity:.6` — the label faded to 2.47:1 and became unreadable. Grey it
+   properly instead: muted ink keeps the disabled READING while staying legible. */
+.v3dl-mini:disabled{opacity:1;cursor:default;color:var(--v3-text-muted);border-color:var(--v3-control-line)}
 .v3dl-mini:focus-visible{outline:2px solid var(--mv);outline-offset:2px}
 .v3dl-mini.ghost{color:var(--v3-text-secondary);border-color:var(--fs-line)}
 .v3dl-question{margin-left:auto;font-size:10px}
 .v3dl-question-note{color:var(--v3-text-muted);font-style:italic}
 /* stakeholders-shape zone: the goal state + the owned-question queue */
 .v3dl-shape{display:grid;grid-template-columns:1.3fr 1fr;gap:12px}
-.v3dl-goal{border:1px solid color-mix(in srgb,var(--v3-positive,#3f9d6b) 30%,var(--fs-line));border-radius:10px;
-  padding:11px 13px;display:flex;flex-direction:column;gap:7px;background:color-mix(in srgb,var(--v3-positive,#3f9d6b) 4%,var(--fs-card))}
+.v3dl-goal{border:1px solid color-mix(in srgb,var(--v3-positive) 30%,var(--fs-line));border-radius:10px;
+  padding:11px 13px;display:flex;flex-direction:column;gap:7px;background:color-mix(in srgb,var(--v3-positive) 4%,var(--fs-card))}
 .v3dl-goal-t{font-size:12px;font-weight:750;color:var(--v3-text-primary)}
 .v3dl-goal-open{font:inherit;text-align:left;font-size:11.5px;color:var(--v3-text-secondary);background:none;border:0;padding:0;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
-.v3dl-goal-open:focus-visible{outline:2px solid var(--v3-positive,#3f9d6b);outline-offset:2px}
+.v3dl-goal-open:focus-visible{outline:2px solid var(--v3-positive);outline-offset:2px}
 .v3dl-goal-sub{font-size:11.5px;color:var(--v3-text-muted)}
 .v3dl-goal-nums{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;font-size:11px}
 .v3dl-goal-num b{font-size:15px;color:var(--v3-text-primary);font-variant-numeric:tabular-nums}
@@ -487,11 +489,19 @@
 .v3ib-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 .v3ib-controls,.v3ib-reassign,.v3ib-fate,.v3ib-form-r{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .v3ib-reassign{margin-left:auto}
-.v3ib select,.v3ib-other,.v3ib-reason,.v3ib-form input,.v3ib-form textarea{font:inherit;font-size:11px;border:1px solid var(--fs-line);border-radius:6px;padding:4px 8px;background:var(--fs-card);color:var(--v3-text-primary)}
+/* The BOUNDARY is the only thing that says "this is a control": these sit on a
+   white/near-white row with no fill of their own, so --fs-line (1.23:1) failed
+   SC 1.4.11. --v3-control-line is the same hue family, dark enough to be seen. */
+.v3ib select,.v3ib-other,.v3ib-reason,.v3ib-form input,.v3ib-form textarea{font:inherit;font-size:11px;border:1px solid var(--v3-control-line);border-radius:6px;padding:4px 8px;background:var(--fs-card);color:var(--v3-text-primary)}
 .v3ib-other,.v3ib-reason{min-width:150px}
-.v3ib-btn{font:inherit;font-size:11px;font-weight:700;color:#fff;background:var(--v3-accent-2);border:1px solid var(--v3-accent-2);border-radius:6px;padding:4px 11px;cursor:pointer}
+.v3ib-btn{font:inherit;font-size:11px;font-weight:700;color:var(--v3-on-accent);background:var(--v3-accent-2);border:1px solid var(--v3-accent-2);border-radius:6px;padding:4px 11px;cursor:pointer}
 .v3ib-btn:hover:not(:disabled){filter:brightness(1.06)}
-.v3ib-btn:disabled{opacity:.5;cursor:default}
+/* Disabled was `opacity:.5`, which composited the white label over a half-faded
+   indigo fill at 2.78:1 — the operator could not read the button they could not
+   press. SC 1.4.3 exempts inactive components, but "exempt" is not "illegible".
+   A real greyed treatment instead: muted ink on the elevated surface, 4.99:1. */
+.v3ib-btn:disabled{opacity:1;cursor:default;color:var(--v3-text-muted);background:var(--v3-surface-3);border-color:var(--v3-control-line)}
+.v3ib-btn.ghost:disabled{background:none;border-color:var(--v3-control-line)}
 .v3ib-btn:focus-visible{outline:2px solid var(--v3-accent-2);outline-offset:2px}
 .v3ib-btn.ghost{color:var(--v3-text-secondary);background:none;border-color:var(--fs-line);font-weight:650}
 .v3ib-btn.ghost:hover:not(:disabled){background:var(--fs-card);filter:none}
@@ -500,17 +510,17 @@
 /* seams to-do (purple joint, not alarm) */
 .v3ib-seams{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
 .v3ib-seam{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:7px 11px;border:1px solid color-mix(in srgb,#6C5FAE 35%,var(--fs-line));border-left:3px double #6C5FAE;border-radius:8px;background:color-mix(in srgb,#6C5FAE 5%,var(--fs-card))}
-.v3ib-seam.booked{border-color:color-mix(in srgb,var(--v3-positive,#3f9d6b) 40%,var(--fs-line));border-left-color:var(--v3-positive,#3f9d6b);background:color-mix(in srgb,var(--v3-positive,#3f9d6b) 5%,var(--fs-card))}
-.v3ib-seam-h{font-size:12px;font-weight:750;color:#5a4fa0}
+.v3ib-seam.booked{border-color:color-mix(in srgb,var(--v3-positive) 40%,var(--fs-line));border-left-color:var(--v3-positive);background:color-mix(in srgb,var(--v3-positive) 5%,var(--fs-card))}
+.v3ib-seam-h{font-size:12px;font-weight:750;color:var(--v3-seam-ink)}
 .v3ib-seam.booked .v3ib-seam-h{color:var(--v3-text-primary)}
 .v3ib-seam-n{font-size:11px;color:var(--v3-text-muted);flex:1;min-width:150px}
-.v3ib-booked{font-size:11px;font-weight:700;color:var(--v3-positive,#3f9d6b);display:inline-flex;align-items:center;gap:4px}
+.v3ib-booked{font-size:11px;font-weight:700;color:var(--v3-positive);display:inline-flex;align-items:center;gap:4px}
 .v3ib-frozen-tag{font-size:10.5px;font-weight:700;color:var(--v3-amber)}
 /* exits + captures */
 .v3ib-exits,.v3ib-awaiting,.v3ib-referral,.v3ib-captured{display:flex;flex-wrap:wrap;gap:7px;align-items:center;font-size:11px}
 .v3ib-exits-l,.v3ib-awaiting-l{color:var(--v3-text-muted)}
 .v3ib-tab{font:inherit;font-size:10.5px;font-weight:700;color:var(--v3-text-secondary);background:var(--fs-card);border:1px solid var(--fs-line);border-radius:6px;padding:2px 10px;cursor:pointer}
-.v3ib-tab[aria-pressed="true"]{color:#fff;background:var(--v3-accent-2);border-color:var(--v3-accent-2)}
+.v3ib-tab[aria-pressed="true"]{color:var(--v3-on-accent);background:var(--v3-accent-2);border-color:var(--v3-accent-2)}
 .v3ib-tab:focus-visible{outline:2px solid var(--v3-accent-2);outline-offset:2px}
 .v3ib-form{display:flex;flex-direction:column;gap:6px;padding:6px 0 2px}
 .v3ib-form textarea{width:100%;resize:vertical}
@@ -546,7 +556,7 @@
 .v3ib-dict-ask{display:flex;flex-direction:column;gap:3px;margin-top:6px;padding:7px 11px;border:1px dashed color-mix(in srgb,var(--v3-accent-2) 40%,var(--fs-line));border-radius:8px;background:var(--fs-card)}
 .v3ib-dict-to{font-size:12px;color:var(--v3-text-primary)}
 .v3ib-dict-msg{font-size:11px;color:var(--v3-text-muted)}
-.v3ib-marked{font-size:11px;color:var(--v3-positive,#3f9d6b);font-weight:600}
+.v3ib-marked{font-size:11px;color:var(--v3-positive);font-weight:600}
 .v3ib-nodate{color:var(--v3-amber);font-weight:700}
 /* Sessions summary — the whole header is ONE disclosure button (⋈ Sessions · N seams,
    N questions), so the section reads as a single line until the operator opens it. */
@@ -558,12 +568,12 @@
 .v3ib-disc-sep{color:var(--v3-text-muted)}
 /* seam "on the session plan" — intent recorded, date still gated */
 .v3ib-seam.planned{border-left-style:solid;background:color-mix(in srgb,#6C5FAE 8%,var(--fs-card))}
-.v3ib-onplan{font-size:11px;color:#5a4fa0;font-weight:650}
+.v3ib-onplan{font-size:11px;color:var(--v3-seam-ink);font-weight:650}
 /* blocked-unowned tag in the assign list */
 .v3ib-blk{font-size:10px;font-weight:700;letter-spacing:.02em;text-transform:uppercase;color:var(--v3-amber);border:1px solid color-mix(in srgb,var(--v3-amber) 45%,transparent);border-radius:4px;padding:0 4px;margin-left:4px}
 /* PROPOSED — a curated element minted from an ontology-gap kit question. Dashed border
    (not solid) so a proposal never reads as an evidence-grounded element at a glance. */
-.v3ib-prop{font-size:10px;font-weight:700;letter-spacing:.02em;text-transform:uppercase;color:#5a4fa0;border:1px dashed color-mix(in srgb,#6C5FAE 55%,transparent);border-radius:4px;padding:0 4px;margin-left:4px}
+.v3ib-prop{font-size:10px;font-weight:700;letter-spacing:.02em;text-transform:uppercase;color:var(--v3-seam-ink);border:1px dashed color-mix(in srgb,#6C5FAE 55%,transparent);border-radius:4px;padding:0 4px;margin-left:4px}
 /* owned-question list in the roster expansion */
 .v3ln-cr-qs.owned li{display:flex;gap:6px;align-items:baseline}
 .v3ln-cr-qtype{font-size:9px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--v3-accent-2);flex-shrink:0}
