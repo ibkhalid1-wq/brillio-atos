@@ -965,6 +965,19 @@ Return ONLY JSON: {"topic":"design"|"other","answer":"..."}.`,
             role: String(hit.pack.role ?? ""),
             receivedAt: now,
             text: answers,
+            // THE VERDICT, when this send carried one. Only the `demo` branch
+            // below used to store it, so a stakeholder approving a DESIGN ROUND
+            // through their own link arrived with no verdict at all: the round
+            // read them as "responded" and never as "accepted", and the Design
+            // Loop gate could not go green from a real stakeholder approval —
+            // only from an operator recording one, which is exactly the
+            // attestation the model works hardest to keep separate.
+            //
+            // Same `DEMO_VERDICTS` vocabulary the demo branch validates against,
+            // so there is one definition of what a verdict may say. A send with
+            // no verdict (an ordinary interview answer) is unchanged: the key is
+            // absent, not empty, and nothing downstream sees a new field.
+            ...(isRecord(body) && DEMO_VERDICTS.has(String(body.verdict)) ? { verdict: String(body.verdict) } : {}),
             ...(documents.length ? { documents } : {}),
             ...(deferrals.length ? { deferrals } : {}),
             ...(suggestedVoices.length ? { suggestedVoices } : {}),
