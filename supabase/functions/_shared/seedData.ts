@@ -58,7 +58,7 @@ const PEOPLE = ["A. Whitfield", "R. Osei", "M. Lindqvist", "S. Nakamura", "D. Fe
 // Neutral enum LABELS for a category/type/tier/segment column. A category is a
 // word a person reads, so it has to look like one — the failing column showed
 // PRA-5570, a handle, because a category shared the `code` branch.
-const CATEGORIES = ["Standard", "Core", "Extended", "Strategic", "Enterprise", "Regional", "Global", "Priority", "Emerging", "Established", "Tier 1", "Tier 2"];
+const CATEGORIES = ["Standard", "Core", "Extended", "Strategic", "Enterprise", "Regional", "Global", "Priority", "Emerging", "Established", "Managed", "Direct"];
 
 const singular = (name: string) => name.replace(/s$/i, "");
 
