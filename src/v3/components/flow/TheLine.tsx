@@ -24,7 +24,7 @@ import {
 import {
   approvalLinkFor, canSendForApproval, stakeholderApprovalItems, type StakeholderApprovalItem,
 } from "@/v3/components/flow/flowApprovals";
-import { resolveMovementStakeholders, type MovementStakeholder } from "@/v3/components/flow/flowStakeholders";
+import { displayPersonLabel, resolveMovementStakeholders, type MovementStakeholder } from "@/v3/components/flow/flowStakeholders";
 import { listInterviewPacks, portalLinkFor } from "@/v3/components/flow/flowPortal";
 import { stakeholderCollection } from "@/v3/components/flow/CollectBoard";
 // Recording → reviewable text, in the capture dialog. TranscribeButton's only
@@ -45,6 +45,10 @@ import { HeardReadout, ConvergenceReadout, ProvisionalMark, ClaimStatus, SourceT
 import DesignLoopZones from "@/v3/components/flow/DesignLoopZones";
 import { ownerRoleLabelForArea } from "@/v3/lib/ledger/migrate";
 import { renderQuestion } from "@/v3/lib/ledger/renderQuestion";
+import {
+  BUCKET_NOTE, emptyOwnedLoad, ownedLoadBreakdown, ownedLoadFor, sendableCount,
+  unboundOpenTotal, unboundOwners, type OwnedBucket, type OwnedLoad,
+} from "@/v3/lib/ledger/ownedLoad";
 import "./theLine.css";
 
 const FlowArtifactStudio = lazy(() => import("./studio/FlowArtifactStudio"));
@@ -462,25 +466,30 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
     }
     return m;
   }, [cast, ledger.soloByOwner]);
-  // Each person's SOLO-answerable owned questions (dedup by locus), read from the
-  // one soloByOwner projection. Seams are excluded by construction (joint owners are
-  // never in soloByOwner) — they live in the session queue, not on an async list.
+  // ── THE ONE owned-load per person (ownedLoad.ts) ──────────────────────────────────
+  // Every locus this person owns, partitioned ONCE into the four buckets that add up to
+  // the headline: on this link · next link · blocked · → dictionary. The card's button,
+  // its breakdown line, its expanded list and the link the operator mints all read this
+  // object, which is what stops them printing 10 / 9 / 8 for one person (F6).
+  const ownedLoadByLabel = useMemo(() => {
+    const m = new Map<string, OwnedLoad>();
+    for (const row of cast) m.set(row.label, ownedLoadFor(ledger, ownerLabelsFor.get(row.label) ?? []));
+    return m;
+  }, [cast, ownerLabelsFor, ledger]);
+  const loadFor = (label: string): OwnedLoad => ownedLoadByLabel.get(label) ?? emptyOwnedLoad();
+  // The same load, phrased. Seams are absent by construction (joint owners are never in
+  // soloByOwner) — they live in the session queue, not on an async list. Blocked and
+  // dictionary loci ARE here, tagged with why they can't ride: a miss stays visible.
   const ownedQuestionsFor = useMemo(() => {
-    const m = new Map<string, Array<{ about: string; question: string; typeTag: string }>>();
+    const m = new Map<string, Array<{ about: string; question: string; typeTag: string; bucket: OwnedBucket }>>();
     for (const row of cast) {
-      const seen = new Set<string>();
-      const out: Array<{ about: string; question: string; typeTag: string }> = [];
-      for (const label of ownerLabelsFor.get(row.label) ?? []) {
-        for (const it of ledger.soloByOwner.get(label) ?? []) {
-          if (seen.has(it.about)) continue; seen.add(it.about);
-          const r = renderQuestion(ledger.store, it.about, "operator");   // the ONE renderer
-          out.push({ about: it.about, question: r.question, typeTag: r.label });
-        }
-      }
-      m.set(row.label, out);
+      m.set(row.label, (ownedLoadByLabel.get(row.label)?.owned ?? []).map((it) => {
+        const r = renderQuestion(ledger.store, it.about, "operator");   // the ONE renderer
+        return { about: it.about, question: r.question, typeTag: r.label, bucket: it.bucket };
+      }));
     }
     return m;
-  }, [cast, ownerLabelsFor, ledger.soloByOwner, ledger.store]);
+  }, [cast, ownedLoadByLabel, ledger.store]);
   // Does this person sit on either side of an open seam? (blocked = only a joint
   // session left for them). Read from the one session queue, by owner-label.
   const seamPairsFor = useMemo(() => {
@@ -494,7 +503,7 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
   }, [cast, ownerLabelsFor, ledger.sessionQueue]);
   const engagementByLabel = useMemo(() => {
     const now = Date.now();
-    const byLabel = new Map<string, { state: EngState; ageDays: number | null; open: number; done: number; needsSession: boolean; onTurf: number }>();
+    const byLabel = new Map<string, { state: EngState; ageDays: number | null; open: number; done: number; needsSession: boolean; onTurf: number; blockedOwned: number }>();
     for (const row of cast) {
       const key = row.label.trim().toLowerCase();
       const assigned = ledger.assignments.filter((a) => a.owner.label.trim().toLowerCase() === key);
@@ -502,17 +511,24 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
       const done = assigned.filter((a) => ledger.capturedAbouts.has(a.about));
       const oldest = open.reduce<number | null>((m, a) => { const t = Date.parse(a.at); return Number.isNaN(t) ? m : (m === null ? t : Math.min(m, t)); }, null);
       const ageDays = oldest !== null ? Math.max(0, Math.floor((now - oldest) / 86400000)) : null;
-      const onTurf = (ownedQuestionsFor.get(row.label) ?? []).length;   // real owned-solo load, not area coverage
+      // SENDABLE, from the one owned-load — what a link could actually carry (the cap
+      // only decides which link, not whether there is anything to ask).
+      const load = ownedLoadByLabel.get(row.label) ?? emptyOwnedLoad();
+      const onTurf = sendableCount(load);
+      const blockedOwned = load.blocked.length;
       const needsSession = (seamPairsFor.get(row.label) ?? []).length > 0;
       let state: EngState;
       if (open.length > 0 || row.awaiting) state = "in-flight";      // engaged, awaiting a response
       else if (onTurf > 0) state = "ready";                          // open questions on loci THEY OWN
-      else if (needsSession) state = "blocked";                      // only a seam session left for them
+      // BLOCKED covers both shapes of "owned but unaskable": a seam that needs a joint
+      // session, and loci the ledger has blocked. Reading the second as "Done for now"
+      // (the old fall-through) buried a real miss under the calmest label on the board.
+      else if (needsSession || blockedOwned > 0) state = "blocked";
       else state = "done";                                           // nothing open owned by them
-      byLabel.set(row.label, { state, ageDays, open: open.length, done: done.length, needsSession, onTurf });
+      byLabel.set(row.label, { state, ageDays, open: open.length, done: done.length, needsSession, onTurf, blockedOwned });
     }
     return byLabel;
-  }, [cast, ledger.assignments, ledger.capturedAbouts, ownedQuestionsFor, seamPairsFor]);
+  }, [cast, ledger.assignments, ledger.capturedAbouts, ownedLoadByLabel, seamPairsFor]);
   const sortedCast = useMemo(() => {
     const rank: Record<EngState, number> = { ready: 0, "in-flight": 1, blocked: 2, done: 3 };
     return [...filteredCast].sort((a, b) => {
@@ -535,6 +551,20 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
     return { ...c, oldest };
   }, [filteredCast, engagementByLabel]);
   const ageStr = (d: number) => d === 0 ? "today" : d === 1 ? "1 day" : d < 21 ? `${d} days` : `${Math.floor(d / 7)} weeks`;
+  // ── OWNED BY NOBODY ON THE ROSTER ────────────────────────────────────────────────
+  // The ledger owns loci by ROLE LABEL; the roster binds people to those labels above
+  // (ownerLabelsFor). A label nothing binds to owns open questions with literally nobody
+  // to ask — 27 of them on the real Laila programme (Executive Sponsor, Sales Ops, Talent
+  // Acquisition, Finance) — and no surface said so, so they read as covered. The count is
+  // soloByOwner's own; no person is invented and no number is invented. NOT filtered by
+  // the area chip: an unclaimed owner has no roster row and therefore no area, so a filter
+  // would silently hide the miss.
+  const unbound = useMemo(() => {
+    const bound = new Set<string>();
+    for (const labels of ownerLabelsFor.values()) for (const label of labels) bound.add(label);
+    return unboundOwners(ledger, bound);
+  }, [ownerLabelsFor, ledger]);
+  const unboundOpen = unboundOpenTotal(unbound);
 
   // ── the record: every attributed evidence entry across the spine, newest
   // first, each mapped to its speaker's area so the Record projection can
@@ -642,9 +672,9 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
     setQOpen((s) => ({ ...s, [who]: true }));
     try {
       await navigator.clipboard.writeText(url);
-      setNote(`Sign-off link copied — ${label} → ${who}. It's also shown in their row.`);
+      setNote(`Sign-off link copied — ${label} → ${displayPersonLabel(who)}. It's also shown in their row.`);
     } catch {
-      setNote(`Sign-off link ready — copy it from ${who}'s row.`);
+      setNote(`Sign-off link ready — copy it from ${displayPersonLabel(who)}'s row.`);
     }
     window.setTimeout(() => setNote(null), 6000);
   };
@@ -681,12 +711,14 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
       const existing = packFor(program, row.label, row.movementId);
       let url = existing ? portalLinkFor(program.id, existing) : null;
       if (!url && onMintFollowUp) {
-        // THE ask on this person's link = the open unknowns on loci THEY OWN —
-        // the same list their drawer shows — sent as LOCI, so the linked page
-        // renders them through the ONE renderer and an answer names the point it
-        // closes. Their kit script stays the fallback when the ledger owns
-        // nothing for them: a person with no owned loci still gets a link.
-        const owned = ownedQuestionsFor.get(row.label) ?? [];
+        // THE ask on this person's link = the `on this link` bucket of the ONE owned-load
+        // their card shows — sent as LOCI, so the linked page renders them through the ONE
+        // renderer and an answer names the point it closes. Taking the bucket (not the
+        // whole owned list) is what makes the card's breakdown TRUE: the pack caps the ask
+        // at LINK_QUESTION_CAP and silently drops the rest, so a card promising more than
+        // the bucket was describing a send that never happened (F6). Their kit script stays
+        // the fallback when nothing is sendable: a person still gets a link.
+        const owned = loadFor(row.label).onLink;
         const ask = owned.length
           ? owned.map((q) => ({ about: q.about, text: renderQuestion(ledger.store, q.about, "stakeholder").question }))
           : row.questions.map((text) => ({ about: "", text }));
@@ -719,14 +751,14 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
           if (pins.length) await commits.commitAction(pins, ledger.actions);
         }
       }
-      if (!url) { setNote(`No link handler available for ${row.label} in this view.`); return; }
+      if (!url) { setNote(`No link handler available for ${displayPersonLabel(row.label)} in this view.`); return; }
       setLinkShown({ who: row.label, url });
       setQOpen((s) => ({ ...s, [row.label]: true }));
       try {
         await navigator.clipboard.writeText(url);
-        setNote(`Link copied — ${row.label}. It's also shown below their row.`);
+        setNote(`Link copied — ${displayPersonLabel(row.label)}. It's also shown below their row.`);
       } catch {
-        setNote(`Link ready — copy it from the field under ${row.label}'s row.`);
+        setNote(`Link ready — copy it from the field under ${displayPersonLabel(row.label)}'s row.`);
       }
       window.setTimeout(() => setNote(null), 6000);
     } catch (error) {
@@ -816,7 +848,7 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
     if (!linkShown) return;
     try {
       await navigator.clipboard.writeText(linkShown.url);
-      setNote(`Link copied — ${linkShown.who}.`);
+      setNote(`Link copied — ${displayPersonLabel(linkShown.who)}.`);
     } catch {
       setNote("The clipboard is blocked here — select the link text and copy it manually.");
     }
@@ -845,7 +877,7 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
       const a = document.createElement("a");
       a.href = url; a.download = `${invitee.movementId}-${invitee.label.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.ics`;
       a.click(); URL.revokeObjectURL(url);
-      setNote(`Invite downloaded · follow-up scheduled — ${invitee.label}, ${inviteDate}`);
+      setNote(`Invite downloaded · follow-up scheduled — ${displayPersonLabel(invitee.label)}, ${inviteDate}`);
     } catch (error) {
       setNote(`Couldn't schedule: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -873,8 +905,8 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
     onRunAgent?.("contradiction-detector", row.movementId);
     setCapFor(null); setCapText("");
     setNote(row.movementId === "listen"
-      ? `Captured — ${row.label}. The Ontology and Atlas will refresh for ${row.area}.`
-      : `Captured — ${row.label}. The Charter and Discovery Kit will refresh.`);
+      ? `Captured — ${displayPersonLabel(row.label)}. The Ontology and Atlas will refresh for ${row.area}.`
+      : `Captured — ${displayPersonLabel(row.label)}. The Charter and Discovery Kit will refresh.`);
     window.setTimeout(() => setNote(null), 6000);
   };
 
@@ -1050,6 +1082,23 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
             <span className="v3ln-engpill is-done"><b>{engSummary.done}</b> done for now</span>
             <span className="v3ln-engbar-note">ageing is operator-tracked (the chase), not a system-tracked reply — until the link is live</span>
           </div>
+          {/* A miss stays VISIBLE: role owners with nobody behind them. Every number here
+              is soloByOwner's own count for that label — nothing is filled in. */}
+          {unbound.length ? (
+            <div className="v3ln-engbar" role="note" aria-label="Owned by nobody on the roster">
+              <span className="v3ln-engbar-l">Nobody to ask</span>
+              <span className="v3ln-engpill is-blocked">
+                <b>{unboundOpen}</b> open question{unboundOpen === 1 ? "" : "s"} owned by {unbound.length} role{unbound.length === 1 ? "" : "s"} with no person behind {unbound.length === 1 ? "it" : "them"}
+              </span>
+              {unbound.map((owner) => (
+                <span key={owner.label} className="v3ln-engpill is-blocked"
+                  title={`${owner.label} owns ${owner.open} open question${owner.open === 1 ? "" : "s"} and no one on the roster answers for that role.`}>
+                  {owner.label} · <b>{owner.open}</b>
+                </span>
+              ))}
+              <span className="v3ln-engbar-note">these are owned in the ledger and unreachable in practice — name someone for the role in the Discovery Kit, or reassign the questions in the Inbox</span>
+            </div>
+          ) : null}
           <div className="v3ln-cast">
             {sortedCast.map((row, i) => {
               const eng = engagementByLabel.get(row.label);
@@ -1071,12 +1120,16 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                   <span className={`v3ln-dot ${row.heard ? "d" : row.awaiting ? "w" : "t"}`}
                     title={row.heard ? "Heard — evidence on the record" : row.awaiting ? "Link out — awaiting response" : "To reach"} />
                   <span className="v3ln-cr-who">
-                    <b>{row.label}</b>
+                    {/* The roster stores an unnamed voice as "<Role> — TBC", a machine
+                      * token. Rendered through the ONE helper the Inbox already uses, so
+                      * Discover stops leaking it as if it were somebody's name. */}
+                    <b>{displayPersonLabel(row.label)}</b>
                     {row.isRole ? <span>role — assign a name to send</span>
                       : row.role && row.role !== row.label ? <span>{row.role}</span> : null}
                     {(() => {
                       const e = engagementByLabel.get(row.label);
                       if (!e) return null;
+                      const load = loadFor(row.label);
                       const aged = e.state === "in-flight" && e.ageDays != null;
                       return (
                         <span className="v3ln-engrow">
@@ -1088,8 +1141,17 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                             </span>
                           ) : e.state === "in-flight" ? <span className="v3ln-age">awaiting response · operator-tracked</span>
                           : e.state === "blocked" && e.needsSession ? <span className="v3ln-eng-why" title="A jointly-owned seam — settled in a session, not solo. It's in the session queue.">only a joint session left</span>
-                          : e.state === "ready" ? <span className="v3ln-eng-why" title="Open unknowns on loci THIS person owns (their solo load) — not area coverage, not seam questions.">{e.onTurf} open on loci they own — send a link</span>
                           : null}
+                          {/* THE RECONCILIATION LINE (F6). One sentence, from the one
+                            * owned-load: the headline the button shows, and where the
+                            * rest of it went. No second derivation, and no subtraction
+                            * left to the operator. */}
+                          {load.owned.length ? (
+                            <span className="v3ln-eng-why"
+                              title="Every locus this person owns, split by whether a link minted now can carry it: the pack caps the ask, blocked loci need unsticking first, and typing loci are answered by the data dictionary rather than by them.">
+                              {ownedLoadBreakdown(load)}{e.state === "ready" ? " — send a link" : ""}
+                            </span>
+                          ) : null}
                         </span>
                       );
                     })()}
@@ -1128,12 +1190,14 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                   </span>
                   <span className="v3ln-cr-right">
                   {(() => {
-                    const owned = ownedQuestionsFor.get(row.label) ?? [];
+                    // THE HEADLINE — the owned-load's own total, the same object the
+                    // breakdown line and the minted link read. One number, one definition.
+                    const load = loadFor(row.label);
                     return (
                   <button type="button" className="v3ln-cr-qbtn" aria-expanded={!!qOpen[row.label]}
-                    title="Open unknowns on loci this person OWNS (their solo load) — seam questions are in the session queue, not here"
+                    title={`${ownedLoadBreakdown(load)}. Open unknowns on loci this person OWNS — seam questions are in the session queue, not here.`}
                     onClick={() => setQOpen((s) => ({ ...s, [row.label]: !s[row.label] }))}>
-                    {owned.length} owned question{owned.length === 1 ? "" : "s"}
+                    {load.owned.length} owned question{load.owned.length === 1 ? "" : "s"}
                     <span aria-hidden="true">{qOpen[row.label] ? " ▴" : " ▾"}</span>
                   </button>
                     );
@@ -1155,7 +1219,7 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                       ? /objection/i.test(j.verdict) ? "objection" : /changes/i.test(j.verdict) ? "changes" : /accept/i.test(j.verdict) ? "accepted" : j.verdict.toLowerCase()
                       : undefined;
                     return (
-                      <span className="v3ln-journey" aria-label={`${row.label} journey`}>
+                      <span className="v3ln-journey" aria-label={`${displayPersonLabel(row.label)} journey`}>
                         {seg("Listen", phaseState(j.listen))}
                         {j.loop.length || j.verdict ? seg("Loop", phaseState(j.loop), verdictShort) : null}
                       </span>
@@ -1166,7 +1230,7 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                       title="Their one durable link — minted once, reused forever">⎘ link</button>
                     {onSaveInputs ? (
                       <button type="button" className="v3ln-a" onClick={() => openCapture(row)}
-                        title={`Capture what ${row.label} said`}>✎ capture</button>
+                        title={`Capture what ${displayPersonLabel(row.label)} said`}>✎ capture</button>
                     ) : null}
                     {onScheduleFollowUp ? (
                       <button type="button" className="v3ln-a" onClick={() => pickDate(row)}
@@ -1182,24 +1246,36 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                         questions are excluded — they're in the session queue. */}
                     {(() => {
                       const owned = ownedQuestionsFor.get(row.label) ?? [];
+                      const load = loadFor(row.label);
                       const seams = seamPairsFor.get(row.label) ?? [];
                       if (!owned.length) return (
-                        <p className="v3ln-cr-noq">No open unknowns on loci {row.label} owns.{seams.length ? ` Their open work is a joint session — it's in the session queue (${seams.join(", ")}).` : " Their durable link still carries the interview script."}</p>
+                        <p className="v3ln-cr-noq">No open unknowns on loci {displayPersonLabel(row.label)} owns.{seams.length ? ` Their open work is a joint session — it's in the session queue (${seams.join(", ")}).` : " Their durable link still carries the interview script."}</p>
                       );
                       return (
+                        <>
+                        <p className="v3ln-cr-noq">{ownedLoadBreakdown(load)}.</p>
                         <ul className="v3ln-cr-qs owned">
                           {owned.map((q) => (
-                            <li key={q.about} title={q.about}><span className="v3ln-cr-qtype">{q.typeTag}</span>{q.question}</li>
+                            // Every owned locus is listed, including the ones a link
+                            // minted now cannot carry — each tagged with WHY. Dropping
+                            // them (the old list showed only the sendable ones) is what
+                            // made a blocked question look like it did not exist.
+                            <li key={q.about} title={q.about}
+                              className={q.bucket === "on-link" ? undefined : "v3ln-cr-seamnote"}>
+                              <span className="v3ln-cr-qtype">{q.typeTag}</span>{q.question}
+                              {q.bucket === "on-link" ? null : <span className="v3ln-cr-qtype"> · {BUCKET_NOTE[q.bucket]}</span>}
+                            </li>
                           ))}
                           {seams.length ? <li className="v3ln-cr-seamnote">＋ seam questions ({seams.join(", ")}) are in the session queue — a joint session, not solo.</li> : null}
                         </ul>
+                        </>
                       );
                     })()}
                     {linkShown?.who === row.label ? (
                       <span className="v3ln-cr-url-row">
                         <input className="v3ln-cr-url" readOnly value={linkShown.url}
                           onFocus={(e) => e.currentTarget.select()}
-                          aria-label={`${row.label}'s durable link`} />
+                          aria-label={`${displayPersonLabel(row.label)}'s durable link`} />
                         <button type="button" className="v3ln-a" onClick={() => void copyShown()}
                           title="Copy the link">⧉ copy</button>
                       </span>
@@ -1253,7 +1329,7 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                             <span className="v3ln-cr-url-row">
                               <input className="v3ln-cr-url" readOnly value={apprLink.url}
                                 onFocus={(e) => e.currentTarget.select()}
-                                aria-label={`${row.label}'s sign-off link`} />
+                                aria-label={`${displayPersonLabel(row.label)}'s sign-off link`} />
                               <button type="button" className="v3ln-a"
                                 onClick={() => void showApprLink(row.label, apprLink.url, "the sign-off")}
                                 title="Copy the link">⧉ copy</button>
@@ -1267,7 +1343,7 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                 {invitee?.label === row.label ? (
                   <span className="v3ln-cr-invite">
                     <input type="date" value={inviteDate} onChange={(e) => setInviteDate(e.target.value)}
-                      aria-label={`Follow-up date for ${row.label}`} />
+                      aria-label={`Follow-up date for ${displayPersonLabel(row.label)}`} />
                     <button type="button" className="v3ln-btn" disabled={!inviteDate}
                       onClick={() => void confirmInvite()}>Schedule &amp; download invite</button>
                     <button type="button" className="v3ln-a" onClick={() => setInvitee(null)}>cancel</button>
@@ -1378,7 +1454,8 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
               <label className="v3ln-cap-f">
                 <span>Who said it</span>
                 <select value={capWho} onChange={(e) => setCapWho(e.target.value)}>
-                  {cast.map((row) => <option key={row.label} value={row.label}>{row.label} — {row.role}</option>)}
+                  {/* The VALUE stays the stored label (it keys the write); only the copy is humanised. */}
+                  {cast.map((row) => <option key={row.label} value={row.label}>{displayPersonLabel(row.label)}{row.role && row.role !== row.label ? ` — ${row.role}` : ""}</option>)}
                 </select>
               </label>
               <label className="v3ln-cap-f">

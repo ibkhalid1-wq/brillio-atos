@@ -23,6 +23,14 @@ import { completeClaudeText } from "../_shared/claudeClient.ts";
 // assembly cluster lives there and nowhere else. The stored, model-authored
 // `prototypeBuild.html` stays operator-only; see the module's own doc comment.
 import { pilotSliceFor, type PilotSlice } from "../_shared/prototypePilot.ts";
+// THE DURABLE LINK'S STATE MACHINE. One definition of "is this link still open"
+// and "what have they already answered", shared with the respond page through the
+// `@shared` alias — the edge ENFORCES it, the page RENDERS it, and neither can
+// drift. A partial submit files the answers and leaves the link usable; only an
+// explicit "I'm done" (or an operator's `closedAt`) finishes it.
+import {
+  portalLinkState, acceptsSubmission, sanitiseAnsweredKeys,
+} from "../_shared/portalLinkState.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -486,25 +494,11 @@ Deno.serve(async (req: Request) => {
             }))
             .find((p) => p.name && (p.name === selfKey || p.name.split(/\s+/)[0] === selfKey.split(/\s+/)[0]))?.role ?? "")
         : "";
-      // Durable-link recap: every response this link has taken, plus whether the
-      // current ask post-dates the last answer (a real follow-up to respond to).
-      const rawSubs = (Array.isArray(hit.pack.submissions) ? hit.pack.submissions : [])
-        .filter(isRecord)
-        .map((s) => ({
-          ts: String(s.ts ?? ""), movementId: typeof s.movementId === "string" ? s.movementId : undefined,
-          kind: String(s.kind ?? "interview"), preview: String(s.preview ?? "").slice(0, 240),
-        }))
-        .filter((s) => s.ts);
-      // Legacy links answered before submission history existed carry only a bare
-      // respondedAt — fold it in so they show a recap, not a re-openable form.
-      if (!rawSubs.length && typeof hit.pack.respondedAt === "string" && hit.pack.respondedAt) {
-        rawSubs.push({ ts: hit.pack.respondedAt, movementId: typeof hit.pack.movementId === "string" ? hit.pack.movementId : undefined,
-          kind: String(hit.pack.role ?? "").startsWith("review:") ? "review" : hit.pack.role === "Follow-up" ? "follow-up" : "interview", preview: "" });
-      }
-      const interviewSubmissions = rawSubs.slice(-40);
-      const lastSubTs = interviewSubmissions.reduce((max, s) => (s.ts > max ? s.ts : max), "");
-      const askUpdatedAt = String(hit.pack.askUpdatedAt ?? hit.pack.createdAt ?? "");
-      const interviewFollowUp = interviewSubmissions.length > 0 && (!lastSubTs || askUpdatedAt > lastSubTs);
+      // Durable-link state — ONE definition, shared with the respond page
+      // (`_shared/portalLinkState.ts`): the recap, whether the current ask
+      // post-dates the last answer (a real follow-up), whether the person has
+      // FINISHED, and which asks are already on the record so none is re-asked.
+      const linkState = portalLinkState(hit.pack);
       return jsonResponse({
         kind: "interview",
         programme: hit.programName,
@@ -566,16 +560,25 @@ Deno.serve(async (req: Request) => {
         ...(isRecord(hit.pack.review) ? { review: hit.pack.review } : {}),
         // On a follow-up, the review they LAST saw — the client diffs it against
         // the live review to render "what changed since your last visit".
-        ...(interviewFollowUp && isRecord(hit.pack.priorReview) ? { priorReview: hit.pack.priorReview } : {}),
+        ...(linkState.followUp && isRecord(hit.pack.priorReview) ? { priorReview: hit.pack.priorReview } : {}),
         // The durable link's recap + follow-up state. `submissions` is what the
         // person already sent (shown read-only on return); `answered` is whether
         // they've responded at all; `followUp` is true when the ask changed AFTER
         // their last answer — a genuinely new thing to respond to. A spent link
         // with nothing new shows a recap, never a dead-end error.
-        submissions: interviewSubmissions,
-        answered: interviewSubmissions.length > 0,
-        followUp: interviewFollowUp,
-        responded: interviewSubmissions.length > 0 && !interviewFollowUp,
+        //
+        // `responded` is CLOSURE, not "has sent something once". A partial send
+        // ("what I have so far") leaves the link open, because the pack IS the
+        // durable per-stakeholder link and the rest of its questions have to stay
+        // reachable. `closed` says which of the two happened; `answeredAsks` says
+        // what is already on the record so the page never re-asks it as if the
+        // person had said nothing.
+        submissions: linkState.submissions,
+        answered: linkState.answered,
+        followUp: linkState.followUp,
+        responded: linkState.responded,
+        closed: linkState.closed,
+        ...(linkState.answeredAsks.length ? { answeredAsks: linkState.answeredAsks } : {}),
       });
     }
 
@@ -806,21 +809,19 @@ Return ONLY JSON: {"topic":"design"|"other","answer":"..."}.`,
         const hit = await loadPack(token);
         if ("reason" in hit) return jsonResponse({ error: hit.reason }, 404);
         // Demo/approval links are one-shot — answering closes them. Interview
-        // links are the DURABLE per-stakeholder link: a response never closes it,
-        // it just adds to the recap. We only reject a repeat submission when
-        // there's nothing new to answer (the ask hasn't changed since their last
-        // response) — a genuine follow-up is always accepted.
+        // links are the DURABLE per-stakeholder link: a PARTIAL response never
+        // closes it, it only adds to the recap, so the questions the person
+        // hasn't reached yet stay reachable on the same token. The one rule for
+        // "may this link take another submission" lives in `_shared` and is
+        // shared with the page, so the two cannot disagree about whether the
+        // form should even be rendered.
         if (hit.kind !== "interview") {
           if (typeof hit.pack.respondedAt === "string") {
             return jsonResponse({ error: "This link has already been used — your earlier answers are safely on the record." }, 410);
           }
         } else {
-          const prior = (Array.isArray(hit.pack.submissions) ? hit.pack.submissions : []).filter(isRecord);
-          const lastTs = prior.reduce((max, s) => (String(s.ts ?? "") > max ? String(s.ts ?? "") : max), "");
-          const askAt = String(hit.pack.askUpdatedAt ?? hit.pack.createdAt ?? "");
-          if (prior.length > 0 && (!lastTs || askAt <= lastTs)) {
-            return jsonResponse({ error: "Your answers are already on the record — there's nothing new to add right now. If we need more, a fresh question will appear on this same link." }, 409);
-          }
+          const gate = acceptsSubmission(hit.pack);
+          if (!gate.ok) return jsonResponse({ error: gate.error }, gate.status);
         }
 
         const stakeholder = String(hit.pack.stakeholder ?? "Stakeholder");
@@ -946,6 +947,17 @@ Return ONLY JSON: {"topic":"design"|"other","answer":"..."}.`,
           if (answers.length < MIN_ANSWER_CHARS && documents.length === 0 && deferrals.length === 0 && suggestedVoices.length === 0) {
             return jsonResponse({ error: "Please write a little more — a sentence or two at minimum." }, 400);
           }
+          // "I'm done" vs "here's what I have so far". Only an EXPLICIT `final`
+          // finishes the durable link; anything else leaves it open for the rest
+          // of the questions. Absent on every client older than this — and the
+          // link then stays open, which is the safe direction: the operator can
+          // still close it, a stakeholder who lost their remaining questions
+          // could not get them back.
+          const finalSend = isRecord(body) && body.final === true;
+          // The asks this send covered, filtered to the pack's OWN questions/loci
+          // (nothing a respondent invents is stored), so a return visit can show
+          // them as on-record instead of asking again.
+          const answeredKeys = sanitiseAnsweredKeys(isRecord(body) ? body.answered : [], hit.pack);
           inbox.push({
             id: crypto.randomUUID(),
             kind: "interview",
@@ -957,8 +969,12 @@ Return ONLY JSON: {"topic":"design"|"other","answer":"..."}.`,
             ...(deferrals.length ? { deferrals } : {}),
             ...(suggestedVoices.length ? { suggestedVoices } : {}),
           });
-          // Append to the durable link's recap instead of closing it — the person
-          // keeps the same link and sees what they've sent when they return.
+          // APPEND to the durable link's recap — never overwrite. Each send is its
+          // own quarantined inbox item above and its own recap row here, so a
+          // second submission cannot merge over or supersede the first, and both
+          // stay attributable to this person and this moment. `closedAt` is
+          // stamped ONLY on an explicit "I'm done"; `respondedAt` keeps its old
+          // meaning ("last heard from") for the operator-side readers.
           const subKind = String(hit.pack.role ?? "").startsWith("review:") ? "review"
             : hit.pack.role === "Follow-up" ? "follow-up" : "interview";
           const preview = (answers || (deferrals.length ? `Routed ${deferrals.length} question${deferrals.length === 1 ? "" : "s"} to others` : "")
@@ -966,13 +982,20 @@ Return ONLY JSON: {"topic":"design"|"other","answer":"..."}.`,
           nextInner.flowInterviewPacks = (hit.inner.flowInterviewPacks as unknown[]).map((entry) => {
             if (!isRecord(entry) || entry.token !== hit.pack.token) return entry;
             const submissions = (Array.isArray(entry.submissions) ? entry.submissions.filter(isRecord) : [])
-              .concat([{ ts: now, movementId: entry.movementId, kind: subKind, preview }]).slice(-40);
-            return { ...entry, respondedAt: now, submissions };
+              .concat([{
+                ts: now, movementId: entry.movementId, kind: subKind, preview,
+                ...(finalSend ? { final: true } : {}),
+                ...(answeredKeys.length ? { answered: answeredKeys } : {}),
+              }]).slice(-40);
+            return {
+              ...entry, respondedAt: now, submissions,
+              ...(finalSend ? { closedAt: now } : {}),
+            };
           });
           log.push({
             ts: now, agentId: "portal", phaseId: "listen", tier: 1,
-            action: `Received an async interview response — ${stakeholder}`,
-            detail: `${answers.split(/\s+/).filter(Boolean).length.toLocaleString()} words${(isRecord(body) && Array.isArray(body.documents) && body.documents.length) ? ` + ${body.documents.length} document${body.documents.length === 1 ? "" : "s"}` : ""}, quarantined in the evidence inbox for your review.`,
+            action: `Received an async interview response — ${stakeholder}${finalSend ? "" : " (partial — their link is still open)"}`,
+            detail: `${answers.split(/\s+/).filter(Boolean).length.toLocaleString()} words${(isRecord(body) && Array.isArray(body.documents) && body.documents.length) ? ` + ${body.documents.length} document${body.documents.length === 1 ? "" : "s"}` : ""}, quarantined in the evidence inbox for your review.${finalSend ? " They said they were done — the link is now closed." : " They can return to the same link to answer the rest."}`,
           });
         }
 

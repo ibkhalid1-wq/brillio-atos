@@ -5564,6 +5564,14 @@ button.v3fs-stale-tag {font-family:inherit;border:none;cursor:pointer}
 .v3fs-portal-err {font-size:12.5px;color:var(--v3-red,#dc2626)}
 .v3fs-portal-send {align-self:flex-start;font-size:14px;padding:10px 22px;text-decoration:none;display:inline-block}
 .v3fs-portal-foot {font-size:11.5px;color:var(--v3-text-muted)}
+/* Two sends on a durable link: "send what I have" (primary, keeps it open) and
+   the quieter terminal "send & finish". The finish action is deliberately not a
+   button-shaped peer — closing your own link is the rarer, heavier choice. */
+.v3fs-portal-sendgroup {display:flex;flex-direction:column;align-items:flex-start;gap:6px}
+.v3fs-portal-finish {font-size:12px;color:var(--v3-text-muted);background:none;border:0;padding:0;cursor:pointer;text-align:left}
+.v3fs-portal-finish:disabled {opacity:.5;cursor:default}
+.v3fs-portal-onrecord {font-size:12.5px;color:var(--v3-text-muted);line-height:1.6}
+.v3fs-portal-onrecord ul {margin:6px 0 0;padding-left:18px}
 .v3fs-portal-quote {font-size:15px;font-style:italic;line-height:1.6;border-left:3px solid var(--v3-accent-b);padding:4px 0 4px 14px;margin:16px 0 0;color:var(--v3-text-primary)}
 .v3fs-portal-steps {display:flex;flex-direction:column;gap:8px}
 .v3fs-portal-step {display:flex;gap:10px;font-size:13px;line-height:1.55}

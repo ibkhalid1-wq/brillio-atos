@@ -151,7 +151,13 @@ describe("[G4] diffFabric incremental keeps Meridian on the re-emitted nodes", (
     expect(touched / total).toBeLessThan(0.05);              // incremental, not a rebuild
     // the re-rendered assembly still styles the touched entity with Meridian
     const { html } = assemblePrototype(changedOntology as unknown as Record<string, unknown>, lailaAtlas());
-    expect(html).toContain("riskTier");
+    // The new attribute reaches the render — asserted through BOTH the human
+    // label and the stable fabric id. It used to be asserted as the raw key
+    // `riskTier`, which only held while the assembly printed schema names
+    // straight onto the page; that was the `BUYINGROLE` defect, so the raw key
+    // no longer appearing is the fix working, not the attribute going missing.
+    expect(html).toContain("Risk Tier");
+    expect(html).toContain("field:account:risktier");
     expect(html).toContain("--m-warn:#9c5c0e");
   });
 });

@@ -661,10 +661,24 @@ const echoesRole = (row: PeopleDirectoryRow): boolean => {
  * Role spellings are matched EXACTLY (after normalization), never fuzzily — a
  * genuinely unstaffed role must stay visible rather than be absorbed into a
  * similarly-named one.
+ *
+ * TWO PEOPLE CAN SHARE A NAME. Merging is a CROSS-SOURCE operation and only
+ * that: one human whom two different lists spell differently ("Head of Sales"
+ * on the roster, "Head of Sales, Markets" on their delivery binding) is one
+ * person. But when a SINGLE list names the same person twice under two
+ * different roles, that list is describing two humans who share a name — at any
+ * real firm two "A. Kumar"s is routine — and keying them on the name alone
+ * DELETED one of them outright: no row, no conflict, nothing for the operator
+ * to notice (verified live: a roster carrying "Head of Sales / Sales" and "Head
+ * of Sales / Sales Operations" rendered one row and the Sales Operations slot
+ * stayed unbound). So inside a list the identity carries the role and both
+ * survive; `ambiguousNames` reports the collision so the page can say so, and
+ * the role each row states is what tells them apart. Nothing is invented to
+ * distinguish them — the disambiguator is a fact both rows already carry.
  */
 export function dedupePeopleRows<R extends PeopleDirectoryRow, D extends PeopleDirectoryRow, A extends PeopleDirectoryRow>(
   roster: R[], roles: D[], added: A[],
-): { rosterD: R[]; rolesD: D[]; addedD: A[] } {
+): { rosterD: R[]; rolesD: D[]; addedD: A[]; ambiguousNames: Set<string> } {
   const all: PeopleDirectoryRow[] = [...roster, ...roles, ...added];
   // A row that names a real person AND states a different role is the only
   // thing that PROVES a string is a human's name rather than a role label.
@@ -678,15 +692,36 @@ export function dedupePeopleRows<R extends PeopleDirectoryRow, D extends PeopleD
     covered.add(labelIdentity(row.role));
   }
 
+  // NAME COLLISIONS, detected per SOURCE LIST. One list that states two
+  // different roles for one name is describing two people; two different lists
+  // that do it are spelling one person's role two ways (the cross-source case
+  // this function exists to collapse). Only the first is a collision.
+  const ambiguousNames = new Set<string>();
+  for (const list of [added, roster, roles]) {
+    const roleSeenFor = new Map<string, string>();
+    for (const row of list) {
+      if (isRolePlaceholder(row) || echoesRole(row)) continue;
+      const key = personKey(row.name);
+      const role = labelIdentity(row.role);
+      const seen = roleSeenFor.get(key);
+      if (seen === undefined) roleSeenFor.set(key, role);
+      else if (seen !== role) ambiguousNames.add(key);
+    }
+  }
+
   const claimedPeople = new Set<string>();
   const claimedRoles = new Set<string>();
   // People are claimed on the STRICT key: two different names never collide, so
-  // this can drop a row only when the same human really is already shown.
-  const claimPerson = (name: string): boolean => {
-    const key = personKey(name);
+  // this can drop a row only when the same human really is already shown. Where
+  // one name provably covers two humans, the claim carries their role too, so
+  // neither can be dropped on the other's behalf — an exact name+role repeat
+  // across sources is still the same person and still collapses.
+  const claimPerson = (row: PeopleDirectoryRow): boolean => {
+    const key = personKey(row.name);
     if (!key) return true;
-    if (claimedPeople.has(key)) return false;
-    claimedPeople.add(key);
+    const claim = ambiguousNames.has(key) ? `${key}|${labelIdentity(row.role)}` : key;
+    if (claimedPeople.has(claim)) return false;
+    claimedPeople.add(claim);
     return true;
   };
   // Roles are claimed on the LOOSE key: keep at most ONE stand-in per role, and
@@ -718,7 +753,7 @@ export function dedupePeopleRows<R extends PeopleDirectoryRow, D extends PeopleD
       const echo = echoesRole(row);
       const person = isPersonRow(row);
       if (pass === 1 ? echo || !person : !echo && person) return;
-      if (person ? claimPerson(row.name) : claimRole(row.role)) keep[listIndex][rowIndex] = true;
+      if (person ? claimPerson(row) : claimRole(row.role)) keep[listIndex][rowIndex] = true;
     }));
   }
 
@@ -726,6 +761,7 @@ export function dedupePeopleRows<R extends PeopleDirectoryRow, D extends PeopleD
     addedD: added.filter((_, i) => keep[0][i]),
     rosterD: roster.filter((_, i) => keep[1][i]),
     rolesD: roles.filter((_, i) => keep[2][i]),
+    ambiguousNames,
   };
 }
 
@@ -785,6 +821,120 @@ export function readListenPlan(program: ProgramSummary): ListenPlanOverlay {
     return { roles: strs(p.roles), areas: strs(p.areas), coverage: cov, dismissedAreas: strs(p.dismissedAreas) };
   } catch { return empty; }
 }
+/* ── Reconciling People with the Discovery Kit ──────────────────────────────
+ * The kit PROPOSES; the operator DISPOSES. Both halves of the comparison live
+ * here rather than inline in the People page, so the rule that decides whether
+ * a human is "missing from the kit" has ONE definition and a test can hold it.
+ */
+
+/**
+ * Every label the GENERATED Discovery Kit knows the cast by: each interview's
+ * role and stakeholder, each persona's name, plus the roles the operator put on
+ * the kit's own coverage matrix (the listen plan IS part of the kit). Matched
+ * through the shared `labelIdentity`, so spelling variants collapse.
+ */
+export function kitCastIdentity(program: ProgramSummary): Set<string> {
+  const out = new Set<string>();
+  const kit = dataRoot(program).discoveryKit;
+  if (isRecord(kit)) {
+    for (const iv of Array.isArray(kit.interviews) ? kit.interviews : []) {
+      if (!isRecord(iv)) continue;
+      for (const value of [iv.role, iv.stakeholder]) {
+        const id = labelIdentity(String(value ?? ""));
+        if (id) out.add(id);
+      }
+    }
+    for (const persona of Array.isArray(kit.personas) ? kit.personas : []) {
+      if (!isRecord(persona)) continue;
+      const id = labelIdentity(String(persona.name ?? ""));
+      if (id) out.add(id);
+    }
+  }
+  for (const role of readListenPlan(program).roles) {
+    const id = labelIdentity(role);
+    if (id) out.add(id);
+  }
+  return out;
+}
+
+/**
+ * Why a person is flagged — the honest reason, and deliberately not a verdict.
+ * An operator-asserted person the kit doesn't name is a fact about the KIT (it
+ * was generated before they were added, or the generator never inventoried
+ * their role); it is not evidence that the person left the programme.
+ */
+export const KIT_ABSENCE_REASON =
+  "not named in the generated Discovery Kit — that is a gap in the kit, not evidence they have left the programme";
+
+export interface KitReconciliation<P> {
+  /** Personas the kit inventoried that People doesn't show. Safe as ONE
+   *  gesture: adding a row invents nobody and takes nothing away. */
+  toAdd: P[];
+  /** Operator-added people the kit doesn't name — FLAGGED FOR REVIEW, one at a
+   *  time, never a bundled removal. */
+  flagged: Array<{ person: DirectoryPerson; reason: string }>;
+}
+
+/**
+ * Reconciliation is a PROPOSAL, and a deliberately asymmetric one.
+ *
+ * Additions flow freely: a persona the kit inventoried and the page doesn't
+ * show is a missing row, and adding it fabricates nobody.
+ *
+ * ABSENCES ARE NOT REMOVALS. A person the operator typed in is an ASSERTED
+ * fact, and asserted reality outranks a generated artifact — that is the
+ * ledger's own precedence. Bundling the kit's silence into a one-click
+ * "Reconcile" inverted it: on the validation programme the button offered to
+ * delete Priya Raghunathan, João Álvares and "Finance SME — TBC" — three
+ * humans someone had typed in — purely because a generated document didn't
+ * list them. So absences come back FLAGGED, each carrying WHY, and removing
+ * one is a separate, individually-confirmed act.
+ */
+export function reconcilePeopleWithKit<P extends { name: string; kind?: string }>(
+  program: ProgramSummary,
+  personas: P[],
+  added: DirectoryPerson[],
+): KitReconciliation<P> {
+  const kit = kitCastIdentity(program);
+  return {
+    toAdd: personas.filter((persona) => persona.kind !== "external"),
+    flagged: added
+      .filter((person) => person.movementId === "listen"
+        && !kit.has(labelIdentity(person.name)) && !kit.has(labelIdentity(person.role)))
+      .map((person) => ({ person, reason: KIT_ABSENCE_REASON })),
+  };
+}
+
+/**
+ * The one-click reconcile's write: the existing directory UNTOUCHED, plus one
+ * row per addition. Conservation is the whole point — a generated artifact can
+ * add people to the record, never subtract them — so this function has no way
+ * to drop anyone, rather than a policy of not doing so.
+ */
+export function reconcileDirectoryWrite(
+  existing: DirectoryPerson[],
+  toAdd: Array<{ name: string }>,
+  opts: { stamp: string; roleResolved: (role: string) => boolean },
+): DirectoryPerson[] {
+  return [
+    ...existing,
+    ...toAdd.map((persona, index) => ({
+      id: `dp-${opts.stamp}-${index}-${persona.name.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 8)}`,
+      name: persona.name,
+      role: persona.name,
+      email: undefined,
+      movementId: "listen",
+      roleResolved: opts.roleResolved(persona.name),
+    })),
+  ];
+}
+
+/** Remove ONE person the operator individually confirmed — by id, so a name
+ *  collision can never take the wrong human with it. */
+export function removeDirectoryPerson(existing: DirectoryPerson[], id: string): DirectoryPerson[] {
+  return existing.filter((person) => person.id !== id);
+}
+
 /** The operator's row/column order for the coverage matrix — PRESENTATIONAL,
  * so it lives in an underscore (fingerprint-exempt) frame field: reordering
  * areas or people never stales the kit and never re-opens the gate. */

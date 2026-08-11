@@ -23,6 +23,82 @@ import {
   composeLocusAnswers, answeredLocusCount, type PortalQuestionModel,
 } from "@/v3/components/flow/portalQuestionModel";
 import type { LedgerStore } from "@/v3/lib/ledger/store";
+import { displayPersonLabel, UNNAMED_SUFFIX_RE } from "@/v3/components/flow/flowStakeholders";
+
+/**
+ * Words that only ever belong to a ROLE or a title, never to a personal name.
+ *
+ * The direction of the failure is chosen deliberately. A surname this list
+ * happens to contain is greeted by its FULL label ("Hi Priya Lead,") — clumsy,
+ * and visibly the person's own words. A role NOT in the list is truncated to its
+ * first word ("Hi Head,"), which is the defect. So the list errs wide, and the
+ * fallback for anything it can't place is "print what we were given", never
+ * "invent a first name out of it".
+ */
+const ROLE_WORDS: ReadonlySet<string> = new Set([
+  "head", "chief", "vp", "svp", "evp", "avp", "director", "manager", "lead", "leader",
+  "officer", "president", "owner", "analyst", "engineer", "architect", "specialist",
+  "coordinator", "administrator", "admin", "consultant", "partner", "executive",
+  "supervisor", "team", "staff", "advisor", "adviser", "controller", "counsel",
+  "secretary", "treasurer", "principal", "associate", "assistant", "intern", "founder",
+  "sme", "rep", "representative", "sponsor", "stakeholder", "approver", "reviewer",
+  "operations", "ops", "sales", "marketing", "finance", "legal", "hr", "it",
+  "procurement", "delivery", "product", "programme", "program", "project", "portfolio",
+  "service", "services", "support", "success", "account", "accounts", "regional",
+  "global", "national", "senior", "junior", "deputy", "acting", "interim", "manager's",
+  "ceo", "cto", "cfo", "coo", "cio", "cmo", "ciso", "chro", "cdo", "cro",
+]);
+
+/** Connectives and punctuation that mark a label as a description of a SLOT
+ *  rather than a person: "Head of Sales", "Sales / Alliances", "Lead (Asha)". */
+const ROLE_SHAPE_RE = /(^|\s)(of|the|and|for|at|to|in|&)(\s|$)|[0-9(){}[\]/|,:]/i;
+
+/** Is this label a PERSON's name (so a first name can be taken from it), or the
+ *  description of a role (which must never be truncated)? */
+export function isPersonLabel(label: string | null | undefined): boolean {
+  const raw = String(label ?? "").trim();
+  if (!raw) return false;
+  if (UNNAMED_SUFFIX_RE.test(raw)) return false;          // "<Domain> SME — TBC" placeholder
+  if (ROLE_SHAPE_RE.test(raw)) return false;
+  const words = raw.split(/\s+/);
+  if (words.length > 4) return false;                     // nobody is greeted by a sentence
+  return !words.some((w) => ROLE_WORDS.has(w.toLowerCase().replace(/[.,'’]/g, "")));
+}
+
+/**
+ * The name a client-facing greeting may use — the ONE place that decides it.
+ *
+ * `stakeholder.split(/\s+/)[0]` greeted an executive with "Hi Head," on the most
+ * client-facing page in the product, because a durable link's recipient is
+ * frequently a ROLE ("Head of Sales") rather than a person. A first name is only
+ * taken when the label actually IS a person's name; a role is greeted whole, and
+ * an unfilled placeholder is not greeted at all — there is no one to greet yet,
+ * and inventing one is exactly the fabrication this codebase forbids.
+ *
+ * `displayPersonLabel` (the single existing definition, in `flowStakeholders`) is
+ * applied first so the stored machine token "— TBC" can never reach the page.
+ * Idempotent on its own output, so a surface may apply it defensively.
+ */
+export function greetingName(label: string | null | undefined): string {
+  const shown = displayPersonLabel(label);
+  if (!shown) return "";
+  if (UNNAMED_SUFFIX_RE.test(String(label ?? "").trim())) return "";
+  return isPersonLabel(shown) ? shown.split(/\s+/)[0] : shown;
+}
+
+/**
+ * What a review surface sends alongside its composed answer text.
+ *
+ * `final` is the terminal "I'm done" — the ONE thing that closes a durable
+ * per-stakeholder link. Its absence means "here's what I have so far", and the
+ * link stays usable for the questions this person hasn't reached yet.
+ * `answered` names the loci this send covers so they aren't asked again.
+ */
+export interface PortalSendExtras {
+  suggestedVoices?: Array<{ name: string; role: string; note: string }>;
+  final?: boolean;
+  answered?: string[];
+}
 
 /** Paper-clip renderer supplied by the page (FlowRespond) so every review
  * input shares the one attach pipeline: the file's extracted text lands IN
@@ -86,7 +162,9 @@ function ReviewHeader({ stakeholder, programme, objective, intro, areaLabel, ret
   /** They've responded before and are returning to a follow-up — warm the greeting. */
   returning?: boolean;
 }) {
-  const first = stakeholder ? stakeholder.split(/\s+/)[0] : "";
+  // NOT `split(" ")[0]`. The recipient of a durable link is as often a ROLE as a
+  // person, and truncating one produced "Hi Head," for "Head of Sales".
+  const greeting = greetingName(stakeholder);
   // Just the core goal for the opener — drop measurement/timeline clauses (they
   // sit after an em-dash: "…satisfaction — measured against baselines — within
   // 12 months"). A stakeholder wants the "why", not the KPI framing.
@@ -97,7 +175,7 @@ function ReviewHeader({ stakeholder, programme, objective, intro, areaLabel, ret
       {programme ? <div className="v3fs-rvw-prog">{programme}</div> : null}
       {/* On a return visit the FollowUpBanner above carries the "Welcome back"
           greeting — don't say it twice; a first visit greets here. */}
-      {first && !returning ? <h1 className="v3fs-rvw-hi">Hi {first},</h1> : null}
+      {greeting && !returning ? <h1 className="v3fs-rvw-hi">Hi {greeting},</h1> : null}
       <p className="v3fs-rvw-lede">
         We&rsquo;re building <b>{programme || "this programme"}</b> — an agentic solution{coreGoal ? <> built to {coreGoal.charAt(0).toLowerCase() + coreGoal.slice(1)}</> : ""}.
       </p>
@@ -142,7 +220,7 @@ function coverageLabel(review: ReviewPayload): string {
 
 function OntologyAtlasSurface({ review, stakeholder, programme, objective, submitting, error, onSubmit, draftKey, returning, afterIntro, clip }: {
   review: OntologyAtlasReview; stakeholder: string; programme?: string; objective?: string; submitting: boolean; error: string | null;
-  onSubmit: (answers: string, extras?: { suggestedVoices?: Array<{ name: string; role: string; note: string }> }) => void; draftKey?: string; returning?: boolean; afterIntro?: React.ReactNode; clip?: ClipFn;
+  onSubmit: (answers: string, extras?: PortalSendExtras) => void; draftKey?: string; returning?: boolean; afterIntro?: React.ReactNode; clip?: ClipFn;
 }) {
   const [termComments, setTermComments] = usePersistentState<Record<string, string>>(draftKey, "oaTerms", {});
   const [workflowComments, setWorkflowComments] = usePersistentState<Record<string, string>>(draftKey, "oaWf", {});
@@ -157,6 +235,12 @@ function OntologyAtlasSurface({ review, stakeholder, programme, objective, submi
     [termComments, workflowComments, overall]);
   const shownTerms = area && hasArea(review.terms, area) ? review.terms.filter((t) => t.area === area) : review.terms;
   const shownWorkflows = area && hasArea(review.workflows, area) ? review.workflows.filter((w) => w.area === area) : review.workflows;
+  /** This surface carries no locus questions, so it reports no `answered` keys —
+   *  only whether the person is finished. */
+  const atlasExtras = (final: boolean): PortalSendExtras => ({
+    ...(whoElse.trim() ? { suggestedVoices: [{ name: whoElse.trim(), role: "", note: "" }] } : {}),
+    ...(final ? { final: true } : {}),
+  });
 
   return (
     <>
@@ -220,10 +304,21 @@ function OntologyAtlasSurface({ review, stakeholder, programme, objective, submi
       <div className="v3fs-rvw-foot">
         {draftKey && touched ? <p className="v3fs-rvw-saved">✓ Saved on this device — you can close this and come back</p> : null}
         {error ? <p className="v3fs-portal-err">{error}</p> : null}
-        <button type="button" className="v3fs-btn pri v3fs-rvw-send" disabled={submitting || (!touched && !whoElse.trim())}
-          onClick={() => onSubmit(composeOntologyAtlasAnswers(review, termComments, workflowComments, overall), whoElse.trim() ? { suggestedVoices: [{ name: whoElse.trim(), role: "", note: "" }] } : undefined)}>
-          {submitting ? "Sending…" : "Send my comments"}
-        </button>
+        {/* Same two sends as the workflow surface: the primary files what they
+            have and keeps the durable link open; only "finish" closes it. */}
+        <div className="v3fs-portal-sendgroup">
+          <button type="button" className="v3fs-btn pri v3fs-rvw-send" disabled={submitting || (!touched && !whoElse.trim())}
+            onClick={() => onSubmit(composeOntologyAtlasAnswers(review, termComments, workflowComments, overall), atlasExtras(false))}>
+            {submitting ? "Sending…" : "Send my comments"}
+          </button>
+          <button type="button" className="v3fs-a v3fs-portal-finish" disabled={submitting || (!touched && !whoElse.trim())}
+            onClick={() => onSubmit(composeOntologyAtlasAnswers(review, termComments, workflowComments, overall), atlasExtras(true))}>
+            Send &amp; finish — I have nothing more to add
+          </button>
+          <p className="v3fs-portal-foot">
+            Sending keeps this link open — come back any time to add more. Only &ldquo;Send &amp; finish&rdquo; closes it.
+          </p>
+        </div>
       </div>
     </>
   );
@@ -231,7 +326,7 @@ function OntologyAtlasSurface({ review, stakeholder, programme, objective, submi
 
 function ListenWorkflowSurface({ review, stakeholder, programme, objective, submitting, error, onSubmit, draftKey, returning, afterIntro, clip, questionModel, store, roster }: {
   review: ListenWorkflowReview; stakeholder: string; programme?: string; objective?: string; submitting: boolean; error: string | null;
-  onSubmit: (answers: string, extras?: { suggestedVoices?: Array<{ name: string; role: string; note: string }> }) => void; draftKey?: string; returning?: boolean; afterIntro?: React.ReactNode; clip?: ClipFn;
+  onSubmit: (answers: string, extras?: PortalSendExtras) => void; draftKey?: string; returning?: boolean; afterIntro?: React.ReactNode; clip?: ClipFn;
   questionModel?: PortalQuestionModel; store?: LedgerStore; roster?: Array<{ name: string; role: string }>;
 }) {
   const [wfSteps, setWfSteps] = usePersistentState<FlowNode[][]>(draftKey, "lwSteps",
@@ -359,6 +454,17 @@ function ListenWorkflowSurface({ review, stakeholder, programme, objective, subm
     const locusBlock = composeLocusAnswers(questionModel?.rows ?? [], locusAnswers, locusWhys);
     return [base, lines.join("\n"), locusBlock].filter(Boolean).join("\n\n");
   };
+
+  /** What rides beside the composed text. `final` closes the durable link and is
+   *  only ever true when the person pressed the finish action; `answered` names
+   *  the loci this send covers, so a return visit isn't asked them again. */
+  const sendExtras = (final: boolean) => ({
+    ...(whoElse.trim() ? { suggestedVoices: [{ name: whoElse.trim(), role: "", note: "" }] } : {}),
+    ...(final ? { final: true } : {}),
+    answered: (questionModel?.rows ?? [])
+      .filter((row) => (locusAnswers[row.about] ?? "").trim())
+      .map((row) => row.about),
+  });
 
   return (
     <>
@@ -500,8 +606,18 @@ function ListenWorkflowSurface({ review, stakeholder, programme, objective, subm
       <div className="v3fs-rvw-foot">
         {draftKey && proposal.count ? <p className="v3fs-rvw-saved">✓ Saved on this device — you can close this and come back</p> : null}
         {error ? <p className="v3fs-portal-err">{error}</p> : null}
-        <button type="button" className="v3fs-btn pri v3fs-rvw-send" disabled={submitting || (!proposal.count && !whoElse.trim())}
-          onClick={() => onSubmit(compose(), whoElse.trim() ? { suggestedVoices: [{ name: whoElse.trim(), role: "", note: "" }] } : undefined)}>{submitting ? "Sending…" : "Send my changes"}</button>
+        {/* Sending files what they have and LEAVES THE DURABLE LINK OPEN — a
+            person who fixed one step out of eight must be able to come back for
+            the rest. Only the quieter "finish" says they're done. */}
+        <div className="v3fs-portal-sendgroup">
+          <button type="button" className="v3fs-btn pri v3fs-rvw-send" disabled={submitting || (!proposal.count && !whoElse.trim())}
+            onClick={() => onSubmit(compose(), sendExtras(false))}>{submitting ? "Sending…" : "Send my changes"}</button>
+          <button type="button" className="v3fs-a v3fs-portal-finish" disabled={submitting || (!proposal.count && !whoElse.trim())}
+            onClick={() => onSubmit(compose(), sendExtras(true))}>Send &amp; finish — I have nothing more to add</button>
+          <p className="v3fs-portal-foot">
+            Sending keeps this link open — come back any time to add more. Only &ldquo;Send &amp; finish&rdquo; closes it.
+          </p>
+        </div>
       </div>
     </>
   );
@@ -517,7 +633,7 @@ export default function FlowReviewSurface({ review, stakeholder, submitting, err
   roster?: Array<{ name: string; role: string }>;
   /** Paper-clip renderer for input fields — see ClipFn. */
   clip?: ClipFn;
-  onSubmit: (answers: string, extras?: { suggestedVoices?: Array<{ name: string; role: string; note: string }> }) => void;
+  onSubmit: (answers: string, extras?: PortalSendExtras) => void;
   /** Persist the respondent's edits to their device under this key so they can
    * close a long review and return. FlowRespond clears it on submit. */
   draftKey?: string;
