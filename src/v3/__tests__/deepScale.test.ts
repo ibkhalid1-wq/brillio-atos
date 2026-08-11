@@ -397,4 +397,34 @@ describe("[5c] timings and growth shape", () => {
     expect(X10.t.conservation).toBeLessThan(5_000);
     expect(X10.t.roster).toBeLessThan(5_000);
   });
+
+  /**
+   * THE BUDGET (set 2026-08-11, pass-2 finding N-6).
+   *
+   * The ceilings above are CI tolerances — 20 s for a render nobody would wait
+   * through. They pin the growth SHAPE and were deliberately generous, which
+   * means a change could make the product four times slower and still pass. A
+   * shape without a ceiling is a measurement, not a gate.
+   *
+   * So: a ceiling grounded in what a person experiences, not in what CI
+   * survives. Measured today (median of 4 runs, after warm-up):
+   *   1x  (410 questions — Laila is 395, the largest real programme):  ~9 ms
+   *   10x (4,100 questions — no client is near this):                 ~690 ms
+   *
+   * The budget is ~5x the measurement in both cases. Tight enough that a real
+   * regression (anything that makes the renderer five times slower) turns this
+   * red; loose enough to absorb a shared or throttled machine, because a gate
+   * that flakes is a gate people learn to re-run rather than read.
+   *
+   * If a client programme ever genuinely approaches 10x, revisit N-6 rather
+   * than raising this number — the quadratic term is the thing to fix, and the
+   * fix is an index on `about` in `store.ts`, which is frozen core.
+   */
+  it("BUDGET: a full render stays inside human tolerance at both scales", () => {
+    expect(X1.t.renderAll, "a real-programme render must feel instant").toBeLessThan(400);
+    expect(X10.t.renderAll, "10x the largest real programme must still be a wait, not a hang").toBeLessThan(4_000);
+    // The linear paths have no excuse at any scale.
+    expect(X10.t.conservation, "the conservation query is linear — it must stay cheap").toBeLessThan(500);
+    expect(X10.t.roster, "the roster projection is linear — it must stay cheap").toBeLessThan(500);
+  });
 });
