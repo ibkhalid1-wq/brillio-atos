@@ -1749,6 +1749,7 @@ function FlowMission({ program, fleet, loadMovementSpend, onSetHaltAll, onToggle
                     title={halted ? "Resume — allow this agent to run again"
                       : state === "running" ? "Hold — the current run finishes; new runs are blocked until resumed"
                         : "Hold — block this agent's runs until resumed"}
+                    aria-label={`${halted ? "Resume" : "Hold"} the ${agentId} agent`}
                     onClick={() => void act(() => onToggleAgentHalt(agentId, !halted))}>
                     {halted ? "Resume" : "Hold"}
                   </button>
@@ -2140,7 +2141,7 @@ function FlowPortfolio({ programs, activeId, onSelectProgram, onHydratePrograms,
                stops propagation, but a keydown on a nested control still bubbles
                here, so pressing Enter on Rename used to arm the rename and then
                navigate straight off the card. */
-            <div className="v3fs-pf-head" role="button" tabIndex={0} aria-label={`Open ${entry.name}`}
+            <div className="v3fs-pf-head" role="button" tabIndex={0} aria-label={`${entry.name} — open this programme`}
               onClick={() => onSelectProgram(entry.id)}
               onKeyDown={rowActivate(() => onSelectProgram(entry.id))}>
               <span className="v3fs-pf-id">
@@ -2170,7 +2171,7 @@ function FlowPortfolio({ programs, activeId, onSelectProgram, onHydratePrograms,
                 <span className={`v3fs-pf-status ${tone}`}>
                   {active ? "You are here" : s.needsYou > 0 ? `${s.needsYou} waiting` : "On track"}
                 </span>
-                <button type="button" className="v3fs-pf-chev" aria-label={isCollapsed ? "Show details" : "Hide details"}
+                <button type="button" className="v3fs-pf-chev" aria-label={`${isCollapsed ? "Show" : "Hide"} details for ${entry.name}`}
                   aria-expanded={!isCollapsed} aria-controls={`${headId}-detail`}
                   onClick={(e) => { e.stopPropagation(); toggleCard(entry.id); }}>⌄</button>
               </span>
@@ -2213,6 +2214,7 @@ function FlowPortfolio({ programs, activeId, onSelectProgram, onHydratePrograms,
 
               <div className="v3fs-pf-cta">
                 <button type="button" className="v3fs-btn pri" disabled={active}
+                  aria-label={active ? `You are already in ${entry.name}` : `Open ${entry.name}`}
                   onClick={() => onSelectProgram(entry.id)}>
                   {active ? "You are here" : "Open programme"}
                 </button>
@@ -2220,11 +2222,12 @@ function FlowPortfolio({ programs, activeId, onSelectProgram, onHydratePrograms,
                   armedDelete === entry.id ? (
                     <span className="v3fs-pf-arm">
                       <span className="v3fs-pf-arm-q">Archive this programme?</span>
-                      <button type="button" className="v3fs-btn danger" onClick={() => { setArmedDelete(null); onDeleteProgram(entry.id); }}>Archive</button>
-                      <button type="button" className="v3fs-btn" onClick={() => setArmedDelete(null)}>Keep</button>
+                      <button type="button" className="v3fs-btn danger" aria-label={`Archive ${entry.name}`} onClick={() => { setArmedDelete(null); onDeleteProgram(entry.id); }}>Archive</button>
+                      <button type="button" className="v3fs-btn" aria-label={`Keep ${entry.name}`} onClick={() => setArmedDelete(null)}>Keep</button>
                     </span>
                   ) : (
-                    <button type="button" className="v3fs-btn quiet" title="Archive — hides it from the list, keeps the record"
+                    <button type="button" className="v3fs-btn quiet" aria-label={`Archive ${entry.name}`}
+                      title="Archive — hides it from the list, keeps the record"
                       onClick={() => setArmedDelete(entry.id)}>Archive</button>
                   )
                 ) : null}
