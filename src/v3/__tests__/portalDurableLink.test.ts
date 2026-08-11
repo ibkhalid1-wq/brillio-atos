@@ -267,3 +267,64 @@ describe("F3 — the respond PAGE lets them come back and finish", () => {
     expect(host.querySelectorAll(".v3fs-portal-card textarea").length).toBe(0);
   });
 });
+
+/** Type into a controlled React textarea the way a person does. */
+const typeInto = (el: HTMLTextAreaElement, value: string) => {
+  const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
+  act(() => {
+    setter.call(el, value);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+};
+
+describe("F3 — the confirmation tells the truth about which send just happened", () => {
+  let posted: Array<Record<string, unknown>>;
+  beforeEach(() => {
+    host = document.createElement("div");
+    document.body.appendChild(host);
+    root = createRoot(host);
+    localStorage.clear();
+    posted = [];
+  });
+  afterEach(() => {
+    act(() => root.unmount());
+    host.remove();
+    globalThis.fetch = realFetch;
+  });
+
+  /** A first visit: eight questions, nothing sent yet. */
+  const openLink = async () => {
+    globalThis.fetch = (async (_url: string, init?: RequestInit) => {
+      if (init?.method === "POST") { posted.push(JSON.parse(String(init.body))); return { ok: true, json: async () => ({ ok: true }) }; }
+      return { ok: true, json: async () => servedPack({ submissions: [], answered: false, answeredAsks: undefined }) };
+    }) as unknown as typeof fetch;
+    await act(async () => { root.render(createElement(FlowRespond, { token: "p1.deadbeef" })); });
+    typeInto(host.querySelector(".v3fs-portal-card textarea") as HTMLTextAreaElement,
+      "The queue stalls at the credit check, every single time.");
+  };
+  /** The ANSWER submissions only — the page also fires anonymous engagement pings. */
+  const sent = () => posted.filter((p) => typeof p.answers === "string");
+  const press = async (label: string) => {
+    const button = [...host.querySelectorAll(".v3fs-portal-sendgroup button")]
+      .find((b) => (b.textContent ?? "").includes(label)) as HTMLButtonElement;
+    await act(async () => { button.click(); });
+  };
+
+  it("REGRESSION: after 'Send my answers' the page says the link STAYS OPEN", async () => {
+    await openLink();
+    await press("Send my answers");
+    expect(sent()).toHaveLength(1);
+    expect(sent()[0].final).toBe(false);
+    // …and it names the ask it covered, so the return visit doesn't re-ask it
+    expect(sent()[0].answered).toEqual(["Question 1?"]);
+    expect(text()).toContain("This link stays open");
+    expect(text()).not.toContain("This link is now closed");
+  });
+
+  it("after 'Send & finish' — and only then — the page says the link is now closed", async () => {
+    await openLink();
+    await press("I have nothing more to add");
+    expect(sent()[0].final).toBe(true);
+    expect(text()).toContain("this link is now closed");
+  });
+});
