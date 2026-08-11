@@ -159,7 +159,25 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
   const pendingSor = useRef<string | null>(null);
   const pendingScope = useRef<string[]>([]);
   const [dictPreview, setDictPreview] = useState<{ name: string; fields: number; closes: number; csv: string; sor: string | null; scope: number; sheet?: string; sheets?: number } | null>(null);
+  /** A file that could not be read at all — reported where the upload was, never swallowed. */
+  const [dictError, setDictError] = useState<{ name: string; reason: string; sor: string | null } | null>(null);
   const readDictionaryFile = async (file: File, sor: string | null, scopeLoci: string[]) => {
+    // EVERYTHING below can throw: `arrayBuffer()` on an unreadable file, the
+    // dynamic `import("xlsx")`, `XLSX.read` on a corrupt or password-protected
+    // workbook, `text()` on a binary blob. This function used to have no catch
+    // and its one caller invoked it with `void`, so a rejection was discarded by
+    // the runtime: the operator attached a file and NOTHING happened — no
+    // preview, no error, no console line. A silent failure is the worst possible
+    // outcome for an upload, because the operator's next move is to attach it
+    // again and watch nothing happen again.
+    try {
+      await readDictionaryFileUnsafe(file, sor, scopeLoci);
+    } catch (err) {
+      setDictPreview(null);
+      setDictError({ name: file.name, sor, reason: (err as Error)?.message?.slice(0, 140) || "the file could not be read" });
+    }
+  };
+  const readDictionaryFileUnsafe = async (file: File, sor: string | null, scopeLoci: string[]) => {
     // A workbook is converted to CSV and parsed by the SAME parser as a .csv upload —
     // one definition of a dictionary row, whatever the operator exported. Which sheet
     // was read is carried into the preview: a real export usually has a cover sheet,
@@ -353,12 +371,26 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
         const unattributed = ledger.artifactAsks.unattributed;
         if (!chase.length && !unattributed.weight) return null;   // self-cleared → hidden
         const now = Date.now();
+        // The systems that actually have a row on screen right now. A preview or
+        // an error naming anything else is an ORPHAN and must fall through to the
+        // programme-wide row rather than render nowhere.
+        const chaseSors = new Set(chase.map((ask) => ask.sor));
         // ONE upload control, rendered per ask (keyed to that SoR) and once for the
         // programme-wide file. `loci` is the scope the preview measures against, so
         // "closes N" means N of THIS system's open questions.
         const uploadRow = (sor: string | null, loci: string[]) => {
           if (!onDictionary) return null;
-          const active = dictPreview && dictPreview.sor === sor;
+          // A preview must NEVER be invisible. It rendered only in the row whose
+          // `sor` matched, and `pendingSor` is a ref that was never reset — so a
+          // stale or null value routed the preview to a row the operator was not
+          // looking at, or to none at all. That is the "I attached a file and
+          // nothing happened" report. The programme-wide row (rendered last) now
+          // also claims any preview whose system is not on screen, so the file
+          // always lands somewhere the operator can see it.
+          const orphan = dictPreview !== null && dictPreview.sor !== null && !chaseSors.has(dictPreview.sor);
+          const active = dictPreview !== null && (dictPreview.sor === sor || (sor === null && orphan));
+          const showError = dictError !== null && (dictError.sor === sor
+            || (sor === null && dictError.sor !== null && !chaseSors.has(dictError.sor)));
           const key = sor ?? "*";
           return (
             <div className="v3ib-dict-up">
@@ -374,16 +406,23 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                       : ""}
                   </span>
                   <button type="button" className="v3ib-btn" disabled={busy === `dict:${key}`}
-                    onClick={() => { setBusy(`dict:${key}`); void Promise.resolve(onDictionary(dictPreview.csv, dictPreview.sor)).finally(() => { setBusy(null); setDictPreview(null); }); }}>
+                    onClick={() => { setBusy(`dict:${key}`); void Promise.resolve(onDictionary(dictPreview.csv, dictPreview.sor)).finally(() => { setBusy(null); setDictPreview(null); pendingSor.current = null; pendingScope.current = []; }); }}>
                     {busy === `dict:${key}` ? "attaching…" : sor ? `attach as the ${sor} dictionary` : "attach this dictionary"}
                   </button>
-                  <button type="button" className="v3ib-btn ghost sm" onClick={() => setDictPreview(null)}>discard</button>
+                  <button type="button" className="v3ib-btn ghost sm" onClick={() => { setDictPreview(null); pendingSor.current = null; pendingScope.current = []; }}>discard</button>
                 </>
               ) : (
+                <>
+                {showError ? (
+                  <span className="v3ib-dict-err" role="alert">
+                    <b>{dictError!.name}</b> could not be read — {dictError!.reason}. Try exporting it as CSV.
+                  </span>
+                ) : null}
                 <button type="button" className="v3ib-btn ghost"
-                  onClick={() => { pendingSor.current = sor; pendingScope.current = loci; dictRef.current?.click(); }}>
+                  onClick={() => { setDictError(null); pendingSor.current = sor; pendingScope.current = loci; dictRef.current?.click(); }}>
                   <span aria-hidden="true">⬆ </span>upload {sor ? `the ${sor} dictionary` : "a dictionary covering every system"} (CSV/TSV/Excel)
                 </button>
+                </>
               )}
             </div>
           );
