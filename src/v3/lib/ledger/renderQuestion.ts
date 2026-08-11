@@ -88,7 +88,9 @@ function scalarAt(store: LedgerStore, about: string): string | null {
  * `semantics.reading.*` claims a migrated terminology collision leaves beside the
  * `#semantics` unknown. Live scalars only, document order, deduped.
  */
-function conflictingReadings(store: LedgerStore, elementId: string): string[] {
+function conflictingReadings(store: LedgerStore, elementId: string, cache?: RenderCache): string[] {
+  const hit = cache?.readings?.get(elementId);
+  if (hit) return hit;
   const out: string[] = [];
   for (const c of store.claims()) {
     if (!isLive(c) || c.value.kind !== "scalar") continue;
@@ -96,6 +98,7 @@ function conflictingReadings(store: LedgerStore, elementId: string): string[] {
     const v = String(c.value.value).trim();
     if (v && !out.includes(v)) out.push(v);
   }
+  if (cache) (cache.readings ??= new Map()).set(elementId, out);
   return out;
 }
 
@@ -125,10 +128,46 @@ function nameFor(store: LedgerStore, el: LedgerElement | undefined, elementId: s
   return el.name;
 }
 
-export function renderQuestion(store: LedgerStore, about: string, audience: Audience): RenderedQuestion {
+/**
+ * A PER-PASS index, supplied by callers that render many loci at once.
+ *
+ * `renderQuestion` rebuilt `new Map(store.elements())` on EVERY call, and
+ * `conflictingReadings` walked every claim for every `#semantics` locus. A pass
+ * over Q loci therefore cost O(Q · (E + C)) — quadratic in programme size.
+ * Measured at 10x the largest real programme (4,100 questions / 3,300 elements):
+ * one full render took ~690 ms, a x73 blow-up over 1x (validation pass 2, N-6).
+ *
+ * The cache is EXPLICIT and PER-PASS rather than memoised on the store, and that
+ * is the safety property: `store.elements()` returns a fresh array each call, so
+ * there is nothing stable to key on, and a length-check cache would silently
+ * serve a stale name after an element was RENAMED. A cache that lives for one
+ * pass cannot go stale — it is built and discarded inside a single synchronous
+ * render, so it observes one consistent view of the store by construction.
+ *
+ * Omitting it changes nothing but speed: every call without a cache behaves
+ * exactly as before. The real fix for the remaining term is an index on `about`
+ * in `store.ts` (`liveClaimsAbout` filters the whole claim map per insert), and
+ * that is frozen core — recorded as finding N-6, not done here.
+ */
+export interface RenderCache {
+  byId?: Map<string, LedgerElement>;
+  readings?: Map<string, string[]>;
+}
+
+export const createRenderCache = (): RenderCache => ({});
+
+/** The element index, built once per pass when a cache is supplied. */
+const elementIndex = (store: LedgerStore, cache?: RenderCache): Map<string, LedgerElement> => {
+  if (cache?.byId) return cache.byId;
+  const built = new Map(store.elements().map((e) => [e.id, e] as const));
+  if (cache) cache.byId = built;
+  return built;
+};
+
+export function renderQuestion(store: LedgerStore, about: string, audience: Audience, cache?: RenderCache): RenderedQuestion {
   const elementId = elementIdOf(about);
   const kind = slotOf(about);
-  const byId = new Map(store.elements().map((e) => [e.id, e] as const));
+  const byId = elementIndex(store, cache);
   const el = byId.get(elementId);
   const your = audience === "stakeholder" ? "your" : "the";
 
@@ -160,7 +199,7 @@ export function renderQuestion(store: LedgerStore, about: string, audience: Audi
         : kind === "valueSet" ? `What values can ${name} take?`
           : kind === "dataType" ? `What type of value is ${name}?`
             : kind === "optionality" ? `Is ${name} required or optional?`
-              : kind === "semantics" ? meaningQuestion(name, conflictingReadings(store, elementId))
+              : kind === "semantics" ? meaningQuestion(name, conflictingReadings(store, elementId, cache))
                 : kind === "trigger" ? `What starts "${name}"?`
                   : kind === "owner" ? `Who owns ${name}?`
                     : kind === "systemOfRecord" ? `Which system is the source of record for ${name}?`
@@ -200,12 +239,13 @@ export function affordanceOptions(store: LedgerStore, kind: string): string[] {
  *  sub-questions. The unit stays QUESTIONS — the group header shows the count. */
 export interface QuestionGroup { elementId: string; header: string; questions: RenderedQuestion[]; count: number; }
 export function groupQuestions(store: LedgerStore, abouts: readonly string[], audience: Audience): QuestionGroup[] {
+  const cache = createRenderCache();
   const byEl = new Map<string, RenderedQuestion[]>();
   for (const about of abouts) {
-    const q = renderQuestion(store, about, audience);
+    const q = renderQuestion(store, about, audience, cache);
     (byEl.get(q.elementId) ?? byEl.set(q.elementId, []).get(q.elementId)!).push(q);
   }
-  const byId = new Map(store.elements().map((e) => [e.id, e] as const));
+  const byId = elementIndex(store, cache);
   return [...byEl.entries()].map(([elementId, questions]) => {
     const el = byId.get(elementId);
     const header = el?.kind === "step"
