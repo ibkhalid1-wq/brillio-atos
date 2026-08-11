@@ -1084,10 +1084,12 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
             </div>
           ) : null}
           {band.id === "loop" && band.stations.some((s) => s.lane) ? (
-            // The Design Loop is a LEDGER SURFACE, not four refreshable cards: three
-            // ownership zones keyed to source class (operator builds · stakeholders
-            // shape · joint), convergence promoted to real closures. See
-            // DesignLoopZones.tsx and docs/aura/surface-redesign.md.
+            // The Design Loop is a LEDGER SURFACE, not four refreshable cards: the
+            // operator's four built artifacts, the design review round STAGED to the
+            // loop's own sequence, and a deviation section that draws only when there
+            // are deviations. `onGoDiscover` is how the band hands Listen's burn-down
+            // back to the tab that works it — the same setTab the Heard stat uses.
+            // See DesignLoopZones.tsx and docs/aura/surface-redesign.md.
             <DesignLoopZones band={band} program={program} ledger={ledger}
               roster={roundRoster}
               onOpen={openStation}
@@ -1095,6 +1097,7 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
               onGenerate={onRunAgent ? generate : undefined}
               onMintReview={onMintReview}
               onDesignRound={onDesignRound}
+              onGoDiscover={() => setTab("discovery")}
               regenBusy={regenBusy} genBusy={genBusy} />
           ) : (
           <div className={`v3ln-stns n${band.stations.length + (band.id === "frame" && onSaveInputs ? 1 : 0)}`}>

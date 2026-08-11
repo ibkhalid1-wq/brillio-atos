@@ -100,8 +100,13 @@ interface Pack {
    * deployed build exists. Flows arrive persona-first for this holder. */
   design?: { flows: Array<Record<string, unknown>>; screens: Array<Record<string, unknown>> };
   /** THEIR demo script — narrates the walk: opening quote, scenario,
-   * per-beat talk track and callbacks, closing acceptance ask. */
-  script?: { openingQuote?: string; scenario?: string; acceptanceAsk?: string; steps?: Array<{ beat?: string; say?: string; callback?: string }> };
+   * per-beat talk track and callbacks, closing acceptance ask. `matchedBy` says
+   * whether the edge resolved it from their NAME or from their ROLE. */
+  script?: { openingQuote?: string; scenario?: string; acceptanceAsk?: string; matchedBy?: string; steps?: Array<{ beat?: string; say?: string; callback?: string }> };
+  /** No script resolved for this recipient — the edge's sentence saying so, shown
+   * in place of the script. An empty script block is indistinguishable from a
+   * broken page, and this page asks people to approve what they can see. */
+  scriptGap?: string;
   /** The recipient's business area — the demo walker opens on their own area's
    * flow and names it, the Show parallel to the Listen reviews' area scoping. */
   recipientArea?: string;
@@ -712,7 +717,7 @@ export default function FlowRespond({ token }: { token: string }) {
                the honest gap (and the external URL) when it cannot. */
             <DesignRoundReviewSurface stamp={roundStamp} stakeholder={greetName}
               programme={state.pack.programme} objective={state.pack.objective}
-              script={state.pack.script}
+              script={state.pack.script} scriptGap={state.pack.scriptGap}
               submitting={submitting} error={error} draftKey={draftKey}
               afterIntro={<MeetingRequestBar kind="prototype" sent={meetingSent} submitting={submitting}
                 onRequest={(pref) => void requestMeeting(pref, "prototype")} />}
@@ -735,7 +740,7 @@ export default function FlowRespond({ token }: { token: string }) {
                       fieldFlags={demoFieldFlags} onToggleFieldFlag={toggleFieldFlag} /> : null}
                   </>
                 )}
-              onSubmit={(verdict: DesignRoundVerdict, feedback) => void submit({
+              onSubmit={(verdict: DesignRoundVerdict, feedback, capture) => void submit({
                 // The QUARANTINE path, unchanged: this is an ordinary portal response
                 // that happens to carry a verdict. It lands in the operator's inbox
                 // and reaches the round only when they ingest it.
@@ -744,11 +749,21 @@ export default function FlowRespond({ token }: { token: string }) {
                     ? "Design review round — I approve this design as the one we build on."
                     : "Design review round — not yet; I am asking for changes.",
                   feedback,
+                  // TYPED OR DICTATED, in the TEXT as well as on the item. The
+                  // structured `capture` below is the field the operator reads,
+                  // but only `text` survives the hop into the round's own
+                  // `DesignRoundResponse` (see the report: the model has no
+                  // `capture` field yet), and a transcript that reaches the
+                  // record dressed as somebody's writing overstates itself.
+                  capture && capture !== "typed"
+                    ? `— Dictated${capture === "mixed" ? " and corrected" : ""} by ${state.pack.stakeholder}, not typed.`
+                    : "",
                   demoRunBlock,
                 ].filter(Boolean).join("\n\n"),
                 // The word the inbox already stores for a demo verdict, so the round's
                 // own attribution maps it without a second vocabulary.
                 verdict,
+                ...(capture ? { capture } : {}),
               })} />
           ) : shownReview ? (
             <>

@@ -63,15 +63,30 @@ begin
       'changed_keys='||coalesce(r.changed_keys::text,'null'));
 end $$;
 
--- 4) FINGERPRINTS present and differ across a real change.
+-- 4) FINGERPRINTS ARE OFF BY DECISION, and `changed_keys` carries the "what".
+--
+-- This check used to assert before_fp <> after_fp. The cost measure (scratch_03,
+-- run 2026-08-11) showed md5(doc::text) dominating the trigger — 1282 ms of a
+-- 1419 ms overhead at a 933 kB blob, and the live store holds a 1.58 MB and a
+-- 5.3 MB row — so the migration takes the COST GUARD's own advice and drops the
+-- fingerprints while keeping changed_keys.
+--
+-- So the check now holds the DECISION rather than the old behaviour, and it is
+-- deliberately two-sided: it fails if the fingerprints come back, because the
+-- line that re-enables them is the line that decides whether saving a programme
+-- is instant or takes three seconds. Anyone re-enabling should have to re-run
+-- the cost measure and update this check on purpose.
 do $$
 declare r record;
 begin
   select * into r from public.audit_events where row_pk='verify-prog-1' order by id desc limit 1;
   insert into _kit_verify(check_name,status,reason)
-    values ('4 fingerprints — before <> after',
-      case when r.before_fp is not null and r.after_fp is not null and r.before_fp <> r.after_fp
-           then 'PASS' else 'FAIL' end, 'before='||coalesce(left(r.before_fp,8),'null')||' after='||coalesce(left(r.after_fp,8),'null'));
+    values ('4 fingerprints off by decision; changed_keys carries the what',
+      case when r.before_fp is null and r.after_fp is null and r.changed_keys is not null
+           then 'PASS' else 'FAIL' end,
+      case when r.before_fp is not null or r.after_fp is not null
+           then 'fingerprints are BACK ON — re-run scratch_03 against real blob sizes before accepting this'
+           else 'fp=null (by decision) changed_keys='||coalesce(r.changed_keys::text,'null') end);
 end $$;
 
 -- 5) ENFORCE + service-role: missing intent must RAISE (fail fast; actor unrecoverable).

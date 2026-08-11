@@ -28,8 +28,12 @@ const ROOT = resolve(__dirname, "../../..");
 const read = (rel: string) => readFileSync(resolve(ROOT, rel), "utf8");
 const snap = (f: string) => JSON.parse(read(`docs/laila/snapshot-2026-08-07/${f}`)) as Record<string, unknown>;
 
-/** The four concerns plus the assembler that joins them. */
-const CLUSTER = ["prototypeAssembly.ts", "fabric.ts", "semanticRoles.ts", "seedData.ts", "prototypeDesignSystem.ts"] as const;
+/** The four concerns, the assembler that joins them, and the ontology graph they
+ *  all read their structure from. The graph belongs in the cluster for the same
+ *  reason as the rest: fabric, seedData and the assembler each import it, so it
+ *  has to resolve from Deno AND from the client, or the two runtimes stop
+ *  serving the same artefact. */
+const CLUSTER = ["prototypeAssembly.ts", "fabric.ts", "semanticRoles.ts", "seedData.ts", "prototypeDesignSystem.ts", "ontologyGraph.ts"] as const;
 const SHARED = "supabase/functions/_shared";
 
 const walk = (dir: string): string[] => readdirSync(dir).flatMap((entry) => {
@@ -58,6 +62,7 @@ describe("the assembly cluster lives in exactly one place", () => {
       "deriveRoles",
       "generateSeed",
       "meridianStylesheet",
+      "deriveOntologyGraph",
     ];
     const files = [...walk(resolve(ROOT, "src")), ...walk(resolve(ROOT, "supabase/functions"))];
     expect(files.length, "source scan found nothing — the walk is broken").toBeGreaterThan(20);

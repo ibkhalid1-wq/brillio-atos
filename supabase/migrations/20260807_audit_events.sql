@@ -185,8 +185,31 @@ begin
     v_intent->>'action_type', v_intent->>'affected_kind', v_intent->>'affected_id',
     (v_intent->>'partial')::boolean,     -- NULL unless the writer asserted; NEVER coerced to false
     v_missing,
-    md5(coalesce(v_old_doc::text, v_old::text, '')),
-    md5(coalesce(v_new_doc::text, v_new::text, '')),
+    -- FINGERPRINTS OFF, and this is the measured choice the file's own COST GUARD
+    -- called for. Verified on scratch Postgres 2026-08-11 (scratch_03_cost_measure):
+    --
+    --   blob     baseline   with md5   without md5   md5 alone
+    --   71 kB      21 ms     104 ms       37 ms        68 ms
+    --   357 kB     99 ms     554 ms      209 ms       345 ms
+    --   933 kB    433 ms    1852 ms      570 ms      1282 ms
+    --
+    -- md5(doc::text) serialises the whole JSONB before hashing, so it grows with
+    -- the blob and dominates everything else. Laila CRM's live blob is 1.58 MB and
+    -- the largest row in the store is 5.3 MB — both past the worst case measured,
+    -- which puts multiple SECONDS on every save. Dropping the fingerprints takes
+    -- the trigger's overhead at ~1 MB from ~1419 ms to ~137 ms.
+    --
+    -- `changed_keys` is KEPT, exactly as the guard says ("drop the fingerprints and
+    -- KEEP changed_keys — not the reverse"): it works on parsed jsonb, costs little,
+    -- and it is the field that says WHAT moved. A fingerprint only says THAT
+    -- something moved, which the event's existence already says.
+    --
+    -- To turn them back on, restore `md5(coalesce(v_old_doc::text, v_old::text, ''))`
+    -- and the same for new — but re-run the cost measure against real blob sizes
+    -- first, because this is the line that decides whether saving a programme is
+    -- instant or takes three seconds.
+    null,
+    null,
     v_changed, v_intent);
 
   return null;   -- AFTER trigger: return value ignored

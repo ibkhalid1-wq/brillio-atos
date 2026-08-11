@@ -353,16 +353,39 @@ describe("the gate, the mint and the empty state", () => {
   });
 
   it("a programme with no round reads as NOT STARTED — no count, no pass", () => {
-    mountShell(seed());
-    const text = zoneText();
-    expect(text).toContain("No design review round has been opened");
-    expect(text).toContain("nobody has been asked");
+    const program = seed();
+    const gate = designRoundGate(program);
+    mountShell(program);
+    // The GATE is the one voice for this fact now (2026-08-11). It used to be said
+    // twice: the gate's own empty state, and — one line below it — a hand-written
+    // paragraph ("No design review round has been opened. Nothing is approved and
+    // nothing has failed — nobody has been asked.") saying the same thing in the
+    // surface's words. The gate won because it is DERIVED: label, tone and next action
+    // all come from `designRoundGate`, so they cannot drift from the model the way a
+    // second sentence maintained by hand can.
+    expect(gate.label).toContain("not opened");
+    expect(host.querySelector(".v3dr-gate-l")!.textContent).toBe(gate.label);
     expect(host.querySelector(".v3dr-gate")!.className).toContain("tone-dim");
     expect(host.querySelectorAll(".v3dr-person").length).toBe(0);
     expect(host.querySelector(".v3dr-counts"), "counts printed for a round that does not exist").toBeNull();
     // the roster picker is the way in, and it names real people
     act(() => { buttonSaying(zone()!, "open a design review round")!.click(); });
     for (const person of ROSTER) expect(zoneText()).toContain(person.name);
+  });
+
+  it("the not-started fact is stated ONCE — the round's paragraph no longer echoes the gate", () => {
+    // The defect, precisely: the round's empty state landed underneath the gate's own
+    // empty state, neither aware of the other, so the operator read the same fact in
+    // two voices. Reverting either half of the fix trips this.
+    mountShell(seed());
+    const text = zoneText();
+    expect(text, "the hand-written echo of the gate is back").not.toContain("No design review round has been opened");
+    expect(text, "the hand-written echo of the gate is back").not.toContain("nobody has been asked");
+    // …and the fact itself survived: exactly one element says the round is not opened
+    const saying = [...zone()!.querySelectorAll("*")]
+      .filter((el) => !el.querySelector("*") && /not opened/i.test(el.textContent ?? ""));
+    expect(saying).toHaveLength(1);
+    expect(saying[0].className).toBe("v3dr-gate-l");
   });
 
   it("a LOCKED Design Loop opens no round and records no verdict", () => {

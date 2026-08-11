@@ -11,10 +11,11 @@
  *
  * Pure, deterministic, no model call. Read-only over the ontology.
  */
+import { deriveAttributeReferences, deriveOntologyGraph, nameWords } from "./ontologyGraph.ts";
 
 export type ValueRole =
   | "identifier" | "title" | "description"
-  | "monetary" | "date" | "quantity" | "code" | "free-text" | "boolean"
+  | "monetary" | "date" | "quantity" | "percent" | "code" | "category" | "free-text" | "boolean"
   | "status" | "health" | "priority"
   | "parent-ref" | "person-ref" | "cross-ref";
 export type RelationshipRole = "collection" | "parent-ref" | "multi-select";
@@ -26,6 +27,12 @@ export interface AttributeRole {
   role: ValueRole;
   method: RoleMethod;
   confidence: number; // 1.0 for derived (identifier from the name attr), <1 for heuristics
+  /** For a reference role: the ontology entity this attribute names, when the
+   *  ontology itself supplied the answer (see `deriveAttributeReferences`). A
+   *  consumer that has to produce a VALUE for the column needs to know what it
+   *  points at — "Northwind sync" in an Opportunity column is what not knowing
+   *  looks like. */
+  refEntity?: string;
 }
 export interface RelationRole {
   from: string;
@@ -48,29 +55,58 @@ const attrType = (a: unknown): string => (typeof a === "object" && a
   ? String((a as { type?: unknown; dataType?: unknown }).type ?? (a as { dataType?: unknown }).dataType ?? "")
   : "");
 
-/** Name-pattern heuristics for value roles, ordered — first match wins. Each
- * carries a confidence: strong single-purpose names score high, ambiguous low. */
+/**
+ * Name-pattern heuristics for value roles, ordered — first match wins. Each
+ * carries a confidence: strong single-purpose names score high, ambiguous low.
+ *
+ * They are tested against the attribute name SPLIT INTO WORDS ("annualRevenue"
+ * → "annual revenue"), because a schema-shaped name is words with the spaces
+ * taken out. Anchored on `_` and start/end, `revenue` did not match
+ * `annualRevenue`, so an Annual Revenue column rendered "Northwind assessment"
+ * — the same class of defect as the rest of this file, one word boundary away.
+ */
 const VALUE_HEURISTICS: Array<{ re: RegExp; role: ValueRole; confidence: number }> = [
-  { re: /(^|_)(amount|revenue|price|cost|fee|arr|mrr|acv|tcv|value|budget|spend)($|_)/i, role: "monetary", confidence: 0.85 },
-  { re: /(^|_)(date|_at$|closedate|dueon|deadline|timestamp|createdat|updatedat)($|_)/i, role: "date", confidence: 0.85 },
-  { re: /(^|_)(count|qty|quantity|number|score|percent|rate|ratio|total|units?)($|_)/i, role: "quantity", confidence: 0.7 },
-  { re: /(^|_)(status|state|stage|phase)($|_)/i, role: "status", confidence: 0.7 },
-  { re: /(^|_)(health|rag)($|_)/i, role: "health", confidence: 0.75 },
-  { re: /(^|_)(priority|severity|urgency)($|_)/i, role: "priority", confidence: 0.75 },
-  { re: /(^|_)(is|has|can|should|active|enabled|flag)($|_|[a-z])/i, role: "boolean", confidence: 0.6 },
+  { re: /(^| )(amount|revenue|price|cost|fee|arr|mrr|acv|tcv|value|budget|spend)($| )/i, role: "monetary", confidence: 0.85 },
+  { re: /(^| )(date|at|closedate|due on|deadline|timestamp|created|updated)($| )/i, role: "date", confidence: 0.85 },
+  // A percent is BOUNDED. It shared the quantity branch, which knows nothing
+  // about bounds, so a "split percent" column rendered 145, 181, 107 — a
+  // share of a whole, over the whole. Its own role is what carries the bound.
+  { re: /(^| )(percent|percentage|pct)($| )/i, role: "percent", confidence: 0.8 },
+  // "invoice number" / "quote number" / "po no" is a HANDLE; "number of
+  // employees" is a count. The difference is whether the word ENDS the name.
+  { re: /(^| )\S.*( )(number|no|code|id)$/i, role: "code", confidence: 0.65 },
+  { re: /(^| )(count|qty|quantity|number|score|rate|ratio|total|units?)($| )/i, role: "quantity", confidence: 0.7 },
+  { re: /(^| )(status|state|stage|phase)($| )/i, role: "status", confidence: 0.7 },
+  { re: /(^| )(health|rag)($| )/i, role: "health", confidence: 0.75 },
+  { re: /(^| )(priority|severity|urgency)($| )/i, role: "priority", confidence: 0.75 },
+  { re: /(^| )(is|has|can|should|active|enabled|flag|flagged)($| )/i, role: "boolean", confidence: 0.6 },
   // A person-shaped reference and an entity-shaped one are NOT the same column.
   // They used to share one role, and because the seed generator had no branch
   // for it at all, an "owner" field rendered as "Northwind onboarding" — an
   // engagement sitting in the Owner column of a demo. Split them so the value
   // generator can shape each correctly.
-  { re: /(^|_)(owner|manager|rep|assignee|approver|requester|contact)($|_)/i, role: "person-ref", confidence: 0.55 },
-  { re: /(^|_)(account|parent|lead)($|_)/i, role: "parent-ref", confidence: 0.55 },
-  { re: /(^|_)(type|category|segment|tier|region|industry|code|source|channel)($|_)/i, role: "code", confidence: 0.6 },
+  { re: /(^| )(owner|manager|rep|assignee|approver|requester|contact)($| )/i, role: "person-ref", confidence: 0.55 },
+  // A category/type/segment/tier is a LABEL a person reads. It shared the `code`
+  // branch, which mints XXX-NNNN handles, so a "forecast category" column
+  // rendered PRA-5570. A code is a HANDLE; the two are not the same column.
+  { re: /(^| )(type|category|segment|tier|region|industry|source|channel|classification|band|grade|kind)($| )/i, role: "category", confidence: 0.6 },
+  { re: /(^| )(code|sku|ref|reference|num)($| )/i, role: "code", confidence: 0.6 },
+  // LAST RESORT, and only for an ontology whose entity list does not name the
+  // target — `deriveAttributeReferences` gets first refusal, because the
+  // ontology's own entity names beat any word list somebody remembered to write.
+  // It sits below `category` so "lead source" is read as the category it is.
+  { re: /(^| )(account|parent|lead)($| )/i, role: "parent-ref", confidence: 0.55 },
 ];
 
 /** Read an ontology's attribute `type` if present; otherwise fall to the name
  * heuristic. The identifier/title attribute (the entity's name field) is derived. */
-function roleForAttribute(entity: string, attr: unknown, index: number, titleIndex: number): AttributeRole {
+function roleForAttribute(
+  entity: string,
+  attr: unknown,
+  index: number,
+  titleIndex: number,
+  refFor: (attribute: string) => { target: string; match: "exact" | "qualified"; isParent: boolean } | undefined,
+): AttributeRole {
   const name = attrName(attr);
   const t = norm(attrType(attr));
   // If the ontology ever grows a real type field, use it — that is DERIVED.
@@ -83,32 +119,67 @@ function roleForAttribute(entity: string, attr: unknown, index: number, titleInd
     text: "free-text", string: "free-text",
   };
   if (t && typed[t]) return { entity, attribute: name, role: typed[t], method: "derived", confidence: 1 };
-  // The entity's TITLE is the attribute actually named like one; position is
-  // only the fallback when no attribute says so. Treating "first attribute" as
-  // the title unconditionally made Contact's `buyingRole` the title AND
-  // `title` the identifier — and since both roles generated the same synthetic
-  // string, the demo's first two columns were literally identical values.
-  if (index === titleIndex) {
+  // The entity's TITLE is the attribute actually named like one — and only that.
+  // Treating "first attribute" as the title unconditionally made Contact's
+  // `buyingRole` the title AND `title` the identifier (two columns, one string),
+  // and on an entity with no name at all it made `stage` the title of an
+  // Opportunity. `titleIndex` is -1 when the ontology names no such attribute.
+  if (index === titleIndex && titleIndex >= 0) {
     return { entity, attribute: name, role: "title", method: "heuristic", confidence: titleIndex === 0 ? 0.65 : 0.8 };
   }
-  if (/(^|_)(name|title|label|id)($|_)/i.test(name)) {
+  // THE ONTOLOGY ANSWERS FIRST. If the attribute's name is an entity of this
+  // ontology, the attribute references that entity — evidence from the model in
+  // front of us, not from a word list somebody hardcoded. It stays tagged
+  // `heuristic` because the ontology still declares no attribute TYPES: naming
+  // an entity is strong evidence of a reference, not a statement of one. The
+  // confidence says how strong, and `refEntity` carries the answer downstream.
+  // It is asked BEFORE the identifier pattern so `accountId` is read as the
+  // reference it is rather than as this entity's own handle.
+  const ref = refFor(name);
+  if (ref) {
+    return { entity, attribute: name, role: ref.isParent ? "parent-ref" : "cross-ref", method: "heuristic",
+      confidence: ref.match === "exact" ? 0.9 : 0.8, refEntity: ref.target };
+  }
+  const words = nameWords(name).join(" ");
+  if (/(^| )(name|title|label|id)($| )/i.test(words)) {
     return { entity, attribute: name, role: "identifier", method: "heuristic", confidence: 0.65 };
   }
-  for (const h of VALUE_HEURISTICS) if (h.re.test(name)) {
+  for (const h of VALUE_HEURISTICS) if (h.re.test(words)) {
     return { entity, attribute: name, role: h.role, method: "heuristic", confidence: h.confidence };
   }
   return { entity, attribute: name, role: "free-text", method: "heuristic", confidence: 0.4 };
 }
 
-/** Relationship role from cardinality — always deterministic. */
-function rolesForRelation(from: string, to: string, cardinality: string): RelationRole {
+/**
+ * Relationship roles from a cardinality, read `from` → `to`. The ONE definition:
+ * `rolesForRelation` reads it as the ontology declared the relation, and the
+ * fabric reads it in the graph's normalised parent→child direction (an N:1 read
+ * from the parent's side is a 1:N, and therefore a collection on that parent).
+ */
+export function relationshipRolesFor(cardinality: string): { parentRole: RelationshipRole; childRole: "parent-ref" | "cross-ref" } {
   const c = cardinality.replace(/\s/g, "").toUpperCase();
   let parentRole: RelationshipRole = "collection";
   if (c === "N:M" || c === "M:N" || c === "*:*") parentRole = "multi-select";
   else if (c === "N:1") parentRole = "parent-ref";
   else if (c === "1:1") parentRole = "parent-ref";
   else parentRole = "collection"; // 1:N and unknown default to a child collection on the parent
-  const childRole = parentRole === "multi-select" ? "cross-ref" : "parent-ref";
+  return { parentRole, childRole: parentRole === "multi-select" ? "cross-ref" : "parent-ref" };
+}
+
+/**
+ * Does this attribute NAME read like the thing a person calls the record? The
+ * ONE definition — `deriveRoles` uses it to pick the title, and the seed uses it
+ * to notice when an entity declares no such attribute at all and its display
+ * name had to be taken positionally (which is a question for Listen, not a fact).
+ */
+export function readsLikeATitle(attribute: unknown): boolean {
+  return /(^| )(name|title|label)($| )/i.test(nameWords(attribute).join(" "));
+}
+
+/** Relationship role from cardinality — always deterministic. */
+function rolesForRelation(from: string, to: string, cardinality: string): RelationRole {
+  const c = cardinality.replace(/\s/g, "").toUpperCase();
+  const { parentRole, childRole } = relationshipRolesFor(c);
   return { from, to, cardinality: c, parentRole, childRole, method: "derived" };
 }
 
@@ -117,15 +188,30 @@ export function deriveRoles(ontology: Record<string, unknown>): OntologyRoles {
   const entities = Array.isArray(ontology.entities) ? ontology.entities : [];
   const relations = Array.isArray(ontology.relations) ? ontology.relations : [];
   const attributeRoles: AttributeRole[] = [];
+  // The ontology's own answer to "what does this attribute point at", derived
+  // once in `ontologyGraph` and read here — never re-derived.
+  const graph = deriveOntologyGraph(ontology);
+  const refIx = new Map(deriveAttributeReferences(ontology).map((r) => [`${r.entity} ${r.attribute}`, r] as const));
   for (const e of entities) {
     const name = String((e as { name?: unknown })?.name ?? "");
+    const parentsOf = new Set(graph.byName[name]?.parents ?? []);
+    const refFor = (attribute: string) => {
+      const r = refIx.get(`${name} ${attribute}`);
+      return r ? { target: r.target, match: r.match, isParent: parentsOf.has(r.target) } : undefined;
+    };
     const attrs = Array.isArray((e as { attributes?: unknown }).attributes) ? (e as { attributes: unknown[] }).attributes : [];
     // Which attribute is this entity's title: the first one named like one,
     // else the first attribute. Decided ONCE per entity so exactly one
     // attribute can hold the role.
-    const named = attrs.findIndex((a) => /(^|_)(name|title|label)($|_)/i.test(attrName(a)));
-    const titleIndex = named >= 0 ? named : 0;
-    attrs.forEach((a, i) => attributeRoles.push(roleForAttribute(name, a, i, titleIndex)));
+    // If NOTHING is named like a title, this entity has no title attribute —
+    // full stop. Handing the role to whatever happened to be listed first put
+    // account names under a "Category" heading and engagement names under
+    // "Status" on two thirds of a real 33-entity ontology, and it silently
+    // overwrote the role those attributes actually have. The absence is real;
+    // the seed reports it
+    // as a Listen question and supplies a display name of its own.
+    const titleIndex = attrs.findIndex((a) => readsLikeATitle(attrName(a)));
+    attrs.forEach((a, i) => attributeRoles.push(roleForAttribute(name, a, i, titleIndex, refFor)));
   }
   const relationRoles = relations.map((r) => {
     const rr = r as { from?: unknown; to?: unknown; cardinality?: unknown };

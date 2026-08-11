@@ -49,16 +49,38 @@ async function blobToBase64(blob: Blob): Promise<string> {
   return btoa(binary);
 }
 
+/** flow-transcribe answers 501 before it validates anything when the project has
+ *  no OPENAI_API_KEY. Probed once per session and remembered, exactly as
+ *  `TranscribeButton` (flowCapture.tsx) does it — one rule, two render sites. */
+let transcribeAvailable: boolean | null = null;
+let transcribeProbe: Promise<void> | null = null;
+
 /**
  * The fallback for browsers with no live dictation (Firefox): record audio and
  * transcribe it server-side (flow-transcribe), then drop the text in the field.
+ *
+ * SELF-HIDES when flow-transcribe isn't configured. A mic that records the
+ * stakeholder's answer and then silently drops it is worse than no mic: they
+ * believe they have answered. Typing is always there underneath, so the graceful
+ * degradation is to offer only what the project can actually deliver.
  */
 function AudioRecordButton({ onText, compact, label }: { onText: (s: string) => void; compact?: boolean; label?: string }) {
-  const [state, setState] = useState<"idle" | "recording" | "working">("idle");
+  const [state, setState] = useState<"idle" | "recording" | "working" | "unavailable">("idle");
+  const [note, setNote] = useState<string | null>(null);
   const recRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
   useEffect(() => () => { recRef.current?.state === "recording" && recRef.current.stop(); streamRef.current?.getTracks().forEach((t) => t.stop()); }, []);
+  useEffect(() => {
+    if (transcribeAvailable !== null) { if (!transcribeAvailable) setState("unavailable"); return; }
+    transcribeProbe ??= fetch(`${FUNCTIONS_BASE}/flow-transcribe`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: ANON_KEY, Authorization: `Bearer ${ANON_KEY}` },
+      body: "{}",
+    }).then((res) => { transcribeAvailable = res.status !== 501; })
+      .catch(() => { transcribeAvailable = true; });   // a network blip is not a verdict on the feature
+    void transcribeProbe.then(() => { if (!transcribeAvailable) setState("unavailable"); });
+  }, []);
 
   const stop = () => { if (recRef.current?.state === "recording") recRef.current.stop(); };
   const start = async () => {
@@ -80,20 +102,26 @@ function AudioRecordButton({ onText, compact, label }: { onText: (s: string) => 
             headers: { "Content-Type": "application/json", apikey: ANON_KEY, Authorization: `Bearer ${ANON_KEY}` },
             body: JSON.stringify({ audio, mime: blob.type }),
           });
+          if (res.status === 501) { transcribeAvailable = false; setState("unavailable"); return; }
           const body = await res.json().catch(() => ({}));
-          if (res.ok && typeof body.text === "string" && body.text.trim()) onText(body.text.trim());
-        } catch { /* leave the field untouched on failure */ }
+          if (res.ok && typeof body.text === "string" && body.text.trim()) { onText(body.text.trim()); setNote(null); }
+          // NEVER a silent drop: they spoke, and if nothing came back they have to
+          // be told, with something they can actually do about it.
+          else setNote("That recording didn’t come back as text — please type it instead.");
+        } catch { setNote("That recording didn’t come back as text — please type it instead."); }
         setState("idle");
       };
       recRef.current = rec;
       rec.start();
+      setNote(null);
       setState("recording");
     } catch { setState("idle"); }
   };
 
+  if (state === "unavailable") return null;
   const cls = compact ? "v3fs-micdot" : "v3fs-mic";
   const busy = state === "working";
-  return (
+  const button = (
     <button type="button" className={`${cls}${state === "recording" ? " on" : ""}`} disabled={busy}
       aria-pressed={state === "recording"} onClick={() => (state === "recording" ? stop() : void start())}
       title={state === "recording" ? "Stop and transcribe" : busy ? "Transcribing…" : (label || "Record your answer")}>
@@ -101,6 +129,8 @@ function AudioRecordButton({ onText, compact, label }: { onText: (s: string) => 
         : (busy ? "Transcribing…" : state === "recording" ? "◉ Recording… tap to stop" : `🎙 ${label || "Record your answer"}`)}
     </button>
   );
+  if (!note) return button;
+  return <span className="v3fs-mic-wrap">{button}<span className="v3fs-kit-rec-note">{note}</span></span>;
 }
 
 /**
