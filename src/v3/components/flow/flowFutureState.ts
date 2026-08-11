@@ -102,7 +102,21 @@ export function projectFutureState(program: ProgramSummary): FutureState {
     const canon = canonicalFrameArea(kitDomains, raw);
     return canon === GENERAL_AREA && raw.trim().toLowerCase() !== GENERAL_AREA.toLowerCase() ? raw : canon;
   };
-  const workflows: FutureWorkflow[] = (atlas && Array.isArray(atlas.workflows) ? atlas.workflows.filter(isRecord) : [])
+  // AGENTIFY IS THE HOME OF THE MODE. Listen's third artifact carries the
+  // Atlas's workflows forward with the call RECORDED on each step. Where it
+  // exists it is the source, and a step's recorded mode WINS over the heuristic
+  // — a human said what should happen and this projection must not overrule it.
+  // A step it leaves undecided, and every programme with no Agentify document at
+  // all, falls straight back to the Atlas and the JUDGEMENT guess below, so
+  // nothing that ran before the artifact existed reads differently.
+  const agentify = isRecord(data.agentify) ? data.agentify : null;
+  const agentifyWfs = agentify && Array.isArray(agentify.workflows) ? agentify.workflows.filter(isRecord) : [];
+  const sourceWfs = agentifyWfs.length
+    ? agentifyWfs
+    : (atlas && Array.isArray(atlas.workflows) ? atlas.workflows.filter(isRecord) : []);
+  const isMode = (value: string): value is FutureMode =>
+    value === "agentify" || value === "assist" || value === "keep";
+  const workflows: FutureWorkflow[] = sourceWfs
     .map((wf): FutureWorkflow => {
       const name = str(wf.name) || "Workflow";
       const owner = bpAgents.find((a) => str(a.replacesWorkflow) && overlaps(str(a.replacesWorkflow), name));
@@ -111,7 +125,13 @@ export function projectFutureState(program: ProgramSummary): FutureState {
         steps: (Array.isArray(wf.steps) ? wf.steps.filter(isRecord) : []).slice(0, 12).map((s): FutureStep => {
           const action = str(s.action) || "step";
           const judgement = JUDGEMENT.test(action);
-          return { action, mode: judgement ? "assist" : "agentify", agent: owner ? str(owner.name) : undefined, hitl: judgement || undefined };
+          const recorded = str(s.mode).trim().toLowerCase();
+          const mode: FutureMode = isMode(recorded) ? recorded : judgement ? "assist" : "agentify";
+          // HITL is a property of the mode once one is recorded: a step kept
+          // manual or only assisted still needs the human; an agentified step
+          // does not, even where the verb reads like judgement.
+          const hitl = isMode(recorded) ? recorded !== "agentify" : judgement;
+          return { action, mode, agent: owner ? str(owner.name) : undefined, hitl: hitl || undefined };
         }),
       };
     }).filter((wf) => wf.steps.length).slice(0, 12);

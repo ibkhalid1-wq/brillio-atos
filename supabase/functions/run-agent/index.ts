@@ -129,6 +129,7 @@ const VALID_AGENT_IDS = new Set([
   // AURA Flow movement generators (kept in lockstep with FORMAL_ARTIFACT_AGENTS).
   "discovery-kit",
   "current-state-atlas",
+  "agentify",
   "domain-ontology",
   "architecture-strategy",
   "agentic-blueprint",
@@ -915,7 +916,9 @@ const DEFAULT_OUTPUT_TOKENS = 4096;
 // cutover runbooks) are also output-heavy now.
 const LARGE_OUTPUT_AGENTS = new Set<string>([
   "discovery-kit", "demo-scripts",
-  "domain-ontology", "current-state-atlas",
+  // Agentify re-emits every atlas workflow with a call on every step — the same
+  // output volume as the atlas itself, plus the rationales.
+  "domain-ontology", "current-state-atlas", "agentify",
   "architecture-strategy", "agentic-blueprint",
   "experience-design", "prototype-pack", "hardening-plan", "eval-suite",
   // Prototype Build emits a self-contained HTML app inside its JSON — the
@@ -1316,6 +1319,41 @@ Return ONLY valid JSON:
   "coverage": [ { "stakeholder": "string", "heard": true } ],
   "gaps": ["stakeholders not yet heard, domains with thin evidence"],
   "summary": "one sentence verdict on current-state understanding",
+  "confidence": 0.0
+}`,
+  },
+  "agentify": {
+    phase: "listen",
+    fieldKey: "agentify",
+    title: "Agentify",
+    system: `You are the AURA Agentify Agent. The Current-State Atlas (upstreamArtifactDocs) says how the business runs TODAY. Your job is the next question, and only that question: for every step of every atlas workflow, what should happen to it — should an agent RUN it, should an agent ASSIST a human who still decides, or should it stay a HUMAN JUDGEMENT?
+
+CARRY THE WORKFLOWS FORWARD VERBATIM. Return every workflow the Atlas holds, in the Atlas's own order, with the Atlas's own name, area, owner and trigger, and every one of its steps in sequence with the Atlas's own actor, action, system, duration, entities and events. You are not re-synthesising the current state and you have no authority to: renaming a workflow, dropping a step, merging two steps or inventing one is a failure. If a step's action reads oddly, carry it as written and raise the question. A workflow the Atlas carries with zero steps is carried with zero steps.
+
+THE ONLY THING YOU ADD is the call on each step, in three fields:
+- "mode": exactly one of "agentify", "assist", "keep".
+- "modeRationale": one plain sentence saying WHY, in the business's own words, citing the pain, the volume, the wait or the judgement that decides it.
+- "hitl": true when a human must still see or approve the step's output.
+
+HOW TO DECIDE, and the discipline that keeps it honest:
+- "keep" — the step turns on JUDGEMENT, RELATIONSHIP or ACCOUNTABILITY: approving, negotiating, deciding, signing off, meeting or calling a client, presenting, escalating, interviewing, assessing a person. Automating these is how a transformation loses trust. When in doubt between assist and keep on a judgement step, choose keep.
+- "assist" — a human still owns the outcome, but the preparation is mechanical: drafting, gathering, summarising, pre-filling, checking against a rule, ranking. hitl is true.
+- "agentify" — the step is MECHANICAL and repeatable: transcribing between systems, re-keying, chasing, formatting, routing, reconciling, looking up, notifying. The clearest candidates are the steps a stakeholder complained about (the Atlas's painHeatmap and the verbatim complaints in the conversation record) and the steps with a stated duration out of all proportion to their content.
+- EVIDENCE OUTRANKS THE HEURISTIC. Where the conversation record carries a stakeholder's own disposition — someone asking for a step to be automated, or insisting a step stays theirs — that disposition WINS, and modeRationale quotes them. A stakeholder's "I'd never let a machine do that" is a "keep", whatever the verb looks like.
+- Never mark a step "agentify" because it would be impressive. Never mark every step of a workflow the same way without saying why each one is that way.
+
+AGENT CANDIDATES: group the "agentify" and "assist" steps into the few agents that would actually field them — one per coherent cluster of steps in one workflow, not one per step. Name each in the business's language, say what it does, name the workflow it takes over, and say plainly where a human stays in the loop. Do NOT design the system: tools, frameworks, orchestration and data contracts belong to the Agentic Blueprint in Envision, not here.
+
+WHAT YOU MAY NOT DO: invent a workflow, a step, an actor or a system the Atlas does not carry; state a benefit in numbers nobody measured ("saves 4 hours a week" is a fabrication unless the record says so); or decide a step you have no basis to decide. Where you genuinely cannot tell, set "mode": "" (the empty string — honestly undecided, and the app renders it as undecided rather than as a call), leave modeRationale empty, and raise the question under "openQuestions" phrased as a PLAIN BUSINESS QUESTION the person who does that step could answer — "When a quote comes back amended, does anyone check it before it goes out, or does it just go?" — never methodology vocabulary (agentify, HITL, autonomy, mode).
+
+Return ONLY valid JSON:
+{
+  "title": "Agentify — <programme name>",
+  "workflows": [ { "name": "the Atlas's workflow name, verbatim", "area": "the Atlas's area, verbatim", "owner": "the Atlas's owner", "trigger": "the Atlas's trigger", "handoffs": ["the Atlas's hand-offs"], "failureModes": ["the Atlas's failure modes"], "steps": [ { "actor": "the Atlas's actor, verbatim", "action": "the Atlas's action, verbatim", "system": "the Atlas's system or null", "duration": "the Atlas's duration or null", "entities": ["the Atlas's entities"], "events": ["the Atlas's events"], "evidence": "the Atlas's verbatim quote — speaker", "mode": "agentify|assist|keep, or \\"\\" when genuinely undecided", "modeRationale": "one plain sentence: why this call, grounded in the pain, the wait or the judgement", "hitl": true } ] } ],
+  "agentCandidates": [ { "name": "what the business would call it", "purpose": "what it does, one sentence", "replacesWorkflow": "the workflow name it takes over, verbatim", "steps": ["the step actions it fields, verbatim"], "humanInTheLoop": "what a human still sees or approves, or 'none'" } ],
+  "openQuestions": ["plain business questions that would settle an undecided step — addressed to the person who does it"],
+  "gaps": ["what the record does not yet say — never a restatement of a step you already decided"],
+  "summary": "one sentence: how much of the current state is a candidate for agents, and what is deliberately staying human",
   "confidence": 0.0
 }`,
   },
@@ -2013,6 +2051,10 @@ interface CarryForwardDocument {
  */
 const CONVERSATION_RECORD_AGENTS = new Set<string>([
   "charter", "discovery-kit", "domain-ontology", "current-state-atlas",
+  // Agentify decides what happens to each step, and a stakeholder's own
+  // disposition ("I'd never let a machine do that") outranks its heuristic —
+  // which it can only honour if it can read what they said.
+  "agentify",
   // Envision synthesis grounds in the same record — it carries the agentify
   // dispositions (what stakeholders asked to automate) that these agents honour.
   "architecture-strategy", "agentic-blueprint",
@@ -2309,6 +2351,10 @@ const UPSTREAM_ARTIFACT_DEPS: Record<string, readonly string[]> = {
   discoveryKit: ["transformationCharter"],
   domainOntology: ["discoveryKit", "transformationCharter"],
   currentStateAtlas: ["domainOntology", "discoveryKit"],
+  // Agentify carries the Atlas's workflows forward with a call on each step, so
+  // the Atlas body must ride along — and this edge is also what stales Agentify
+  // when the Atlas is re-synthesised (the inversion below reads this map).
+  agentify: ["currentStateAtlas", "domainOntology"],
   architectureStrategy: ["currentStateAtlas", "domainOntology"],
   experienceDesign: ["architectureStrategy", "currentStateAtlas", "domainOntology"],
   agenticBlueprint: ["architectureStrategy", "experienceDesign", "domainOntology"],
@@ -11245,6 +11291,9 @@ Deno.serve(async (req) => {
         const coreSections = ({
           "domain-ontology": ["entities", "relations"],
           "current-state-atlas": ["workflows"],
+          // A re-run that returns fewer workflows than the record holds has
+          // dropped somebody's decision, not simplified it.
+          "agentify": ["workflows"],
           "discovery-kit": ["interviews"],
           "agentic-blueprint": ["agents"],
           "experience-design": ["screens", "flows"],

@@ -1278,11 +1278,20 @@ export const ATOS_FLOW: MethodologyDefinition = {
     {
       id: "listen",
       displayName: "Listen",
-      description: "Run 45-minute discovery conversations; every transcript compiles into the Current-State Atlas — workflows, ontology, pain heatmap — while coverage climbs.",
-      requiredArtifacts: ["domain-ontology", "current-state-atlas"],
+      description: "Run 45-minute discovery conversations; every transcript compiles into the Current-State Atlas — ontology, registers, pain heatmap — then Agentify carries the workflows step by step into automate / assist / keep manual.",
+      // ORDER MATTERS: getPhaseArtifactDefs builds the movement's artifact
+      // sequence from this array alone. Agentify sits AFTER the Current-State
+      // Atlas because it reads it: the Atlas establishes what runs today, and
+      // Agentify is where each of its workflow steps gets its agentification
+      // decision. Listen therefore gates on it — a movement that has mapped the
+      // current state but never said what should be automated has not finished
+      // listening. A programme with no Agentify document shows the row
+      // "Agentify generated" unmet on the Listen gate; nothing is fabricated
+      // and no existing data moves.
+      requiredArtifacts: ["domain-ontology", "current-state-atlas", "agentify"],
       mandatoryExitCriteriaTemplates: ["Stakeholder coverage complete", "Contradictions resolved or logged"],
       entryGuards: ["Discovery kit generated"],
-      recommendedAgents: ["current-state-atlas", "domain-ontology", "stakeholder"],
+      recommendedAgents: ["current-state-atlas", "domain-ontology", "agentify", "stakeholder"],
       typicalDurationWeeks: { min: 1, max: 3 },
       movement: {
         humanMoments: [
@@ -1295,6 +1304,7 @@ export const ATOS_FLOW: MethodologyDefinition = {
           "Domain ontology built from every conversation — entities, relations, systems, hand-offs",
           "Contradiction detection between stakeholders, with follow-up questions generated",
           "Live coverage meter — who has been heard, which domains are thin",
+          "Agentify — every Atlas workflow step proposed as automate, assist, or keep manual, with the reason and a candidate agent",
         ],
         readyWhen: "Every mapped stakeholder has been heard or explicitly waived, and contradictions are resolved or logged.",
       },
@@ -1334,6 +1344,10 @@ export const ATOS_FLOW: MethodologyDefinition = {
       artifactInputFlow: {
         "current-state-atlas": ["interviewRoster", "interviewTranscripts", "contradictionLog"],
         "domain-ontology": ["interviewRoster", "interviewTranscripts"],
+        // Agentify's primary input is the Atlas itself (declared upstream on the
+        // edge); the transcripts feed it too — a stakeholder saying "this bit
+        // should just happen" is the disposition the decision records.
+        "agentify": ["interviewTranscripts"],
       },
     },
     {

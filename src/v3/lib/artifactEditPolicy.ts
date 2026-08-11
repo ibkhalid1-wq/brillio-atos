@@ -18,7 +18,11 @@
  * never disagree.
  */
 export const DESIGN_TEAM_ARTIFACTS = ["architecture-strategy", "experience-design", "agentic-blueprint", "prototype-build"];
-export const CURATABLE_ARTIFACTS = ["domain-ontology", "current-state-atlas"];
+// Agentify joins the curatable tier for the same reason the Atlas is in it: its
+// workflows are DERIVED from the Atlas's evidence, and the operator curates the
+// call on each step (automate / assist / keep) rather than inventing workflows
+// that no stakeholder described.
+export const CURATABLE_ARTIFACTS = ["domain-ontology", "current-state-atlas", "agentify"];
 
 export type ArtifactEditTier = "authorable" | "curatable" | "derived";
 

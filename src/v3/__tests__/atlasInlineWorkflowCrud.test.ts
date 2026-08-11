@@ -23,7 +23,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import { act, createElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { ProgramSummary } from "@/new/types";
-import WorkflowStudio from "@/v3/components/flow/studio/WorkflowStudio";
+import WorkflowStudio, { AtlasRegisters } from "@/v3/components/flow/studio/WorkflowStudio";
 import { StudioLockContext, StudioAuthoringContext } from "@/v3/components/flow/studio/StudioKit";
 
 /* ── the programme (supplies the Frame's areas) ───────────────────────────── */
@@ -90,6 +90,18 @@ function Harness({ initial, locked, authoring }: {
       })));
 }
 
+/** The registers' new home: the Atlas tab renders them with no workflow focus,
+ * so the full editors are what mount. */
+function RegisterHarness({ initial }: { initial: Record<string, unknown> }) {
+  const [doc, setDoc] = useState(initial);
+  return createElement(StudioLockContext.Provider, { value: false },
+    createElement(StudioAuthoringContext.Provider, { value: true },
+      createElement(AtlasRegisters, {
+        doc, program: PROGRAM, focus: null,
+        onChange: (next: Record<string, unknown>) => { wrote = next; setDoc(next); },
+      })));
+}
+
 let root: Root | null = null;
 let host: HTMLElement | null = null;
 
@@ -105,6 +117,15 @@ function mount(opts: { doc?: Record<string, unknown>; locked?: boolean; authorin
       authoring: opts.authoring ?? true,
     }));
   });
+  return host;
+}
+
+function mountRegisters(doc: Record<string, unknown> = seedDoc()): HTMLElement {
+  wrote = null;
+  host = document.createElement("div");
+  document.body.appendChild(host);
+  root = createRoot(host);
+  act(() => { root!.render(createElement(RegisterHarness, { initial: doc })); });
   return host;
 }
 
@@ -348,12 +369,22 @@ describe("what surrounded the removed section still renders", () => {
     expect((wrote!.workflows as unknown[]).length).toBe(1);
   });
 
-  it("the document-level registers (events · pain · systems) are still editable", () => {
-    const el = mount();
+  // The registers (events · pain · systems) are the ATLAS document's, not a
+  // workflow's, so when the workflows moved to Agentify they stayed behind — they
+  // are `AtlasRegisters` on the Current-State Atlas tab now. The capability is
+  // unchanged and still proved by the write, only from its new home.
+  it("the document-level registers (events · pain · systems) are still editable, on the Atlas tab", () => {
+    const el = mountRegisters();
     const reg = [...el.querySelectorAll(".v3fs-wf-reg")]
       .find((r) => (r.textContent ?? "").includes("Systems inventory")) as HTMLElement;
     click(buttonWith(reg, "Add system"));
     expect((wrote!.systemsInventory as unknown[]).length).toBe(1);
+  });
+
+  it("the workflow surface no longer carries the registers — they are not in two places", () => {
+    const el = mount();
+    expect(el.querySelector(".v3fs-wf-reg")).toBeNull();
+    expect(el.textContent).not.toContain("Systems inventory");
   });
 });
 

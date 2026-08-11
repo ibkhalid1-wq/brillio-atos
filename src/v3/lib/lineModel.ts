@@ -140,6 +140,7 @@ const SUBTITLES: Record<string, string> = {
   "discovery-kit": "The cast and the questions — it names the areas",
   "domain-ontology": "The map of your business — its shared dictionary",
   "current-state-atlas": "How the work flows today, area by area",
+  "agentify": "Each step of that work: automate, assist, or keep it human",
   "architecture-strategy": "The shape of the build, chosen on record",
   "experience-design": "What each screen and flow becomes",
   "agentic-blueprint": "What each agent does, and with which data",
@@ -207,6 +208,10 @@ export const GENERATION_PREREQS: Record<string, string[][]> = {
   "discovery-kit": [["charter"]],
   "domain-ontology": [["discovery-kit"]],
   "current-state-atlas": [["discovery-kit"]],
+  // Agentify decides what to do with the Atlas's steps, so the Atlas must exist
+  // first — until it does, the station reads not-seeded rather than offering a
+  // Generate that would have nothing to read.
+  "agentify": [["current-state-atlas"]],
   "architecture-strategy": [["domain-ontology"], ["current-state-atlas"]],
   "experience-design": [["architecture-strategy"]],
   "agentic-blueprint": [["experience-design"]],
@@ -291,6 +296,7 @@ export function buildLineModel(program: ProgramSummary): LineModel {
 
   const onto = card("domain-ontology");
   const atlas = card("current-state-atlas");
+  const agentify = card("agentify");
   const proto = card("prototype-build")?.present ? card("prototype-build") : card("prototype-pack");
   const demoCard = card("demo-scripts");
 
@@ -322,6 +328,11 @@ export function buildLineModel(program: ProgramSummary): LineModel {
       stations: [
         station(program, onto, listenOk, { perArea: listenSegments(!!onto?.present) }),
         station(program, atlas, listenOk, { perArea: listenSegments(!!atlas?.present) }),
+        // Listen's third stop, and it GATES: a movement that has mapped the
+        // current state but never said what should be automated has not
+        // finished listening. Every programme that predates the artifact shows
+        // it here as not-seeded rather than as an absence nobody can see.
+        station(program, agentify, listenOk, { perArea: listenSegments(!!agentify?.present) }),
       ],
     },
     {

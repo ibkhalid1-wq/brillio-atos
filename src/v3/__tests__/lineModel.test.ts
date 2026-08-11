@@ -12,8 +12,13 @@ describe("lineModel.buildLineModel", () => {
   it("renders the full methodology from an empty record — the day-0 board", () => {
     const model = buildLineModel(programme({}));
     expect(model.bands.map((b) => b.id)).toEqual(["frame", "listen", "loop", "ship", "evolve"]);
-    // 2 + 2 + 5 + 3 + 2 = 14 stations, every one visible before anything exists.
-    expect(model.bands.reduce((n, b) => n + b.stations.length, 0)).toBe(14);
+    // 2 + 3 + 5 + 3 + 2 = 15 stations, every one visible before anything exists.
+    // Listen carries THREE: the ontology, the atlas, and Agentify — the call on
+    // each of the atlas's steps. Agentify GATES Listen, so a programme without
+    // one has to be able to see that it is missing, here, at maturity ○.
+    expect(model.bands.reduce((n, b) => n + b.stations.length, 0)).toBe(15);
+    expect(model.bands[1].stations.map((s) => s.id))
+      .toEqual(["domain-ontology", "current-state-atlas", "agentify"]);
     for (const band of model.bands) {
       for (const station of band.stations) {
         expect(station.maturity).toBe(0);

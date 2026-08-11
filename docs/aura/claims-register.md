@@ -42,6 +42,7 @@ FULLY TRUE**.
 | 12 | a computed **grounding** figure | NOT YET TRUE + ceiling | Fix at Step 5; state the ceiling |
 | 13 | **reproducible / deterministic** (not asserted anywhere) | WILL NEVER BE FULLY TRUE | Never claim "deterministic"; guard |
 | 17 | stakeholder prototype: "every screen, field and menu item comes from the domain model and process map we agreed" | **TRUE** (deploy-gated) | None — keep the presentation caveat |
+| 18 | Agentify rationale: "grounded in the pain, the wait or the judgement" | **TRUE** (model-facing) | None — re-status if ever shown to a client |
 
 **Applied 2026-08-07** — rows **1–5** edited to the phrasing below and re-statused
 **TRUE** (see each row for file, before→after). No surface in the repo now asserts
@@ -215,6 +216,29 @@ into those steps' definitions of done — not touched here.
 - **Remediation:** none while the copy keeps the presentation caveat. If the heuristic role
   table is ever replaced by declared attribute types, the caveat can be dropped — and this row
   re-statused, not silently reworded.
+
+### 18 · Agentify: "one plain sentence: why this call, grounded in the pain, the wait or the judgement"
+- **Where:** `supabase/functions/run-agent/index.ts` (agentify system prompt, the JSON
+  template's `modeRationale` field — **model-facing**).
+- **Added 2026-08-11.** Agentify is Listen's third artifact: it carries every Current-State
+  Atlas workflow step forward and records the call on it — automate / assist / keep manual.
+  `modeRationale` is where the model must say WHY, and the word chosen was *grounded*.
+- **What it asserts, and its bound.** *Grounded* here means one specific, checkable thing: the
+  reason must cite something already on the record — a pain in the Atlas's `painHeatmap`, a
+  stated duration, or the judgement the step's own verb carries. It does **not** assert a
+  computed lineage (row 12's ceiling stands; nothing resolves this sentence back to a source
+  span), and the prompt does not let it stand in for one: numbers nobody measured are named as
+  fabrication in the same prompt ("saves 4 hours a week" is banned unless the record says so).
+- **The claim NOT made is the load-bearing part.** A step the model cannot decide takes
+  `"mode": ""` — honestly undecided — with an empty rationale and a plain business question
+  under `openQuestions`. The client renders an undecided step with **no chip at all**, so a
+  default is never dressed up as a decision, and `flowFutureState` falls back to its own
+  heuristic rather than reading an empty string as a call.
+- **True today?** Yes as worded, and narrow: it constrains what a sentence may cite, not what
+  the platform can prove. Model-facing only; asserts nothing to a user.
+- **Status:** **TRUE** (as worded).
+- **Remediation:** none. If this rationale is ever surfaced to a client as evidence of the
+  decision, re-status this row first — a model's stated reason is not a traced one.
 
 ---
 

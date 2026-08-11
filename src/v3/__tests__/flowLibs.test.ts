@@ -1692,10 +1692,19 @@ describe("gateReadiness — one composed verdict over the closed loop", () => {
     expect(verdict(metFrame(), [art({ gaps: 2 }), art({ id: "charter", title: "Charter", stale: true })]).kind).toBe("trails");
   });
 
-  it("criteria met but a document never generated → not yet written, never 'out of date'", () => {
+  // NAMED, not generic. A movement can gain a required deliverable it never had
+  // (Listen gained Agentify), and every programme predating it then holds an
+  // unmet criterion — an amber gate that will not say WHICH document is missing
+  // reads as breakage. The verdict names the absent documents, all of them.
+  it("criteria met but a document never generated → names it, never 'out of date'", () => {
     const r = verdict(metFrame(), [art({ present: false })]);
     expect(r.kind).toBe("gaps");
-    expect(r.detail).toBe("A document has not been generated yet");
+    expect(r.detail).toBe("Not generated yet: Discovery Kit");
+  });
+
+  it("two missing documents are both named", () => {
+    const r = verdict(metFrame(), [art({ present: false }), art({ id: "agentify", title: "Agentify", present: false })]);
+    expect(r.detail).toBe("Not generated yet: Discovery Kit · Agentify");
   });
 
   it("criteria met and a document trails its evidence → out of date", () => {

@@ -245,6 +245,11 @@ export const CROSS_PHASE_ARTIFACT_DEPS: Record<string, Array<{ phaseId: string; 
     { phaseId: "prototype", artifactId: "agentic-blueprint" },
   ],
   "current-state-atlas": [
+    // Same-phase edge (inert on the input-edit path, live on the proposal-CONFIRM
+    // path — exactly like domain-ontology → current-state-atlas above): Agentify's
+    // workflows are carried FORWARD from the Atlas, so a re-synthesised Atlas
+    // leaves the agentification decision trailing its own evidence.
+    { phaseId: "listen", artifactId: "agentify" },
     { phaseId: "envision", artifactId: "architecture-strategy" },
     { phaseId: "envision", artifactId: "experience-design" },
     { phaseId: "envision", artifactId: "agentic-blueprint" },
