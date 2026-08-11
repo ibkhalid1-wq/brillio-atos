@@ -112,8 +112,13 @@ safe local patch. ~~**Reported, not fixed.**~~
 **DECIDED AND FIXED (2026-08-11)** — recency extended to same-provenance `code-derived`
 in `merge.ts`; provenance read from `closedBy.by` where `method === "import"`. A
 different system's disagreement still coexists. See `ledger-write-model.md` §"Rule 2"
-and `ledgerMergeProvenance.test.ts`. Does **not** yet reach the persisted path — see
-finding F4 (`pgStore.rowToClaim` drops `closedBy`).
+and `ledgerMergeProvenance.test.ts`. ~~Does **not** yet reach the persisted path — see
+finding F4 (`pgStore.rowToClaim` drops `closedBy`).~~ **It now does — F4 CLOSED
+(2026-08-11).** `rowToClaim` was repaired first (without `closedBy` the rule had no
+provenance to read); then the rule itself, with N-5 and N-11, moved into
+`mergeRules.ts`, which BOTH `merge.reconcile` and `PgLedger.reconcile` import — one
+definition, not a second copy in the persistence layer. `mergeRulesLockstep.test.ts`
+fails if either side re-declares a rule or stops calling one.
 
 **N-5 · MODERATE — the same-value race inflates the settled denominator, and the
 doc says it doesn't.** Two writers closing one locus with the *same* value never
