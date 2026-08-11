@@ -9,7 +9,11 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { INDUSTRY_OPTIONS, INDUSTRY_SEGMENTS } from "@/v3/lib/methodology";
+import ts from "typescript";
+import { INDUSTRY_OPTIONS, INDUSTRY_SEGMENTS, ATOS_FLOW } from "@/v3/lib/methodology";
+import {
+  KIT_AGENDA_CACHE_VERSION, KIT_AGENDA_CACHE_FIELD, KIT_AGENDA_CACHE_NOTE, readKitAgendaCache,
+} from "@/v3/lib/ledger/kitAgendaCache";
 
 const EDGE = readFileSync(resolve(__dirname, "../../../supabase/functions/run-agent/index.ts"), "utf8");
 
@@ -153,5 +157,148 @@ describe("evidence pipeline guards stay wired (2026-07-14 regression pins)", () 
     expect(EDGE).toContain("inputCoverage: {");
     expect(EDGE).toContain("conversationRecordChars:");
     expect(EDGE).toContain("outputRepaired");
+  });
+});
+
+// ── O-19 · the kit generator is the LAST producer of question text ──────────
+//
+// Question TEXT has one producer (`renderQuestion.ts` over the ledger). The kit
+// generator predates it and emits agenda strings. It cannot render from loci —
+// the kit is a FRAME artifact and every ledger element comes from the LISTEN
+// ontology/atlas, so at generation time there are no loci to render. What it CAN
+// do is stop the strings masquerading as a source: demote them into the same
+// versioned cache the client writes, so both producers leave ONE shape.
+//
+// The Deno boundary prevents a shared import, so the edge mirrors the shape and
+// this pins it (the edgeLockstep idiom). The behavioural half EXTRACTS the edge's
+// own `demoteKitAgendas` and reads its output back through the CLIENT's
+// `readKitAgendaCache` — proving the two sides agree in fact, not just in text.
+describe("kit agenda cache — client ↔ edge lockstep (O-19)", () => {
+  const start = EDGE.indexOf("const KIT_AGENDA_CACHE_VERSION");
+  const end = EDGE.indexOf("/**\n * Mark every artifact that CONSUMES this one as stale.");
+  const section = EDGE.slice(start, end);
+
+  it("the edge mirrors the client's cache field and version", () => {
+    expect(start, "edge KIT_AGENDA_CACHE_VERSION not found").toBeGreaterThan(-1);
+    expect(section).toContain(`const KIT_AGENDA_CACHE_VERSION = ${KIT_AGENDA_CACHE_VERSION};`);
+    expect(section).toContain(`const KIT_AGENDA_CACHE_FIELD = "${KIT_AGENDA_CACHE_FIELD}";`);
+  });
+
+  it("the edge NEVER stamps the provenance note — it has no loci to back it", () => {
+    // The note claims the ledger produced these strings; the loci are the
+    // evidence. Written apart, the generator's own text would carry a provenance
+    // claim nothing can check. The miss must stay visible as `loci: []`.
+    expect(section).not.toContain(KIT_AGENDA_CACHE_NOTE);
+    expect(section).toContain("loci: []");
+  });
+
+  it("the demotion is wired into the kit path AFTER both synthesis fallbacks", () => {
+    // Demoting before the roster/persona stubs are appended would let them
+    // re-introduce inline `agenda[].questions` and the paths would diverge again.
+    const call = EDGE.indexOf("demoteKitAgendas(formalResult");
+    const personaAdds = EDGE.indexOf("if (personaAdds.length) {");
+    const rosterAdds = EDGE.indexOf("if (added.length) {");
+    expect(call).toBeGreaterThan(-1);
+    expect(call).toBeGreaterThan(personaAdds);
+    expect(call).toBeGreaterThan(rosterAdds);
+  });
+
+  it("the edge's demotion output reads back through the CLIENT's accessor", () => {
+    const js = ts.transpileModule(
+      `const isRecord = (v) => typeof v === "object" && v !== null && !Array.isArray(v);\n${section}\n` +
+      `return { demoteKitAgendas };`,
+      { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.None } },
+    ).outputText;
+    const { demoteKitAgendas } = new Function(js)() as {
+      demoteKitAgendas: (kit: Record<string, unknown>, at: string) => Record<string, unknown>;
+    };
+    const kit = {
+      interviews: [{
+        stakeholder: "Dana Ruiz",
+        agenda: [
+          { minutes: 20, topic: "How quoting runs today", questions: ["Walk me through a quote.", "Where does it stall?"] },
+          { minutes: 25, topic: "Artifacts", questions: ["What can you share?"] },
+        ],
+      }],
+    };
+    const out = demoteKitAgendas(kit, "2026-08-10T00:00:00Z");
+    const interview = (out.interviews as unknown[])[0] as Record<string, unknown>;
+
+    // The client reads it as a CACHE — not as legacy inline strings.
+    const cache = readKitAgendaCache(interview);
+    expect(cache.origin).toBe("cache");
+    expect(cache.version).toBe(KIT_AGENDA_CACHE_VERSION);
+    expect(cache.questions).toEqual(["Walk me through a quote.", "Where does it stall?", "What can you share?"]);
+    // No loci — and therefore the miss stays visible rather than papered over.
+    expect(cache.loci).toEqual([]);
+    expect((interview[KIT_AGENDA_CACHE_FIELD] as Record<string, unknown>).note).toBeUndefined();
+
+    // The agenda blocks survive — a 45-minute shape is the conversation's
+    // design — but they stop carrying text that reads like a source.
+    const blocks = interview.agenda as Array<Record<string, unknown>>;
+    expect(blocks).toHaveLength(2);
+    expect(blocks.map((b) => b.topic)).toEqual(["How quoting runs today", "Artifacts"]);
+    expect(blocks.every((b) => b.questions === undefined)).toBe(true);
+
+    // Idempotent: a regenerated kit never gets a fresh timestamp on strings
+    // nobody touched.
+    const again = demoteKitAgendas(out, "2026-08-11T00:00:00Z");
+    expect(readKitAgendaCache((again.interviews as unknown[])[0]).at).toBe("2026-08-10T00:00:00Z");
+  });
+});
+
+// ── O-20 · a declared input must be CONSUMED, not just declared ─────────────
+//
+// `systemsOfRecord` (methodology.ts, Frame) declares
+// `usedByArtifacts: ["domain-ontology", "current-state-atlas"]`. The sponsor's
+// names already reach the model: for every formal agent, groundingFacts merges
+// the FRAME inputs with the target phase's own. So the declaration was true
+// about the plumbing and false about the prompts — neither consumed it. These
+// pin that both now do, and that consuming it never licenses a fabrication.
+describe("declared systemsOfRecord is consumed by the artifacts that claim it (O-20)", () => {
+  const frame = ATOS_FLOW.phases.find((p) => p.id === "frame");
+  const field = frame?.inputFields?.find((f) => f.id === "systemsOfRecord");
+  const promptFor = (agentId: string): string => {
+    const from = EDGE.indexOf(`  "${agentId}": {\n    phase:`);
+    return from < 0 ? "" : EDGE.slice(from, EDGE.indexOf("\n  },\n", from));
+  };
+
+  it("the frame field still declares its two consumers", () => {
+    expect(field, "systemsOfRecord field not found on Frame").toBeTruthy();
+    expect(field!.usedByArtifacts).toEqual(["domain-ontology", "current-state-atlas"]);
+  });
+
+  it("the FRAME inputs really do reach a LISTEN artifact's groundingFacts", () => {
+    // The plumbing half of the claim — without this merge the prompts below
+    // would be asking the model to read a fact it never receives.
+    expect(EDGE).toContain(
+      "...buildGroundingFacts(Object.keys(phaseInputs).length ? { ...frameInputs, ...phaseInputs } : frameInputs),",
+    );
+  });
+
+  it("every declared consumer's prompt actually reads the field", () => {
+    for (const agentId of field!.usedByArtifacts!) {
+      const prompt = promptFor(agentId);
+      expect(prompt, `no prompt block for ${agentId}`).not.toBe("");
+      expect(prompt, `${agentId} never names the systemsOfRecord grounding fact`)
+        .toContain("DECLARED SYSTEMS OF RECORD");
+      expect(prompt).toContain('"systemsOfRecord" fact');
+      // Named systems are used VERBATIM — a renamed system reads downstream as
+      // a second, unknown one and opens a duplicate ask.
+      expect(prompt).toContain("VERBATIM");
+    }
+  });
+
+  it("consuming the list never licenses inventing a system or a use for one", () => {
+    const ontology = promptFor("domain-ontology");
+    // Being on the list is not evidence that any entity lives there.
+    expect(ontology).toContain("leave systemOfRecord null and raise a gap");
+    expect(ontology).toContain("Never invent a system");
+
+    const atlas = promptFor("current-state-atlas");
+    // The sponsor named the system, not its use and not its faults.
+    expect(atlas).toContain("leave complaints EMPTY until a stakeholder voices one");
+    // Knowing the business runs on a system is not knowing which step touches it.
+    expect(atlas).toContain("steps[].system stays null unless the evidence places that system at that step");
   });
 });

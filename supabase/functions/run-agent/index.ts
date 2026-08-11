@@ -1266,7 +1266,7 @@ DEDUPLICATE the cast: normalise role/persona names to ONE canonical label — ne
 Return ONLY valid JSON:
 {
   "title": "Discovery Kit — <programme name>",
-  "interviews": [ { "stakeholder": "the person's name when known, else '<Domain> SME — TBC' (placeholders name expertise, never a job title; the ' — TBC' suffix is required)", "role": "string", "email": "their email address ONLY if it appears in the evidence, else null — NEVER invent an address; the operator fills it in", "domain": "the workflow domain they own", "durationMinutes": 45, "objectives": ["what this conversation must surface"], "agenda": [ { "minutes": 5, "topic": "string", "questions": ["specific questions"] } ], "askForArtifacts": ["systems/screens/reports to bring"] } ],
+  "interviews": [ { "stakeholder": "the person's name when known, else '<Domain> SME — TBC' (placeholders name expertise, never a job title; the ' — TBC' suffix is required)", "role": "string", "email": "their email address ONLY if it appears in the evidence, else null — NEVER invent an address; the operator fills it in", "domain": "the workflow domain they own", "durationMinutes": 45, "objectives": ["what this conversation must surface"], "agenda": [ { "minutes": 5, "topic": "string", "questions": ["specific questions — a PROVISIONAL seed, not the plan of record: these strings are stored as a cache (agendaCache) and are superseded question-by-question once the ledger holds the programme's open unknowns, which is the single source of question text. Write them anyway and write them well; just never restate one as an established fact"] } ], "askForArtifacts": ["systems/screens/reports to bring"] } ],
   "personas": [ { "name": "a ROLE in the workflow, not a person — e.g. 'Sales Rep', 'End Customer'", "kind": "internal|external", "partInWorkflow": "one sentence: what they do in the process", "spokenForBy": ["interview stakeholders who can speak for this persona"], "unrepresented": false } ],
   "coverageMap": [ { "domain": "string", "coveredBy": ["stakeholders"], "thin": false } ],
   "schedulingGuidance": "sequencing and cadence recommendation for the tour",
@@ -1290,7 +1290,9 @@ PROVISIONAL ACTORS: every step's actor comes from the CLOSED CAST — the Discov
 
 AREA COMPLETENESS (applies ALWAYS, not only to the zero-evidence seed): every Discovery-Kit coverage area whose Domain Ontology carries entities must own at least one workflow. When an area has ontology entities but NO transcript covers it (its stakeholder hasn't been heard yet), do not leave the area blank — draft ONE provisional workflow for it under the provisional discipline above: named for how that area's entities move in industry-standard practice, 3-6 steps whose steps[].entities reference that area's ontology entities VERBATIM, evidence "industry-standard practice — to confirm in interviews" on every step, actors from the area's own kit persona, step.system and step.duration null, and an openQuestion addressed to that persona asking how the process really runs. Evidence-backed workflows are never displaced by this rule — it fills silent areas only, and an interview later replaces the skeleton with the real picture.
 
-CURRENT-STATE ONLY: the atlas describes the business AS IT RUNS TODAY. The solution the mandate proposes to build (the "AI-powered CRM", the new platform) does not exist yet — it must NOT appear in any workflow step, the systemsInventory, the painHeatmap, or the summary. systemsInventory lists only systems the evidence actually names; with none named, leave it empty and ask what systems support each stage today under openQuestions. Two runs over the same mandate must produce the same workflows, stage for stage, with the same actors.
+CURRENT-STATE ONLY: the atlas describes the business AS IT RUNS TODAY. The solution the mandate proposes to build (the "AI-powered CRM", the new platform) does not exist yet — it must NOT appear in any workflow step, the systemsInventory, the painHeatmap, or the summary. systemsInventory lists only systems the evidence actually names; with none named, leave it empty and ask what systems support each stage today under openQuestions.
+
+DECLARED SYSTEMS OF RECORD: groundingFacts carries a "systemsOfRecord" fact — the systems the SPONSOR named, one per line, as where the business's records live. Those ARE named by the evidence, so they belong in systemsInventory: one row each, the sponsor's spelling VERBATIM ("SAP Finance", never "SAP" or "the finance system"), since a renamed system reads downstream as a second, unknown one. But the sponsor named the system, not its use and not its faults: set usedFor only to what the record actually states and leave complaints EMPTY until a stakeholder voices one — an invented complaint or a guessed purpose is a fabrication, and inventing pain the business never reported is the worst kind. Where the record does not say what a declared system is for, say so plainly in usedFor ("named by the sponsor — purpose not yet established") and raise the openQuestion that closes it. This does NOT relax the provisional rule above: steps[].system stays null unless the evidence places that system at that step — knowing the business runs on a system is not knowing which step touches it, and that is exactly what the interviews establish. Two runs over the same mandate must produce the same workflows, stage for stage, with the same actors.
 
 Ground every workflow step and pain point in what a stakeholder actually said — carry a verbatim quote with attribution wherever possible. Never invent a step or a hand-off; where the transcripts leave one unclear, record it under "openQuestions" instead. Where two stakeholders describe the same process differently, that is a finding — record it under "contradictions" with a suggested follow-up, never silently pick a side.
 
@@ -1347,6 +1349,8 @@ STANDARDS-FIRST GROUNDING (the acid test for every provisional entity and relati
 Net effect: an outsider should be able to check every object entity against a published standard class and every relation against a standard association or a mandate sentence. Anything that fails that check is a gap, not a guess.
 
 COMPLETENESS CHECK before returning: for the core process in the mandate, account for each of — (1) every ACTOR named, (2) the ORGANISATION each actor belongs to, (3) the THING being requested / exchanged / produced (the service, product, application or request at the heart of the process), (4) the SYSTEM OF RECORD each entity lives in — recorded on the entity's systemOfRecord field, never as an entity of its own. Each of these is either a provisional entity (labelled "— to confirm") or, if the mandate cannot support it, an explicit gap phrased as a plain business question. Never silently drop one. Outcome measures and the proposed solution system are NOT part of this check — see the exclusions above.
+
+DECLARED SYSTEMS OF RECORD: groundingFacts carries a "systemsOfRecord" fact — the systems the SPONSOR named, one per line, as where the business's records actually live. That list is evidence, and it is the naming authority for systems: when an entity's records live in one of them, set that entity's systemOfRecord to the sponsor's spelling VERBATIM ("Salesforce CRM", not "Salesforce" or "the CRM") — a renamed or abbreviated system reads as a second, unknown system downstream and opens a duplicate ask for one that is already being chased. Two disciplines bound this and neither bends: (1) a system being on the list is NOT evidence that any particular entity lives in it — assign one only where the mandate or a conversation actually places those records there; where nothing does, leave systemOfRecord null and raise a gap asking where that entity's records live ("Where does the signed contract actually live — the CRM or somewhere else?"). Guessing an assignment to make the list look consumed is a fabrication. (2) Never invent a system neither the sponsor's list nor the evidence names, and never promote a declared system to an entity of its own (see the exclusions above). A declared system that no entity claims is not an error to hide — it is a gap question about what it holds.
 
 Use the stakeholders' own nouns — the ontology's names should be their language, not generic data-modelling vocabulary. Every entity carries at least one evidence source. Where different teams use different words for the same thing (or the same word for different things), record it under "ambiguities" — those collisions are exactly what the Blueprint's data contracts must resolve.
 
@@ -6439,6 +6443,80 @@ function tagArtifactAreas(programData: ProgramState, fieldKey: string, result: R
   }
 }
 
+// ── Kit agenda: the generator's questions are a CACHE, not a source ──────────
+//
+// Question TEXT has exactly one producer — `renderQuestion.ts` over the ledger's
+// open unknowns. This generator predates that and emits agenda question STRINGS
+// in a field whose name and position read like the plan itself. That makes it a
+// SECOND producer, which is exactly the drift the ledger exists to end.
+//
+// It cannot be made a first-class consumer of the renderer here, and the reason
+// is ordering, not plumbing: the kit is a FRAME-phase artifact, while every
+// ledger element is derived from the LISTEN-phase Domain Ontology + Current-State
+// Atlas (`migrate.ts`'s Snapshot is exactly {ontology, atlas, overrides}). At kit
+// generation time those documents do not exist yet, so there are NO loci to
+// render — the renderer has nothing to be pointed at. See the FINDING in
+// docs/aura/next-session-brief.md §5 (O-19).
+//
+// What IS possible, and what this does, is stop the strings MASQUERADING as a
+// source: demote them into the same versioned cache the client writes
+// (`src/v3/lib/ledger/kitAgendaCache.ts`), so both producers emit ONE shape and
+// every reader (`readKitAgendaCache`) sees a cache rather than a plan.
+//
+// The provenance NOTE and the LOCI travel together or not at all: the note claims
+// the ledger produced these strings and the loci are the evidence for it. This
+// path has neither, so it writes neither — `loci: []`, no note. The miss stays
+// VISIBLE as `loci.length === 0` rather than being papered over with a provenance
+// claim nothing can check.
+//
+// DUPLICATION IS DELIBERATE: the Deno boundary prevents importing the client
+// module, so the shape is mirrored here and pinned in lockstep by
+// `src/v3/__tests__/edgeLockstep.test.ts` (the edgeLockstep idiom).
+const KIT_AGENDA_CACHE_VERSION = 1;
+const KIT_AGENDA_CACHE_FIELD = "agendaCache";
+
+/**
+ * Demote every interview's inline `agenda[].questions` into `agendaCache`.
+ * Idempotent — an interview already carrying the cache is left untouched, so a
+ * regenerated kit never gets a fresh timestamp on strings nobody changed.
+ */
+function demoteKitAgendas(kit: Record<string, unknown>, at: string): Record<string, unknown> {
+  if (!Array.isArray(kit.interviews)) return kit;
+  let demoted = 0;
+  const interviews = kit.interviews.map((iv) => {
+    if (!isRecord(iv)) return iv;
+    // Already a cache — leave it exactly as it is.
+    if (isRecord(iv[KIT_AGENDA_CACHE_FIELD])) return iv;
+    demoted += 1;
+    const questions = (Array.isArray(iv.agenda) ? iv.agenda : [])
+      .filter(isRecord)
+      .flatMap((block) => (Array.isArray(block.questions) ? block.questions : []))
+      .map((q) => String(q ?? "").trim())
+      .filter(Boolean);
+    // The blocks are never dropped — a 45-minute shape is the conversation's
+    // design, not a question producer. They simply stop carrying text that
+    // looks like a source.
+    const kept = (Array.isArray(iv.agenda) ? iv.agenda : [])
+      .filter(isRecord)
+      .map((block) => {
+        const { questions: _dropped, ...rest } = block;
+        return rest;
+      });
+    return {
+      ...iv,
+      agenda: kept.length ? kept : [{ topic: "Conversation", minutes: 45 }],
+      [KIT_AGENDA_CACHE_FIELD]: {
+        version: KIT_AGENDA_CACHE_VERSION,
+        questions,
+        // No loci and therefore no note — see the header. Never stamped here.
+        loci: [],
+        at,
+      },
+    };
+  });
+  return demoted ? { ...kit, interviews } : kit;
+}
+
 /**
  * Mark every artifact that CONSUMES this one as stale.
  *
@@ -11131,6 +11209,13 @@ Deno.serve(async (req) => {
           if (personaAdds.length) {
             formalResult = { ...formalResult, interviews: [...currentInterviews, ...personaAdds] };
           }
+          // Demote the agenda strings LAST, so all three producers of kit
+          // question text — the model's own output and both synthesis fallbacks
+          // above (the roster stub and the persona placeholder) — leave in ONE
+          // shape. Demoting earlier would let the two fallbacks re-introduce
+          // inline `agenda[].questions` after the fact and the paths would
+          // diverge again, which is the whole defect.
+          formalResult = demoteKitAgendas(formalResult, new Date().toISOString());
         }
         // Tag experience-design flows / demo scripts with their business area so
         // the Show demo can default a recipient to their own area's flow — done

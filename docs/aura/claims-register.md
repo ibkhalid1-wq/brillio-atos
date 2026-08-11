@@ -137,6 +137,47 @@ into those steps' definitions of done — not touched here.
 - **Honest phrasing if ever claimed:** *"reproducible record"* (we retain exactly what was sent and received), never *"deterministic replay."*
 - **Remediation:** never introduce a determinism claim. If audit-tier determinism is needed, it requires seed + temp 0 first.
 
+### 14 · Current-state atlas: "declared systems belong in the inventory, their use and faults do not"
+- **Where:** `supabase/functions/run-agent/index.ts` (current-state-atlas system prompt — **model-facing**).
+- **Added 2026-08-10 (O-20):** the `systemsOfRecord` Frame field declared
+  `usedByArtifacts: ["domain-ontology", "current-state-atlas"]` (`methodology.ts:1251`) while
+  NEITHER prompt consumed it. The sponsor's named systems already reach the model as a
+  grounding fact, so this is a prompt-only fix — no plumbing was missing.
+- **What it now asserts:** a declared system goes into `systemsInventory` with the sponsor's
+  spelling verbatim; `usedFor` states only what the record supports; `complaints` stays EMPTY
+  until a stakeholder voices one; `steps[].system` stays null unless evidence places it there.
+- **True today?** Yes, and deliberately narrow. The claim is about where a NAME may be
+  recorded, not about what the system does — "an invented complaint or a guessed purpose is a
+  fabrication" is stated in the prompt itself. A system the sponsor named is evidence that the
+  system exists, never evidence that any particular entity or step touches it.
+- **Status:** **TRUE** (as worded). Model-facing only; asserts nothing to a user.
+
+### 15 · Domain ontology: "the sponsor's list is the naming authority, not an assignment"
+- **Where:** `supabase/functions/run-agent/index.ts` (domain-ontology system prompt — **model-facing**).
+- **Added 2026-08-10 (O-20):** same field, the other consumer.
+- **What it now asserts:** when an entity's records live in a declared system, `systemOfRecord`
+  takes the sponsor's spelling verbatim — a renamed or abbreviated system reads downstream as a
+  second, unknown one and opens a duplicate ask. Presence on the list is explicitly NOT evidence
+  that any entity lives there: where nothing places the records, `systemOfRecord` stays null and
+  a gap question is raised.
+- **True today?** Yes. The prompt states both bounds — never invent a system, never promote a
+  declared system to an entity — and names the failure it prevents ("guessing an assignment to
+  make the list look consumed is a fabrication").
+- **Status:** **TRUE** (as worded). Model-facing only.
+
+### 16 · Kit agenda demotion: "no provenance note without loci" (guard row)
+- **Where:** `supabase/functions/run-agent/index.ts` (comments on the edge kit-agenda demotion).
+- **Added 2026-08-10 (O-19):** the server kit path now demotes agenda questions to a cache
+  after both synthesis fallbacks, so the model's output and both stubs leave in one shape.
+- **The claim NOT made is the point.** The client's cache writes a provenance note saying the
+  ledger's open unknowns are the source; the edge path has no ledger and therefore writes
+  `loci: []` and NO note. The absence is the honest signal — a note without loci is an
+  uncheckable provenance claim, which is the L7 defect (`25f1dbf`) in the other direction.
+- **Status:** **TRUE by omission** — pinned by a test asserting the note never appears on this
+  path. See the O-19 finding: full migration to rendered questions is blocked architecturally,
+  because the kit is a Frame artifact and every locus derives from Listen-phase documents that
+  do not exist yet.
+
 ---
 
 ## External claims we cannot verify from the repo — human check needed
@@ -155,4 +196,4 @@ Three mechanisms, most-mechanical first:
 
 ---
 
-*Last swept: 2026-08-07 (this unit). Re-sweep whenever a step lands or copy changes.*
+*Last swept: 2026-08-10 — rows 14-16 added for the O-19/O-20 generator-prompt changes.*
