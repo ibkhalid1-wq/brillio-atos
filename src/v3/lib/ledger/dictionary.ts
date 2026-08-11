@@ -208,3 +208,61 @@ export function writeDictionaryField(raw: unknown, csv: string, sor?: string | n
   const key = Object.keys(existing).find((k) => k.toLowerCase() === wanted.toLowerCase()) ?? wanted;
   return JSON.stringify({ ...existing, [key]: csv });
 }
+
+// ── spreadsheet uploads ─────────────────────────────────────────────────────────────
+/**
+ * A workbook is converted to CSV and handed to `parseDictionaryCsv` above, so the
+ * deterministic parser stays the ONE definition of what a dictionary row means. No
+ * second column-matcher, no second notion of a recognisable header.
+ *
+ * This exists because the Inbox told the operator "CSV/XLSX dictionaries parse now"
+ * while the file input accepted `.csv,.tsv,.txt` — and `xlsx` was a declared dependency
+ * with ZERO importers. An operator exporting from Salesforce, where XLSX is the default,
+ * was told it worked and then could not select the file.
+ */
+export const SPREADSHEET_EXTENSIONS = [".xlsx", ".xlsm", ".xlsb", ".xls"];
+
+export const isSpreadsheetName = (name: string): boolean =>
+  SPREADSHEET_EXTENSIONS.some((ext) => name.toLowerCase().endsWith(ext));
+
+export interface WorkbookPick {
+  /** The chosen sheet as CSV, ready for `parseDictionaryCsv`. */
+  csv: string;
+  /** Which sheet that was, so the operator can see what was read. */
+  sheet: string;
+  /** Every sheet name in the workbook, in order. */
+  sheets: string[];
+}
+
+/**
+ * Convert a workbook and CHOOSE the sheet that actually looks like a dictionary.
+ *
+ * A real export is rarely one clean sheet: Salesforce and most BI tools emit a cover
+ * or notes sheet first. Taking `SheetNames[0]` unconditionally would read that one,
+ * parse zero fields, and tell the operator their file matched nothing — a wrong answer
+ * that looks like a data problem. So every sheet is converted and parsed, and the one
+ * yielding the most recognised fields wins; ties keep workbook order.
+ *
+ * When nothing parses anywhere, the FIRST sheet is returned rather than an empty
+ * string: the operator then sees "0 fields parsed" against a named sheet they can go
+ * and check, instead of an unexplained blank. The miss stays visible either way — the
+ * caller reports which sheet was read and how many were skipped.
+ *
+ * `xlsx` is imported DYNAMICALLY: it is a large library, this module is imported by a
+ * dozen test files and by `flowShellData`, and a workbook is the uncommon path. Loading
+ * it eagerly would put it in the main bundle for every reader of TYPING_SLOTS.
+ */
+export async function pickDictionarySheet(bytes: ArrayBuffer): Promise<WorkbookPick> {
+  const XLSX = await import("xlsx");
+  const wb = XLSX.read(bytes, { type: "array" });
+  const sheets = wb.SheetNames.slice();
+  if (sheets.length === 0) return { csv: "", sheet: "", sheets };
+  let best: WorkbookPick | null = null;
+  let bestFields = -1;
+  for (const sheet of sheets) {
+    const csv = XLSX.utils.sheet_to_csv(wb.Sheets[sheet]);
+    const fields = parseDictionaryCsv(csv, sheet).fields.length;
+    if (fields > bestFields) { bestFields = fields; best = { csv, sheet, sheets }; }
+  }
+  return best ?? { csv: "", sheet: sheets[0], sheets };
+}

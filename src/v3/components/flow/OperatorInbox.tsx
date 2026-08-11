@@ -25,7 +25,7 @@ import { renderQuestion } from "@/v3/lib/ledger/renderQuestion";
 import { ClaimStatus, OwnershipTag, ProvisionalMark, SourceTag } from "@/v3/components/flow/studio/ledgerPrimitives";
 import { asksNeedingChase, isSystemOwner, type ArtifactAskMark } from "@/v3/lib/ledger/artifactAsks";
 import { operatorQueueCounts, sessionQuestionCount, unfrozenQueues } from "@/v3/lib/ledger/operatorQueue";
-import { parseDictionaryCsv } from "@/v3/lib/ledger/dictionary";
+import { parseDictionaryCsv, isSpreadsheetName, pickDictionarySheet, SPREADSHEET_EXTENSIONS } from "@/v3/lib/ledger/dictionary";
 import { retractProposal } from "@/v3/lib/ledger/curation";
 import { displayPersonLabel } from "@/v3/components/flow/flowStakeholders";
 
@@ -143,9 +143,14 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
   const dictRef = useRef<HTMLInputElement>(null);
   const pendingSor = useRef<string | null>(null);
   const pendingScope = useRef<string[]>([]);
-  const [dictPreview, setDictPreview] = useState<{ name: string; fields: number; closes: number; csv: string; sor: string | null; scope: number } | null>(null);
+  const [dictPreview, setDictPreview] = useState<{ name: string; fields: number; closes: number; csv: string; sor: string | null; scope: number; sheet?: string; sheets?: number } | null>(null);
   const readDictionaryFile = async (file: File, sor: string | null, scopeLoci: string[]) => {
-    const csv = await file.text();
+    // A workbook is converted to CSV and parsed by the SAME parser as a .csv upload —
+    // one definition of a dictionary row, whatever the operator exported. Which sheet
+    // was read is carried into the preview: a real export usually has a cover sheet,
+    // and silently reading the wrong one looks like a data problem rather than a pick.
+    const workbook = isSpreadsheetName(file.name) ? await pickDictionarySheet(await file.arrayBuffer()) : null;
+    const csv = workbook ? workbook.csv : await file.text();
     const parsed = parseDictionaryCsv(csv, file.name.replace(/\.[^.]+$/, ""));
     // Measured against THIS ask's loci when the upload is for one system; against
     // every open typing locus for the programme-wide one. Same count either way —
@@ -155,7 +160,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
       const id = `el:attr:${f.entity.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-")}.${f.field.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
       return n + (scope.has(id) ? 1 : 0);
     }, 0);
-    setDictPreview({ name: parsed.name, fields: parsed.fields.length, closes, csv, sor, scope: scopeLoci.length });
+    setDictPreview({ name: parsed.name, fields: parsed.fields.length, closes, csv, sor, scope: scopeLoci.length, sheet: workbook?.sheet, sheets: workbook?.sheets.length });
   };
   const [sel, setSel] = useState<Record<string, string>>({});
   const [other, setOther] = useState<Record<string, string>>({});
@@ -327,6 +332,9 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                     {" "}<b>{dictPreview.closes}</b> of the {dictPreview.scope} open typing question{dictPreview.scope === 1 ? "" : "s"}
                     {sor ? ` on ${sor}` : ""} match
                     {dictPreview.closes === 0 ? " — nothing here matches an open locus; check the entity/field columns" : ""}
+                    {dictPreview.sheet && (dictPreview.sheets ?? 1) > 1
+                      ? ` · read the “${dictPreview.sheet}” sheet of ${dictPreview.sheets}`
+                      : ""}
                   </span>
                   <button type="button" className="v3ib-btn" disabled={busy === `dict:${key}`}
                     onClick={() => { setBusy(`dict:${key}`); void Promise.resolve(onDictionary(dictPreview.csv, dictPreview.sor)).finally(() => { setBusy(null); setDictPreview(null); }); }}>
@@ -337,7 +345,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
               ) : (
                 <button type="button" className="v3ib-btn ghost"
                   onClick={() => { pendingSor.current = sor; pendingScope.current = loci; dictRef.current?.click(); }}>
-                  ⬆ upload {sor ? `the ${sor} dictionary` : "a dictionary covering every system"} (CSV/TSV)
+                  ⬆ upload {sor ? `the ${sor} dictionary` : "a dictionary covering every system"} (CSV/TSV/Excel)
                 </button>
               )}
             </div>
@@ -407,7 +415,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                 every system (the shape a programme that never keys keeps). */}
             {onDictionary ? (
               <>
-                <input ref={dictRef} type="file" accept=".csv,.tsv,.txt" className="v3ib-sr"
+                <input ref={dictRef} type="file" accept={[".csv", ".tsv", ".txt", ...SPREADSHEET_EXTENSIONS].join(",")} className="v3ib-sr"
                   onChange={(e) => {
                     const f = e.target.files?.[0]; e.target.value = "";
                     if (f) void readDictionaryFile(f, pendingSor.current, pendingScope.current);
