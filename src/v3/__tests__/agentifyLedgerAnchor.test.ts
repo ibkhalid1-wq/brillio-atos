@@ -459,12 +459,15 @@ describe("the ledger panel, driven through the studio that edits the workflows",
     expect(doc).toEqual(before);
   });
 
-  // Agentify draws the same steps and resolves them the same way — it just cannot
-  // reword them, so its panel can only ever read from the atlas's own text.
-  it("Agentify reads the same claims, off the Atlas's workflows, with no document of its own", () => {
+  // AGENTIFY no longer draws this panel. It is a LIST of activities with a toggle
+  // each (studios.tsx), and a step's evidence is read where the step is DESCRIBED —
+  // on the Atlas, above. The half of it this module is about still holds there, and
+  // is what is asserted instead: Agentify reads the atlas's OWN steps, keys off
+  // them, and rendering it writes nothing.
+  it("Agentify lists the Atlas's own steps, with no document of its own, and writes nothing", () => {
     const el = mountStudio("agentify", {}, programWith(atlasDoc()));
-    openFirstStep(el, "Quote to cash");
-    expect(panel(el).textContent).toContain("Ledger claims on this step");
+    expect([...el.querySelectorAll(".v3fs-ag-act")].map((n) => n.textContent)).toEqual([RE_KEY, APPROVE]);
+    expect(el.querySelector(".v3fs-wf-claims"), "the claims panel came back to Agentify").toBeNull();
     expect(wrote).toBeNull();
   });
 });

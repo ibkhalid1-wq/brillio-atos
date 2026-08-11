@@ -18,8 +18,8 @@
  *     buttons. Asserted here as well as in a11yFlow*, because those audit whatever
  *     the shell happens to draw and this fixture guarantees the surface is drawn.
  *
- *  3. THE GATES. A locked/derived artifact and the Agentify surface get NO drag
- *     affordance and NO add/delete — the tile is not draggable at all, rather than
+ *  3. THE GATES. A locked/derived artifact gets NO drag affordance and NO
+ *     add/delete — the tile is not draggable at all, rather than
  *     draggable-but-refused.
  *
  *  4. THE ANCHORS, AND THEREFORE AGENTIFY'S DECISIONS. Steps carry `_atlasStepId`,
@@ -75,15 +75,15 @@ const seedDoc = (): Record<string, unknown> => ({
 let wrote: Record<string, unknown> | null = null;
 let onChangeSpy: ReturnType<typeof vi.fn>;
 
-function Harness({ initial, locked, surface, anchorDoc }: {
+function Harness({ initial, locked, anchorDoc }: {
   initial: Record<string, unknown>; locked: boolean;
-  surface: "atlas" | "agentify"; anchorDoc?: Record<string, unknown>;
+  anchorDoc?: Record<string, unknown>;
 }) {
   const [doc, setDoc] = useState(initial);
   return createElement(StudioLockContext.Provider, { value: locked },
     createElement(StudioAuthoringContext.Provider, { value: true },
       createElement(WorkflowStudio, {
-        doc, program: PROGRAM, surface, anchorDoc,
+        doc, program: PROGRAM, anchorDoc,
         onChange: (next: Record<string, unknown>) => { wrote = next; onChangeSpy(next); setDoc(next); },
       })));
 }
@@ -92,8 +92,7 @@ let root: Root | null = null;
 let host: HTMLElement | null = null;
 
 function mount(opts: {
-  doc?: Record<string, unknown>; locked?: boolean;
-  surface?: "atlas" | "agentify"; anchorDoc?: Record<string, unknown>;
+  doc?: Record<string, unknown>; locked?: boolean; anchorDoc?: Record<string, unknown>;
 } = {}): HTMLElement {
   wrote = null;
   onChangeSpy = vi.fn();
@@ -104,7 +103,6 @@ function mount(opts: {
     root!.render(createElement(Harness, {
       initial: opts.doc ?? seedDoc(),
       locked: opts.locked ?? false,
-      surface: opts.surface ?? "atlas",
       anchorDoc: opts.anchorDoc,
     }));
   });
@@ -472,22 +470,11 @@ describe("a committed or derived artifact offers none of it", () => {
     expect(detail.querySelectorAll(".v3fs-swim-ins").length).toBe(0);
   });
 
-  it("AGENTIFY renders the same swimlane structurally READ-ONLY — the surface flag, not a second one", () => {
-    // AgentifyStudio hands this component the Atlas's own workflows with
-    // surface="agentify"; structure is the Atlas's and Agentify may not reshape it.
-    const el = mount({ surface: "agentify" });
-    const detail = openWorkflow(el, "Quote to cash");
-    expect(tiles(detail).length).toBeGreaterThan(0);
-    expect(tiles(detail).every((t) => t.getAttribute("draggable") !== "true")).toBe(true);
-    expect(detail.querySelectorAll(".v3fs-swim-acts").length).toBe(0);
-    const dt = makeTransfer();
-    fireDrag(tile(detail, 0), "dragstart", { dataTransfer: dt });
-    const target = cells(detail, 2)[0];
-    stubBox(target, 100, 100);
-    fireDrag(target, "dragover", { clientX: 120, dataTransfer: dt });
-    fireDrag(target, "drop", { clientX: 120, dataTransfer: dt });
-    expect(wrote).toBeNull();
-  });
+  // (There used to be a third gate here: `surface="agentify"`, a structurally
+  // frozen twin of this swimlane that Agentify rendered. Agentify is a LIST of
+  // activities now — studios.tsx, AgentifyList — and this component draws the
+  // Atlas and nothing else, so the prop and its test are gone. The two LOCKED
+  // cases above pin the identical behaviour, which is all that gate ever added.)
 });
 
 /* ── 5 · the anchors, and Agentify's decisions ────────────────────────────── */

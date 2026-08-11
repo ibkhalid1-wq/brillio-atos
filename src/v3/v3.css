@@ -6233,28 +6233,59 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-wf-agentify:hover:not(:disabled){border-color:color-mix(in srgb,var(--v3-accent-2) 44%,var(--fs-line));color:var(--v3-accent-2)}
 .v3fs-wf-agentify.on{background:var(--v3-accent);border-color:var(--v3-accent);color:#fff}
 .v3fs-wf-agentify:disabled{opacity:.55;cursor:default}
-/* ── The agentification call, made in the step inspector on AGENTIFY and worn by
-   the tile there. An UNDECIDED step gets no flag at all — absence is the honest
-   rendering of a decision nobody has made — and the Current-State Atlas wears no
-   flags whatever, because deciding is not what the Atlas is for.
-   `-flag`, not `-mode`: `.v3fs-wf-mode` is already the SEAM VIEW's view-switcher
-   button further down this file, and the two rules were quietly fighting over the
-   same tile. ── */
-.v3fs-wf-modebar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:2px 0 8px;padding:8px 10px;border:1px solid var(--fs-line);border-radius:12px;background:var(--fs-card)}
-.v3fs-wf-modebar-l{font-size:11.5px;font-weight:650;color:var(--v3-text-primary)}
-.v3fs-wf-modebar-b{display:flex;gap:6px;flex-wrap:wrap}
-.v3fs-wf-modebar-n{font-size:10.5px;font-style:italic;color:var(--v3-text-muted)}
-.v3fs-wf-flag{flex:none;font-size:9.5px;font-weight:700;letter-spacing:.02em;border-radius:999px;padding:1px 7px;border:1px solid var(--fs-line);color:var(--v3-text-muted);background:var(--fs-card)}
-.v3fs-wf-flag.agentify{border-color:var(--v3-green);color:var(--v3-green);background:color-mix(in srgb,var(--v3-green) 12%,transparent)}
-.v3fs-wf-flag.assist{border-color:var(--v3-amber);color:var(--v3-amber);background:var(--v3-amber-soft)}
-.v3fs-wf-flag.keep{border-color:var(--fs-line);color:var(--v3-text-muted)}
-/* Facts STATED, not offered: the workflow/step as Agentify shows it — read from
-   the Atlas, editable only there. Reuses the document view's fact grid so a
-   read-only fact looks the same wherever it is read. */
-.v3fs-wf-ro{display:flex;flex-direction:column;gap:6px;margin:2px 0 8px}
-.v3fs-wf-ro .v3fs-dv-fl{flex-basis:132px}
-.v3fs-wf-ro-note{margin:6px 0 0;font-size:11px;line-height:1.5;color:var(--v3-text-muted)}
-.v3fs-wf-src{font-style:normal;margin-left:8px;font-size:9.5px;font-weight:650;letter-spacing:.04em;text-transform:uppercase;color:var(--v3-text-muted)}
+/* ── AGENTIFY — the list of activities, grouped by workflow, one toggle each.
+   (This replaced a structurally-frozen copy of the Atlas swimlane; the flag chip
+   and the three-way mode bar that lived on its step inspector went with it.)
+
+   THE UNDECIDED TRACK IS HOLLOW AND DASHED, deliberately: an activity nobody has
+   looked at must not read as a decided "no". A recorded `assist` / `keep manual`
+   gets a SOLID off track plus its own words in the status, so the two states that
+   an on/off switch would flatten together stay apart on screen as well as in the
+   accessible description. ── */
+.v3fs-ag-wf{margin:0 0 14px;border:1px solid var(--fs-line);border-radius:14px;background:var(--fs-card);overflow:hidden;box-shadow:var(--fs-shadow)}
+.v3fs-ag-wf-h{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;padding:11px 14px;border-bottom:1px solid var(--fs-line);
+  background:color-mix(in srgb,var(--v3-accent-2) 5%,transparent)}
+.v3fs-ag-wf-n{font-size:13.5px;font-weight:750;letter-spacing:-.01em;color:var(--v3-text-primary)}
+.v3fs-ag-wf-a{font-size:10px;font-weight:650;letter-spacing:.04em;text-transform:uppercase;color:var(--v3-text-muted)}
+.v3fs-ag-wf-c{margin-left:auto;font-size:11px;font-variant-numeric:tabular-nums;color:var(--v3-text-muted)}
+.v3fs-ag-rows{list-style:none;margin:0;padding:0}
+.v3fs-ag-row{padding:9px 14px;border-top:1px solid color-mix(in srgb,var(--fs-line) 60%,transparent)}
+.v3fs-ag-row:first-child{border-top:0}
+.v3fs-ag-row.is-agentify{background:color-mix(in srgb,var(--v3-green) 7%,transparent)}
+.v3fs-ag-row-main{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.v3fs-ag-n{flex:none;width:20px;height:20px;display:grid;place-items:center;border-radius:6px;
+  font-family:var(--v3-font-mono,ui-monospace,monospace);font-size:10px;font-weight:700;color:var(--v3-text-muted);background:var(--fs-line)}
+.v3fs-ag-act{flex:1 1 240px;min-width:0;font-size:12.5px;font-weight:600;line-height:1.35;color:var(--v3-text-primary)}
+.v3fs-ag-meta{flex:none;display:flex;gap:5px;flex-wrap:wrap}
+.v3fs-ag-actor,.v3fs-ag-sys{font-size:9.5px;font-weight:650;border-radius:999px;padding:2px 8px;border:1px solid var(--fs-line);color:var(--v3-text-muted);background:var(--fs-card)}
+.v3fs-ag-sys{font-family:var(--v3-font-mono,ui-monospace,monospace);font-weight:600}
+.v3fs-ag-state{flex:none;min-width:96px;text-align:right;font-size:10.5px;color:var(--v3-text-muted)}
+.v3fs-ag-row.is-undecided .v3fs-ag-state{font-style:italic}
+.v3fs-ag-row.is-agentify .v3fs-ag-state{font-weight:650;color:var(--v3-green)}
+.v3fs-ag-row.is-assist .v3fs-ag-state{font-weight:650;color:var(--v3-amber)}
+.v3fs-ag-withdraw{flex:none;font:inherit;font-size:10px;font-weight:650;cursor:pointer;border:1px solid var(--fs-line);border-radius:999px;
+  padding:3px 9px;background:var(--fs-card);color:var(--v3-text-muted)}
+.v3fs-ag-withdraw:hover:not(:disabled){border-color:var(--v3-accent-2);color:var(--v3-accent-2)}
+.v3fs-ag-withdraw:disabled{opacity:.5;cursor:default}
+.v3fs-ag-switch{flex:none;width:42px;height:23px;padding:2px;cursor:pointer;border-radius:999px;background:transparent;
+  border:1px dashed color-mix(in srgb,var(--fs-line) 100%,transparent);transition:background .14s ease,border-color .14s ease}
+.v3fs-ag-switch:hover:not(:disabled){border-color:var(--v3-accent-2)}
+.v3fs-ag-switch:focus-visible{outline:2px solid var(--v3-accent-2);outline-offset:2px}
+.v3fs-ag-switch-t{display:block;width:17px;height:17px;border-radius:50%;background:var(--v3-text-muted);opacity:.45;
+  transition:transform .14s ease,background .14s ease,opacity .14s ease}
+/* DECIDED-BUT-NOT-AGENTIFY: solid border, solid knob — somebody answered. */
+.v3fs-ag-row.is-assist .v3fs-ag-switch,.v3fs-ag-row.is-keep .v3fs-ag-switch{border-style:solid;background:var(--fs-line)}
+.v3fs-ag-row.is-assist .v3fs-ag-switch-t,.v3fs-ag-row.is-keep .v3fs-ag-switch-t{opacity:1}
+.v3fs-ag-switch[aria-checked="true"]{border-style:solid;border-color:var(--v3-green);background:var(--v3-green)}
+.v3fs-ag-switch[aria-checked="true"] .v3fs-ag-switch-t{transform:translateX(19px);background:#fff;opacity:1}
+.v3fs-ag-switch:disabled{opacity:.5;cursor:default}
+.v3fs-ag-why{display:flex;align-items:center;gap:8px;margin:7px 0 1px 30px}
+.v3fs-ag-why-l{flex:none;font-size:10px;font-weight:650;letter-spacing:.04em;text-transform:uppercase;color:var(--v3-text-muted)}
+.v3fs-ag-why input{flex:1;min-width:0;font:inherit;font-size:11.5px;padding:5px 9px;border:1px solid var(--fs-line);border-radius:8px;
+  background:var(--fs-card);color:var(--v3-text-primary)}
+.v3fs-ag-why input:disabled{opacity:.6}
+.v3fs-ag-orphans{margin:0 0 12px;padding:9px 12px;font-size:11.5px;line-height:1.5;border:1px solid var(--v3-amber);border-radius:10px;
+  background:var(--v3-amber-soft);color:var(--v3-text-primary)}
 /* ── Agentify tree — the Listen workflows by area, each step with a suggest /
    approve / mark control. An expandable area → workflow → steps structure. ── */
 .v3fs-agtree{display:flex;flex-direction:column;gap:10px}

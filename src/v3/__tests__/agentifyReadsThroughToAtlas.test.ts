@@ -15,9 +15,12 @@
  *               fields, add / reorder / drop a step, edit a step, dismiss a
  *               workflow. This is where the work is DESCRIBED. It makes, and shows,
  *               no automation call.
- *   AGENTIFY  — the SAME workflows, and one flag per step: can this be agentified.
- *               Structure is read-only. This is where the CALL is made, and it is
- *               the only thing Agentify decides.
+ *   AGENTIFY  — the SAME activities, LISTED by workflow, one toggle each: can this
+ *               be agentified. Structure is not editable here at all. This is where
+ *               the CALL is made, and it is the only thing Agentify decides.
+ *               (It drew the swimlane too, until 2026-08-11. Operator direction,
+ *               verbatim: "agentify, should show a list of activities by workflow
+ *               with a toggle to agentify".)
  *
  * AND THERE IS NO SECOND COPY. That is the load-bearing half. Agentify used to hold
  * its own `workflows` array — carried forward verbatim, forked on the first
@@ -39,6 +42,9 @@ import { workflowElementId, stepElementId } from "@/v3/lib/ledger/migrate";
 import {
   readDecisions, writeDecision, decisionStepId, DECISIONS_FIELD, DECISION_STEP_ID,
 } from "@/v3/lib/ledger/agentifyDecisions";
+// a11yFlowNames / a11yFlowKeyboard never open a studio, so they would pass
+// vacuously on this surface. Their helpers are applied to it directly instead.
+import { accessibleName, isWordless, roleOf } from "./helpers/accessibleName";
 
 const STUDIOS = readFileSync(resolve(__dirname, "../components/flow/studio/studios.tsx"), "utf8");
 const ARTIFACT = readFileSync(resolve(__dirname, "../components/flow/studio/FlowArtifactStudio.tsx"), "utf8");
@@ -109,9 +115,26 @@ const click = (el: Element | null | undefined) => {
 };
 const openWorkflow = (el: HTMLElement, name: string) =>
   click([...el.querySelectorAll("button")].find((b) => (b.textContent ?? "").includes(name)));
-const flagButton = (el: HTMLElement, label: string) =>
-  [...el.querySelectorAll(".v3fs-wf-modebar button")].find((b) => b.textContent === label);
 const rows = (doc: Record<string, unknown>) => (doc[DECISIONS_FIELD] ?? []) as Array<Record<string, unknown>>;
+
+/* ── reading Agentify's LIST ──────────────────────────────────────────────── */
+
+/** Every activity row on the Agentify list, in document order. */
+const activityRows = (el: HTMLElement) => [...el.querySelectorAll<HTMLElement>(".v3fs-ag-row")];
+const actionOf = (row: HTMLElement) => row.querySelector(".v3fs-ag-act")?.textContent ?? "";
+const rowFor = (el: HTMLElement, action: string) => {
+  const row = activityRows(el).find((r) => actionOf(r) === action);
+  if (!row) throw new Error(`no activity row for “${action}” — saw: ${activityRows(el).map(actionOf).join(" | ")}`);
+  return row;
+};
+/** The one toggle on an activity's row. */
+const toggleFor = (el: HTMLElement, action: string) =>
+  rowFor(el, action).querySelector<HTMLButtonElement>('button[role="switch"]')!;
+const stateOf = (el: HTMLElement, action: string) =>
+  rowFor(el, action).querySelector(".v3fs-ag-state")?.textContent ?? "";
+/** The surface's OWN running count — read off the lead, never off the whole page,
+ *  so a per-workflow heading that happens to read the same cannot stand in for it. */
+const counter = (el: HTMLElement) => el.querySelector(".v3fs-stu-lead")?.textContent ?? "";
 
 /* ── 1 · the Atlas is the workflows, and it edits them ────────────────────── */
 
@@ -165,14 +188,37 @@ describe("the Current-State Atlas draws the workflows and edits them", () => {
   });
 });
 
-/* ── 2 · Agentify shows the same workflows, and only flags them ───────────── */
+/* ── 2 · Agentify LISTS those activities, and toggles them ────────────────── */
 
-describe("Agentify shows the Atlas's workflows with a flag per step", () => {
-  it("it draws them with no document of its own — nothing to generate first", () => {
+/**
+ * THE LIST (operator direction 2026-08-11, verbatim: "agentify, should show a list
+ * of activities by workflow with a toggle to agentify").
+ *
+ * It replaced a structurally-frozen copy of the Atlas's swimlane whose call was
+ * three buttons inside a step inspector — reachable only by opening a workflow and
+ * clicking a tile. What the diagram did for Agentify, the Atlas already does
+ * better; what Agentify needed was every decidable activity in one place with its
+ * control in reach, and a visible count of what is still open.
+ *
+ * The hard part, pinned below: a toggle has two positions and the record has FOUR
+ * readings — agentify, assist, keep manual, and undecided. Undecided is not "off".
+ */
+describe("Agentify lists the Atlas's activities, grouped by workflow", () => {
+  it("one row per activity, under its workflow — and no diagram anywhere", () => {
     const el = mount("agentify", {}, programWith(atlasDoc()));
-    expect(el.querySelector(".v3fs-seam-wf")).not.toBeNull();
-    openWorkflow(el, "Quote to cash");
-    expect(el.querySelectorAll("button.v3fs-swim-tile")).toHaveLength(2);
+    expect(el.textContent).toContain("Quote to cash");                 // the group heading
+    expect(activityRows(el).map(actionOf)).toEqual([RE_KEY, APPROVE]);  // a row each, in order
+    // The swimlane is the ATLAS's surface, and it is not drawn here.
+    expect(el.querySelector(".v3fs-swim"), "Agentify still draws the swimlane").toBeNull();
+    expect(el.querySelector(".v3fs-swim-tile")).toBeNull();
+    expect(el.querySelector(".v3fs-seam-wf")).toBeNull();
+  });
+
+  it("each row carries the context the call needs: the actor's lane and the system", () => {
+    const el = mount("agentify", {}, programWith(atlasDoc()));
+    const row = rowFor(el, RE_KEY);
+    expect(row.querySelector(".v3fs-ag-actor")?.textContent).toBe("Sales Rep");
+    expect(row.querySelector(".v3fs-ag-sys")?.textContent).toBe("CRM");
   });
 
   it("a rename on the ATLAS is a rename on Agentify — there is no second version to update", () => {
@@ -183,63 +229,202 @@ describe("Agentify shows the Atlas's workflows with a flag per step", () => {
     expect(el.textContent).not.toContain("Quote to cash");
   });
 
-  it("STRUCTURE is read-only there: no add, no reorder, no drop, no dismiss, no fields", () => {
+  it("a DROPPED step is not decidable work — it is off the list, and out of the count", () => {
+    const dropped = atlasDoc();
+    ((dropped.workflows[0] as Record<string, unknown>).steps as Array<Record<string, unknown>>)[0].dropped = true;
+    const el = mount("agentify", {}, programWith(dropped));
+    expect(activityRows(el).map(actionOf)).toEqual([APPROVE]);
+    expect(counter(el)).toContain("0 of 1 decided");
+  });
+
+  it("STRUCTURE is not editable there: no add, no reorder, no drop, no dismiss, no workflow fields", () => {
     const el = mount("agentify", {}, programWith(atlasDoc()));
     expect(el.querySelector("button.v3fs-seam-addwf")).toBeNull();
     expect(el.querySelector(".v3fs-seam-wf-dismiss")).toBeNull();
-    openWorkflow(el, "Quote to cash");
-    const detail = el.querySelector<HTMLElement>(".v3fs-seam-wfdetail")!;
-    expect(detail.textContent).not.toContain("Dismiss this workflow");
-    expect([...detail.querySelectorAll("button")].map((b) => b.textContent ?? "")
-      .filter((t) => t.includes("＋ Step"))).toEqual([]);
-    click(detail.querySelector("button.v3fs-swim-tile"));
     expect(el.querySelector(".v3fs-wf-insp-actions")).toBeNull();
-    // The workflow's facts are STATED, not offered.
-    expect(detail.querySelector(".v3fs-wf-ro")).not.toBeNull();
-    expect(detail.textContent).toContain("An RFQ arrives");
+    expect(el.textContent).not.toContain("Dismiss this workflow");
+    expect([...el.querySelectorAll("button")].map((b) => b.textContent ?? "")
+      .filter((t) => t.includes("＋ Step"))).toEqual([]);
+    // Nothing here offers a workflow's own fields — those are the Atlas's.
+    expect([...el.querySelectorAll("label.v3fs-stu-field .v3fs-stu-fl")].map((n) => n.textContent))
+      .not.toContain("Name");
   });
 
-  it("the flag is the ONLY edit — and it writes a decision, never a workflow", () => {
+  it("the TOGGLE is the only edit — flipping one on writes a decision, never a workflow", () => {
     const el = mount("agentify", {}, programWith(atlasDoc()));
-    openWorkflow(el, "Quote to cash");
-    click(el.querySelector("button.v3fs-swim-tile"));
-    click(flagButton(el, "Agentify"));
+    click(toggleFor(el, RE_KEY));
 
     expect(wrote!.workflows, "a copy of the Atlas's workflows landed on Agentify").toBeUndefined();
     expect(rows(wrote!)).toHaveLength(1);
     expect(rows(wrote!)[0][DECISION_STEP_ID]).toBe(RE_KEY_ID);
     expect(rows(wrote!)[0].mode).toBe("agentify");
-    expect(el.querySelector(".v3fs-wf-flag")?.textContent).toBe("Agentify");
+    // …and it comes straight back as the row's state.
+    expect(toggleFor(el, RE_KEY).getAttribute("aria-checked")).toBe("true");
+    expect(stateOf(el, RE_KEY)).toContain("Agentify");
+    expect(counter(el)).toContain("1 of 2 decided");
   });
 
-  it("clicking the chosen flag again WITHDRAWS it — back to undecided, not to a default", () => {
+  it("flipping it OFF WITHDRAWS the call — back to undecided, never to a “no” nobody chose", () => {
     const el = mount("agentify", {}, programWith(atlasDoc()));
-    openWorkflow(el, "Quote to cash");
-    click(el.querySelector("button.v3fs-swim-tile"));
-    click(flagButton(el, "Assist"));
-    click(flagButton(el, "Assist"));
-    expect(rows(wrote!)[0].mode).toBe("");
-    expect(el.querySelector(".v3fs-wf-flag")).toBeNull();
-    expect(el.querySelector(".v3fs-wf-modebar")!.textContent).toContain("Not decided yet");
+    click(toggleFor(el, RE_KEY));
+    click(toggleFor(el, RE_KEY));
+    expect(rows(wrote!)[0].mode).toBe("");            // stored as withdrawn, so it sticks
+    expect(toggleFor(el, RE_KEY).getAttribute("aria-checked")).toBe("false");
+    expect(stateOf(el, RE_KEY)).toBe("Not decided");  // NOT "Keep manual"
+    expect(counter(el)).toContain("0 of 2 decided");
   });
 
-  it("an UNDECIDED step wears no flag — absence is the honest rendering", () => {
+  it("UNDECIDED renders UNSET — visibly its own state, not a decided “no”", () => {
     const el = mount("agentify", { [DECISIONS_FIELD]: [{ [DECISION_STEP_ID]: RE_KEY_ID, mode: "keep", rationale: "" }] },
       programWith(atlasDoc()));
-    openWorkflow(el, "Quote to cash");
-    const flags = [...el.querySelectorAll(".v3fs-wf-flag")].map((n) => n.textContent);
-    expect(flags).toEqual(["Keep manual"]);     // one decided step, one silent one
+    // Both toggles are OFF, and that is exactly why off alone cannot be the whole story.
+    expect(activityRows(el).map((r) => r.querySelector('[role="switch"]')!.getAttribute("aria-checked")))
+      .toEqual(["false", "false"]);
+    // The undecided one is marked un-set and says so…
+    expect(rowFor(el, APPROVE).className).toContain("is-undecided");
+    expect(stateOf(el, APPROVE)).toBe("Not decided");
+    // …the decided one is marked decided and says WHICH call was made.
+    expect(rowFor(el, RE_KEY).className).toContain("is-keep");
+    expect(stateOf(el, RE_KEY)).toContain("Keep manual");
+    expect(counter(el)).toContain("1 of 2 decided");
   });
 
-  it("a LOCKED Agentify renders the flag control dead — the gate holds", () => {
-    const el = mount("agentify", {}, programWith(atlasDoc()), { locked: true });
-    openWorkflow(el, "Quote to cash");
-    click(el.querySelector("button.v3fs-swim-tile"));
-    const buttons = [...el.querySelectorAll<HTMLButtonElement>(".v3fs-wf-modebar button")];
-    expect(buttons.length).toBe(3);
-    expect(buttons.every((b) => b.disabled)).toBe(true);
-    click(buttons[0]);
+  it("the gap stays legible: a running count on the lead AND on each workflow", () => {
+    const twoWf = atlasDoc();
+    twoWf.workflows = [...twoWf.workflows, {
+      name: "Renewals", area: "Sales", owner: "Bo", trigger: "A renewal falls due",
+      handoffs: [], failureModes: [],
+      steps: [{ actor: "Sales Rep", action: "Chase the renewal", system: "CRM", duration: "", entities: [] }],
+    }] as typeof twoWf.workflows;
+    const el = mount("agentify", { [DECISIONS_FIELD]: [{ [DECISION_STEP_ID]: RE_KEY_ID, mode: "agentify", rationale: "" }] },
+      programWith(twoWf));
+    expect(counter(el)).toContain("1 of 3 decided");
+    expect(counter(el)).toContain("2 still open");
+    expect([...el.querySelectorAll(".v3fs-ag-wf-c")].map((n) => n.textContent))
+      .toEqual(["1 of 2 decided", "0 of 1 decided"]);
+  });
+
+  it("a call the Atlas has moved out from under is SAID, not quietly dropped from the count", () => {
+    // A decision filed under an id the Atlas no longer holds — its step was reworded
+    // or dismissed there. It is still in the document and still reaches Envision, so
+    // "N of M decided" must not be the only thing this surface says about it.
+    const el = mount("agentify", { [DECISIONS_FIELD]: [
+      { [DECISION_STEP_ID]: "el:wf:quote-to-cash:step:gone", workflow: "Quote to cash", step: "A step that moved", mode: "agentify", rationale: "" },
+    ] }, programWith(atlasDoc()));
+    expect(counter(el)).toContain("0 of 2 decided");          // it is not counted…
+    const notice = el.querySelector(".v3fs-ag-orphans")?.textContent ?? "";
+    expect(notice).toContain("1 call");                       // …and it is not hidden either
+    expect(notice).toContain("no longer match any activity");
+  });
+
+  it("…and no such notice appears when every call still names an activity", () => {
+    const el = mount("agentify", { [DECISIONS_FIELD]: [{ [DECISION_STEP_ID]: RE_KEY_ID, mode: "agentify", rationale: "" }] },
+      programWith(atlasDoc()));
+    expect(el.querySelector(".v3fs-ag-orphans")).toBeNull();
+  });
+
+  it("a recorded ASSIST is shown as assist — a binary control does not flatten it into off", () => {
+    const el = mount("agentify", { [DECISIONS_FIELD]: [{ [DECISION_STEP_ID]: APPROVE_ID, mode: "assist", rationale: "a human signs it" }] },
+      programWith(atlasDoc()));
+    expect(stateOf(el, APPROVE)).toContain("Assist");
+    expect(rowFor(el, APPROVE).className).toContain("is-assist");
+    // and the reason that was recorded with it is still on screen, still editable
+    expect(rowFor(el, APPROVE).querySelector<HTMLInputElement>(".v3fs-ag-why input")!.value)
+      .toBe("a human signs it");
+    // MERELY LOOKING rewrites nothing — the call stays `assist` until a human moves it.
     expect(wrote).toBeNull();
+  });
+
+  it("…and it is the operator, never the render, who changes an assist", () => {
+    const el = mount("agentify", { [DECISIONS_FIELD]: [{ [DECISION_STEP_ID]: APPROVE_ID, mode: "assist", rationale: "" }] },
+      programWith(atlasDoc()));
+    // Its own Withdraw takes it back to undecided (the toggle cannot: it is already off).
+    click(rowFor(el, APPROVE).querySelector(".v3fs-ag-withdraw"));
+    expect(rows(wrote!).find((r) => r[DECISION_STEP_ID] === APPROVE_ID)!.mode).toBe("");
+    expect(stateOf(el, APPROVE)).toBe("Not decided");
+  });
+
+  it("turning an assist ON records agentify — an explicit change, on one click", () => {
+    const el = mount("agentify", { [DECISIONS_FIELD]: [{ [DECISION_STEP_ID]: APPROVE_ID, mode: "assist", rationale: "" }] },
+      programWith(atlasDoc()));
+    click(toggleFor(el, APPROVE));
+    expect(rows(wrote!).find((r) => r[DECISION_STEP_ID] === APPROVE_ID)!.mode).toBe("agentify");
+  });
+
+  it("a LOCKED Agentify renders every toggle GENUINELY inert — not merely dimmed", () => {
+    const el = mount("agentify", { [DECISIONS_FIELD]: [{ [DECISION_STEP_ID]: APPROVE_ID, mode: "assist", rationale: "" }] },
+      programWith(atlasDoc()), { locked: true });
+    const switches = [...el.querySelectorAll<HTMLButtonElement>('button[role="switch"]')];
+    expect(switches).toHaveLength(2);
+    expect(switches.every((b) => b.disabled)).toBe(true);
+    // Every other control the row can carry is dead too.
+    expect(el.querySelector<HTMLButtonElement>(".v3fs-ag-withdraw")!.disabled).toBe(true);
+    expect(el.querySelector<HTMLInputElement>(".v3fs-ag-why input")!.disabled).toBe(true);
+    for (const s of switches) click(s);
+    click(el.querySelector(".v3fs-ag-withdraw"));
+    expect(wrote, "a locked Agentify wrote a decision").toBeNull();
+  });
+});
+
+/* ── 2b · every toggle says WHICH activity it decides ─────────────────────── */
+
+/**
+ * Twenty switches all announcing "Agentify" is the ambiguity failure this repo
+ * already fixed once in the Inbox. a11yFlowNames/a11yFlowKeyboard cannot catch it
+ * here — their fixture never opens a studio, so they would pass on an unlabelled
+ * div — so their own helpers are applied directly to this surface instead.
+ */
+describe("the toggles are named, distinctly, after the activity they decide", () => {
+  /** Two workflows sharing a step's wording — the case a generic name cannot survive. */
+  const twoWorkflows = () => {
+    const doc = atlasDoc();
+    doc.workflows = [...doc.workflows, {
+      name: "Renewals", area: "Sales", owner: "Bo", trigger: "A renewal falls due",
+      steps: [{ actor: "Sales Rep", action: RE_KEY, system: "CRM" }],
+    }] as typeof doc.workflows;
+    return doc;
+  };
+
+  it("each toggle is a real switch with a real accessible name", () => {
+    const el = mount("agentify", {}, programWith(atlasDoc()));
+    for (const s of el.querySelectorAll('button[role="switch"]')) {
+      expect(roleOf(s)).toBe("switch");
+      expect(s.hasAttribute("aria-checked")).toBe(true);
+      const name = accessibleName(s);
+      expect(isWordless(name), `wordless toggle name: “${name}”`).toBe(false);
+      expect(name).toContain(actionOf(s.closest(".v3fs-ag-row") as HTMLElement));
+    }
+  });
+
+  it("no two toggles share a name — not even across workflows with the same step wording", () => {
+    const el = mount("agentify", {}, programWith(twoWorkflows()));
+    const names = [...el.querySelectorAll('button[role="switch"]')].map(accessibleName);
+    expect(names).toHaveLength(3);
+    expect(new Set(names).size).toBe(3);
+    expect(names.some((n) => n.includes("Renewals"))).toBe(true);
+  });
+
+  it("the STATE is announced with the toggle, so undecided and “decided otherwise” differ to AT", () => {
+    // aria-checked is false for both; the described-by status is what tells them apart.
+    const el = mount("agentify", { [DECISIONS_FIELD]: [{ [DECISION_STEP_ID]: RE_KEY_ID, mode: "keep", rationale: "" }] },
+      programWith(atlasDoc()));
+    const described = (action: string) => {
+      const toggle = toggleFor(el, action);
+      const id = toggle.getAttribute("aria-describedby")!;
+      return el.ownerDocument.getElementById(id)!.textContent ?? "";
+    };
+    expect(described(APPROVE)).toBe("Not decided");
+    expect(described(RE_KEY)).toContain("Keep manual");
+  });
+
+  it("every other control on a row is named after its activity too", () => {
+    const el = mount("agentify", { [DECISIONS_FIELD]: [{ [DECISION_STEP_ID]: APPROVE_ID, mode: "assist", rationale: "" }] },
+      programWith(atlasDoc()));
+    for (const control of [el.querySelector(".v3fs-ag-withdraw")!, el.querySelector(".v3fs-ag-why input")!]) {
+      const name = accessibleName(control);
+      expect(isWordless(name)).toBe(false);
+      expect(name).toContain(APPROVE);
+    }
   });
 });
 
@@ -325,12 +510,19 @@ describe("Agentify holds no copy of the workflows", () => {
     expect(STUDIO_REGISTRY["agentify"].docOrder).not.toContain("workflows");
   });
 
-  it("no path through the Agentify studio can write `workflows` — the door is bolted, not just hidden", () => {
-    // The seam view, the lifecycle grid and the swimlane all route their writes
-    // through one callback; on Agentify it returns without calling onChange.
-    const source = readFileSync(resolve(__dirname, "../components/flow/studio/WorkflowStudio.tsx"), "utf8");
-    const body = source.slice(source.indexOf("const writeWorkflows"), source.indexOf("const patchWorkflow"));
-    expect(body).toContain("if (structureLocked) return;");
-    expect(STUDIOS).toMatch(/surface="agentify"/);
+  it("no path through the Agentify studio can write `workflows` — the door is gone, not just bolted", () => {
+    // It used to be a guard: Agentify rendered the workflow studio and that studio
+    // refused the structural write. Now Agentify does not render it at all, and the
+    // only onChange in the whole component is the decision write — so there is no
+    // door left to bolt. Both halves are asserted, because a second onChange
+    // appearing here is exactly how a copy of the Atlas would get back on.
+    const body = STUDIOS.slice(STUDIOS.indexOf("function AgentifyStudio"), STUDIOS.indexOf("/* ── Envision"));
+    expect(body).not.toContain("WorkflowStudio");
+    expect(body.match(/onChange\(/g)).toEqual(["onChange("]);
+    expect(body).toContain("onChange(writeDecision(doc, atlasDoc, stepId, next))");
+    // …and that one door is shut when the artifact is locked. Asserted from source
+    // because a `disabled` control cannot exercise the guard behind it — the
+    // behavioural half (a locked surface writes nothing) is the LOCKED test above.
+    expect(body).toContain("if (locked) return;");
   });
 });
