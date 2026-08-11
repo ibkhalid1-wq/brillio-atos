@@ -504,6 +504,13 @@ Deno.serve(async (req: Request) => {
         // A role-placeholder link (no person bound to the role yet) must never
         // greet the role title as a first name — the client skips the greeting.
         ...(hit.pack.unnamed === true ? { unnamed: true } : {}),
+        // This ask is the generated kit SCRIPT, not the ledger's open unknowns —
+        // stamped at mint, where the ledger was in hand and owned nothing for this
+        // person. Pass-through only; the client STATES it on the page instead of
+        // rendering a script identically to a locus-backed ask that can actually
+        // close something. Absent on every pack minted before the flag existed, and
+        // the page then says nothing extra — we don't know, so we don't claim.
+        ...(hit.pack.scripted === true ? { scripted: true } : {}),
         role: String(hit.pack.role ?? ""),
         intro: String(hit.pack.intro ?? ""),
         questions: Array.isArray(hit.pack.questions) ? hit.pack.questions.map(String).slice(0, 12) : [],

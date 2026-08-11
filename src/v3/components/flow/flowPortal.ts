@@ -37,6 +37,20 @@ export interface FlowInterviewPack {
    * what was actually ASKED (the model can be re-rendered later), and the edge
    * validates a deferral against the pack's own question list. */
   questionLoci?: string[];
+  /** This ask is the generated kit SCRIPT, not the ledger's open unknowns.
+   *
+   * A person the ledger owns no loci for still gets a link — their kit script is
+   * the fallback (`TheLine.tsx:689-692`). Every question on it then carries
+   * `about: ""`, which forces `portalQuestionModel` into `mode: "strings"`, and
+   * the page looked IDENTICAL to a locus-backed one: same header, same cards, but
+   * no answer on it can be attributed to a point in the model, so answering
+   * closes nothing. The flag is the difference made visible — the page states it
+   * rather than letting the two read the same.
+   *
+   * Derived, never guessed: set only where the caller HAD a ledger and it owned
+   * nothing for this person. A pack minted with no ledger in hand carries no flag
+   * (we do not know), and the page says nothing extra — exactly as before. */
+  scripted?: boolean;
   /** Secret half of the response link (programId.secret). */
   token: string;
   createdAt: string;
@@ -160,6 +174,10 @@ export function listInterviewPacks(program: ProgramSummary): FlowInterviewPack[]
       : undefined,
     movementId: typeof entry.movementId === "string" ? entry.movementId : undefined,
     recipientArea: typeof entry.recipientArea === "string" ? entry.recipientArea : undefined,
+    // Only ever `true` or absent — a stored `false` is the same statement as
+    // "nobody marked this", and inventing a distinction between them would be
+    // reading a claim the mint never made.
+    scripted: entry.scripted === true ? true : undefined,
     engagement: isRecord(entry.engagement) ? {
       openedAt: typeof entry.engagement.openedAt === "string" ? entry.engagement.openedAt : undefined,
       lastSeenAt: typeof entry.engagement.lastSeenAt === "string" ? entry.engagement.lastSeenAt : undefined,
@@ -521,7 +539,11 @@ export function mintFollowUpPack(
   input: { movementId: string; who: string; questions: string[]; captureField: string; unnamed?: boolean;
     /** The ledger loci behind `questions`, index-aligned. Optional and additive:
      *  a caller with no ledger in hand mints exactly the pack it always did. */
-    loci?: string[] },
+    loci?: string[];
+    /** The caller had a ledger and it owned NOTHING for this person, so these
+     *  questions are their generated kit SCRIPT, not open unknowns. Stated on
+     *  the pack so the page can say so — see `FlowInterviewPack.scripted`. */
+    scripted?: boolean },
   actor: string,
 ): Record<string, unknown> | null {
   if (!input.who.trim() || !input.questions.length) return null;
@@ -549,6 +571,13 @@ export function mintFollowUpPack(
     reviewKind: undefined,
     review: undefined,
     unnamed: input.unnamed || undefined,
+    // Always SET, for the same reason as `questionLoci`: a later locus-backed ask
+    // on the same durable token must CLEAR the scripted mark rather than leave the
+    // page saying the questions are a script when they are now open unknowns.
+    // Not added to `askSignature` — it is derived from whether loci were passed,
+    // and `questionLoci` is already in that signature, so it carries no
+    // independent information about whether the ask changed.
+    scripted: input.scripted || undefined,
   };
   const { durable, rest } = collapseDurable(existing, input.who);
   let pack: Record<string, unknown>;

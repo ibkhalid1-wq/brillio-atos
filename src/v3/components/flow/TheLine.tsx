@@ -85,7 +85,7 @@ interface TheLineProps {
   onSaveInputs?: SaveInputsFn;
   onRenamePerson?: KitAlignProps["onRenamePerson"];
   onRenameRole?: KitAlignProps["onRenameRole"];
-  onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string; unnamed?: boolean; loci?: string[] }) => Promise<string | null>;
+  onMintFollowUp?: (input: { movementId: string; who: string; questions: string[]; captureField: string; unnamed?: boolean; loci?: string[]; scripted?: boolean }) => Promise<string | null>;
   onScheduleFollowUp?: (movementId: string, who: string, date: string) => Promise<void>;
   onRunAgent?: (agentId: string, phaseId?: string) => void;
   /** Record a movement's gate — demonstrated. Reopen — evidence changed.
@@ -690,11 +690,18 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
         const ask = owned.length
           ? owned.map((q) => ({ about: q.about, text: renderQuestion(ledger.store, q.about, "stakeholder").question }))
           : row.questions.map((text) => ({ about: "", text }));
+        // The fallback is a DIFFERENT KIND of ask and the pack has to say so. Every
+        // question on it carries `about: ""` — no point in the model, so nothing an
+        // answer can be filed against. Unmarked, the recipient's page was
+        // indistinguishable from a locus-backed one while closing nothing. We know
+        // it here and only here: the ledger is in hand and owns nothing for them.
+        const scripted = !owned.length;
         url = await onMintFollowUp({
           movementId: row.movementId, who: row.label,
           questions: ask.map((q) => q.text),
           loci: ask.map((q) => q.about),
           captureField: row.captureField, unnamed: row.isRole,
+          ...(scripted ? { scripted: true } : {}),
         });
         // THE SEND MOMENT. The link is out, so every LOCUS it carries is now PINNED to
         // this recipient: a later re-derivation (or a bulk assign) cannot move it — it
