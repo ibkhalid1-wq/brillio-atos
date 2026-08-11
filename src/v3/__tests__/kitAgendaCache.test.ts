@@ -16,7 +16,7 @@ import { describe, it, expect } from "vitest";
 import type { ProgramSummary } from "@/new/types";
 import {
   readKitAgendaCache, kitAgendaQuestions, demoteInterviewAgenda, demoteKitAgendas,
-  KIT_AGENDA_CACHE_VERSION, KIT_AGENDA_CACHE_FIELD,
+  KIT_AGENDA_CACHE_VERSION, KIT_AGENDA_CACHE_FIELD, KIT_AGENDA_CACHE_NOTE,
 } from "@/v3/lib/ledger/kitAgendaCache";
 import { resolveMovementStakeholders } from "@/v3/components/flow/flowStakeholders";
 import { meetingKit } from "@/v3/components/flow/flowMeetings";
@@ -73,6 +73,36 @@ describe("the agenda strings are a cache — read through ONE accessor", () => {
   it("loci ride the cache when the mint knew them — the way back to the source", () => {
     const demoted = demoteInterviewAgenda(legacyInterview(), { loci: ["el:attr:quote.status#valueSet"] });
     expect(readKitAgendaCache(demoted).loci).toEqual(["el:attr:quote.status#valueSet"]);
+  });
+
+  // The note is a PROVENANCE CLAIM — "the ledger's open unknowns are the source"
+  // — and the loci are the only evidence for it. Written unconditionally, an
+  // operator's own keystrokes in the kit studio (studios.tsx:161-169, which
+  // demotes with `questions` and no `loci`) landed stamped as a rendering of the
+  // ledger, with nothing anyone could check that against.
+  it("the note and the loci travel together — a hand-typed question claims no ledger source", () => {
+    const typed = demoteInterviewAgenda(legacyInterview(), { questions: ["Something the operator typed"] });
+    const cache = (typed[KIT_AGENDA_CACHE_FIELD] ?? {}) as Record<string, unknown>;
+    expect(cache.loci).toBeUndefined();
+    expect(cache.note).toBeUndefined();            // no evidence ⇒ no claim
+    expect(cache.questions).toEqual(["Something the operator typed"]);   // still cached
+    expect(cache.version).toBe(KIT_AGENDA_CACHE_VERSION);
+  });
+
+  it("with loci, the note IS written — the claim stands where it is checkable", () => {
+    const rendered = demoteInterviewAgenda(legacyInterview(), { loci: ["el:attr:quote.status#valueSet"] });
+    const cache = (rendered[KIT_AGENDA_CACHE_FIELD] ?? {}) as Record<string, unknown>;
+    expect(cache.note).toBe(KIT_AGENDA_CACHE_NOTE);
+    expect(cache.loci).toEqual(["el:attr:quote.status#valueSet"]);
+  });
+
+  it("no reader depends on the note — dropping it changes nothing anyone reads", () => {
+    const withNote = demoteInterviewAgenda(legacyInterview(), { loci: ["el:step:a#phase"], at: "2026-08-10T00:00:00Z" });
+    const stripped = { ...withNote };
+    const cache = { ...(stripped[KIT_AGENDA_CACHE_FIELD] as Record<string, unknown>) };
+    delete cache.note;
+    stripped[KIT_AGENDA_CACHE_FIELD] = cache;
+    expect(readKitAgendaCache(stripped)).toEqual(readKitAgendaCache(withNote));
   });
 
   it("a non-interview / empty input is honest rather than throwing", () => {

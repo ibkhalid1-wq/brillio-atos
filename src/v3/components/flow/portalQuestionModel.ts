@@ -16,7 +16,12 @@
  *  · a locus whose element this store does not hold is NOT dropped — its stored
  *    string falls through to `strings`, so the ask survives a model that moved on.
  *    (A miss stays visible; it is never papered over.)
- *  · the unit stays QUESTIONS: `count` = rendered rows + leftover strings.
+ *  · those leftovers are COUNTED SEPARATELY (`unbacked`), never folded into
+ *    `count`. They compose as bare `Q:/A:` blocks with no `[locus: …]` tag, so
+ *    ingest cannot attribute them and answering one closes nothing. Folding them
+ *    into one total told the stakeholder that N questions were actionable when
+ *    only `count` of them were — a fabricated number by omission. The surface
+ *    gives them their own heading; the two are never presented as one figure.
  *
  * Answers compose with the locus named in the text (`[locus: …]`), so the answer
  * that comes back through the quarantine channel can be attributed to the exact
@@ -60,8 +65,16 @@ export interface PortalQuestionModel {
   rows: PortalQuestionRow[];
   /** Stored strings with no renderable locus — rendered as before, never dropped. */
   strings: PortalStringQuestion[];
-  /** The unit is QUESTIONS: rendered rows + leftover strings. */
+  /** The questions under the page's MAIN list: the locus-backed rows in `loci`
+   *  mode, the whole stored list in `strings` mode. NEVER includes `unbacked` —
+   *  a total that mixed them would imply the leftovers are actionable. */
   count: number;
+  /** Questions shown BESIDE the locus-backed cards with no locus of their own
+   *  (`strings.length` in `loci` mode, `0` in `strings` mode, where there are no
+   *  locus cards for them to sit beside). An answer to one of these carries no
+   *  `[locus: …]` tag, so it closes nothing — the surface must say so rather
+   *  than absorb them into `count`. */
+  unbacked: number;
 }
 
 /** The one decision: does this pack render through the renderer, or as stored strings? */
@@ -77,7 +90,7 @@ export function portalQuestionModel(
     .filter((q) => q.question.trim());
   const loci = (pack.questionLoci ?? []).map((a) => String(a));
   const asStrings = (): PortalQuestionModel =>
-    ({ mode: "strings", groups: [], rows: [], strings: plain, count: plain.length });
+    ({ mode: "strings", groups: [], rows: [], strings: plain, count: plain.length, unbacked: 0 });
   if (!store || !loci.some((a) => a.trim())) return asStrings();
 
   // Index-aligned at mint: questionLoci[i] is the locus behind questions[i].
@@ -112,7 +125,10 @@ export function portalQuestionModel(
     })),
   }));
   const rows = groups.flatMap((g) => g.rows);
-  return { mode: "loci", groups, rows, strings: leftover, count: rows.length + leftover.length };
+  // `count` is the locus-backed rows ONLY. The leftovers travel as `unbacked`:
+  // they are real asks that must stay on the page, but nothing can attribute an
+  // answer to them, so they never join the headline figure.
+  return { mode: "loci", groups, rows, strings: leftover, count: rows.length, unbacked: leftover.length };
 }
 
 /** How the locus rides the composed answer text so an ingest can attribute it. */

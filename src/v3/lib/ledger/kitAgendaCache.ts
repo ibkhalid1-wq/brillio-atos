@@ -29,7 +29,15 @@
 export const KIT_AGENDA_CACHE_VERSION = 1;
 /** The field the demoted strings live under, on each interview. */
 export const KIT_AGENDA_CACHE_FIELD = "agendaCache";
-/** Written INTO the artifact, so the JSON itself says what these strings are. */
+/**
+ * Written INTO the artifact, so the JSON itself says what these strings are.
+ *
+ * It is a PROVENANCE CLAIM, not decoration: it asserts the strings were rendered
+ * from the ledger's open unknowns. So it is stamped only when the `loci` that
+ * make the claim checkable are stamped with it (`demoteInterviewAgenda`) —
+ * otherwise the operator's own keystrokes from the kit studio
+ * (`studios.tsx:161-169`) would carry a note saying the ledger produced them.
+ */
 export const KIT_AGENDA_CACHE_NOTE =
   "cache of rendered question text — the ledger's open unknowns are the source";
 
@@ -106,9 +114,12 @@ export function demoteInterviewAgenda(
     [KIT_AGENDA_CACHE_FIELD]: {
       version: KIT_AGENDA_CACHE_VERSION,
       questions,
-      ...(loci.length ? { loci } : {}),
+      // The loci and the note travel TOGETHER or not at all. The note claims the
+      // ledger is these strings' source; the loci are the evidence for it. Written
+      // apart, a hand-typed question from the kit studio landed stamped as a
+      // rendering of open unknowns with nothing to check that against.
+      ...(loci.length ? { loci, note: KIT_AGENDA_CACHE_NOTE } : {}),
       at: opts.at ?? new Date().toISOString(),
-      note: KIT_AGENDA_CACHE_NOTE,
     },
   };
 }

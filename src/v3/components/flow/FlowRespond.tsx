@@ -65,6 +65,13 @@ interface Pack {
   /** The link belongs to a ROLE PLACEHOLDER (no person bound yet) — every
    * greeting skips the name; "Solution Architect" is never a first name. */
   unnamed?: boolean;
+  /** This ask is the generated kit SCRIPT, not the ledger's open unknowns: at
+   * mint the ledger owned no loci for this person, so every question carries
+   * `about: ""` and the page falls to `mode: "strings"`. Rendered alone that is
+   * indistinguishable from a locus-backed page, while no answer on it can be
+   * filed against a point in the model. The page SAYS SO instead. Absent on
+   * packs minted before the flag existed — then nothing extra is claimed. */
+  scripted?: boolean;
   /** Demo invites only. */
   openingQuote?: string;
   scenario?: string;
@@ -676,8 +683,12 @@ export default function FlowRespond({ token }: { token: string }) {
             </>
           ) : (
             <>
+              {/* "…they're below" — so this is a count of what is RENDERED, both
+                  the locus-backed rows and the unbacked leftovers. It is not the
+                  actionability figure; that one stays split in the header. */}
               {state.pack.followUp ? <FollowUpBanner stakeholder={greetName}
-                submissions={state.pack.submissions ?? []} newCount={questionModel.count} /> : null}
+                submissions={state.pack.submissions ?? []}
+                newCount={questionModel.count + questionModel.unbacked} /> : null}
               <header className="v3fs-portal-head">
                 <div className="v3fs-hero-eyebrow">{state.pack.programme} <span>· <img src="/brillio-logo.png" alt="Brillio" className="v3fs-portal-brandimg sm" /> AURA</span></div>
                 {/* On a follow-up the banner above already greets and frames the
@@ -697,13 +708,32 @@ export default function FlowRespond({ token }: { token: string }) {
                     </p>
                   </>
                 )}
-                {/* The unit is QUESTIONS — locus-backed ones and plain ones counted
-                    the same way, so the header can't disagree with the page. */}
+                {/* TWO figures, never one. `count` is the questions tied to a point
+                    in the model — an answer to one names the point it settles.
+                    `unbacked` is the ones the pack carried with no such point;
+                    answering those attributes to nothing. Presenting the sum as a
+                    single total implied all of them were actionable, which is the
+                    fabrication this codebase exists to prevent. The time estimate
+                    spans both, because both cost the reader time. */}
                 <div className="v3fs-portal-meta">
                   <span>✎ {questionModel.count} {state.pack.followUp ? (questionModel.count === 1 ? "new question" : "new questions") : "questions"} — answer any</span>
-                  <span>⏱ ~{Math.max(5, Math.round(questionModel.count * 1.5))} minutes</span>
+                  {questionModel.unbacked ? (
+                    <span>✎ + {questionModel.unbacked} carried over, not tied to a point in the model</span>
+                  ) : null}
+                  <span>⏱ ~{Math.max(5, Math.round((questionModel.count + questionModel.unbacked) * 1.5))} minutes</span>
                   <span>⛨ Reviewed by the team before anything enters the record</span>
                 </div>
+                {/* SCRIPTED ASK. The model holds no open point owned by this person,
+                    so these are the prepared interview questions rather than gaps in
+                    the record. Everything else on this page reads the same either
+                    way, which is precisely why it has to be said. */}
+                {state.pack.scripted ? (
+                  <p className="v3fs-portal-sub">
+                    These are our <b>prepared questions</b> for your role — the model doesn&rsquo;t yet hold a specific open point
+                    against your name, so your answers are read by the programme team rather than filed against a particular
+                    point in it. That makes them no less useful: they are how those points get opened.
+                  </p>
+                ) : null}
               </header>
               <div className="v3fs-portal-qs">
                 {state.pack.pilotHtml ? (
@@ -740,6 +770,21 @@ export default function FlowRespond({ token }: { token: string }) {
                       return { ...current, [about]: to };
                     })}
                     roster={state.pack.roster} />
+                ) : null}
+                {/* The leftovers get their OWN heading rather than trailing the
+                    locus cards under the header's one count. They are asked as
+                    they were stored, and an answer to one arrives as a bare
+                    `Q:/A:` block with no `[locus: …]` tag — so it is read by a
+                    person, not attributed to a point. Saying that is the whole
+                    fix: the miss stays visible instead of being counted as if it
+                    were actionable. */}
+                {questionModel.mode === "loci" && questionModel.unbacked ? (
+                  <div className="v3fs-rvw-wf-h">
+                    <b>Carried over from an earlier version of the model</b>
+                    <span className="v3fs-rvw-trigger">
+                      {questionModel.unbacked} {questionModel.unbacked === 1 ? "question" : "questions"} — the part of the model {questionModel.unbacked === 1 ? "it points" : "they point"} at has since changed, so {questionModel.unbacked === 1 ? "this one is" : "these are"} read by the team rather than filed against a specific point
+                    </span>
+                  </div>
                 ) : null}
                 {(questionModel.mode === "loci"
                   ? questionModel.strings
@@ -833,10 +878,14 @@ export default function FlowRespond({ token }: { token: string }) {
                 {error ? <div className="v3fs-portal-err">{error}</div> : null}
               </div>
               <div className="v3fs-portal-bar">
+                {/* `answeredCount` counts BOTH the locus rows and the unbacked
+                    strings, so the denominator has to span both or the bar reads
+                    "3 of 2". This is a progress figure over what is on the page,
+                    not the header's actionability claim. */}
                 <div className="v3fs-portal-progress">
-                  <span>{answeredCount} of {questionModel.count} answered</span>
+                  <span>{answeredCount} of {questionModel.count + questionModel.unbacked} answered</span>
                   <div className="v3fs-portal-track" aria-hidden="true">
-                    <div style={{ width: `${questionModel.count ? Math.round((answeredCount / questionModel.count) * 100) : 0}%` }} />
+                    <div style={{ width: `${questionModel.count + questionModel.unbacked ? Math.round((answeredCount / (questionModel.count + questionModel.unbacked)) * 100) : 0}%` }} />
                   </div>
                   {hasDraft ? <span className="v3fs-portal-saved">✓ Saved on this device — you can close this and come back</span> : null}
                 </div>
