@@ -38,10 +38,46 @@ const FUNCTIONS: Array<[RegExp, string]> = [
   [/sales ?op/, "Sales Ops"],
   [/sales|opportunity|account/, "Sales"],
 ];
-export const functionOf = (area: string): string | null => {
-  const a = (area || "").toLowerCase();
-  for (const [re, fn] of FUNCTIONS) if (re.test(a)) return fn;
+/** One segment of an area label → its function, by the ORDERED table above. Order is
+ *  load-bearing within a segment: "Sales Ops" must reach `/sales ?op/` before the broader
+ *  `/sales/`, which is why this cannot be a set-membership test. */
+const functionOfSegment = (segment: string): string | null => {
+  const s = segment.toLowerCase();
+  for (const [re, fn] of FUNCTIONS) if (re.test(s)) return fn;
   return null;
+};
+
+/**
+ * The function that owns an area — or NULL when the record does not say.
+ *
+ * The previous spelling tested the WHOLE label against the ordered table and returned the
+ * first hit. That is fine for a single-function area and wrong for the shape this
+ * programme actually produces: an entity whose area reads
+ * "Sales / Practices / Delivery / Marketing / Legal / Finance" was routed entirely to
+ * Practices — not because the record says so, but because `/practice|…/` happens to sit
+ * first in the array. On the Laila snapshot that was 78 questions, every one of Practices'
+ * entity-derived load, sent to a function the label names fifth.
+ *
+ * That is the fabricated-owner pattern in another costume: a plausible owner invented
+ * where the record names six. So a label naming two or more RECOGNISED functions now
+ * resolves to null, and `ownerFor` turns null into `unowned` — the miss stays visible and
+ * an operator routes it from the assign queue, which is what that queue is for.
+ *
+ * NOT "first named wins": the order inside these labels is model-authored and nothing
+ * makes the first name the accountable one, so that would swap one arbitrary rule for
+ * another. NOT joint either — that is the right answer and it does not fit: `Owner`'s
+ * joint arm is a PAIR (`{a, b}`), and 73 of those 78 name three or more functions. Widening
+ * it is a frozen-core change (`types.ts`), raised as a finding rather than made here.
+ *
+ * A label naming ONE recognised function still resolves to it, even alongside names we do
+ * not recognise ("Delivery / Talent Acquisition" → Delivery): one known owner is an answer,
+ * two is a choice this module has no basis to make.
+ */
+export const functionOf = (area: string): string | null => {
+  const found = [...new Set(
+    String(area || "").split("/").map((seg) => functionOfSegment(seg.trim())).filter(Boolean),
+  )] as string[];
+  return found.length === 1 ? found[0] : null;
 };
 /** Preserve the ledger's existing role labels for the function tokens. */
 const ROLE_LABEL: Record<string, string> = { Sales: "Sales Leaders" };

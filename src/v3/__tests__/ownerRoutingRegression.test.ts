@@ -25,9 +25,26 @@ const lailaSnap = (f: string) => JSON.parse(readFileSync(resolve(__dirname, `../
 
 describe("functionOf — most-specific wins, no broad swallow, no default", () => {
   it("Sales context still maps to Sales Ops (regression not over-tightened)", () => {
+    // The guard this test exists for: the narrow `/sales ?op/` must win over the broad
+    // `/sales/`, and tightening that must not stop Sales Ops resolving at all.
     expect(functionOf("Sales Ops")).toBe("Sales Ops");
     expect(functionOf("Sales Operations")).toBe("Sales Ops");
-    expect(functionOf("Sales / Sales Ops / Practices")).not.toBeNull();
+  });
+
+  it("a label naming SEVERAL functions resolves to none of them — it is unowned", () => {
+    // DELIBERATE RE-BASELINE. This case previously asserted `.not.toBeNull()`, which
+    // encoded the old whole-string first-match-wins behaviour: "Sales / Sales Ops /
+    // Practices" resolved to Practices purely because `/practice|…/` sits first in the
+    // table. On the Laila snapshot that sent 78 questions — all of Practices'
+    // entity-derived load — to a function the label names third.
+    //
+    // Picking any one of several named functions is a fabricated owner, so the record
+    // now says what it actually knows: nothing. `ownerFor` turns null into `unowned` and
+    // an operator routes it. Assertions above still hold, so the Sales Ops fix is intact.
+    expect(functionOf("Sales / Sales Ops / Practices")).toBeNull();
+    expect(functionOf("Sales / Practices / Delivery / Marketing / Legal / Finance")).toBeNull();
+    // ONE recognised function is still an answer, even beside names we do not know.
+    expect(functionOf("Delivery / Talent Acquisition")).toBe("Delivery");
   });
 
   it("a bare '…Operations' area is NOT swallowed into Sales Ops — it maps to none", () => {
