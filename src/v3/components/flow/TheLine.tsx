@@ -46,7 +46,7 @@ import { useOperatorCommits } from "@/v3/lib/ledger/useOperatorCommits";
 import { pinsForSend } from "@/v3/lib/ledger/operatorActions";
 import { HeardReadout, ConvergenceReadout, ProvisionalMark, ClaimStatus, SourceTag } from "@/v3/components/flow/studio/ledgerPrimitives";
 import DesignLoopZones from "@/v3/components/flow/DesignLoopZones";
-import { ownerRoleLabelForArea } from "@/v3/lib/ledger/migrate";
+import { ownerLabelsForCast } from "@/v3/lib/ledger/ownerBinding";
 import { renderQuestion } from "@/v3/lib/ledger/renderQuestion";
 import {
   BUCKET_NOTE, emptyOwnedLoad, ownedLoadBreakdown, ownedLoadFor, sendableCount,
@@ -486,32 +486,13 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
   // function mapping (ownerRoleLabelForArea) — NOT area-word overlap. This is the
   // F-1/turf root fix: a person's questions are the OPEN unknowns on loci THEY OWN,
   // so the same locus can never land under two owners and inflate everyone's count.
-  const ownerLabelsFor = useMemo(() => {
-    const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
-    const ledgerLabels = [...ledger.soloByOwner.keys()];
-    const m = new Map<string, Set<string>>();
-    for (const row of cast) {
-      const labels = new Set<string>();
-      // A person owns their PRIMARY function — from their ROLE/title, else their
-      // primary area. NOT the union of every coverage area they're tagged with:
-      // nearly everyone "covers" Sales, so unioning coverage reproduces the
-      // area-inherited bleed (Alliances inheriting Sales-handoff questions). The
-      // ledger owns each locus by ONE role, so a person maps to ONE owning function.
-      const primary = ownerRoleLabelForArea(row.role) ?? ownerRoleLabelForArea(row.label) ?? ownerRoleLabelForArea(row.area);
-      if (primary) labels.add(primary);
-      // ATLAS-STATED owners (non-CRM domains): the ledger can now own a locus by the
-      // atlas's own workflow.owner / step.actor string. Bind a person to those labels
-      // by EXACT normalized match on their role or name only — never fuzzy (the
-      // "Surgical Operations"→Sales Ops false-match lesson). A label nobody matches
-      // stays visible in the unbound-owners strip below, never silently unclaimed.
-      for (const L of ledgerLabels) {
-        const n = norm(L);
-        if (n === norm(row.role || "") || n === norm(row.label)) labels.add(L);
-      }
-      m.set(row.label, labels);
-    }
-    return m;
-  }, [cast, ledger.soloByOwner]);
+  // The binding rule lives in lib/ledger/ownerBinding — one definition, asserted
+  // directly. It used to be inline here, which is how the area fallback quietly
+  // handed a recruiter all of Sales Leaders' questions.
+  const ownerLabelsFor = useMemo(
+    () => ownerLabelsForCast(cast, [...ledger.soloByOwner.keys()]),
+    [cast, ledger.soloByOwner],
+  );
   // ── THE ONE owned-load per person (ownedLoad.ts) ──────────────────────────────────
   // Every locus this person owns, partitioned ONCE into the four buckets that add up to
   // the headline: on this link · next link · blocked · → dictionary. The card's button,
@@ -1399,7 +1380,9 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                       );
                       return (
                         <>
-                        <p className="v3ln-cr-noq">{ownedLoadBreakdown(load)}.</p>
+                        {/* The card header already prints this sentence; repeating
+                            it at the top of the drawer said the same arithmetic
+                            twice, two lines apart. */}
                         <ul className="v3ln-cr-qs owned">
                           {owned.map((q) => (
                             // Every owned locus is listed, including the ones a link

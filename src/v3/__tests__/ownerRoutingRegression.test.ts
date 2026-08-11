@@ -21,6 +21,7 @@ import { migrate, functionOf, type Snapshot, ownerFor, ownerRoleLabelForArea } f
 import { ownerLabel, normalizeOwner } from "@/v3/lib/ledger/types";
 import { buildUnknownQueue } from "@/v3/lib/ledger/projections";
 import { TYPING_SLOTS } from "@/v3/lib/ledger/dictionary";
+import { ownerLabelsForRow } from "@/v3/lib/ledger/ownerBinding";
 
 const lailaSnap = (f: string) => JSON.parse(readFileSync(resolve(__dirname, `../../../docs/laila/snapshot-2026-08-07/${f}`), "utf8"));
 
@@ -230,5 +231,70 @@ describe("a compound term is not the function it contains", () => {
     expect(marketing).toBe("Marketing");
     expect(gtm).not.toBe(marketing);      // the defect: these were equal
     expect(gtm).toBeNull();               // and unrouted is the honest answer, not a guess
+  });
+});
+
+/**
+ * THE AREA IS NOT A STAND-IN FOR A ROLE WE COULD NOT MAP.
+ *
+ * Found on live Laila from a screenshot: the Talent Acquisition card claimed 74
+ * owned questions and listed opportunity stages, deal reviews and buying
+ * committees — Sales work, under a recruiter's name. `functionOf` is a CRM
+ * table with no "Talent Acquisition" entry, so the stated role resolved to null
+ * and the binding fell through to the person's AREA, which is Sales. That is
+ * the same area-inherited bleed the surrounding comment warned about; only the
+ * UNION had been removed, not the FALLBACK.
+ *
+ * The honest answer is that we could not map their role. They own what matches
+ * them exactly and nothing else.
+ */
+describe("an unresolvable role does not inherit its area's questions", () => {
+  const ledgerLabelsAndCounts = () => {
+    const store = migrate({
+      ontology: lailaSnap("domain-ontology.json"),
+      atlas: lailaSnap("current-state-atlas.json"),
+      overrides: lailaSnap("operator-overrides.json"),
+    } as Snapshot);
+    const open = buildUnknownQueue(store).items.filter((i) => i.status === "open");
+    const counts = new Map<string, number>();
+    for (const i of open) counts.set(i.ownerLabel, (counts.get(i.ownerLabel) ?? 0) + 1);
+    return counts;
+  };
+
+  it("the preconditions still hold — this test is about a REAL unmapped role", () => {
+    // If the CRM table ever gains a Talent Acquisition entry, this test is no
+    // longer exercising the fallback and must be re-pointed at another
+    // unmapped role, not deleted.
+    expect(ownerRoleLabelForArea("Talent Acquisition")).toBeNull();
+    expect(ownerRoleLabelForArea("Sales")).toBe("Sales Leaders");
+    const counts = ledgerLabelsAndCounts();
+    expect(counts.get("Talent Acquisition")).toBeGreaterThan(0);
+    expect(counts.get("Sales Leaders")).toBeGreaterThan(20);   // the load that bled
+  });
+
+  it("REGRESSION: a recruiter is not handed Sales Leaders' questions", () => {
+    const counts = ledgerLabelsAndCounts();
+    const labels = [...counts.keys()];
+    const bound = ownerLabelsForRow(
+      { label: "Nisha Rao", role: "Talent Acquisition", area: "Sales" },
+      labels,
+    );
+    expect(bound.has("Sales Leaders"), "the area bled back in").toBe(false);
+    expect(bound.has("Talent Acquisition"), "their own work went missing").toBe(true);
+    // The number on the card is their own load, not a borrowed one.
+    const owned = [...bound].reduce((n, l) => n + (counts.get(l) ?? 0), 0);
+    expect(owned).toBe(counts.get("Talent Acquisition"));
+  });
+
+  it("a person who states NO role still binds through their area", () => {
+    // The fallback is not removed — it is scoped to the case it was written for.
+    const bound = ownerLabelsForRow({ label: "", role: "", area: "Sales" }, []);
+    expect([...bound]).toEqual(["Sales Leaders"]);
+  });
+
+  it("a role the table DOES map still wins over the area", () => {
+    const bound = ownerLabelsForRow({ label: "Dev Patel", role: "Marketing", area: "Sales" }, []);
+    expect(bound.has("Marketing")).toBe(true);
+    expect(bound.has("Sales Leaders")).toBe(false);
   });
 });
