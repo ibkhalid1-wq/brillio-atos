@@ -20,7 +20,7 @@ import {
   listFlowTracks, trackAcceptance, trackPace,
 } from "@/v3/components/flow/flowTracks";
 import { readFlowGovernance, flowAgentTier } from "@/v3/components/flow/flowGovernance";
-import { resolveMovementStakeholders, deliveryRoleDirectory, readDirectoryPeople, validateProgramRole, readRoleBindings, knownProgramRoles, kitPersonaDirectory, readSuggestedVoices, readListenPlan, listenPlanWrite, dismissedListenRoles, labelIdentity, dedupePeopleRows } from "@/v3/components/flow/flowStakeholders";
+import { resolveMovementStakeholders, deliveryRoleDirectory, readDirectoryPeople, validateProgramRole, readRoleBindings, knownProgramRoles, kitPersonaDirectory, readSuggestedVoices, readListenPlan, listenPlanWrite, dismissedListenRoles, labelIdentity, dedupePeopleRows, UNNAMED_SUFFIX_RE } from "@/v3/components/flow/flowStakeholders";
 import DiscoveryKitAlign from "@/v3/components/flow/DiscoveryKitAlign";
 import TheLine from "@/v3/components/flow/TheLine";
 import OperatorInbox from "@/v3/components/flow/OperatorInbox";
@@ -1139,7 +1139,7 @@ function FlowToday({ program, ledger, programs, onSelectProgram, onResolveDecisi
     const cov = coverageNames[0];
     if (!cov) return;
     autoCoverageRef.current = true;
-    const cleanName = cov.name.replace(/\s*[—–−‑-]\s*TBC\s*$/i, "").trim() || cov.name;
+    const cleanName = cov.name.replace(UNNAMED_SUFFIX_RE, "").trim() || cov.name;
     void addCoverageName(cleanName, cov.domain)
       .finally(() => { autoCoverageRef.current = false; });
     // eslint-disable-next-line react-hooks/exhaustive-deps

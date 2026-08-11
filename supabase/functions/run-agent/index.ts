@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.8";
+import { UNNAMED_SUFFIX } from "../_shared/unnamedSuffix.ts";
 import {
   streamClaudeText,
 } from "../_shared/claudeClient.ts";
@@ -11193,7 +11194,7 @@ Deno.serve(async (req) => {
             if (kind === "external" || !unrepresented) continue;
             coveredRoles.add(norm(name));
             personaAdds.push({
-              stakeholder: `${name} — TBC`,
+              stakeholder: `${name}${UNNAMED_SUFFIX}`,
               role: name,
               email: null,
               domain: "",
