@@ -6243,8 +6243,28 @@ details[open] > summary .v3fs-disc-c::after {display:none}
    an on/off switch would flatten together stay apart on screen as well as in the
    accessible description. ── */
 .v3fs-ag-wf{margin:0 0 14px;border:1px solid var(--fs-line);border-radius:14px;background:var(--fs-card);overflow:hidden;box-shadow:var(--fs-shadow)}
-.v3fs-ag-wf-h{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;padding:11px 14px;border-bottom:1px solid var(--fs-line);
+/* The heading is a real <button> now (the card's disclosure), so it needs the
+   button reset — width/text-align/font/cursor — or it inherits centred UA
+   styling and the row stops looking like a heading. */
+.v3fs-ag-wf-h{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;padding:11px 14px;border:0;border-bottom:1px solid var(--fs-line);
+  width:100%;text-align:left;font:inherit;cursor:pointer;
   background:color-mix(in srgb,var(--v3-accent-2) 5%,transparent)}
+.v3fs-ag-wf-h:hover{background:color-mix(in srgb,var(--v3-accent-2) 9%,transparent)}
+/* A shut card keeps its counts visible — a collapsed card that hides its own
+   progress is exactly why you would open it again. */
+.v3fs-ag-wf.is-shut .v3fs-ag-wf-h{border-bottom:0}
+.v3fs-ag-wf-c-ic{font-size:10px;color:var(--v3-text-muted);line-height:1}
+
+/* Filter bar. Presentation only — it never changes what is decided, and the
+   note beside it reconciles the narrowed view with the whole-document counter. */
+.v3fs-ag-filter{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:0 0 12px}
+.v3fs-ag-q{flex:1 1 200px;min-width:160px;padding:6px 10px;border:1px solid var(--v3-control-line);border-radius:9px;
+  background:var(--fs-card);color:var(--v3-text-primary);font:inherit;font-size:12.5px}
+.v3fs-ag-sel{padding:6px 9px;border:1px solid var(--v3-control-line);border-radius:9px;background:var(--fs-card);
+  color:var(--v3-text-primary);font:inherit;font-size:12.5px}
+.v3fs-ag-only{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--v3-text-secondary);white-space:nowrap}
+.v3fs-ag-filter-sp{flex:0 0 auto;margin-left:auto}
+.v3fs-ag-filter-note{margin:0 0 12px;font-size:11.5px;color:var(--v3-text-muted)}
 .v3fs-ag-wf-n{font-size:13.5px;font-weight:750;letter-spacing:-.01em;color:var(--v3-text-primary)}
 .v3fs-ag-wf-a{font-size:10px;font-weight:650;letter-spacing:.04em;text-transform:uppercase;color:var(--v3-text-muted)}
 .v3fs-ag-wf-c{margin-left:auto;font-size:11px;font-variant-numeric:tabular-nums;color:var(--v3-text-muted)}
