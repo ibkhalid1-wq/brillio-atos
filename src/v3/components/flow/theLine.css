@@ -10,7 +10,10 @@
 .v3ln-tabs button{flex:1;font:inherit;text-align:left;padding:9px 14px;border:0;cursor:pointer;
   background:var(--fs-card);color:var(--v3-text-muted)}
 .v3ln-tabs button:hover{color:var(--v3-text-primary)}
-.v3ln-tabs button.on{background:var(--v3-accent-2);color:#fff}
+/* the selected tab's label is --v3-on-accent, not #fff: white on the DARK theme's
+   --v3-accent-2 (#9488e8) is 3.02:1, an AA failure at 13px. The token is white on the
+   light theme (11.44:1) and #211747 on dark (5.43:1). Measured in a11yContrast. */
+.v3ln-tabs button.on{background:var(--v3-accent-2);color:var(--v3-on-accent)}
 .v3ln-tabs button:focus-visible{outline:2px solid var(--v3-accent-2);outline-offset:-2px}
 .v3ln-tabs button{font-size:13px;font-weight:700}
 .v3ln-tabs button span{display:block;font-size:10px;font-weight:500;letter-spacing:.04em;opacity:.75;margin-top:1px}
@@ -43,17 +46,48 @@
  * accent stays reserved for things you click */
 .v3ln-spine-row{position:relative;display:grid;grid-template-columns:44px minmax(0,1fr);align-items:start;
   padding-bottom:16px;--mv:var(--v3-accent-2)}
-.v3ln-spine-row[data-mv="listen"]{--mv:#2C8C7C}
-.v3ln-spine-row[data-mv="loop"]{--mv:#6C5FAE}
-.v3ln-spine-row[data-mv="ship"]{--mv:#2E9A72}
-.v3ln-spine-row[data-mv="evolve"]{--mv:#B0842B}
+/* CONTRAST-AUDITED (2026-08-11). These four were theme-blind literals — one value
+ * per movement, whichever theme you were in. DesignLoopZones draws them as TEXT
+ * (.v3dl-ready on a --v3-surface-2 tile, .v3dl-mini and .v3dl-devreg-t on a card),
+ * and no single ink can clear 4.5:1 against BOTH a white surface and a #22263a one:
+ * the two requirements point in opposite directions. So they are theme-aware now,
+ * exactly like every --v3-* ink beside them. Unqualified = the DARK theme (v3.css's
+ * `:root` is dark); [data-theme="light"] and the prefers-color-scheme mirror carry
+ * the light pair. Each replacement holds the ORIGINAL's HSL hue and saturation and
+ * moves LIGHTNESS only, so the movements still read as themselves:
+ *   listen  #2C8C7C hsl(170.0,52.2%)  L 36.1% → 31.0% light / 41.2% dark
+ *   loop    #6C5FAE hsl(249.9,32.8%)  L 52.7% → 52.7% light (unchanged) / 64.9% dark
+ *   ship    #2E9A72 hsl(157.8,54.0%)  L 39.2% → 31.2% light / 41.0% dark
+ *   evolve  #B0842B hsl( 40.2,60.7%)  L 42.9% → 33.3% light / 44.1% dark
+ * Worst case is the elevated surface, and every one clears it: 4.62–4.77:1 there,
+ * 5.2–5.4:1 on a card. Measured in __tests__/a11yContrast.test.ts. */
+.v3ln-spine-row[data-mv="listen"]{--mv:#32A08D}
+.v3ln-spine-row[data-mv="loop"]{--mv:#9188C3}
+.v3ln-spine-row[data-mv="ship"]{--mv:#30A178}
+.v3ln-spine-row[data-mv="evolve"]{--mv:#B5882C}
+[data-theme="light"] .v3ln-spine-row[data-mv="listen"]{--mv:#26786B}
+[data-theme="light"] .v3ln-spine-row[data-mv="loop"]{--mv:#6C5FAE}
+[data-theme="light"] .v3ln-spine-row[data-mv="ship"]{--mv:#257A5B}
+[data-theme="light"] .v3ln-spine-row[data-mv="evolve"]{--mv:#896621}
+/* Auto-apply the light inks when the OS prefers light and no theme is set yet —
+   mirrors the [data-theme="light"] block above exactly, as v3.css does. */
+@media (prefers-color-scheme: light){
+  :root:not([data-theme]) .v3ln-spine-row[data-mv="listen"]{--mv:#26786B}
+  :root:not([data-theme]) .v3ln-spine-row[data-mv="loop"]{--mv:#6C5FAE}
+  :root:not([data-theme]) .v3ln-spine-row[data-mv="ship"]{--mv:#257A5B}
+  :root:not([data-theme]) .v3ln-spine-row[data-mv="evolve"]{--mv:#896621}
+}
 .v3ln-spine-row::before{content:"";position:absolute;left:21px;top:0;bottom:0;width:2px;
   background:linear-gradient(var(--fs-line),color-mix(in srgb,var(--v3-accent-2) 20%,var(--fs-line)))}
 .v3ln-spine-row:first-child::before{top:10px}
 .v3ln-spine-row:last-child::before{bottom:auto;height:34px}
 .v3ln-rail-n{position:relative;z-index:1;justify-self:center;margin-top:6px;
   width:30px;height:30px;display:grid;place-items:center;
-  font:800 11px/1 var(--mono,ui-monospace);letter-spacing:.03em;color:#fff;
+  font:800 11px/1 var(--mono,ui-monospace);letter-spacing:.03em;color:var(--v3-on-accent);
+  /* NOT #fff. The label sits ON the movement fill, and --mv now moves with the theme:
+   * on dark it is the LIGHTER end of its hue, where white falls to ~3.4:1. --v3-on-accent
+   * is the palette's existing "label on a coloured fill" ink — white on light, #211747 on
+   * dark — and clears 4.5:1 on all five movements in both themes. */
   background:var(--mv);border-radius:50%;font-variant-numeric:tabular-nums;
   box-shadow:0 0 0 4px var(--fs-card),0 2px 6px -1px color-mix(in srgb,var(--mv) 55%,transparent)}
 @media(max-width:680px){.v3ln-spine-row{grid-template-columns:34px minmax(0,1fr)}
@@ -374,7 +408,8 @@
    properly instead: muted ink keeps the disabled READING while staying legible. */
 .v3dl-mini:disabled{opacity:1;cursor:default;color:var(--v3-text-muted);border-color:var(--v3-control-line)}
 .v3dl-mini:focus-visible{outline:2px solid var(--mv);outline-offset:2px}
-.v3dl-mini.ghost{color:var(--v3-text-secondary);border-color:var(--fs-line)}
+/* `.v3dl-mini.ghost` dressed the "? question → {role}" button. That button was
+ * unreachable (TheLine never passed onQuestion) and is gone; the rule went with it. */
 .v3dl-question{margin-left:auto;font-size:10px}
 .v3dl-question-note{color:var(--v3-text-muted);font-style:italic}
 /* stakeholders-shape zone: the goal state + the owned-question queue */
@@ -556,6 +591,12 @@
 .v3ib-dict-ask{display:flex;flex-direction:column;gap:3px;margin-top:6px;padding:7px 11px;border:1px dashed color-mix(in srgb,var(--v3-accent-2) 40%,var(--fs-line));border-radius:8px;background:var(--fs-card)}
 .v3ib-dict-to{font-size:12px;color:var(--v3-text-primary)}
 .v3ib-dict-msg{font-size:11px;color:var(--v3-text-muted)}
+/* An upload that could not be read says so WHERE the upload button was. The
+   read path had no catch and its caller used `void`, so a rejected promise was
+   discarded and the operator saw nothing at all — the failure mode that reads
+   as "I attached a file and nothing happened". --color-danger is AA on both
+   surfaces (see a11yContrast). */
+.v3ib-dict-err{display:block;font-size:11px;line-height:1.45;color:var(--color-danger);margin-bottom:5px}
 .v3ib-marked{font-size:11px;color:var(--v3-positive);font-weight:600}
 .v3ib-nodate{color:var(--v3-amber);font-weight:700}
 /* Sessions summary — the whole header is ONE disclosure button (⋈ Sessions · N seams,

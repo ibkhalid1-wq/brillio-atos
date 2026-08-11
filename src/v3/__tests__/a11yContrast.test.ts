@@ -30,8 +30,9 @@
  *
  * THEMES. `[data-theme="light"]` is the shipped theme — AppShellV3 sets it for everyone
  * and there is no in-app toggle (only an explicit "dark" already in localStorage wins).
- * The dark `:root` palette is audited too, and its failures are reported rather than
- * silently skipped; see FAILS_IN_DARK_ONLY at the foot of this file.
+ * The dark `:root` palette is audited to the same standard, not skipped: the block at
+ * the foot of this file held the last three dark-theme failures as PINNED numbers while
+ * they were open, and now holds them as requirements.
  */
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
@@ -285,45 +286,127 @@ describe("the palette itself", () => {
 });
 
 /**
- * DARK-THEME FINDINGS, REPORTED NOT FIXED.
+ * THE LAST THREE, NOW CLOSED.
  *
- * `--mv` (the movement hue) is set to bare literals by TheLine's own spine rows —
- * `.v3ln-spine-row[data-mv="loop"]{--mv:#6C5FAE}` and friends — with no dark variant,
- * and DesignLoopZones draws `.v3dl-ready` / `.v3dl-devreg-t` / `.v3dl-mini` in it. On
- * the dark surface that is 3.11:1, an AA failure for normal text. The literals live in
- * the v3ln- namespace (TheLine's), so this test states the number rather than moving
- * someone else's token; the light theme, which is what ships, passes at 4.77:1.
+ * This block used to be titled "reported, NOT fixed". It pinned three pairs at their
+ * failing values — `--mv` (theme-blind, 3.11:1 on dark and 3.40:1 in BOTH themes for
+ * Evolve), the selected tab's white-on-accent at 3.02:1 on dark, and `--br-green` drawn
+ * as text at 2.22:1 — on the grounds that the rules sat in someone else's namespace.
+ * All three are fixed; the assertions below are the same measurements, now stated as
+ * requirements. Each one FAILS if the fix is reverted.
+ *
+ * The `--mv` inks are read OUT OF theLine.css by selector, the same discipline the rest
+ * of this file applies to v3.css: no hex is duplicated here except the four ORIGINALS,
+ * which are gone from the stylesheet and are kept as the hue reference.
  */
-describe("reported, NOT fixed — failures inside the v3ln- namespace (TheLine's)", () => {
-  it("--mv, the movement ink, is a theme-blind literal that fails on dark", () => {
-    const loop = "#6C5FAE";                          // .v3ln-spine-row[data-mv="loop"]
-    expect(LINE).toContain(`--mv:${loop}`);          // still a theme-blind literal
-    expect(contrast(loop, light(CARD))).toBeGreaterThanOrEqual(4.5);   // ships: 5.4:1
-    expect(contrast(loop, dark(CARD))).toBeLessThan(4.5);              // dark: 3.11:1
-    // DesignLoopZones draws .v3dl-ready / .v3dl-devreg-t / .v3dl-mini in it, so the
-    // consequence lands on a surface this audit owns — but the token does not.
+
+/** HSL hue/saturation of a hex — the fix may move lightness and nothing else. */
+const hsl = (h: string): [number, number, number] => {
+  const [r, g, b] = toRgb(h).map((c) => c / 255);
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  const l = (mx + mn) / 2;
+  const s = d ? d / (1 - Math.abs(2 * l - 1)) : 0;
+  if (!d) return [0, s, l];
+  const x = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [(60 * x + 360) % 360, s, l];
+};
+
+/** The `--mv` literal a given selector prefix sets for a movement, read off disk.
+ *  Anchored at a line start so the dark rule, the [data-theme="light"] override and
+ *  the prefers-color-scheme mirror are told apart rather than matched by substring. */
+const mvInk = (prefix: string, movement: string): string => {
+  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`^\\s*${esc(prefix)}\\.v3ln-spine-row\\[data-mv="${movement}"\\]\\{--mv:(#[0-9a-fA-F]{6})\\}`, "m");
+  const m = re.exec(LINE);
+  if (!m) throw new Error(`theLine.css sets no --mv for "${movement}" at prefix "${prefix || "(unqualified)"}"`);
+  return m[1];
+};
+
+/** What each movement WAS, before the audit — the hue every replacement must hold. */
+const MV_ORIGINAL = {
+  listen: "#2C8C7C", loop: "#6C5FAE", ship: "#2E9A72", evolve: "#B0842B",
+} as const;
+
+describe("the v3ln- namespace's own inks — the three that were pinned as failing", () => {
+  // `.v3dl-ready` draws --mv at 11px on an UNBUILT tile, and `.v3dl-tile` is
+  // --v3-surface-2 until it is `.present`. That elevated surface, not the card, is the
+  // worst case, so both are asserted.
+  for (const movement of Object.keys(MV_ORIGINAL) as Array<keyof typeof MV_ORIGINAL>) {
+    it(`--mv (${movement}) is AA as TEXT in BOTH themes — .v3dl-ready / .v3dl-mini / .v3dl-devreg-t`, () => {
+      const inks = { light: mvInk('[data-theme="light"] ', movement), dark: mvInk("", movement) };
+      for (const [name, palette] of [["light", LIGHT], ["dark", DARK]] as const) {
+        const ink = inks[name];
+        for (const bg of [CARD, SURF2]) {
+          const on = resolveIn(palette, bg);
+          expect(
+            contrast(ink, on),
+            `--mv:${movement} (${name}) is ${ink} on ${on} = ${contrast(ink, on)}:1, needs 4.5:1`,
+          ).toBeGreaterThanOrEqual(4.5);
+        }
+      }
+      // …and the label that sits ON the movement fill (.v3ln-rail-n, 11px/800) clears it
+      // too, which is why that rule takes --v3-on-accent instead of #fff.
+      expect(contrast(resolveIn(LIGHT, "var(--v3-on-accent)"), inks.light)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(resolveIn(DARK, "var(--v3-on-accent)"), inks.dark)).toBeGreaterThanOrEqual(4.5);
+    });
+
+    it(`--mv (${movement}) moved LIGHTNESS only — the movement still reads as itself`, () => {
+      const [h0, s0] = hsl(MV_ORIGINAL[movement]);
+      for (const prefix of ['[data-theme="light"] ', "", ":root:not([data-theme]) "]) {
+        const [h, s] = hsl(mvInk(prefix, movement));
+        expect(Math.abs(h - h0), `${movement} re-hued at "${prefix || "(unqualified)"}"`).toBeLessThan(2);
+        expect(Math.abs(s - s0), `${movement} re-saturated at "${prefix || "(unqualified)"}"`).toBeLessThan(0.02);
+      }
+    });
+  }
+
+  it("the light --mv block and its prefers-color-scheme mirror agree, movement for movement", () => {
+    // Same failure mode v3.css has: a fix applied to one copy of the light palette and
+    // not the other is not a fix.
+    for (const movement of Object.keys(MV_ORIGINAL)) {
+      expect(mvInk(":root:not([data-theme]) ", movement), `${movement} mirror drifted`)
+        .toBe(mvInk('[data-theme="light"] ', movement));
+    }
   });
 
-  it("--mv for the Evolve band fails as text in BOTH themes", () => {
-    const evolve = "#B0842B";                        // .v3ln-spine-row[data-mv="evolve"]
-    expect(LINE).toContain(`--mv:${evolve}`);
-    expect(contrast(evolve, light(CARD))).toBeLessThan(4.5);           // 3.4:1
+  it("the selected projection tab takes --v3-on-accent, not #fff", () => {
+    // White on the DARK theme's --v3-accent-2 was 3.02:1 at 13px. The token is the
+    // palette's own answer: white on light (11.44:1), #211747 on dark (5.43:1).
+    expect(LINE).toContain(".v3ln-tabs button.on{background:var(--v3-accent-2);color:var(--v3-on-accent)}");
+    for (const [name, palette] of [["light", LIGHT], ["dark", DARK]] as const) {
+      const fg = resolveIn(palette, "var(--v3-on-accent)");
+      const bg = resolveIn(palette, "var(--v3-accent-2)");
+      expect(contrast(fg, bg), `.v3ln-tabs button.on (${name}) is ${fg} on ${bg}`).toBeGreaterThanOrEqual(4.5);
+    }
   });
 
-  it("the selected projection tab puts white on the accent fill — fails on dark", () => {
-    expect(LINE).toContain(".v3ln-tabs button.on{background:var(--v3-accent-2);color:#fff}");
-    expect(contrast("#ffffff", light("var(--v3-accent-2)"))).toBeGreaterThanOrEqual(4.5); // 11.4:1
-    expect(contrast("#ffffff", dark("var(--v3-accent-2)"))).toBeLessThan(4.5);            // 3.02:1
-    // The fix is one token away — `color:var(--v3-on-accent)`, which now exists — but
-    // the rule belongs to TheLine, so this states the number instead of taking it.
-  });
-
-  it("--br-green, the BRAND mark, is drawn as text in the classic namespace", () => {
-    // Deliberately not touched: #2cc84d is Brillio's green and --br-green is the brand
-    // token, not status ink. Where the classic chrome uses it as TEXT on a light
-    // surface it is 2.22:1 — a real failure, in rules outside the flow surfaces.
+  it("--br-green stays the BRAND colour and is no longer drawn as text anywhere", () => {
+    // THE BRAND DECISION, recorded. #2cc84d is Brillio's green; it is not status ink and
+    // it is not changed here. But it is not a logo-only token either — seven rules in the
+    // classic namespace set it as `color:` (.v3-nav-tab.active, .v3-health-cell-value
+    // .green, .adam-badge.green, .v3-readiness-gauge-hint.is-ready, .v3-phase-number,
+    // .v3-program-dropdown-item.active, .v3-action-icon.action), which is 2.22:1 on a
+    // light card — a failure no brand argument covers, because the brand argument is
+    // about the MARK, and a status label is not the mark.
+    //
+    // So: the colour is untouched and still fills, borders and glows the mark; the text
+    // rules now take --v3-green, the audited status ink. That keeps the brand exactly
+    // where a brand belongs and takes it off the one duty it cannot perform.
     expect(ROOT["--br-green"]).toBe("#2cc84d");
-    expect(contrast("#2cc84d", light(CARD))).toBeLessThan(4.5);
-    expect([...V3.matchAll(/color:\s*var\(--br-green\)/g)].length).toBeGreaterThan(0);
+    expect(LIGHT["--br-green"]).toBe("#2cc84d");
+    expect(contrast("#2cc84d", light(CARD))).toBeLessThan(4.5);   // 2.22:1 — why it is not text
+    // `border-color:`/`background:` contain the substring "color:", so the boundary is
+    // explicit: only a declaration that STARTS `color:` is text.
+    const asText = [...V3.matchAll(/(^|[;{\s])color:\s*var\(--br-green\)/g)];
+    expect(asText.map((m) => m[0]), "the brand colour is being drawn as text again").toEqual([]);
+    // …and it is still the brand: the mark itself is untouched.
+    expect([...V3.matchAll(/background:\s*var\(--br-green\)/g)].length).toBeGreaterThan(0);
+    // The ink that replaced it passes on both themes, at every surface those rules use.
+    for (const [name, palette] of [["light", LIGHT], ["dark", DARK]] as const) {
+      const green = resolveIn(palette, "var(--v3-green)");
+      for (const bg of [CARD, SURF2]) {
+        expect(contrast(green, resolveIn(palette, bg)), `--v3-green (${name}) on ${bg}`).toBeGreaterThanOrEqual(4.5);
+      }
+    }
   });
 });
