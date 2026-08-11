@@ -144,6 +144,17 @@ sys.exit(0 if need <= set(d) else 1)"; then
   fi
 fi
 
+say "LIVE. CONSERVATION ON REAL DATA"
+# Every conservation assertion in this repo runs against a fixture or a synthetic
+# mirror — the shapes we thought of. This runs the identity over every programme
+# actually in the store. The snapshot fetched above is its input, so the test
+# itself stays offline.
+if npx vitest run src/v3/__tests__/liveStoreConservation.test.ts >/tmp/vld-cons.txt 2>&1; then
+  pass "conservation holds on every live programme (queue is a subset of open/blocked claims, no duplicates)"
+else
+  fail "conservation BROKEN on live data (see /tmp/vld-cons.txt)"
+fi
+
 say "RESULT"
 [ "$FAIL" -eq 0 ] && echo "ALL RUNNABLE LIVE LEGS PASS" || echo "LIVE LEGS FAILED"
 exit "$FAIL"

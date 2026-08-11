@@ -144,7 +144,16 @@ const statedOwner = (stated: unknown): Owner | null => {
  */
 const jointOrOwner = (areaA: string, areaB: string): Owner => {
   const a = functionOf(areaA), b = functionOf(areaB);
-  if (a && b && a !== b) return jointOwner([a, b]);
+  // ROLE_LABEL on BOTH parties, exactly as `ownerFor` does. Without it this path
+  // built the seam from RAW function tokens while `ownerFor` built it from
+  // labels, so one seam wore two names: Laila carries "Practices ⋈ Sales
+  // Leaders" (5 questions) AND "Practices ⋈ Sales" (10) for the same pair of
+  // functions. Every surface groups seams by `ownerLabel`, so the Sessions panel
+  // drew two pair cards for one conversation, and a roster person routed through
+  // `ownerRoleLabelForArea` (which DOES apply ROLE_LABEL) matched one band and
+  // not the other. `jointOwner`'s sort makes a seam order-independent; it cannot
+  // help when the parties are spelled differently before it is reached.
+  if (a && b && a !== b) return jointOwner([ROLE_LABEL[a] ?? a, ROLE_LABEL[b] ?? b]);
   return a ? ownerFor(areaA) : b ? ownerFor(areaB) : { kind: "unowned" };
 };
 

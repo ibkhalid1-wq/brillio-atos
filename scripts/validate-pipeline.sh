@@ -38,6 +38,22 @@ elif grep -qn 'ownerFor("sales ops")\|fallback: string' "$B1_SRC"; then fail "B1
 else pass "B1 no default-owner branch (grep)"; fi
 # B3 — partition (also in pipelineValidation) + conservation
 run_tests "B3 partition + conservation" src/v3/__tests__/inboxReconciliation.test.ts
+# B3b — the SURFACE partition. Added in validation pass 2 after a deliberately
+# planted conservation leak in `unfrozenQueues` passed all 23 checks, exit 0.
+# Invisible twice over: the badge and the page both read that one function, so
+# the badge-equals-page sentry proved only that they agreed while both were
+# wrong; and the pre-existing L8 test builds a fixture WITH a conflict, so the
+# zero-conflict early return — the common case on every real programme — carried
+# no conservation assertion at all.
+run_tests "B3b surface partition conserves (unfrozenQueues, both branches)" src/v3/__tests__/unfrozenQueuesConserve.test.ts
+# B3c — a fabricated owner may not hide in the joint arm of Owner. The type
+# widened when N-party seams landed; every fabrication gate matched `role:` only.
+run_tests "B3c fabrication scan reads joint owners too" src/v3/__tests__/jointOwnerFabricationScan.test.ts
+# B3d — ONE SEAM, ONE LABEL. `ownerFor` mapped functions through ROLE_LABEL and
+# `jointOrOwner` did not, so Laila carried "Practices ⋈ Sales Leaders" AND
+# "Practices ⋈ Sales" for the same pair — two Sessions cards for one
+# conversation, and a roster person matching only one band.
+run_tests "B3d one seam wears one owner label (real snapshot)" src/v3/__tests__/oneSeamOneLabel.test.ts
 # B4 — in-flight-with-0-sent unrepresentable (guard is in the row builder)
 grep -qn "questions.length > 0" src/v3/components/flow/TheLine.tsx && pass "B4 in-flight requires sent questions (guard present)" || fail "B4 guard missing in TheLine.tsx"
 # B5 — a SENT question is PINNED to its recipient: re-derivation (and a later assign)
@@ -122,6 +138,19 @@ else
   [ -n "$H1_SKIP" ] && printf "SKIP  H1 unreachable (sandbox TLS, not a code fault):%s\n" "$H1_SKIP"
   [ -z "$H1_BAD" ] && pass "H1 every reachable _shared module type-checks" || fail "H1 type errors in:$H1_BAD"
 fi
+
+say "DEEP. EDGE SCENARIOS (added in validation pass 2)"
+# Pass 1 proved the happy paths. These are the edges: a race on one locus, a
+# repeated import, a closure the operator wants back, hostile element names,
+# 10x volume, and a programme with nothing in it. Each was written to DISPROVE
+# an invariant; the two that found real defects are named in
+# docs/aura/full-validation-pass2-2026-08-11.md rather than silently passing.
+run_tests "DEEP1 concurrency: one closure wins, conservation holds mid-race" src/v3/__tests__/deepConcurrency.test.ts
+run_tests "DEEP2 idempotency: the same import twice is a byte-identical no-op" src/v3/__tests__/deepIdempotency.test.ts
+run_tests "DEEP3 reopen: no closure is reversible, and no attribution is erased" src/v3/__tests__/deepReopen.test.ts
+run_tests "DEEP4 renderer fuzz: longest/strangest names, zero truncation in string" src/v3/__tests__/deepFuzz.test.ts
+run_tests "DEEP5 scale: correctness at 10x volume, timings recorded" src/v3/__tests__/deepScale.test.ts
+run_tests "DEEP6 empty programme: no division by zero, honest cold start" src/v3/__tests__/deepEmptyProgram.test.ts
 
 say "G. FABRIC -> MERIDIAN"
 # G1 — assembler reachable from the studio; no model call in the render path.
