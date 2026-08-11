@@ -222,8 +222,41 @@ const astRoleOwners = (source: string, opts: RoleOwnerScanOpts): string[] => {
  * direction — a guard may over-report and be argued with; under-reporting is silent.
  * Deduped, because both passes see the ordinary inline literal.
  */
+/**
+ * The parties of a literal JOINT owner — the shape this scan was blind to.
+ *
+ * FOUND IN VALIDATION PASS 2, and it is a defect the fix window itself opened.
+ * `Owner` gained a joint arm (`{ kind: "joint"; parties: string[] }`, plus the
+ * `jointOwner([...])` constructor) when N-party seams were authorised. Every
+ * fabrication gate in this repo, though, matches on `role: "…"` — so from that
+ * change onward a constant owner could be written
+ *
+ *     const O: Owner = jointOwner(["Chief of Surgery"]);
+ *
+ * and the scan returned []. That is the EXACT bug the gates exist to prevent
+ * (the Chief-of-Surgery fabrication), wearing the one costume they never learned
+ * to recognise. The sentry had silently narrowed while the type widened.
+ *
+ * Both spellings are read: the object literal and the constructor call. Only
+ * string LITERALS are reported — `jointOwner(fns)` is a derivation, not a
+ * constant, and must not be flagged.
+ */
+const literalJointParties = (source: string): string[] => {
+  const code = codeOnly(source);
+  const out: string[] = [];
+  const strings = (list: string) => {
+    for (const m of list.matchAll(/["'`]([^"'`]+)["'`]/g)) out.push(m[1]);
+  };
+  // { kind: "joint", parties: ["A", "B"] } — property order independent.
+  for (const m of code.matchAll(/kind:\s*["'`]joint["'`][^}]*?parties:\s*\[([^\]]*)\]/g)) strings(m[1]);
+  for (const m of code.matchAll(/parties:\s*\[([^\]]*)\][^}]*?kind:\s*["'`]joint["'`]/g)) strings(m[1]);
+  // jointOwner(["A", "B"]) — the constructor, literal argument only.
+  for (const m of code.matchAll(/jointOwner\(\s*\[([^\]]*)\]/g)) strings(m[1]);
+  return out;
+};
+
 export const literalRoleOwners = (source: string, opts: RoleOwnerScanOpts = {}): string[] => {
-  const out: string[] = astRoleOwners(source, opts);
+  const out: string[] = [...astRoleOwners(source, opts), ...literalJointParties(source)];
   // The regex pass cannot see the sibling `kind` that carries the Owner discriminant, so
   // it is skipped when the caller asked for owner-shaped matches only.
   if (opts.ownerShapeOnly) return [...new Set(out)];
