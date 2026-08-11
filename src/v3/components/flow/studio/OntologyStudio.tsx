@@ -507,8 +507,13 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
         </div>
         {printing ? null : (
         <div className="v3fs-onto-toolbar">
-          {locked || !authoring ? null : <button type="button" className="v3fs-btn" onClick={addEntity}>＋ Add entity</button>}
-          <button type="button" className="v3fs-btn" onClick={() => void rearrange()} title="Re-apply the routed layout — no overlaps, edges steered around entities, fewest crossings">⌗ Arrange</button>
+          {locked || !authoring ? null : <button type="button" className="v3fs-btn" onClick={addEntity}><span aria-hidden="true">＋</span> Add entity</button>}
+          {/* The ⌗ is decoration; without hiding it the button announces as
+              "viewdata square, Arrange", and "Arrange" alone does not say what is
+              arranged either — the aria-label says both. */}
+          <button type="button" className="v3fs-btn" onClick={() => void rearrange()}
+            aria-label="Arrange the ontology canvas — re-apply the routed layout"
+            title="Re-apply the routed layout — no overlaps, edges steered around entities, fewest crossings"><span aria-hidden="true">⌗</span> Arrange</button>
           {/* The honest inventory: what the DOCUMENT holds, regardless of what
               the viewport or focus mode currently shows. If this reads low,
               the data shrank; if it reads full while the canvas looks empty,

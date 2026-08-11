@@ -169,6 +169,65 @@ const expandEverything = () => {
   }
 };
 
+/**
+ * THE ARTIFACT STUDIOS — the half of the Library this audit could not see.
+ *
+ * A studio is not a disclosure, so `expandEverything` never reached one. Clicking a
+ * Library artifact row sets FlowShell's `docFor`, and FlowShell renders the studio
+ * through `React.lazy` behind `<Suspense fallback={null}>`. A SYNCHRONOUS
+ * `act(() => row.click())` therefore renders nothing and throws nothing: the chunk is
+ * still a pending promise and the fallback is `null`. That silence is why every
+ * control on the seam grid, the swimlane, the step inspector and the lifecycle grid
+ * was absent from every case in this file — the audit was green over an empty div.
+ *
+ * So the chunk is awaited, which makes the audit async from here down. `import()` is
+ * cached by the module registry, so the await after the first is free.
+ */
+const STUDIO_CHUNK = import("@/v3/components/flow/studio/FlowArtifactStudio");
+
+/** The artifact rows that actually open — "not yet generated" rows are inert. */
+const artifactRows = () =>
+  [...host.querySelectorAll(".v3fs-art-row.v3fs-row-open")] as HTMLElement[];
+
+/**
+ * Open one artifact studio and walk into it: expand the seam view's workflows (which
+ * is what draws the swimlane at all), then SELECT a step, because the step inspector
+ * — reorder, drop/restore, every field — renders only for a selected step and is
+ * otherwise a control surface no audit can see.
+ */
+const openStudio = async (row: HTMLElement) => {
+  act(() => { row.click(); });
+  await act(async () => { await STUDIO_CHUNK; });
+  expandEverything();
+  // The tile is clicked LAST, and deliberately: `expandEverything` toggles the seam
+  // view's workflow disclosures, WorkflowStudio re-derives its active workflow when
+  // they change, and that clears the selected step — so selecting first and expanding
+  // afterwards left the inspector closed and its controls unaudited.
+  const tile = host.querySelector("button.v3fs-swim-tile") as HTMLButtonElement | null;
+  if (tile) act(() => { tile.click(); });
+};
+
+/** Close it again, so the next studio opens onto a clean page. */
+const closeStudio = () => {
+  const close = [...host.querySelectorAll("button")]
+    .find((b) => (b.textContent ?? "").trim() === "Close") as HTMLButtonElement | undefined;
+  if (close) act(() => { close.click(); });
+};
+
+/**
+ * Land on a view and open everything on it. On Library that now includes the artifact
+ * studios: the FIRST one is left open so every case below audits a studio, and the
+ * per-studio case further down walks each of them in turn.
+ */
+const enter = async (view: string) => {
+  goto(view);
+  expandEverything();
+  if (view === "Library") {
+    const first = artifactRows()[0];
+    if (first) await openStudio(first);
+  }
+};
+
 const VIEWS = ["Inbox", "Flow", "Library", "People", "Pulse", "Control", "Portfolio"] as const;
 
 beforeEach(() => {
@@ -176,6 +235,15 @@ beforeEach(() => {
   document.body.appendChild(host);
   root = createRoot(host);
   Object.defineProperty(window, "scrollTo", { value: () => {}, writable: true, configurable: true });
+  // React Flow's ZoomPane constructs a ResizeObserver on mount, and jsdom has none.
+  // Without this the graph surfaces THROW, ViewBoundary catches it, and the Library
+  // renders an error card instead of the page — an audit that then finds nothing
+  // wrong because there is nothing left to find. A no-op observer is honest here:
+  // this file measures names and roles, and layout callbacks change neither.
+  Object.defineProperty(globalThis, "ResizeObserver", {
+    value: class { observe() {} unobserve() {} disconnect() {} },
+    writable: true, configurable: true,
+  });
   act(() => { root.render(createElement(FlowShell, shellProps())); });
 });
 afterEach(() => {
@@ -189,11 +257,10 @@ const describeEl = (el: Element) =>
 
 describe("no interactive element is nameless or glyph-only", () => {
   for (const view of VIEWS) {
-    it(`${view}: every control announces words`, () => {
-      goto(view);
+    it(`${view}: every control announces words`, async () => {
       // Portfolio is reached from the app bar, not the rail — but the rail label
       // exists for it too; goto() covers both because both carry the aria-label.
-      expandEverything();
+      await enter(view);
       const bad = interactiveElements(host)
         .map((el) => ({ el, name: accessibleName(el) }))
         .filter(({ name }) => isWordless(name));
@@ -204,14 +271,13 @@ describe("no interactive element is nameless or glyph-only", () => {
     });
   }
 
-  it("the whole shell, every view at once, has zero wordless controls", () => {
+  it("the whole shell, every view at once, has zero wordless controls", async () => {
     // A belt-and-braces sweep: some controls only exist while another view has been
     // visited (the Inbox's dictionary preview, the Library's doc router). Visiting
     // every view in one mount catches anything the per-view cases miss.
     const bad: string[] = [];
     for (const view of VIEWS) {
-      goto(view);
-      expandEverything();
+      await enter(view);
       for (const el of interactiveElements(host)) {
         const name = accessibleName(el);
         if (isWordless(name)) bad.push(`${view}: ${describeEl(el)} → ${JSON.stringify(name)}`);
@@ -222,8 +288,19 @@ describe("no interactive element is nameless or glyph-only", () => {
 });
 
 describe("decorative glyphs are hidden from the reading order", () => {
-  /** The glyph vocabulary these surfaces draw. Anything in a name is read aloud. */
-  const GLYPHS = /[←-⇿⌀-⏿■-➿⬀-⯿！-～\u{1F300}-\u{1FAFF}]/u;
+  /**
+   * The glyph vocabulary these surfaces draw. Anything in a name is read aloud.
+   *
+   * MATHEMATICAL OPERATORS (U+2200–U+22FF) were a HOLE in this list, and the studios
+   * fell straight through it: "⊘ Mark dropped (reversible)" — U+2298, circled division
+   * slash — sat between the arrows block that ends at U+21FF and the misc-technical
+   * block that starts at U+2300, so the audit read the words, found them, and passed a
+   * name a screen reader announces as "circled division slash, mark dropped". The two
+   * supplemental symbol blocks (U+2900–U+2AFF) are closed for the same reason. No
+   * legitimate label spells a word out of a maths operator, so the range is safe to
+   * ban wholesale; em dashes, ellipses and middots are punctuation and stay allowed.
+   */
+  const GLYPHS = /[←-⇿∀-⋿⌀-⏿■-➿⤀-⫿⬀-⯿！-～\u{1F300}-\u{1FAFF}]/u;
 
   /**
    * Two controls carrying an unhidden glyph live in files this audit does not own, so
@@ -239,11 +316,10 @@ describe("decorative glyphs are hidden from the reading order", () => {
   const excused = (el: Element, name: string) =>
     NOT_OURS.some((x) => (el.getAttribute("class") ?? "").split(/\s+/).includes(x.cls) && x.name.test(name));
 
-  it("no control we own announces a decorative glyph", () => {
+  it("no control we own announces a decorative glyph", async () => {
     const offenders: string[] = [];
     for (const view of VIEWS) {
-      goto(view);
-      expandEverything();
+      await enter(view);
       for (const el of interactiveElements(host)) {
         const name = accessibleName(el);
         const hit = name.match(GLYPHS);
@@ -255,13 +331,12 @@ describe("decorative glyphs are hidden from the reading order", () => {
     expect([...new Set(offenders)]).toEqual([]);
   });
 
-  it("the two glyph controls in other agents' files are still exactly those two", () => {
+  it("the two glyph controls in other agents' files are still exactly those two", async () => {
     // A known-defect pin. When their owners fix them, this goes red and the excuse
     // above is deleted — which is the point: an exemption has to be able to expire.
     const found = new Set<string>();
     for (const view of VIEWS) {
-      goto(view);
-      expandEverything();
+      await enter(view);
       for (const el of interactiveElements(host)) {
         const name = accessibleName(el);
         if (GLYPHS.test(name)) found.add(`${el.getAttribute("class")}|${name.slice(0, 24)}`);
@@ -274,8 +349,78 @@ describe("decorative glyphs are hidden from the reading order", () => {
   });
 });
 
+/**
+ * EVERY STUDIO, ONE AT A TIME. `enter("Library")` leaves the FIRST artifact open, which
+ * is enough to stop the sweeps above being blind — but only the first. A studio is a
+ * whole application surface (the Atlas alone draws a seam grid, a swimlane, a step
+ * inspector, a lifecycle grid and four routed registers), so each is opened and audited
+ * on its own, and each failure names the studio it came from rather than "Library".
+ */
+describe("the artifact studios say what their controls do", () => {
+  it("the Library actually opens studios on this fixture", async () => {
+    // If the router ever stops opening — a renamed class, a lazy chunk that throws,
+    // a fixture whose artifacts are all "not yet generated" — every case below goes
+    // vacuously green. That is the exact failure this whole section exists to end,
+    // so it is asserted before anything is measured.
+    goto("Library");
+    expandEverything();
+    expect(artifactRows().length, "no artifact on this fixture is openable").toBeGreaterThan(0);
+    await openStudio(artifactRows()[0]);
+    expect(
+      host.querySelectorAll(".v3fs-seam-tile, button.v3fs-swim-tile, .v3fs-stu-sec").length,
+      "the studio opened but drew none of its own surfaces",
+    ).toBeGreaterThan(0);
+  });
+
+  it("the Current-State Atlas studio really draws its swimlane and step inspector", async () => {
+    // The named surfaces, asserted rather than hoped for: the probe that started this
+    // work found 0 swim tiles, 0 `.v3fs-swim-acts` buttons and 0 `.v3fs-wf-bar` buttons
+    // on Library, and every one of those was a control this file had never seen.
+    goto("Library");
+    expandEverything();
+    const atlas = artifactRows().find((r) => (r.textContent ?? "").includes("Current-State Atlas"));
+    expect(atlas, "the Current-State Atlas must be openable on the Laila snapshot").toBeTruthy();
+    await openStudio(atlas!);
+    expect(host.querySelectorAll(".v3fs-seam-tile").length, "seam tiles").toBeGreaterThan(0);
+    expect(host.querySelectorAll("button.v3fs-swim-tile").length, "swimlane tiles").toBeGreaterThan(0);
+    expect(host.querySelectorAll(".v3fs-swim-acts button").length, "per-tile add/drop").toBeGreaterThan(0);
+    expect(host.querySelectorAll(".v3fs-wf-bar button").length, "the step toolbar").toBeGreaterThan(0);
+    expect(host.querySelectorAll(".v3fs-wf-inspector").length, "the step inspector").toBe(1);
+  });
+
+  it("no control in any studio is nameless, glyph-named or ambiguous", async () => {
+    const GLYPHS = /[←-⇿∀-⋿⌀-⏿■-➿⤀-⫿⬀-⯿！-～\u{1F300}-\u{1FAFF}]/u;
+    const offenders: string[] = [];
+    goto("Library");
+    expandEverything();
+    const titles = artifactRows().map((r) => (r.querySelector(".v3fs-row-n")?.textContent ?? "?").trim());
+    for (const title of titles) {
+      const row = artifactRows().find((r) => (r.querySelector(".v3fs-row-n")?.textContent ?? "").trim() === title);
+      if (!row) continue;
+      await openStudio(row);
+      const byName = new Map<string, Element[]>();
+      for (const el of interactiveElements(host)) {
+        const name = accessibleName(el);
+        if (isWordless(name)) { offenders.push(`${title}: ${describeEl(el)} → nameless ${JSON.stringify(name)}`); continue; }
+        const hit = name.match(GLYPHS);
+        // The Library page itself stays mounted behind the studio, and its one
+        // excused control (flowCapture's "⌲ Attach a file") is not ours to fix here.
+        if (hit && !(el.getAttribute("class") ?? "").split(/\s+/).includes("v3fs-a")) {
+          offenders.push(`${title}: ${describeEl(el)} → glyph ${JSON.stringify(hit[0])} in ${JSON.stringify(name)}`);
+        }
+        (byName.get(name) ?? byName.set(name, []).get(name)!).push(el);
+      }
+      for (const [name, els] of byName) {
+        if (els.length > 1) offenders.push(`${title}: ${els.length}x ${JSON.stringify(name)} (${els[0].tagName}.${els[0].getAttribute("class")})`);
+      }
+      closeStudio();
+    }
+    expect([...new Set(offenders)]).toEqual([]);
+  });
+});
+
 describe("repeated controls are told apart", () => {
-  it("no two controls on a page answer to the same name", () => {
+  it("no two controls on a page answer to the same name", async () => {
     // The other half of "say what it does": twenty buttons all announcing "answer",
     // or eight selects all announcing "Owner", are each individually named and
     // collectively useless — a screen-reader user tabbing the Inbox cannot tell which
@@ -283,8 +428,7 @@ describe("repeated controls are told apart", () => {
     // catches ambiguity, which is the failure mode of a repeated row.
     const clashes: string[] = [];
     for (const view of VIEWS) {
-      goto(view);
-      expandEverything();
+      await enter(view);
       const byName = new Map<string, Element[]>();
       for (const el of interactiveElements(host)) {
         const name = accessibleName(el);
@@ -306,9 +450,8 @@ describe("repeated controls are told apart", () => {
 });
 
 describe("form controls inside rows are labelled", () => {
-  it("every select, input and textarea has a name that is not just its placeholder", () => {
-    goto("Inbox");
-    expandEverything();
+  it("every select, input and textarea has a name that is not just its placeholder", async () => {
+    await enter("Inbox");
     // isInteractive, not a bare selector: the dictionary file input is deliberately
     // aria-hidden + tabindex=-1 (a real button proxies it), so it is not a control a
     // user can reach and asking it for a label would be asking the wrong question.
@@ -328,9 +471,8 @@ describe("form controls inside rows are labelled", () => {
     expect(unlabelled.map(describeEl), "form controls named only by their placeholder").toEqual([]);
   });
 
-  it("every label's `for` resolves to the control it names", () => {
-    goto("Inbox");
-    expandEverything();
+  it("every label's `for` resolves to the control it names", async () => {
+    await enter("Inbox");
     const broken = [...host.querySelectorAll("label[for]")]
       .filter((l) => {
         const target = l.getAttribute("for")!;
@@ -341,9 +483,8 @@ describe("form controls inside rows are labelled", () => {
     expect(broken, "labels pointing at nothing").toEqual([]);
   });
 
-  it("no two controls on the page share an id", () => {
-    goto("Inbox");
-    expandEverything();
+  it("no two controls on the page share an id", async () => {
+    await enter("Inbox");
     const seen = new Map<string, number>();
     for (const el of Array.from(host.querySelectorAll("[id]"))) {
       const id = el.id;
