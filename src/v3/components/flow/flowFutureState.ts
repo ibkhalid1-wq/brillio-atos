@@ -8,6 +8,7 @@
  */
 import type { ProgramSummary } from "@/new/types";
 import { canonicalFrameArea, GENERAL_AREA, kitCoverageDomains, workflowArea } from "@/v3/components/flow/flowAreas";
+import { readDecisions, decisionStepId } from "@/v3/lib/ledger/agentifyDecisions";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -102,18 +103,23 @@ export function projectFutureState(program: ProgramSummary): FutureState {
     const canon = canonicalFrameArea(kitDomains, raw);
     return canon === GENERAL_AREA && raw.trim().toLowerCase() !== GENERAL_AREA.toLowerCase() ? raw : canon;
   };
-  // AGENTIFY IS THE HOME OF THE MODE. Listen's third artifact carries the
-  // Atlas's workflows forward with the call RECORDED on each step. Where it
-  // exists it is the source, and a step's recorded mode WINS over the heuristic
-  // — a human said what should happen and this projection must not overrule it.
-  // A step it leaves undecided, and every programme with no Agentify document at
-  // all, falls straight back to the Atlas and the JUDGEMENT guess below, so
-  // nothing that ran before the artifact existed reads differently.
+  // THE WORKFLOWS ARE THE ATLAS'S; THE CALL ON A STEP IS AGENTIFY'S.
+  //
+  // Agentify used to carry a copy of the Atlas's workflows with a `mode` on each
+  // step, which made the projection choose which copy to believe. It no longer
+  // does: the workflows are read from the Atlas, and Agentify contributes only
+  // DECISIONS, keyed by the step's ledger element id (agentifyDecisions — which
+  // also reads the legacy copy, so a document generated in the old shape projects
+  // exactly as it did). A recorded call WINS over the heuristic — a human said what
+  // should happen and this projection must not overrule it. A step nobody decided,
+  // and every programme with no Agentify document at all, falls straight back to the
+  // JUDGEMENT guess below, so nothing that ran before the artifact existed reads
+  // differently.
   const agentify = isRecord(data.agentify) ? data.agentify : null;
+  const atlasWfs = atlas && Array.isArray(atlas.workflows) ? atlas.workflows.filter(isRecord) : [];
   const agentifyWfs = agentify && Array.isArray(agentify.workflows) ? agentify.workflows.filter(isRecord) : [];
-  const sourceWfs = agentifyWfs.length
-    ? agentifyWfs
-    : (atlas && Array.isArray(atlas.workflows) ? atlas.workflows.filter(isRecord) : []);
+  const sourceWfs = atlasWfs.length ? atlasWfs : agentifyWfs;
+  const decisions = readDecisions(agentify, atlas);
   const isMode = (value: string): value is FutureMode =>
     value === "agentify" || value === "assist" || value === "keep";
   const workflows: FutureWorkflow[] = sourceWfs
@@ -125,7 +131,7 @@ export function projectFutureState(program: ProgramSummary): FutureState {
         steps: (Array.isArray(wf.steps) ? wf.steps.filter(isRecord) : []).slice(0, 12).map((s): FutureStep => {
           const action = str(s.action) || "step";
           const judgement = JUDGEMENT.test(action);
-          const recorded = str(s.mode).trim().toLowerCase();
+          const recorded = (decisions[decisionStepId(wf, s)]?.mode || str(s.mode)).trim().toLowerCase();
           const mode: FutureMode = isMode(recorded) ? recorded : judgement ? "assist" : "agentify";
           // HITL is a property of the mode once one is recorded: a step kept
           // manual or only assisted still needs the human; an agentified step

@@ -1,13 +1,19 @@
 /**
- * AGENTIFY — Listen's third artifact, and the new home of the workflows.
+ * AGENTIFY — Listen's third artifact, and the home of ONE call about the Atlas.
  *
- * The Current-State Atlas says how the business runs today. Agentify says what
- * should happen to each of those steps: automate it, assist the human doing it,
- * or keep it a human judgement. That decision already existed in the codebase as
- * `FutureMode` in flowFutureState (inferred by a regex over the step's verb) and
- * as the "agentify" stakeholder review in flowPortal — but it had no home, no
- * document, and no place in the methodology. It does now, and the workflow
- * swimlane moved into it because the swimlane is where the call is made.
+ * The Current-State Atlas says how the business runs today, and it is where that
+ * description is edited. Agentify says what should happen to each of those steps:
+ * agentify it, assist the human doing it, or keep it a human judgement. That
+ * decision already existed in the codebase as `FutureMode` in flowFutureState
+ * (inferred by a regex over the step's verb) and as the "agentify" stakeholder
+ * review in flowPortal — but it had no home, no document, and no place in the
+ * methodology. It does now.
+ *
+ * WHAT DID *NOT* MOVE. The first cut of this artifact took the workflows off the
+ * Atlas entirely and gave Agentify a copy of them. That was wrong twice over: the
+ * Atlas is the workflows (nowhere else can they be edited), and a copy forks on the
+ * first keystroke. So both tabs draw the SAME array — the Atlas's — and Agentify
+ * persists only decisions, keyed by the atlas step's ledger element id.
  *
  * THIS IS A GATING CHANGE and the tests below are written to make that fact
  * checkable rather than pleasant. Listen now requires three documents where it
@@ -31,6 +37,7 @@ import { getPhaseDefinition } from "@/v3/lib/methodology";
 import { getPhaseArtifactDefs } from "@/v3/lib/phaseArtifacts";
 import { FORMAL_ARTIFACT_FIELD_KEYS, FORMAL_ARTIFACT_PHASES } from "@/v3/lib/formalArtifacts";
 import { STUDIO_REGISTRY } from "@/v3/components/flow/studio/studios";
+import { workflowElementId, stepElementId } from "@/v3/lib/ledger/migrate";
 import { declaredCrossPhaseTargets } from "@/v3/lib/artifactStaleness";
 import { buildLineModel } from "@/v3/lib/lineModel";
 import { movementArtifacts, gateChecklist, gateReadiness, flowMovements } from "@/v3/components/flow/flowShellData";
@@ -119,10 +126,14 @@ describe("Agentify sits under Listen, immediately after the Current-State Atlas"
 
 /* ── what moved, and what stayed ──────────────────────────────────────────── */
 
-describe("the workflows moved off the Atlas tab and into Agentify", () => {
-  it("the atlas no longer typesets workflows; Agentify leads with them", () => {
-    expect(STUDIO_REGISTRY["current-state-atlas"].docOrder).not.toContain("workflows");
-    expect(STUDIO_REGISTRY["agentify"].docOrder?.[0]).toBe("workflows");
+describe("the workflows stayed on the Atlas; Agentify decides about them", () => {
+  // The first cut of this artifact moved the whole workflow surface OUT of the
+  // Atlas. That was too much: the Atlas IS the workflows — it is where the work is
+  // described and where every structural change to it is made. Agentify decides ONE
+  // thing about those same workflows and owns no copy of them.
+  it("the atlas leads with its workflows; Agentify's document holds none", () => {
+    expect(STUDIO_REGISTRY["current-state-atlas"].docOrder?.[0]).toBe("workflows");
+    expect(STUDIO_REGISTRY["agentify"].docOrder).not.toContain("workflows");
   });
 
   it("the atlas KEEPS its registers — they are the document's, not a workflow's", () => {
@@ -215,6 +226,44 @@ describe("Agentify is the home of the automate / assist / keep call", () => {
     expect(state.workflows[0].name).toBe("Quote to cash");
     expect(state.workflows[0].steps.map((s) => s.mode)).toEqual(["agentify", "assist"]);
   });
+
+  // The two shapes must project identically — the whole point of storing decisions
+  // by element id is that nothing downstream has to know which shape it is reading.
+  it("a decision in the KEYED shape reaches Envision, with no copy of the workflows anywhere", () => {
+    const wid = workflowElementId("Quote to cash");
+    const program = {
+      id: "p-keyed", name: "Keyed", methodology: "atos-flow",
+      rawData: { data: {
+        currentStateAtlas: structuredClone(ATLAS),
+        agentify: { decisions: [
+          { _stepId: stepElementId(wid, "Sales Rep", "Re-key the quote into the CRM"), workflow: "Quote to cash", step: "Re-key…", mode: "keep", rationale: "" },
+          { _stepId: stepElementId(wid, "Sales Lead", "Approve the discount"), workflow: "Quote to cash", step: "Approve…", mode: "agentify", rationale: "" },
+        ] },
+      } },
+    } as unknown as ProgramSummary;
+    const state = projectFutureState(program);
+    expect(state.workflows[0].steps.map((s) => s.mode)).toEqual(["keep", "agentify"]);
+    expect(state.workflows[0].steps[0].hitl).toBe(true);
+    expect(state.workflows[0].steps[1].hitl).toBeUndefined();
+    // and the Atlas is what supplied the steps — Agentify holds no workflows at all
+    expect((program.rawData as Record<string, Record<string, Record<string, unknown>>>).data.agentify.workflows).toBeUndefined();
+  });
+
+  it("a WITHDRAWN decision (mode:\"\") beats a legacy copy that still says otherwise", () => {
+    const wid = workflowElementId("Quote to cash");
+    const program = {
+      id: "p-clear", name: "Cleared", methodology: "atos-flow",
+      rawData: { data: {
+        currentStateAtlas: structuredClone(ATLAS),
+        agentify: {
+          workflows: [{ name: "Quote to cash", steps: [{ actor: "Sales Rep", action: "Re-key the quote into the CRM", mode: "keep" }] }],
+          decisions: [{ _stepId: stepElementId(wid, "Sales Rep", "Re-key the quote into the CRM"), mode: "", rationale: "" }],
+        },
+      } },
+    } as unknown as ProgramSummary;
+    // Back to the heuristic — not stuck on the call the operator took back.
+    expect(projectFutureState(program).workflows[0].steps[0].mode).toBe("agentify");
+  });
 });
 
 /* ── the generator ────────────────────────────────────────────────────────── */
@@ -253,30 +302,31 @@ describe("Agentify has a real generator — a gating artifact nothing can produc
   });
 });
 
-/* ── the diagram travelled with the workflows ─────────────────────────────── */
+/* ── both Listen tabs are diagrams ────────────────────────────────────────── */
 
 // Two lists in FlowArtifactStudio decide which artifact OPENS on its picture and
-// which one EXPORTS its picture. Both named the atlas because the atlas drew the
-// swimlanes; it doesn't any more. Parsed from source (the edgeLockstep idiom)
-// because the alternative is mounting the whole artifact dialog to observe a
-// default tab.
-describe("the swimlane's studio behaviours followed it to Agentify", () => {
+// which one EXPORTS its picture. BOTH Listen tabs qualify: the Atlas because the
+// swimlane is the atlas (and the only place its workflows can be edited), Agentify
+// because the call on a step is made where the step is drawn. Parsed from source
+// (the edgeLockstep idiom) because the alternative is mounting the whole artifact
+// dialog to observe a default tab.
+describe("both Listen tabs open on, and export, their diagram", () => {
   const STUDIO = readFileSync(resolve(__dirname, "../components/flow/studio/FlowArtifactStudio.tsx"), "utf8");
   const listOf = (name: string) => {
     const block = STUDIO.match(new RegExp(`${name} = \\[([^\\]]+)\\]`))![1];
     return [...block.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
   };
 
-  it("Agentify opens on its diagram; the atlas opens as its typeset registers", () => {
+  it("both open on their diagram, not on a form", () => {
     const graphFirst = listOf("GRAPH_FIRST");
     expect(graphFirst).toContain("agentify");
-    expect(graphFirst).not.toContain("current-state-atlas");
+    expect(graphFirst).toContain("current-state-atlas");
   });
 
-  it("Agentify exports the picture; the atlas — now a form — exports the document", () => {
+  it("both export the picture — an exported Atlas without its swimlanes is a cover sheet", () => {
     const printGraphic = listOf("PRINT_GRAPHIC_ARTIFACTS");
     expect(printGraphic).toContain("agentify");
-    expect(printGraphic).not.toContain("current-state-atlas");
+    expect(printGraphic).toContain("current-state-atlas");
   });
 });
 
@@ -318,32 +368,71 @@ const click = (el: Element | null | undefined) => {
   act(() => { el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })); });
 };
 
-describe("the two Listen tabs draw different things", () => {
-  it("the Atlas tab draws the registers and NO swimlane", () => {
+describe("the two Listen tabs draw the SAME workflows, and decide different things", () => {
+  it("the Atlas tab draws the swimlane AND the registers — it is the whole current state", () => {
     const el = mountStudio("current-state-atlas", structuredClone(ATLAS) as Record<string, unknown>, preAgentify());
+    expect(el.querySelector(".v3fs-seam-wf")).not.toBeNull();
     expect(el.textContent).toContain("Systems inventory");
     expect(el.textContent).toContain("Pain heatmap");
-    expect(el.querySelector(".v3fs-swim")).toBeNull();
-    expect(el.querySelector(".v3fs-seam-wf")).toBeNull();
   });
 
-  it("the Agentify tab draws the workflows, and the call on a step WRITES", () => {
-    const doc = { workflows: structuredClone(ATLAS.workflows), openQuestions: [], gaps: [] };
-    const el = mountStudio("agentify", doc as Record<string, unknown>, preAgentify());
-    // Open the workflow's row, then its first step.
+  it("the Atlas offers NO agentify control — describing the work is not deciding about it", () => {
+    const el = mountStudio("current-state-atlas", structuredClone(ATLAS) as Record<string, unknown>, preAgentify());
+    click([...el.querySelectorAll("button")].find((b) => (b.textContent ?? "").includes("Quote to cash")));
+    click(el.querySelector("button.v3fs-swim-tile"));
+    expect(el.querySelector(".v3fs-wf-inspector")).not.toBeNull();   // the step DOES open for editing…
+    expect(el.querySelector(".v3fs-wf-modebar")).toBeNull();         // …but the call is not made here
+    expect(el.querySelector(".v3fs-wf-flag")).toBeNull();            // and no flag is worn
+  });
+
+  it("the Agentify tab draws the ATLAS's workflows — with no document of its own at all", () => {
+    // The 11 live programmes: an Atlas, no Agentify. The diagram must be there.
+    const el = mountStudio("agentify", {}, preAgentify());
+    expect(el.querySelector(".v3fs-seam-wf")).not.toBeNull();
+    click([...el.querySelectorAll("button")].find((b) => (b.textContent ?? "").includes("Quote to cash")));
+    expect(el.querySelector(".v3fs-swim-tile")).not.toBeNull();
+  });
+
+  it("the call on a step WRITES — as a decision keyed by the atlas step id, never as a workflow", () => {
+    const el = mountStudio("agentify", {}, preAgentify());
     click([...el.querySelectorAll("button")].find((b) => (b.textContent ?? "").includes("Quote to cash")));
     click(el.querySelector("button.v3fs-swim-tile"));
     const bar = el.querySelector<HTMLElement>(".v3fs-wf-modebar")!;
     expect(bar.textContent).toContain("Not decided yet");
     click([...bar.querySelectorAll("button")].find((b) => b.textContent === "Keep manual"));
-    const steps = (wrote!.workflows as Array<Record<string, unknown>>)[0].steps as Array<Record<string, unknown>>;
-    expect(steps[0].mode).toBe("keep");
-    expect(steps[1].mode).toBeUndefined();  // only the selected step was decided
+
+    // No copy of the atlas landed on the Agentify document…
+    expect(wrote!.workflows).toBeUndefined();
+    // …and the decision is filed under the ledger element id of the atlas step.
+    const rows = wrote!.decisions as Array<Record<string, unknown>>;
+    expect(rows).toHaveLength(1);                       // only the selected step was decided
+    expect(rows[0].mode).toBe("keep");
+    expect(rows[0]._stepId).toBe(
+      stepElementId(workflowElementId("Quote to cash"), "Sales Rep", "Re-key the quote into the CRM"));
+    expect(rows[0].step).toBe("Re-key the quote into the CRM");   // a legend, for the typeset read
+    // and it comes back as the flag on the tile
+    expect(el.querySelector(".v3fs-wf-flag")?.textContent).toBe("Keep manual");
   });
 
-  it("the pain the swimlane shades by still comes from the ATLAS, which Agentify does not own", () => {
-    const doc = { workflows: structuredClone(ATLAS.workflows) };
-    const el = mountStudio("agentify", doc as Record<string, unknown>, preAgentify());
+  it("Agentify cannot reshape a workflow — no add, no reorder, no drop, no dismiss, no fields", () => {
+    const el = mountStudio("agentify", {}, preAgentify());
+    click([...el.querySelectorAll("button")].find((b) => (b.textContent ?? "").includes("Quote to cash")));
+    expect(el.querySelector("button.v3fs-seam-addwf")).toBeNull();
+    expect(el.querySelector(".v3fs-seam-wf-dismiss")).toBeNull();
+    const detail = el.querySelector<HTMLElement>(".v3fs-seam-wfdetail")!;
+    expect(detail.textContent).not.toContain("Dismiss this workflow");
+    expect(detail.querySelector(".v3fs-wf-bar button")).toBeNull();          // no ＋ Step
+    click(detail.querySelector("button.v3fs-swim-tile"));
+    const insp = el.querySelector<HTMLElement>(".v3fs-wf-inspector")!;
+    expect(insp.querySelector(".v3fs-wf-insp-actions")).toBeNull();          // no reorder / drop
+    // The only writable control in the whole surface is the flag and its reason.
+    const labels = [...el.querySelectorAll("label.v3fs-stu-field .v3fs-stu-fl")].map((n) => n.textContent);
+    expect(labels.filter((l) => l !== "Why — the reason this call was made")).toEqual([]);
+  });
+
+  it("the pain the swimlane shades by comes from the ATLAS, which Agentify does not own", () => {
+    const doc = {};
+    const el = mountStudio("agentify", doc, preAgentify());
     click([...el.querySelectorAll("button")].find((b) => (b.textContent ?? "").includes("Quote to cash")));
     expect(el.querySelector(".v3fs-swim-tile.pain-high")).toBeTruthy();
     expect((doc as Record<string, unknown>).painHeatmap).toBeUndefined();

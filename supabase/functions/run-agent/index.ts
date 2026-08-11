@@ -6,6 +6,7 @@ import {
 import { estimateCostUsd, resolveAgentTier } from "../_shared/modelCatalog.ts";
 import { logger } from "../_shared/logger.ts";
 import { stakeholderPrimaryArea, GENERAL_AREA } from "../_shared/flowAreas.ts";
+import { anchorAgentifyToAtlas } from "../_shared/agentifyAnchor.ts";
 import {
   splitExternalTexts,
   mergeExternalTexts,
@@ -11269,6 +11270,13 @@ Deno.serve(async (req) => {
         // on the finalized result so BOTH the direct-apply and the propose-then-
         // confirm (held) paths below carry the tags. Idempotent.
         tagArtifactAreas(contextProgramData, spec.fieldKey, formalResult);
+        // Anchor Agentify's carried-forward workflows to the ATLAS elements the claims
+        // ledger files their claims under — while the two copies still read identically,
+        // which is now and only now. Without it, a step whose Atlas evidence later moves
+        // is indistinguishable, on the Agentify tab, from a step that never had any.
+        // Same placement rationale as the tagger above: on the finalized result, so both
+        // the direct-apply and the propose-then-confirm paths carry the anchors.
+        anchorAgentifyToAtlas(spec.fieldKey, formalResult, areaGrounding(contextProgramData).workflows);
         // ── Regeneration guard ─────────────────────────────────────────────
         // Documents are data; the studio lets humans edit that data. A doc
         // whose editedAt postdates its generatedAt carries human work — a

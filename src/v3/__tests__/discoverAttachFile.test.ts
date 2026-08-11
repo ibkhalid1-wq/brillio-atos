@@ -53,21 +53,6 @@ vi.mock("@/integrations/supabase/client", () => ({
   },
 }));
 
-/**
- * THE ENVIRONMENT'S btoa IS BROKEN, and it has to be replaced before the module
- * under test loads. In this repo's vitest jsdom (0.34 driving jsdom 29) a plain
- * `btoa("abc")` spins for ~30 SECONDS and then throws InvalidCharacterError on
- * input that is unambiguously valid base64 source. Left alone, every attach in
- * this file would take the uploader's catch branch for the wrong reason — the
- * tests would still be "green" on the error cases and impossible on the happy
- * one, which is worse than no test.
- *
- * This substitutes a PRIMITIVE the browser supplies, not any code under test —
- * the same move vitest.config.ts already makes for fflate's URL import. The
- * assertion below pins it to the spec answer so the substitute cannot drift.
- */
-globalThis.btoa = (input: string) => Buffer.from(input, "latin1").toString("base64");
-
 const TheLine = (await import("@/v3/components/flow/TheLine")).default;
 
 // ── fixture ────────────────────────────────────────────────────────────────
@@ -180,10 +165,9 @@ const DOC_HEADER = /^— Document: (.+?), provided by (.+?), (\d{4}-\d{2}-\d{2} 
 
 // ═══════════════════════════════════════════════════════════════════════════
 describe("Discover · add to the record — a file is a road into the record", () => {
-  it("the base64 substitute is the spec's answer (guard on the environment patch above)", () => {
-    expect(btoa("abc")).toBe("YWJj");
-    expect(btoa("\u00ff\u0000A")).toBe("/wBB");   // the whole latin1 range, not just ASCII
-  });
+  // The base64 every attach below depends on is repaired for the whole suite by
+  // src/test/setupBase64.ts, and pinned to the spec's answer by
+  // base64Environment.test.ts. This file no longer patches it locally.
 
   it("the capture dialog offers the SHARED attach control, with a real file input", async () => {
     const dialog = await openDialog();

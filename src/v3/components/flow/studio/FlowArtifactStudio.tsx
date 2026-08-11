@@ -44,7 +44,7 @@ const SECTION_COPILOT_PLACEHOLDER: Record<string, string> = {
  * The swimlanes travelled with the workflows: AGENTIFY draws them now, and the
  * Current-State Atlas tab is registers — a form, which would print as boxes.
  */
-const PRINT_GRAPHIC_ARTIFACTS = ["domain-ontology", "agentify"];
+const PRINT_GRAPHIC_ARTIFACTS = ["domain-ontology", "current-state-atlas", "agentify"];
 
 import DocumentView from "./DocumentView";
 import EvidenceReader from "@/v3/components/flow/EvidenceReader";
@@ -112,10 +112,10 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
   // The graph-first documents open straight into their studio — the diagram
   // IS the document there, so the graphical view leads. Prose-first
   // documents keep the typeset reading view as the default.
-  // (The atlas left this list with its workflows: its tab is now the registers,
-  // which read better typeset. Agentify took its place — the swimlane IS the
-  // document there, and the call on each step is made on the diagram.)
-  const GRAPH_FIRST = ["domain-ontology", "agentify", "architecture-strategy", "agentic-blueprint", "experience-design", "prototype-build"];
+  // (BOTH Listen diagrams open on their picture: the Atlas because the swimlane IS
+  // the atlas — the workflows and every structural edit to them — and Agentify
+  // because the call on a step is made where the step is drawn.)
+  const GRAPH_FIRST = ["domain-ontology", "current-state-atlas", "agentify", "architecture-strategy", "agentic-blueprint", "experience-design", "prototype-build"];
   const graphFirst = GRAPH_FIRST.includes(artifact.id);
   const [editing, setEditing] = useState(graphFirst);
 
@@ -772,14 +772,16 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
                   // as the plan (coverage + cast), not a duplicate of the scripts.
                   // On EXPORT they come back: a printed kit that omits the
                   // questions isn't the kit, it's the cover sheet.
-                  // The Atlas still CARRIES `workflows` — it is the evidence
-                  // record and the source Agentify generates from — but it no
-                  // longer PRESENTS them: the diagram moved to Agentify. Without
-                  // this, the generic renderer appended them as a raw NAME /
-                  // OWNER / STEPS / ACTION field dump, which is worse than either
-                  // showing the swimlane or showing nothing.
+                  // AGENTIFY holds DECISIONS, not workflows. A document generated
+                  // in the older shape still carries a verbatim copy of the Atlas's
+                  // `workflows`; typesetting it here would print a second, competing
+                  // atlas that nothing on this tab can edit — so it is suppressed.
+                  // Presentational only: the copy is still READ (its decisions are
+                  // migrated on the next call made), it is just never shown as the
+                  // record of what the business does. The Atlas presents its own
+                  // workflows again, and hides nothing.
                   hideKeys={artifact.id === "discovery-kit" && !printing ? new Set(["interviews"])
-                    : artifact.id === "current-state-atlas" ? new Set(["workflows"]) : undefined}
+                    : artifact.id === "agentify" ? new Set(["workflows"]) : undefined}
                   openToSection={initialSection}
                   onPatch={editable ? (key, value) => { setDraft({ ...draft, [key]: value }); setDirty(true); } : undefined}
                   onOpenFullEditor={editable ? () => setEditing(true) : undefined} />
