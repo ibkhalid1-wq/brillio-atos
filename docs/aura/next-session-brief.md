@@ -498,6 +498,32 @@ every surface gets the deterministic template, which is the safe state.
 
 ---
 
+## 6b. FINDING — `Owner` cannot express shared ownership beyond a pair
+
+**Raised 2026-08-11, not acted on: `types.ts` is frozen core.**
+
+`Owner`'s joint arm is a PAIR — `{ kind: "joint"; a: string; b: string }` (`types.ts:24`).
+Laila's ontology routinely names three or more functions on one entity
+("Sales / Practices / Delivery / Marketing / Legal / Finance"). Measured: **78 open
+questions sit on elements naming more than one recognised function, and 73 of those name
+three or more** — so joint, which is the semantically right owner for them, is
+*unrepresentable*.
+
+Because of that, `5b25269` routes them to **`unowned`** instead: the honest fallback, since
+picking one of six is a fabricated owner. That is correct but it is a floor, not the
+answer. An operator now has to route work the record already describes as shared.
+
+**The real fix is an `Owner` that holds N parties** — `{ kind: "joint"; parties: string[] }`
+or similar — which changes the frozen core and every reader of `.a` / `.b`
+(`jointOrOwner`, the session-queue pairing, `sessionQuestionCount`, the Inbox's seam rows).
+That is a deliberate design change with a migration, not a cleanup.
+
+> **Do not "fix" this by widening `functionOf` again.** Returning one function from a label
+> that names six is what `5b25269` removed, and it is why Practices held 78 questions it
+> was never given.
+
+---
+
 ## 7. BLOCKED ON THE LIVE DB / A BROWSER
 
 Nothing in the repo can settle these. Each names what would.
@@ -553,7 +579,17 @@ than `entry.resolution` — writing that field back was rejected because it woul
 closure a writer of a generated artifact, clobbered by the next regeneration. Conservation
 held: `openUnknowns` 395 → 395 on Laila, no test re-baselined, delta pinned as arithmetic.
 
-> **STILL OPEN, upstream:** Laila's two collisions put a QUESTION in the `resolution` field
+> **DECIDED 2026-08-11 — the reader is left alone.** The generator prompt is fixed
+> (`752340d`), so nothing NEW can put a question in `resolution`. Tightening the READER to
+> require an adopted meaning would reopen Laila's two stale rows, moving `openUnknowns`
+> 395 → 397 and **holding movement approval on a live programme** — a bad surprise for two
+> rows that clear on the next regeneration of that ontology.
+>
+> **THE CAVEAT, so nobody is misled:** under this decision those two collisions are never
+> asked *unless that ontology is regenerated*. If it never is, they stay permanently
+> invisible. Revisit if that programme is not regenerating.
+
+> **The original finding:** Laila's two collisions put a QUESTION in the `resolution` field
 > ("To confirm if 'Account' always refers to…"), which `/unresolved/i` does not match, so
 > both are treated as resolved and stay invisible. The predicate was preserved deliberately
 > rather than inventing a "…to confirm" heuristic. **The honest fix is the generator prompt**
