@@ -5,7 +5,7 @@
 # Usage: bash scripts/validate-pipeline.sh   (exit 0 = all scripted checks pass)
 set -u
 cd "$(dirname "$0")/.."
-export PATH="$HOME/tools/node/bin:$PATH"
+export PATH="$HOME/tools/node/bin:$HOME/.deno/bin:$PATH"
 FAIL=0
 say()  { printf "\n== %s ==\n" "$1"; }
 pass() { printf "PASS  %s\n" "$1"; }
@@ -91,6 +91,37 @@ run_tests "F6 the F5 guards catch their own bypasses" src/v3/__tests__/sourceGua
 #      rows on the page. The two documented divergences — the collapsed Sessions line and
 #      the decided trace — are named expectations here, not weakened assertions.
 run_tests "F7 the badge equals the rendered Inbox page (DOM)" src/v3/__tests__/inboxBadgeIsThePage.test.ts
+
+say "H. EDGE TYPE GATE"
+# H1 — THE EDGE HAS NO TYPE GATE OTHERWISE. `tsconfig.json` includes src/** only, so
+# `tsc --noEmit` never reads supabase/functions at all: an edge module can carry a real
+# type error indefinitely and every gate stays green. That is not hypothetical -
+# claudeClient.ts held a TS2322 (a filter that never narrowed) through this whole branch,
+# invisible, and a module whose check always fails is a module where the NEXT error cannot
+# be seen either.
+#
+# `deno check` on function ENTRYPOINTS fails in this sandbox on remote imports
+# (`invalid peer certificate: UnknownIssuer`) - TLS interception, not a code fault. So the
+# gate covers the _shared modules, and a module that cannot be reached is reported SKIP by
+# name rather than counted as a pass. Silence is not success.
+if ! command -v deno >/dev/null 2>&1; then
+  fail "H1 deno not on PATH - the edge type gate cannot run (export \$HOME/.deno/bin)"
+else
+  # BRANCH ON THE EXIT CODE, never on the message. The first version of this check
+  # grepped the output for "TS<n> [ERROR]" and silently passed a real TS2322: deno colours
+  # its output, so ANSI escapes sit between the code and the bracket and the pattern never
+  # matched. A guard that reads formatted text is a guard that a formatting change
+  # disables. The exit code is the contract; the text is only used to tell the sandbox TLS
+  # failure apart from a genuine one.
+  H1_BAD=""; H1_SKIP=""
+  for f in supabase/functions/_shared/*.ts; do
+    if OUT=$(deno check "$f" 2>&1); then continue; fi
+    if printf '%s' "$OUT" | grep -q "UnknownIssuer"; then H1_SKIP="$H1_SKIP $(basename "$f")"
+    else H1_BAD="$H1_BAD $(basename "$f")"; fi
+  done
+  [ -n "$H1_SKIP" ] && printf "SKIP  H1 unreachable (sandbox TLS, not a code fault):%s\n" "$H1_SKIP"
+  [ -z "$H1_BAD" ] && pass "H1 every reachable _shared module type-checks" || fail "H1 type errors in:$H1_BAD"
+fi
 
 say "G. FABRIC -> MERIDIAN"
 # G1 — assembler reachable from the studio; no model call in the render path.
