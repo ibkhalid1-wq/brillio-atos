@@ -52,6 +52,8 @@ import { createRoot, type Root } from "react-dom/client";
 import type { ProgramSummary } from "@/new/types";
 import { migrate, type Snapshot } from "@/v3/lib/ledger/migrate";
 import { buildUnknownQueue } from "@/v3/lib/ledger/projections";
+import { TYPING_SLOTS } from "@/v3/lib/ledger/dictionary";
+import { readConflicts } from "@/v3/lib/ledger/useProgramLedger";
 import FlowShell from "@/v3/components/flow/FlowShell";
 import { codeOnly } from "./helpers/sourceGuards";
 
@@ -65,11 +67,35 @@ const LAILA_BLOB = {
 };
 // The same migration, run here, only to pick REAL loci for the operator actions below —
 // an action on an invented `about` would render a question about nothing.
-const lailaQueue = buildUnknownQueue(migrate({
+const lailaStore = migrate({
   ontology: LAILA_BLOB.domainOntology,
   atlas: LAILA_BLOB.currentStateAtlas,
   overrides: LAILA_BLOB.flowOperatorOverrides as Array<Record<string, unknown>>,
-} as Snapshot));
+} as Snapshot);
+const lailaQueue = buildUnknownQueue(lailaStore);
+
+/**
+ * THE INDEPENDENT WITNESS for the Sessions term.
+ *
+ * The collapsed summary prints `sessionQuestionCount(sessionQueue)` — Σ `abouts.length` —
+ * and each expanded row prints its own `abouts.length`. So "Σ rows === summary" is
+ * ARITHMETICALLY GUARANTEED: if `abouts` held the wrong set, both sides move together, the
+ * assertion stays green, and the operator still reads a wrong number. That is precisely
+ * what made the Sessions term of badge === page vacuous.
+ *
+ * This recomputes the joint-question total from the QUEUE ITEMS — the upstream definition
+ * `sessionQueue` is a projection OF — so it never routes through an `abouts` array at any
+ * point. It mirrors useProgramLedger's own loop, in that loop's order: open typing
+ * questions leave for the dictionary FIRST (a BLOCKED typing question is not in the
+ * dictionary bucket and so stays), and whatever is jointly owned after that is a session
+ * question. Frozen loci are subtracted last, because a locus awaiting adjudication is not
+ * a conversation anyone can schedule (see `unfrozenQueues`).
+ */
+const FROZEN_ABOUTS = new Set(readConflicts(lailaStore).map((c) => c.about));
+const jointQuestionsFromItems = lailaQueue.items.filter((i) =>
+  !(i.status === "open" && TYPING_SLOTS.has(i.slot))
+  && i.owner.kind === "joint"
+  && !FROZEN_ABOUTS.has(i.about)).length;
 
 const AT = "2026-08-01T00:00:00Z";
 type Props = Parameters<typeof FlowShell>[0];
@@ -298,6 +324,32 @@ describe("the ONE collapsed section — the summary line IS its rows", () => {
     expect(perPair.reduce((a, b) => a + b, 0)).toBe(collapsed);
     // and expanding moved nothing: the badge still equals the page
     expect(badge()).toBe(page().waiting);
+  });
+
+  /**
+   * …AND THE NUMBER IS THE RIGHT ONE. The assertion above compares the summary against its
+   * own rows, and both are rendered from `abouts.length` — so it holds for ANY `abouts`,
+   * including a wrong one. This is the half that was missing: the same on-screen number,
+   * checked against a total recomputed from the queue items, which never touches `abouts`.
+   * Wrong SET (a typing question kept, a frozen locus counted, a seam dropped) now fails
+   * here even though the summary and its rows still agree with each other.
+   */
+  it("and that number is the joint questions the ledger actually holds, counted independently", () => {
+    mount(LEDGER_ONLY);
+    // the witness must be non-trivial, or this test passes by describing nothing
+    expect(jointQuestionsFromItems).toBeGreaterThan(0);
+    expect(sessionsLine()).toBe(jointQuestionsFromItems);
+
+    // expanded, the rows carry that same total — the disclosure renders zero rows while
+    // collapsed, so it has to be opened before the rows exist to be counted at all
+    const disclosure = host.querySelector("#ib-sessions button[aria-expanded]") as HTMLButtonElement;
+    act(() => disclosure.click());
+    const perPair = [...host.querySelectorAll("#ib-sessions li.v3ib-seam")].map((li) => {
+      const m = /(\d+)\s+joint question/.exec(li.textContent ?? "");
+      if (!m) throw new Error(`no per-pair count: ${li.textContent}`);
+      return Number(m[1]);
+    });
+    expect(perPair.reduce((a, b) => a + b, 0)).toBe(jointQuestionsFromItems);
   });
 });
 
