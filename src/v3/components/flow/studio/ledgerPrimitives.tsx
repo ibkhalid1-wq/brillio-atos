@@ -137,6 +137,19 @@ export function HeardReadout({ heard, perAreaProvisional = true }: { heard: Hear
 //    number can agree with HEARD (0 attributed closures ⇒ 0% convergence). ──
 export function ConvergenceReadout({ burnDown, perAreaProvisional = true }: { burnDown: KitView["burnDown"]; perAreaProvisional?: boolean }) {
   // Density: the headline is the %; the closed/weak/open split is detail on hover.
+  //
+  // THE NOTHING-HEARD CAVEAT LIVES HERE, and this is the only honest place for it.
+  // `closed` counts REAL closures, and a real closure needs a stakeholder ANSWER — but that
+  // write path is not wired in the browser, so on a live programme `closed` is 0 BY
+  // CONSTRUCTION rather than because the work is outstanding. Every derived reading
+  // inherits it: "0% closed" here, and "0 conflicts to adjudicate" in the Inbox, both mean
+  // "nobody has answered yet" at least as much as "nothing is wrong".
+  //
+  // It belongs on the CONVERGENCE readout rather than in the Inbox for two reasons. It
+  // qualifies THIS number — the Inbox's zero is downstream of it. And zero-count Inbox
+  // sections are hidden by request, so a note attached there vanishes in exactly the state
+  // that needs explaining. This readout is always drawn.
+  const nothingClosed = burnDown.closed === 0 && burnDown.total > 0;
   return (
     <span className="v3lc-conv" title={`${burnDown.closed} real closures · ${burnDown.weak} pre-filled weak (unconfirmed) · ${burnDown.open} open of ${burnDown.total}`}>
       <span className="v3lc-conv-bar" role="img" aria-label={`${burnDown.pctClosed}% of claims really closed (${burnDown.closed} of ${burnDown.total}); ${burnDown.weak} pre-filled weak`}>
@@ -144,6 +157,12 @@ export function ConvergenceReadout({ burnDown, perAreaProvisional = true }: { bu
         <span className="wk" style={{ width: `${Math.max(0, burnDown.pctSettled - burnDown.pctClosed)}%` }} />
       </span>
       <span className="v3lc-conv-l"><b>{burnDown.pctClosed}%</b> <span className="v3lc-conv-sub">closed{burnDown.weak ? <> · {burnDown.pctSettled}% incl. pre-filled</> : null}</span></span>
+      {nothingClosed ? (
+        <span
+          className="v3lc-conv-nh"
+          title="A claim closes on a stakeholder ANSWER, and that write path is not wired in the browser yet. So this reads 0 because nothing has been heard — not because nothing needs answering. Anything derived from it, including “0 conflicts to adjudicate”, carries the same caveat."
+        >— nothing heard yet</span>
+      ) : null}
       {perAreaProvisional ? <ProvisionalMark what="per-area convergence is demo-verdict sign-off, gated on the stakeholder write path" /> : null}
     </span>
   );

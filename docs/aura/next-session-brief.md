@@ -620,6 +620,16 @@ Nothing in the repo can settle these. Each names what would.
    SCHEMA miss, not a permission one — RLS returns `200` with zero rows (which is exactly what
    `adam_programs` does under the anon key), never a 404. So this item is blocked *before* Step 1b:
    there is nothing to write to.
+   > **NOT APPLIED, DELIBERATELY — this needs your explicit go-ahead.** The migration is
+   > idempotent and additive for TABLES, but at `:199-207` it installs
+   > `after insert or update or delete` **triggers on `adam_programs`, `adam_agent_runs` and
+   > `adam_program_artifacts`** — the core tables of a live client system. If `aura_audit()`
+   > throws, every write to those tables fails and the app breaks for all users. That is not
+   > a cleanup; it is a production change with a real blast radius. `supabase db push` is
+   > additionally unsafe here because the version mis-reporting below would sweep in other
+   > migrations. Apply it deliberately, ideally off-peak, with a rollback ready (the file's
+   > own commented `drop` statements at `:261-262`).
+
    > **Do NOT trust `supabase migration list` here.** These migration filenames are not 14-digit
    > timestamps, so several collide on the same parsed version and the local/remote table
    > mis-reports. It listed `20260715` as unapplied while that migration's table
@@ -629,11 +639,34 @@ Nothing in the repo can settle these. Each names what would.
    browser never publishes `aura.intent` — the only `set_config` calls are in
    `pgStore.ts:59,129,197`, and `PgLedger` has no importer outside tests/scripts. Step 1b
    (client publishes `action_type`) is code, and comes first.
+5. **A real duplicated People pair — ANSWERED 2026-08-11, PASS.** Swept all 122 live
+   programmes; six carry a roster. The case exists on **"BFSI - Use case"**: *IT Lead* and
+   *Head of Technology* hold the identical role string `Technology` (and *Head of IT* holds
+   "Technology and Systems"). Ran `dedupePeopleRows` over that real roster: **6 in, 6 out,
+   both technology people kept as separate rows.** The dangerous direction — merging two
+   different humans because they share a role — does not happen on live data.
+
+   <details><summary>original entry</summary>
+
 5. **A real duplicated People pair.** The fix is live and shared (`flowStakeholders.ts:665`,
    sole caller `FlowShell.tsx:2236`). The danger is architecturally contained: identity is
    two functions — `labelIdentity` (`:601`, loose, for role slots) and `personKey`
    (`:622`, strict, "NEVER discards words", for humans). `peopleDirectoryDedup.test.ts:76`
    pins that two different people in one role stay two rows.
+6. **The adjudicate caveat — RESOLVED 2026-08-11.** It now sits on the **convergence
+   readout** (`ledgerPrimitives.tsx`), which is always drawn: when `closed === 0` the
+   figure reads "0% closed — nothing heard yet", with a tooltip explaining that a claim
+   closes on a stakeholder answer, that write path is unwired, and that anything derived
+   from it (including "0 conflicts to adjudicate") carries the same caveat.
+
+   It deliberately does NOT go back beside the Inbox panel: zero-count sections are hidden
+   by request, so a note there vanishes in exactly the state that needs explaining. Pinned
+   by a RENDER test — a caveat present in the source but never reaching the DOM would be
+   the same defect again — which also asserts it disappears on the first real closure, so
+   it stays a caveat rather than becoming a permanent banner.
+
+   <details><summary>original entry</summary>
+
 6. **The adjudicate caveat has no home** (`OperatorInbox.tsx:484`). `heard` is **0 by
    construction** on live Laila — the stakeholder write path is not wired in-browser
    (`useProgramLedger.ts:18-21`, enforced by `projections.ts:130-132`). So "0 conflicts"
