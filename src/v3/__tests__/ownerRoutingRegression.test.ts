@@ -17,7 +17,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { migrate, functionOf, type Snapshot, ownerFor } from "@/v3/lib/ledger/migrate";
+import { migrate, functionOf, type Snapshot, ownerFor, ownerRoleLabelForArea } from "@/v3/lib/ledger/migrate";
 import { ownerLabel, normalizeOwner } from "@/v3/lib/ledger/types";
 import { buildUnknownQueue } from "@/v3/lib/ledger/projections";
 import { TYPING_SLOTS } from "@/v3/lib/ledger/dictionary";
@@ -200,5 +200,35 @@ describe("§6b — shared ownership beyond a pair", () => {
     expect(ownerLabel(normalizeOwner({ kind: "joint", parties: ["B", "A"] }))).toBe("A ⋈ B");
     expect(normalizeOwner({ kind: "role", role: "Legal" })).toEqual({ kind: "role", role: "Legal" });
     expect(normalizeOwner(undefined).kind).toBe("unowned");
+  });
+});
+
+// ── the compound-term rule, proved on LIVE data ─────────────────────────────────────
+/**
+ * Found on the real Laila programme (`6eed8ebc…`, read from the live DB): its roster has a
+ * "Head of Marketing" (role "Marketing") and a "Head of GTM" (role "Go-To-Market"), and
+ * `/market/` matched BOTH — so the two were routed to the same ledger label and each shown
+ * the SAME 15 loci. Two different people, one set of questions, neither actually
+ * accountable for the other's.
+ *
+ * Identical in kind to the "Surgical Operations" bug the Sales Ops rule already guards
+ * against: a compound term is not the function whose name it happens to contain.
+ */
+describe("a compound term is not the function it contains", () => {
+  it("Go-To-Market is NOT Marketing — the collision found on live Laila", () => {
+    expect(functionOf("Marketing")).toBe("Marketing");
+    expect(functionOf("Digital Marketing")).toBe("Marketing");
+    expect(functionOf("Go-To-Market")).toBeNull();
+    expect(functionOf("Aftermarket Ops")).toBeNull();
+  });
+
+  it("two roster roles that are different functions do not collapse to one label", () => {
+    // The property that actually matters: distinct roles must not resolve to one owner,
+    // or the People surface shows two people the same work.
+    const marketing = ownerRoleLabelForArea("Marketing");
+    const gtm = ownerRoleLabelForArea("Go-To-Market");
+    expect(marketing).toBe("Marketing");
+    expect(gtm).not.toBe(marketing);      // the defect: these were equal
+    expect(gtm).toBeNull();               // and unrouted is the honest answer, not a guess
   });
 });

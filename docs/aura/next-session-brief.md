@@ -566,11 +566,40 @@ That is a deliberate design change with a migration, not a cleanup.
 
 Nothing in the repo can settle these. Each names what would.
 
+1. **Surgery — ANSWERED 2026-08-11, PASS.** Run against the REAL programme
+   (`b8fe2b08-0158-46a7-afec-3dcbe4cd2d54`, "Surgery cancellations usecase", 7 entities /
+   8 workflows) read from the live DB. **The "need an owner" queue is 0** — the 61 drained.
+   61 questions are now role-owned by eight CLINICAL roles (Anesthesiology Lead, Chief of
+   Surgery, Pre-Op Nursing Lead, Patient Access/Registration Lead, Surgical Scheduling
+   Coordinator, IT/EHR Systems Lead, Quality & Risk Management Lead, Executive Sponsor),
+   spread evenly at 7–9 each rather than the old Chief-of-Surgery magnet. **Zero CRM labels
+   leaked** onto the clinical programme. The remaining 45 unowned are all typing questions
+   in the dictionary bucket, closed by one upload rather than by routing. Conservation holds.
+
+   <details><summary>original entry</summary>
+
 1. **Surgery: do the 61 "need an owner" questions drain?** The code half landed
    (`migrate.ts:163`, atlas-stated owner fallback). The only surgery data on disk is a
    2-entity synthetic fixture (`ownerRoutingRegression.test.ts:54`) — the real
    8-workflow blob exists nowhere. To close: regenerate the atlas on the live programme,
    read the stat, check conservation. **Remember §6** — the edge mirror won't run.
+2. **Laila roster chips — ANSWERED 2026-08-11, and it was a REAL COLLISION (fixed).**
+   Run against the live programme `6eed8ebc-9b45-4ba9-8b01-ca0dfbd62904`. The 9 and 15 are
+   real, but the 15 was not GTM's: **`/market/` is an unanchored substring, so "Go-To-Market"
+   matched Marketing.** Head of GTM and Head of Marketing were routed to the SAME label and
+   each shown the SAME 15 loci — two people, one set of questions, neither accountable for
+   the other's. Identical in kind to the "Surgical Operations → Sales Ops" bug the table
+   already guards against. Fixed by anchoring the rule (`/\bmarketing\b|^market/`), pinned
+   by a test; "Go-To-Market" now routes nowhere, which is honest — the ledger holds no GTM
+   loci.
+
+   > **STILL OPEN on this programme: 27 open loci are owned by labels with NO roster
+   > person** — Executive Sponsor (8), Sales Ops (7), Head of Talent Acquisition (7),
+   > Finance (5). Those questions have an owner label and nobody to ask. That is a
+   > roster-completeness gap, not a routing bug.
+
+   <details><summary>original entry</summary>
+
 2. **Laila roster chips** (Head of Sales 9 / Head of GTM 15) vs the projection
    (`TheLine.tsx:439-483`). The roster/`_directoryPeople`/discoveryKit blobs are not in
    the repo. Watch `ownerRoleLabelForArea` — it maps both labels through the `FUNCTIONS`

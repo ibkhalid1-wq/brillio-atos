@@ -31,7 +31,12 @@ const FUNCTIONS: Array<[RegExp, string]> = [
   [/finance|invoic|billing|revenue/, "Finance"],
   [/legal|contract/, "Legal"],
   [/deliver|engagement/, "Delivery"],
-  [/market/, "Marketing"],
+  // Marketing requires the FUNCTION, not the word. `/market/` is a substring match, so
+  // "Go-To-Market", "Market Research" and "Aftermarket Ops" all became Marketing — and on
+  // live Laila that put Head of GTM and Head of Marketing on the SAME 15 loci, each told
+  // they owned questions the other was accountable for. Same failure the Sales Ops rule
+  // below already guards against: a compound term is not the function it contains.
+  [/\bmarketing\b|^market/, "Marketing"],
   // Sales Ops requires the SALES context: "Sales Ops", "Sales Operations". A bare
   // "…Operations" (e.g. "Surgical Operations") is NOT Sales Ops — it maps to no
   // known function and stays unowned, rather than being swallowed by a broad match.
