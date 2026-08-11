@@ -30,6 +30,8 @@
  * `designRoundSurfaces.test.ts` builds them, so the programme under test is a real one.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { ProgramSummary } from "@/new/types";
@@ -80,6 +82,23 @@ const unbuilt = (): ProgramSummary => ({
       discoveryKit: { interviews: ROSTER.map((p) => ({ stakeholder: p.name, role: p.role, questions: ["What is slow?"] })) },
     },
   },
+} as unknown as ProgramSummary);
+
+/**
+ * THE REAL LAILA LEDGER — the same snapshot the a11y suites mount, so the band's
+ * owned-question line is a real count (hundreds of role-owned open unknowns) rather
+ * than a fixture that happens to be empty. This IS the programme in the screenshot the
+ * simplification was asked for.
+ */
+const lailaSnap = (f: string) =>
+  JSON.parse(readFileSync(resolve(__dirname, `../../../docs/laila/snapshot-2026-08-07/${f}`), "utf8"));
+const laila = (): ProgramSummary => ({
+  ...seed({
+    domainOntology: lailaSnap("domain-ontology.json") as Record<string, unknown>,
+    currentStateAtlas: lailaSnap("current-state-atlas.json") as Record<string, unknown>,
+    flowOperatorOverrides: lailaSnap("operator-overrides.json") as unknown[],
+  }),
+  id: "laila",
 } as unknown as ProgramSummary);
 
 const apply = (program: ProgramSummary, blob: Record<string, unknown> | null): ProgramSummary =>
@@ -254,18 +273,20 @@ describe("§1 CAPABILITY — every verb the band offered is still reachable", ()
 
   it("CAPABILITY work the role-owned open questions — the band hands them to Discover", () => {
     // The routing-filtered drill list ("341 open unknowns owned by a role · 148 blocking
-    // · 193 answerable") is Listen's burn-down and lived inside the design-APPROVAL zone,
-    // giving that zone two unrelated jobs. It is one line at the foot now, and the line's
-    // button lands on the tab where the questions are actually worked.
-    mountShell(seed());
-    const go = buttonSaying(band()!, "work them in Discover");
-    if (!go) {
-      // A fixture with no role-owned open questions hides the line by the zero rule —
-      // then there is no work to reach and nothing to prove. Say so rather than pass.
-      expect(host.querySelector(".v3dl-elsewhere"), "no owned-question line and no owned questions").toBeNull();
-      return;
-    }
-    act(() => { go.click(); });
+    // · 193 answerable · 1 blocked") is Listen's burn-down and lived inside the design-
+    // APPROVAL zone, giving that zone two unrelated jobs. It is one line at the foot now,
+    // and the line's button lands on the tab where the questions are actually worked.
+    //
+    // On the REAL Laila ledger, so the count is a real one and the case cannot pass by
+    // the section being hidden at zero.
+    const program = laila();
+    mountShell(program);
+    const line = host.querySelector(".v3dl-elsewhere")!;
+    expect(line, "the owned-question line is missing on a programme that has hundreds").toBeTruthy();
+    expect(Number(line.querySelector("b")!.textContent)).toBeGreaterThan(0);
+    // …and the three-way split it used to print here is NOT reprinted
+    expect(line.textContent).not.toMatch(/blocking|answerable|blocked/);
+    act(() => { buttonSaying(line, "work them in Discover")!.click(); });
     expect(host.querySelector('[aria-label="Discover"]'), "the band's link did not land on Discover").toBeTruthy();
     expect(host.querySelector(".v3dl"), "the Work board is still drawn — the tab did not change").toBeNull();
   });

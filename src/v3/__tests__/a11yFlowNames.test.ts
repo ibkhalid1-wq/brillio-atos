@@ -161,7 +161,10 @@ const expandEverything = () => {
   for (let pass = 0; pass < 2; pass++) {
     const togglers = [
       ...host.querySelectorAll('button[aria-expanded="false"]'),
-      ...host.querySelectorAll(".v3ib-tab, .v3dl-drillbtn, .v3fs-ev-ghead, .v3ib-disc"),
+      // `.v3dl-drillbtn` was the Design Loop's owned-question drill. That block moved
+      // to Discover (2026-08-11); the band's zone-rule disclosures (`.v3dl-help`) are
+      // real aria-expanded buttons and are already caught by the selector above.
+      ...host.querySelectorAll(".v3ib-tab, .v3fs-ev-ghead, .v3ib-disc"),
     ] as HTMLButtonElement[];
     for (const t of togglers) {
       if (t.disabled) continue;

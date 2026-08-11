@@ -69,8 +69,8 @@ const slicesFor: (hit: unknown) => Slices = (() => {
      return { slicesFor };`,
     { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.None } },
   ).outputText;
-  return (new Function("stripUnnamedSuffix", js) as (s: unknown) => { slicesFor: (hit: unknown) => Slices })
-    (stripUnnamedSuffix).slicesFor;
+  const build = new Function("stripUnnamedSuffix", js) as (s: unknown) => { slicesFor: (hit: unknown) => Slices };
+  return build(stripUnnamedSuffix).slicesFor;
 })();
 
 /** A demo script as the generator writes it. */
