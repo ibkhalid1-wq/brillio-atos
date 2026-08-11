@@ -97,15 +97,30 @@ PACKS=$1; ARTS=$2; MIS=$3; LEGACY=$4
 [ "$MIS" -eq 0 ] && pass "A3-linked-page questions/questionLoci index-aligned in every live pack" \
                  || fail "A3-linked-page $MIS packs whose loci and questions have different lengths"
 
-# LOCI COVERAGE — new in pass 2, and the reason it exists: the pass-1 top finding
-# ("the pack delivers stored strings no locus backs") was fixed in code, but the
-# fix only applies at MINT time. Every pack minted before it renders in
-# `mode: "strings"`, so a stakeholder still reads unbacked phrasing and answering
-# still closes nothing. Code-fixed and production-fixed are different claims.
+# LOCI COVERAGE. Pass 2 first read this as a migration gap — "the fix only
+# applies at mint time, so backfill the rest". A dry run falsified that:
+# renderQuestion was run over every open locus on every live programme, in both
+# audiences, and matched against all 126 stored strings in these packs. EXACT
+# matches: ZERO. Ambiguous: zero.
+#
+# Because they are not drifted renderings of loci at all. They are a DIFFERENT
+# ARTIFACT — generated Discovery Kit interview script ("Describe how you engage
+# with partners for funding, training, and co-sell…") beside ledger slot
+# questions ("What type of value is Account.category?"). There is no locus
+# behind the first because it does not settle one slot; it opens a conversation.
+#
+# So this is NOT a backfill waiting to happen, and re-minting would REPLACE good
+# human prompts with narrower schema questions — an upgrade in attribution and a
+# downgrade in the conversation. Which artifact a durable link should carry is a
+# product decision (see docs/aura/full-validation-pass2-2026-08-11.md, N-1).
+#
+# The check stays RED on purpose: these links close nothing when answered, and
+# that should stay visible until the decision is made. It is a standing question,
+# not a defect to patch.
 if [ "$LEGACY" -eq 0 ]; then
   pass "LOCI every open link on a live programme carries its ledger loci"
 else
-  fail "LOCI $LEGACY open link(s) on live programmes carry NO loci — stakeholders see unbacked phrasing (backfill or re-mint)"
+  fail "LOCI $LEGACY open link(s) carry an interview SCRIPT, not ledger loci — answering closes nothing (product decision, not a backfill: see N-1)"
 fi
 
 say "LIVE. E1 AUDIT TRAIL"
