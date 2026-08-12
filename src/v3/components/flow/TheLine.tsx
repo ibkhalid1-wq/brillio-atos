@@ -49,7 +49,7 @@ import DesignLoopZones from "@/v3/components/flow/DesignLoopZones";
 import { ownerLabelsForCast } from "@/v3/lib/ledger/ownerBinding";
 import { renderQuestion } from "@/v3/lib/ledger/renderQuestion";
 import {
-  BUCKET_NOTE, emptyOwnedLoad, ownedLoadBreakdown, ownedLoadFor, sendableCount,
+  emptyOwnedLoad, ownedLoadBreakdown, ownedLoadFor, ownedLoadSections, sendableCount,
   unboundOpenTotal, unboundOwners, type OwnedBucket, type OwnedLoad,
 } from "@/v3/lib/ledger/ownedLoad";
 import "./theLine.css";
@@ -1373,7 +1373,6 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                         questions are excluded — they're in the session queue. */}
                     {(() => {
                       const owned = ownedQuestionsFor.get(row.label) ?? [];
-                      const load = loadFor(row.label);
                       const seams = seamPairsFor.get(row.label) ?? [];
                       if (!owned.length) return (
                         <p className="v3ln-cr-noq">No open unknowns on loci {displayPersonLabel(row.label)} owns.{seams.length ? ` Their open work is a joint session — it's in the session queue (${seams.join(", ")}).` : " Their durable link still carries the interview script."}</p>
@@ -1383,20 +1382,34 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                         {/* The card header already prints this sentence; repeating
                             it at the top of the drawer said the same arithmetic
                             twice, two lines apart. */}
-                        <ul className="v3ln-cr-qs owned">
-                          {owned.map((q) => (
-                            // Every owned locus is listed, including the ones a link
-                            // minted now cannot carry — each tagged with WHY. Dropping
-                            // them (the old list showed only the sendable ones) is what
-                            // made a blocked question look like it did not exist.
-                            <li key={q.about} title={q.about}
-                              className={q.bucket === "on-link" ? undefined : "v3ln-cr-seamnote"}>
-                              <span className="v3ln-cr-qtype">{q.typeTag}</span>{q.question}
-                              {q.bucket === "on-link" ? null : <span className="v3ln-cr-qtype"> · {BUCKET_NOTE[q.bucket]}</span>}
-                            </li>
-                          ))}
-                          {seams.length ? <li className="v3ln-cr-seamnote">＋ seam questions ({seams.join(", ")}) are in the session queue — a joint session, not solo.</li> : null}
-                        </ul>
+                        {/* Every owned locus is listed, including the ones a link minted
+                            now cannot carry — but the REASON is a property of the bucket,
+                            so it is stated once as a section heading instead of tagged
+                            onto every row. Ten typing questions used to print "answered
+                            by the data dictionary, not by them" ten times. */}
+                        {ownedLoadSections(owned).map(({ bucket, section, items }) => (
+                          // <details>, so the disclosure is keyboard-operable and works
+                          // with no JS — the same idiom the prototype nav uses. The
+                          // dictionary section starts closed: 36 rows nobody will answer
+                          // buried the eight that are actually addressed to this person.
+                          <details key={bucket} className={`v3ln-cr-qgroup ${bucket}`} open={section.defaultOpen}>
+                            <summary className="v3ln-cr-qgroup-h">
+                              <span className="v3ln-cr-qgroup-t">{section.title}</span>
+                              <span className="v3ln-cr-qgroup-n">{items.length}</span>
+                              <span className="v3ln-cr-qgroup-note">{section.note}</span>
+                            </summary>
+                            <ul className="v3ln-cr-qs owned">
+                              {items.map((q) => (
+                                <li key={q.about} title={q.about}>
+                                  <span className="v3ln-cr-qtype">{q.typeTag}</span>{q.question}
+                                </li>
+                              ))}
+                            </ul>
+                          </details>
+                        ))}
+                        {seams.length ? (
+                          <p className="v3ln-cr-seamnote">＋ seam questions ({seams.join(", ")}) are in the session queue — a joint session, not solo.</p>
+                        ) : null}
                         </>
                       );
                     })()}

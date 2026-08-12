@@ -49,7 +49,7 @@ import type { ProgramLedger } from "./useProgramLedger";
  *
  * `mintFollowUpPack` and `mintReviewPack` slice their ask with this exact constant
  * (`flowPortal.ts` imports it), the Discover card's `on this link` bucket is sliced
- * with it here, and `BUCKET_NOTE` names it in the copy. A surface that shows a bigger
+ * with it here, and `BUCKET_SECTION` names it in the copy. A surface that shows a bigger
  * number beside a "send a link" button is describing a send that will not happen, and
  * the only way that can be true again is if this number is changed — which changes the
  * card and the mint in the same edit.
@@ -165,14 +165,74 @@ export function ownedLoadBreakdown(load: OwnedLoad): string {
   return parts.length <= 1 ? `${head} — ${parts[0] ?? "unbucketed"}` : `${head} = ${parts.join(" · ")}`;
 }
 
-/** Why a bucket is not on the link — the tag the expanded list shows beside a locus so
- *  the miss is visible rather than merely absent. */
-export const BUCKET_NOTE: Record<OwnedBucket, string> = {
-  "on-link": "on this link",
-  "next-link": `past the link's ${LINK_QUESTION_CAP}-question cap — next link`,
-  blocked: "blocked — unstick it before it can be asked",
-  dictionary: "answered by the data dictionary, not by them",
+/**
+ * How each bucket is HEADED in the expanded question list.
+ *
+ * This used to be a per-row tag (`BUCKET_NOTE`), repeated beside every locus in the
+ * bucket. On a Head of Marketing card with ten typing questions that printed
+ * "answered by the data dictionary, not by them" ten times down the right-hand side —
+ * one fact, restated until it read as noise, and it crowded out the questions
+ * themselves. A property shared by every row in a group belongs to the GROUP.
+ *
+ * So the list is sectioned by bucket and each fact is stated once, as a heading. The
+ * count lives here too, because a header that says how many is the same header doing
+ * more work. `title` names the bucket; `note` is the reason, in the operator's terms —
+ * what it means for them, not what the ledger calls it.
+ *
+ * `on-link` is deliberately headed like the rest rather than left bare: an unlabelled
+ * first group reads as "the questions", which is exactly the misreading that made the
+ * dictionary rows look like part of the ask.
+ */
+export interface BucketSection {
+  title: string;
+  note: string;
+  /**
+   * Whether the section starts OPEN.
+   *
+   * The dictionary bucket is the one nobody works through: on a real card it is 36
+   * rows of "What type of value is Lead.status?", none of which this person will
+   * ever answer — one upload closes all of them. Open, it buries the eight
+   * questions that ARE addressed to them under a wall of questions that are not.
+   * So it starts closed, with its count and its reason still on screen: the miss
+   * stays visible, it just stops being the loudest thing on the card.
+   */
+  defaultOpen: boolean;
+}
+
+export const BUCKET_SECTION: Record<OwnedBucket, BucketSection> = {
+  "on-link": {
+    title: "On this link",
+    note: "these go to them when you share their link",
+    defaultOpen: true,
+  },
+  "next-link": {
+    title: "On the next link",
+    note: `past the ${LINK_QUESTION_CAP}-question cap a single link carries — share again once these are answered`,
+    defaultOpen: true,
+  },
+  blocked: {
+    title: "Blocked",
+    note: "something upstream has to be settled before these can be asked",
+    defaultOpen: true,
+  },
+  dictionary: {
+    title: "Answered by the data dictionary",
+    note: "nobody needs to answer these — one dictionary upload closes all of them",
+    defaultOpen: false,
+  },
 };
+
+/** The non-empty buckets in list order, each with its heading and its questions. Readers
+ *  never re-derive the order or re-slice the load; a bucket that is empty is absent, so
+ *  a section can never head an empty list. */
+export function ownedLoadSections<T extends { bucket: OwnedBucket }>(
+  items: readonly T[],
+): Array<{ bucket: OwnedBucket; section: BucketSection; items: T[] }> {
+  const order: OwnedBucket[] = ["on-link", "next-link", "blocked", "dictionary"];
+  return order
+    .map((bucket) => ({ bucket, section: BUCKET_SECTION[bucket], items: items.filter((i) => i.bucket === bucket) }))
+    .filter((g) => g.items.length > 0);
+}
 
 /** The identity every reader depends on. Exported so surfaces (and tests) can assert it
  *  rather than trusting it: the headline IS the sum of the buckets. */

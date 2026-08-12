@@ -696,7 +696,49 @@
 /* owned-question list in the roster expansion */
 .v3ln-cr-qs.owned li{display:flex;gap:6px;align-items:baseline}
 .v3ln-cr-qtype{font-size:9px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--v3-accent-2);flex-shrink:0}
-.v3ln-cr-seamnote{color:#5a4fa0!important;font-style:italic}
+/* Seam note — now a paragraph under the sections, not a row inside one. Was a
+   theme-blind #5a4fa0; the token carries a light and a dark value. */
+.v3ln-cr-seamnote{margin:8px 0 0;padding-left:2px;max-width:560px;font-size:11px;line-height:1.45;color:var(--v3-seam-ink);font-style:italic}
+
+/* ── OWNED QUESTIONS, GROUPED BY BUCKET ──────────────────────────────────────
+   The reason a question is not on the link belongs to the GROUP, not to each
+   row: ten typing questions used to print "answered by the data dictionary,
+   not by them" ten times down the side of the card. Each section states it
+   once, in a heading, and carries its own hue on a left rule so the rows read
+   as belonging to it without a box around them.
+
+   One local `--g` per section drives the rule, the title and the count, so a
+   bucket's colour is set in one place. All four are tokens, so both themes
+   and the contrast audit hold. */
+.v3ln-cr-qgroup{--g:var(--v3-accent-2);margin:11px 0 0;padding-left:10px;border-left:2px solid color-mix(in srgb,var(--g) 32%,transparent)}
+.v3ln-cr-qgroup:first-of-type{margin-top:3px}
+.v3ln-cr-qgroup.next-link{--g:var(--v3-text-muted)}
+.v3ln-cr-qgroup.blocked{--g:var(--v3-amber)}
+.v3ln-cr-qgroup.dictionary{--g:var(--v3-seam-ink)}
+
+/* the whole heading row is the disclosure control */
+.v3ln-cr-qgroup-h{display:flex;align-items:baseline;gap:7px;margin:0;cursor:pointer;list-style:none;padding:2px 0;border-radius:4px}
+.v3ln-cr-qgroup-h::-webkit-details-marker{display:none}
+.v3ln-cr-qgroup-h:hover .v3ln-cr-qgroup-t{text-decoration:underline}
+.v3ln-cr-qgroup-h:focus-visible{outline:2px solid var(--g);outline-offset:2px}
+/* a caret that turns — the only glyph, and it never reaches the a11y tree */
+.v3ln-cr-qgroup-h::before{content:"";flex-shrink:0;width:0;height:0;border-left:4px solid var(--g);border-top:3.5px solid transparent;border-bottom:3.5px solid transparent;transform:translateY(-1px);transition:transform .15s ease}
+.v3ln-cr-qgroup[open]>.v3ln-cr-qgroup-h::before{transform:translateY(-1px) rotate(90deg)}
+@media (prefers-reduced-motion:reduce){.v3ln-cr-qgroup-h::before{transition:none}}
+.v3ln-cr-qgroup-t{font-size:9.5px;font-weight:750;letter-spacing:.07em;text-transform:uppercase;color:var(--g)}
+/* tabular so the counts line up down a card with several sections */
+.v3ln-cr-qgroup-n{font-size:9.5px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.6;color:var(--g);background:color-mix(in srgb,var(--g) 13%,transparent);border-radius:999px;padding:0 6px}
+.v3ln-cr-qgroup-note{font-size:10.5px;line-height:1.45;color:var(--v3-text-muted)}
+.v3ln-cr-qgroup>.v3ln-cr-qs{margin-top:6px}
+/* the rule already carries the grouping — bullets and their indent would say it twice */
+.v3ln-cr-qgroup .v3ln-cr-qs{padding-left:0;list-style:none}
+.v3ln-cr-qgroup .v3ln-cr-qs li{margin:0 0 5px}
+.v3ln-cr-qgroup:last-of-type .v3ln-cr-qs li:last-child{margin-bottom:0}
+/* a question nobody is being asked is set back a step — still legible, not italic
+   (ten italic rows were harder to read than the fact was worth) */
+.v3ln-cr-qgroup.dictionary .v3ln-cr-qs,.v3ln-cr-qgroup.next-link .v3ln-cr-qs{color:var(--v3-text-muted)}
+.v3ln-cr-qgroup.dictionary .v3ln-cr-qtype{color:var(--v3-seam-ink)}
+.v3ln-cr-qgroup.blocked .v3ln-cr-qtype{color:var(--v3-amber)}
 .v3ln-cr-noq{margin:0;padding:2px 0 0 2px;font-size:11px;color:var(--v3-text-muted);font-style:italic;max-width:560px;line-height:1.45}
 /* collapsed "+N more" area chip — same idiom as the seams strip */
 .v3ln-cr-area.more{color:var(--v3-text-muted);font-weight:700;background:color-mix(in srgb,var(--v3-text-muted) 8%,transparent)}
