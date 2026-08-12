@@ -13,7 +13,7 @@
  * One write path, one view: nothing renders a second copy of these numbers, so
  * there is nothing left for a second surface to disagree with.
  */
-import { Fragment, Suspense, lazy, useEffect, useMemo, useState, type ComponentProps } from "react";
+import { Fragment, Suspense, lazy, useEffect, useMemo, useState, type ComponentProps, useRef } from "react";
 import type { ProgramSummary } from "@/new/types";
 import { buildLineModel, LINE_GLYPHS, type LineBand, type LineStation } from "@/v3/lib/lineModel";
 import {
@@ -942,15 +942,41 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
     window.setTimeout(() => setNote(null), 6000);
   };
 
+  /**
+   * COPY, WITH A FALLBACK THAT ACTUALLY DOES SOMETHING.
+   *
+   * `navigator.clipboard.writeText` is refused with NotAllowedError whenever the
+   * document is not focused or the page sits in an embed without clipboard
+   * permission — both ordinary, neither the operator's fault. The old catch told
+   * them to "select the link text and copy it manually" and then left the text
+   * unselected, which is a instruction, not a fallback.
+   *
+   * So the fallback does the selecting: the field is focused and its text
+   * selected, `execCommand("copy")` is tried (it works in exactly the embedded
+   * cases the async API refuses), and only if THAT fails does it ask for a
+   * keystroke — on text already highlighted, so the keystroke is all that is left.
+   */
+  const linkFieldRef = useRef<HTMLInputElement | null>(null);
   const copyShown = async () => {
     if (!linkShown) return;
+    const done = (msg: string) => { setNote(msg); window.setTimeout(() => setNote(null), 5000); };
     try {
       await navigator.clipboard.writeText(linkShown.url);
-      setNote(`Link copied — ${displayPersonLabel(linkShown.who)}.`);
-    } catch {
-      setNote("The clipboard is blocked here — select the link text and copy it manually.");
+      done(`Link copied — ${displayPersonLabel(linkShown.who)}.`);
+      return;
+    } catch { /* refused — fall through to the selection path */ }
+    const field = linkFieldRef.current;
+    if (field) {
+      field.focus();
+      field.select();
+      try {
+        if (document.execCommand("copy")) {
+          done(`Link copied — ${displayPersonLabel(linkShown.who)}.`);
+          return;
+        }
+      } catch { /* older engines and locked-down embeds both land here */ }
     }
-    window.setTimeout(() => setNote(null), 5000);
+    done("The clipboard is blocked here — the link is selected, press ⌘C (Ctrl+C) to copy it.");
   };
 
   // ── meeting invite: a VISIBLE inline date bar (hidden-input showPicker()
@@ -1513,7 +1539,7 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                     })()}
                     {linkShown?.who === row.label ? (
                       <span className="v3ln-cr-url-row">
-                        <input className="v3ln-cr-url" readOnly value={linkShown.url}
+                        <input ref={linkFieldRef} className="v3ln-cr-url" readOnly value={linkShown.url}
                           onFocus={(e) => e.currentTarget.select()}
                           aria-label={`${displayPersonLabel(row.label)}'s durable link`} />
                         <button type="button" className="v3ln-a" onClick={() => void copyShown()}
