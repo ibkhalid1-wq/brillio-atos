@@ -39,8 +39,7 @@ import {
 } from "@/v3/components/flow/flowShellData";
 import {
   listOpenFlowDecisions, listFlowAttestations, describeDecisionChanges,
-  type FlowDecision,
-} from "@/v3/components/flow/flowDecisions";
+  type FlowDecision, dedupeContradictionDecisions } from "@/v3/components/flow/flowDecisions";
 import {
   listFlowTracks, trackAcceptance, trackPace,
 } from "@/v3/components/flow/flowTracks";
@@ -1441,7 +1440,11 @@ function FlowToday({ program, ledger, programs, onSelectProgram, onResolveDecisi
             <h2>From the record</h2>
             <span>{items.total} item{items.total === 1 ? "" : "s"}</span>
           </div>
-          {open.map((decision) => (
+          {/* ONE CARD PER CONTRADICTION. Two watchers propose them and a dispute
+              worded differently is a different id, so the same finding arrived
+              four times and the operator had to work out whether any of them
+              differed. Everything else passes through untouched. */}
+          {dedupeContradictionDecisions(open).map((decision) => (
             <DecisionCard key={decision.id} program={program} decision={decision} movementLabel={label(decision.movementId)}
               busy={busyId === decision.id} onResolve={resolve} />
           ))}

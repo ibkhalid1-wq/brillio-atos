@@ -176,7 +176,24 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
   /** The confirmation grid is opened deliberately — it is a pass of work, not a banner. */
   const [showGrid, setShowGrid] = useState(false);
   /** The questions behind a count, opened from the count itself. */
-  const [peek, setPeek] = useState<{ sor: string; abouts: string[] } | null>(null);
+  const [peek, setPeek] = useState<{ sor: string; abouts: string[]; orphan?: boolean } | null>(null);
+
+  /**
+   * WHICH ENTITIES HAVE NO SYSTEM NAMED — the strip used to say only "41 typing
+   * questions on entities with no system of record named / a Frame gap, not an ask",
+   * which named neither the entities nor the act that clears it. An operator cannot
+   * name a system for a set they cannot see.
+   */
+  const orphanEntities = useMemo(() => {
+    const byId = new Map(ledger.store.elements().map((e) => [e.id, e] as const));
+    const counts = new Map<string, number>();
+    for (const about of ledger.artifactAsks.unattributed.abouts) {
+      const el = byId.get(elementIdOf(about));
+      const name = (el?.kind === "attribute" && el.of ? byId.get(el.of)?.name : el?.name) ?? "";
+      if (name) counts.set(name, (counts.get(name) ?? 0) + 1);
+    }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  }, [ledger.store, ledger.artifactAsks.unattributed.abouts]);
 
   /**
    * ROLES NOBODY ANSWERS FOR — moved here from Discover (2026-08-12).
@@ -433,7 +450,9 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
               <b>{unboundOpen}</b> open question{unboundOpen === 1 ? "" : "s"} are owned by{" "}
               {unbound.length} role{unbound.length === 1 ? "" : "s"} with no person behind{" "}
               {unbound.length === 1 ? "it" : "them"} — owned in the ledger, unreachable in practice.
-              Name someone for the role in the Discovery Kit, or reassign the questions below.
+              {" "}Reassign them below, or add someone to the Discovery Kit whose role is spelt
+              EXACTLY as it appears here — the binding is an exact match on the role, so
+              &ldquo;Exec Sponsor&rdquo; does not answer for &ldquo;Executive Sponsor&rdquo;.
             </span>
           </header>
           <div className="v3ib-unbound-rows">
@@ -704,8 +723,34 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
             ) : null}
             {unattributed.weight ? (
               <div className="v3ib-dict-ask">
-                <span className="v3ib-dict-to"><b>{unattributed.weight}</b> typing question{unattributed.weight === 1 ? "" : "s"} on entities with <b>no system of record named</b></span>
-                <span className="v3ib-dict-msg">a Frame gap, not an ask — name the SoR and these attach to its ask.</span>
+                <span className="v3ib-dict-to">
+                  <b>{unattributed.weight}</b> typing question{unattributed.weight === 1 ? "" : "s"} on{" "}
+                  {orphanEntities.length ? (
+                    <>
+                      <b>{orphanEntities.slice(0, 3).map(([n]) => n).join(", ")}</b>
+                      {orphanEntities.length > 3 ? <> and {orphanEntities.length - 3} more</> : null}
+                      {" "}— <b>no system of record named</b>
+                    </>
+                  ) : <>entities with <b>no system of record named</b></>}
+                </span>
+                {/* WHAT IT IS AND WHAT CLEARS IT. "a Frame gap, not an ask" is the
+                    ledger's own vocabulary and told the operator nothing they could
+                    act on: no dictionary can be requested for a system nobody has
+                    named, so this bucket is deliberately NOT an ask — it is waiting
+                    on the Frame answer that turns it into one. */}
+                <span className="v3ib-dict-msg">
+                  Nothing to chase yet: a dictionary is requested from a system, and these
+                  {" "}{orphanEntities.length === 1 ? "entity holds" : "entities hold"} no system name.
+                  {" "}Name the system on the Frame — in <b>systems of record</b> — and these
+                  {" "}{unattributed.weight} attach to its ask. They stay open and counted meanwhile.
+                </span>
+                <span className="v3ib-dict-acts">
+                  <button type="button" className="v3ib-btn ghost sm"
+                    aria-label={spoken(`Show the ${unattributed.weight} questions with no system of record named`)}
+                    onClick={() => setPeek({ sor: "", abouts: [...unattributed.abouts], orphan: true })}>
+                    show the {unattributed.weight}
+                  </button>
+                </span>
               </div>
             ) : null}
             {/* THE UPLOAD — the write half of the ask. Parsed first so the operator
@@ -993,15 +1038,22 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
         <>
           <div className="v3ib-peek-backdrop" onClick={() => setPeek(null)} aria-hidden="true" />
           <div className="v3ib-peek-panel" role="dialog" aria-modal="true"
-            aria-label={`Open questions on ${peek.sor}`}>
+            aria-label={peek.orphan ? "Open questions with no system of record named" : `Open questions on ${peek.sor}`}>
             <header className="v3ib-peek-h">
               <span className="v3ib-peek-t">
-                <b>{peek.abouts.length}</b> open question{peek.abouts.length === 1 ? "" : "s"} on <b>{peek.sor}</b>
+                <b>{peek.abouts.length}</b> open question{peek.abouts.length === 1 ? "" : "s"}{" "}
+                {peek.orphan ? <>with <b>no system of record named</b></> : <>on <b>{peek.sor}</b></>}
               </span>
               <button type="button" className="v3ib-btn ghost sm" onClick={() => setPeek(null)}>close</button>
             </header>
             <span className="v3ib-peek-m">
-              These are what a {peek.sor} dictionary would close. They stay open and counted until
+              {/* NO DICTIONARY IS PROMISED HERE. The SoR-keyed copy says what a named
+                  system's dictionary would close; for this bucket there is no system
+                  to name one, and saying otherwise would promise a document nobody
+                  can be asked for. */}
+              {peek.orphan
+                ? <>Their entities carry no system of record, so no dictionary can be requested for them yet.</>
+                : <>These are what a {peek.sor} dictionary would close.</>} They stay open and counted until
               something answers them — a dictionary, or the types confirmed by hand.
               {" "}Each says where its field came from; <b>no source on record</b> means the ontology
               named the field without saying who or what named it, which is worth knowing before
