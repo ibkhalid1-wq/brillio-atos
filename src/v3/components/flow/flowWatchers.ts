@@ -18,7 +18,7 @@ import type { ProgramSummary } from "@/new/types";
 import { FLOW_ATTESTATION_CAP } from "@/v3/lib/blobGuard";
 import { getProgramState, wrapProgramState } from "@/new/lib/programState";
 import { flowMovements, movementEvidence, parseGridRows, readMovementInputs, evidenceStamp } from "@/v3/components/flow/flowShellData";
-import { listFlowDecisions, handledContradictionStatements, isContradictionHandled } from "@/v3/components/flow/flowDecisions";
+import { listFlowDecisions, handledContradictionStatements, isContradictionHandled, contradictionKey } from "@/v3/components/flow/flowDecisions";
 import { validateOntologyConstraints, isValidCardinality } from "@/v3/components/flow/flowOntologyConstraints";
 import { resolveMovementStakeholders } from "@/v3/components/flow/flowStakeholders";
 import { mapTranscriptSpeakers } from "@/v3/components/flow/flowTranscriptMap";
@@ -401,7 +401,7 @@ export function negatedClaimProposal(program: ProgramSummary): WatcherProposal |
   const entries = flowMovements().flatMap((movement) => movementEvidence(program, movement))
     .filter((entry) => entry.text && entry.text.length > 40)
     .filter((entry) => !/^operator\b|resolution/i.test(entry.who));
-  const collected: Array<{ statement: string; between: string; positions: string }> = [];
+  const collected: Array<{ statement: string; claim: string; between: string; positions: string }> = [];
   const seen = new Set<string>();
   for (const entry of entries) {
     for (const sentence of entry.text.split(/(?<=[.!?])\s+|\n+/)) {
@@ -423,6 +423,7 @@ export function negatedClaimProposal(program: ProgramSummary): WatcherProposal |
       seen.add(key);
       const shown = readableEvidenceLine(line);
       collected.push({
+        claim: hit.text.replace(/\s+/g, " ").trim(),
         statement: shown.slice(0, 140),
         between: `${entry.who.split(",")[0].trim() || "new evidence"} vs Transformation Charter (${hit.key})`,
         positions: `Evidence: "${shown.slice(0, 90)}" · Charter still asserts: "${hit.text.replace(/\s+/g, " ").slice(0, 90)}"`,
@@ -438,7 +439,9 @@ export function negatedClaimProposal(program: ProgramSummary): WatcherProposal |
   const found = collected.filter((entry) => !isContradictionHandled(handled, entry.statement));
   if (!found.length) return null;
 
-  const id = `watch-negated-${djb2(found.map((f) => f.statement.toLowerCase()).sort().join("|"))}`;
+  // Keyed on WORDS, like the handled-check: hashing the raw text meant a change in
+  // how a statement is punctuated minted a second card for the same finding.
+  const id = `watch-negated-${djb2(found.map((f) => contradictionKey(f.statement)).sort().join("|"))}`;
   if (listFlowDecisions(program).some((decision) => decision.id === id)) return null;
 
   return {
@@ -451,7 +454,13 @@ export function negatedClaimProposal(program: ProgramSummary): WatcherProposal |
     // card whose evidence IS an attached file it read as the noun. `Log` cannot be
     // misread the same way here: nothing else on the card is a log.
     title: `Log ${found.length} contradiction${found.length === 1 ? "" : "s"} against the charter`,
-    summary: found.map((f) => f.statement).join(" · ").slice(0, 220),
+    // THE CONFLICT, not just one side of it. The summary used to repeat the
+    // statement that the diff row below already shows verbatim, while the thing an
+    // operator needs to judge it — which standing claim it contradicts — was
+    // computed here and never put on screen.
+    summary: found.length === 1
+      ? `Evidence: “${found[0].statement.slice(0, 120)}” — the charter still says “${found[0].claim.slice(0, 120)}”`
+      : found.map((f) => f.statement).join(" · ").slice(0, 220),
     blocking: "New evidence plainly negates a standing charter claim — documents built on the disputed claim keep asserting it until this is logged.",
     recommendation: {
       action: "Log the contradiction",

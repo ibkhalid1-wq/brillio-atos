@@ -1049,7 +1049,12 @@ function DecisionCard({ program, decision, movementLabel, busy, onResolve }: {
       {decision.blocking ? <p className="v3fs-dec-b">Waiting on this: {decision.blocking}</p> : null}
       {decision.recommendation ? (
         <div className="v3fs-dec-rec">
-          <div className="v3fs-dec-rec-a">Recommended — {decision.recommendation.action}</div>
+          {/* The action is NOT repeated here. The primary button below is built from
+              this same string, so "Recommended — Log the contradiction" above a
+              button reading "Log the contradiction" said it twice, under a title
+              that had already said it once. The label keeps the block's meaning;
+              the button keeps the words. */}
+          <div className="v3fs-dec-rec-a">Recommended</div>
           {decision.recommendation.rationale ? <div className="v3fs-dec-rec-r">{decision.recommendation.rationale}</div> : null}
           {decision.recommendation.band ? <div className="v3fs-dec-rec-b">{decision.recommendation.band}</div> : null}
         </div>
