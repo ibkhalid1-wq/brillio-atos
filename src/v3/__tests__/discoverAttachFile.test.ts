@@ -126,7 +126,9 @@ const openDialog = async () => {
 
 /** The shared attach control, found the way an operator finds it — by its words. */
 const attachButton = (dialog: HTMLElement): HTMLButtonElement => {
-  const button = [...dialog.querySelectorAll("button")].find((b) => /Attach a file/.test(text(b)));
+  // `files?` — the control took one file and now takes a selection ("Attach files"),
+  // because a system's dictionary arrives as several per-object workbooks.
+  const button = [...dialog.querySelectorAll("button")].find((b) => /Attach files?/.test(text(b)));
   if (!button) throw new Error(`no attach control in the capture dialog: ${[...dialog.querySelectorAll("button")].map((b) => text(b)).join(" | ")}`);
   return button as HTMLButtonElement;
 };
@@ -171,7 +173,7 @@ describe("Discover · add to the record — a file is a road into the record", (
 
   it("the capture dialog offers the SHARED attach control, with a real file input", async () => {
     const dialog = await openDialog();
-    expect(text(attachButton(dialog))).toMatch(/Attach a file/);
+    expect(text(attachButton(dialog))).toMatch(/Attach files?/);
     expect(dialog.querySelector('input[type="file"]')).toBeTruthy();
   });
 

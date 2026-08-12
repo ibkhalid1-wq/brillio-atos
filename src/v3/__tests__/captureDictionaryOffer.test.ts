@@ -33,13 +33,28 @@ const offerBlock = (): string => {
 };
 
 describe("the attach control hands back the raw file", () => {
-  it("AttachFileButton exposes onFile — the edge's prose cannot be re-read as columns", () => {
-    expect(CAPTURE).toContain("onFile?: (file: File) => void");
-    expect(CAPTURE, "onFile is declared but never called").toContain("onFile?.(file)");
+  it("AttachFileButton exposes onFiles — the edge's prose cannot be re-read as columns", () => {
+    expect(CAPTURE).toContain("onFiles?: (files: File[]) => void");
+    expect(CAPTURE, "onFiles is declared but never called").toContain("onFiles?.(files)");
+  });
+
+  it("ALL the selected files in one call, so a merging caller cannot race itself", () => {
+    // One call per file would have each result computed from a `capDict` the
+    // previous had not written yet, and the last writer would win.
+    expect(CAPTURE, "the attach input is single-file again").toMatch(/type="file" multiple/);
+    expect(CAPTURE, "only the first file is handed over").not.toMatch(/onFiles\?\.\(\[?files\[0\]/);
   });
 
   it("and the capture panel passes it", () => {
-    expect(LINE).toContain("onFile={(file) => void readAttachedDictionary(file)}");
+    expect(LINE).toContain("onFiles={(files) => void readAttachedDictionary(files)}");
+  });
+
+  it("one unreadable file does not lose the others, and keeps its own reason", () => {
+    // A single file reports the edge's own words ("That workbook is
+    // password-protected."); only a real batch is summarised, and by name.
+    expect(CAPTURE).toContain("const failed: Array<{ name: string; reason: string }> = []");
+    expect(CAPTURE, "the loop aborts on the first failure").not.toMatch(/failed\.push[^\n]*\n?[^\n]*break;/);
+    expect(CAPTURE).toContain("files.length === 1\n      ? failed[0].reason");
   });
 
   it("REGRESSION: attaching still files the document as evidence", () => {
@@ -64,9 +79,18 @@ describe("what the panel reads, and how it counts", () => {
     // `dictLocusId` is the resolver: it wraps `attrLocusId` and adds the bridge a
     // real export needs — a row binds by whichever of its two names (API name or
     // stated label) the ontology actually modelled.
-    expect(offerBlock()).toContain("dictLocusId");
-    expect(INBOX, "the Inbox kept its own copy of the locus rule").toMatch(/dictLocusId|dictionaryCoverage/);
+    // `dictionaryCoverage` is the shared reading: it resolves each row through
+    // `dictLocusId` (API name or stated label, whichever the ontology modelled) and
+    // scopes the denominator to the entities the files actually name.
+    expect(offerBlock()).toContain("dictionaryCoverage");
+    expect(INBOX, "the Inbox kept its own copy of the locus rule").toContain("dictionaryCoverage");
     expect(offerBlock(), "a hand-rolled slug is back").not.toMatch(/replace\(\/\[\^a-z0-9\]/);
+  });
+
+  it("several files are merged into ONE reading, through the stored field's rule", () => {
+    const block = offerBlock();
+    expect(block).toContain("mergeDictionaryCsv");
+    expect(block, "the files are read in parallel — the merge would race").toContain("for (const file of files)");
   });
 
   it("a file that is not a dictionary sets no offer, and is not an error", () => {

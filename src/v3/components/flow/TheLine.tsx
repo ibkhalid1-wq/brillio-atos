@@ -47,7 +47,7 @@ import { pinsForSend } from "@/v3/lib/ledger/operatorActions";
 import { HeardReadout, ConvergenceReadout, ProvisionalMark, ClaimStatus, SourceTag } from "@/v3/components/flow/studio/ledgerPrimitives";
 import DesignLoopZones from "@/v3/components/flow/DesignLoopZones";
 import { ownerLabelsForCast } from "@/v3/lib/ledger/ownerBinding";
-import { dictLocusId, isSpreadsheetName, parseDictionaryCsv, readDictionaryWorkbook } from "@/v3/lib/ledger/dictionary";
+import { dictionaryCoverage, isSpreadsheetName, mergeDictionaryCsv, parseDictionaryCsv, readDictionaryWorkbook } from "@/v3/lib/ledger/dictionary";
 import { currentDesignRound } from "@/v3/components/flow/flowDesignRound";
 import { renderQuestion } from "@/v3/lib/ledger/renderQuestion";
 import {
@@ -1005,23 +1005,42 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
    * they attached it to the record, so it still becomes evidence. This only stops
    * the answers inside it going unnoticed.
    */
-  const [capDict, setCapDict] = useState<{ name: string; fields: number; closes: number; csv: string } | null>(null);
+  const [capDict, setCapDict] = useState<{
+    name: string; fields: number; closes: number; csv: string;
+    /** how many attachments this reading came from — the sentence is plural above one */
+    files: number;
+    /** open questions on the entities this file NAMES — the honest denominator */
+    inScope: number; entities: string[];
+  } | null>(null);
   const [capDictBusy, setCapDictBusy] = useState(false);
-  const readAttachedDictionary = async (file: File) => {
-    try {
-      const wb = isSpreadsheetName(file.name) ? await readDictionaryWorkbook(await file.arrayBuffer(), file.name) : null;
-      const csv = wb ? wb.csv : await file.text();
-      const parsed = parseDictionaryCsv(csv, file.name.replace(/\.[^.]+$/, ""));
-      if (!parsed.fields.length) { setCapDict(null); return; }
-      const openTyping = new Set(ledger.typingLoci.map((i) => i.about.split("#")[0]));
-      const closes = parsed.fields.reduce((n, f) => {
-        return n + (openTyping.has(dictLocusId(f, openTyping)) ? 1 : 0);
-      }, 0);
-      setCapDict({ name: parsed.name, fields: parsed.fields.length, closes, csv });
-    } catch {
-      // Unreadable as a dictionary is not an error here — it is simply not one.
-      setCapDict(null);
+  const readAttachedDictionary = async (files: File[]) => {
+    // SEQUENTIALLY, into one running CSV. A system's dictionary arrives as several
+    // per-object workbooks, so the whole selection is one reading — and merging
+    // through the SAME rule the stored field uses means the count offered here is
+    // the count that lands. Reading them in parallel and merging into state would
+    // race: each result computed from a `capDict` the previous had not written.
+    let csv = "";
+    let read = 0;
+    for (const file of files) {
+      try {
+        const wb = isSpreadsheetName(file.name) ? await readDictionaryWorkbook(await file.arrayBuffer(), file.name) : null;
+        const own = wb ? wb.csv : await file.text();
+        if (!parseDictionaryCsv(own).fields.length) continue;   // not a dictionary; not an error
+        csv = mergeDictionaryCsv(csv, own);
+        read += 1;
+      } catch {
+        // Unreadable as a dictionary is not an error here — it is simply not one,
+        // and the extraction path reports its own failures.
+      }
     }
+    const parsed = parseDictionaryCsv(csv, files.length === 1 ? files[0].name.replace(/\.[^.]+$/, "") : `${read} files`);
+    if (!parsed.fields.length) { setCapDict(null); return; }
+    const openTyping = new Set(ledger.typingLoci.map((i) => i.about.split("#")[0]));
+    const cover = dictionaryCoverage(parsed.fields, openTyping);
+    setCapDict({
+      name: parsed.name, fields: parsed.fields.length, closes: cover.matched,
+      inScope: cover.inScope, entities: cover.entities, csv, files: read,
+    });
   };
 
   const openCapture = (row?: CastRow) => {
@@ -1706,7 +1725,7 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                   nothing becomes evidence until Capture is pressed. */}
               <div className="v3ln-cap-ins">
                 <AttachFileButton programId={program.id}
-                  onFile={(file) => void readAttachedDictionary(file)}
+                  onFiles={(files) => void readAttachedDictionary(files)}
                   onExtracted={(filename, text, sourceKey) => setCapDocs((current) => [...current, { filename, text, sourceKey }])} />
                 <TranscribeButton onText={(transcript) => setCapText((current) => (current.trim() ? `${current.trim()}\n\n${transcript}` : transcript))} />
               </div>
@@ -1716,9 +1735,10 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
               {capDict ? (
                 <div className="v3ln-cap-dict">
                   <span className="v3ln-cap-dict-t">
-                    <b>{capDict.name}</b> also reads as a <b>data dictionary</b> —
+                    <b>{capDict.name}</b> {capDict.files > 1 ? "together read" : "also reads"} as a <b>data dictionary</b> —
                     {" "}{capDict.fields} field{capDict.fields === 1 ? "" : "s"},
-                    {" "}<b>{capDict.closes}</b> of your open typing question{capDict.closes === 1 ? "" : "s"} match
+                    {" "}<b>{capDict.closes}</b> of the {capDict.inScope} open typing question{capDict.inScope === 1 ? "" : "s"}
+                    {capDict.entities.length ? ` on ${capDict.entities.slice(0, 3).join(", ")}${capDict.entities.length > 3 ? ` +${capDict.entities.length - 3} more` : ""}` : ""} match
                     {capDict.closes === 0 ? " — nothing here matches an open locus, so it would close nothing" : ""}
                   </span>
                   <span className="v3ln-cap-dict-m">

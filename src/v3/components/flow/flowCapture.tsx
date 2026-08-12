@@ -69,50 +69,74 @@ async function fileToBase64(file: File): Promise<string> {
  * do that from text the edge has already flattened. The attachment still becomes
  * evidence either way; this only lets the caller offer the second reading.
  */
-export function AttachFileButton({ programId, onExtracted, onFile }: {
+export function AttachFileButton({ programId, onExtracted, onFiles }: {
   programId: string;
   onExtracted: (filename: string, text: string, sourceKey?: string) => void;
-  onFile?: (file: File) => void;
+  /** ALL the selected files at once, not one call each: a caller that merges them
+   *  (a dictionary split across per-object workbooks) would otherwise race itself,
+   *  every call computing its result from state the previous one had not written. */
+  onFiles?: (files: File[]) => void;
 }) {
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
 
-  const ingest = async (file: File) => {
-    setBusy(true);
+  /** Each file extracted in turn. One failure is reported and the rest continue —
+   *  losing four attachments to one unreadable PDF is its own defect. */
+  const ingestAll = async (files: File[]) => {
     setNote(null);
+    const failed: Array<{ name: string; reason: string }> = [];
+    for (let i = 0; i < files.length; i += 1) {
+      setBusy(files.length > 1 ? `Reading ${i + 1} of ${files.length}…` : "Reading…");
+      const outcome = await ingestOne(files[i]);
+      if (outcome) failed.push({ name: files[i].name, reason: outcome });
+    }
+    setBusy(null);
+    if (!failed.length) return;
+    // ONE file keeps its OWN reason verbatim — "That workbook is password-protected."
+    // is what the operator can act on, and a batch summary in its place would be a
+    // worse message for the commonest case. Only a real batch is summarised, and
+    // then by NAME, because the reasons will differ.
+    setNote(files.length === 1
+      ? failed[0].reason
+      : failed.length === files.length
+        ? `None of those ${files.length} files could be read — paste the text instead.`
+        : `Read ${files.length - failed.length} of ${files.length}. Could not read: ${failed.map((f) => f.name).join(", ")}.`);
+  };
+
+  /** null when it landed; the reason when it did not. */
+  const ingestOne = async (file: File): Promise<string | null> => {
     try {
       const { data, error } = await supabase.functions.invoke("flow-extract", {
         body: { file: await fileToBase64(file), mime: file.type || "", filename: file.name, store: true, programId },
       });
       if (error) {
         const detail = await (error as { context?: Response }).context?.json?.().catch(() => null);
-        setNote((detail as { error?: string } | null)?.error ?? "Could not read that file — paste the text instead.");
-        return;
+        return (detail as { error?: string } | null)?.error
+          ?? "Could not read that file — paste the text instead.";
       }
       const text = typeof (data as { text?: string } | null)?.text === "string" ? (data as { text: string }).text : "";
       const sourceKey = typeof (data as { sourceKey?: string } | null)?.sourceKey === "string" ? (data as { sourceKey: string }).sourceKey : undefined;
-      if (text) onExtracted(file.name, text, sourceKey);
-      else setNote("The file produced no readable text.");
+      if (!text) return "The file produced no readable text.";
+      onExtracted(file.name, text, sourceKey);
+      return null;
     } catch {
-      setNote("Could not read that file — paste the text instead.");
-    } finally {
-      setBusy(false);
+      return "Could not read that file — paste the text instead.";
     }
   };
 
   return (
     <div className="v3fs-kit-rec">
-      <input ref={inputRef} type="file" hidden
+      <input ref={inputRef} type="file" multiple hidden
         onChange={(event) => {
-          const file = event.target.files?.[0];
+          const files = [...(event.target.files ?? [])];
           event.target.value = "";
-          if (!file) return;
-          onFile?.(file);            // the caller's own reading, before the edge flattens it
-          void ingest(file);
+          if (!files.length) return;
+          onFiles?.(files);          // the caller's own reading, before the edge flattens it
+          void ingestAll(files);
         }} />
-      <button type="button" className="v3fs-a" disabled={busy} onClick={() => inputRef.current?.click()}>
-        {busy ? "Reading…" : "⌲ Attach a file — PDF, Word, Excel, text…"}
+      <button type="button" className="v3fs-a" disabled={!!busy} onClick={() => inputRef.current?.click()}>
+        {busy ?? "⌲ Attach files — PDF, Word, Excel, text…"}
       </button>
       {note ? <span className="v3fs-kit-rec-note">{note}</span> : null}
     </div>
