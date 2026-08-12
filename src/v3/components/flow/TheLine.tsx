@@ -52,7 +52,7 @@ import { currentDesignRound } from "@/v3/components/flow/flowDesignRound";
 import { renderQuestion } from "@/v3/lib/ledger/renderQuestion";
 import {
   emptyOwnedLoad, ownedLoadBreakdown, ownedLoadFor, ownedLoadSections, personOwned, sendableCount,
-  unboundOpenTotal, unboundOwners, type OwnedBucket, type OwnedLoad,
+  type OwnedBucket, type OwnedLoad,
 } from "@/v3/lib/ledger/ownedLoad";
 import "./theLine.css";
 
@@ -622,12 +622,11 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
   // soloByOwner's own; no person is invented and no number is invented. NOT filtered by
   // the area chip: an unclaimed owner has no roster row and therefore no area, so a filter
   // would silently hide the miss.
-  const unbound = useMemo(() => {
-    const bound = new Set<string>();
-    for (const labels of ownerLabelsFor.values()) for (const label of labels) bound.add(label);
-    return unboundOwners(ledger, bound);
-  }, [ownerLabelsFor, ledger]);
-  const unboundOpen = unboundOpenTotal(unbound);
+  // ROLES NOBODY ANSWERS FOR are derived and drawn in the INBOX now (2026-08-12):
+  // naming someone for a role and reassigning their questions are both operator
+  // decisions, and this surface is for the questions aimed at stakeholders. The
+  // binding rule they share is `ownerLabelsForCast`, so neither can drift.
+
 
   // ── the record: every attributed evidence entry across the spine, newest
   // first, each mapped to its speaker's area so the Record projection can
@@ -1141,6 +1140,17 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
 
       {tab === "work" ? (
         <>
+        {/* THE BURN-DOWN, on the operator's own board. Moved off Discover, which
+            is for the questions aimed at stakeholders — an operator judging where
+            the programme stands reads it here, beside the round and the
+            convergence that answer the same question at different resolutions. */}
+        <div className="v3ln-goal work">
+          <span className="v3ln-goal-lead">The goal — close the burn-down</span>
+          <span className="v3ln-goal-stats">
+            <b>{ledger.kit.burnDown.open}</b> open <span className="v3ln-unit">questions</span> · <b>{ledger.heard.total}</b> answered
+            {" "}· <b>{ledger.unownedOpen}</b> need an owner{ledger.typingLoci.length ? <> · <b>{ledger.typingLoci.length}</b> → dictionary</> : null} · <b>{ledger.seamBands.length}</b> seam{ledger.seamBands.length === 1 ? "" : "s"}
+          </span>
+        </div>
         <div className="v3ln-stats ledger">
           <div><span className="v3ln-sl">Round</span><span className="v3ln-sv">{model.round}</span></div>
           <button type="button" className="v3ln-statbtn wide" onClick={() => setTab("discovery")}
@@ -1272,17 +1282,12 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
               <button type="button" className="v3ln-a" onClick={() => openCapture()}>＋ add to the record</button>
             ) : null}
           </header>
-          {/* One denominator, one goal: the burn-down is the headline; the inbox below
-              is the small operator-action subset. No two numbers that contradict. */}
-          <div className="v3ln-goal">
-            <span className="v3ln-goal-lead">The goal — close the burn-down</span>
-            <span className="v3ln-goal-stats">
-              <b>{ledger.kit.burnDown.open}</b> open <span className="v3ln-unit">questions</span> · <b>{ledger.heard.total}</b> answered
-              {" "}· <b>{ledger.unownedOpen}</b> need an owner{ledger.typingLoci.length ? <> · <b>{ledger.typingLoci.length}</b> → dictionary</> : null} · <b>{ledger.seamBands.length}</b> seam{ledger.seamBands.length === 1 ? "" : "s"}
-            </span>
-            <ConvergenceReadout burnDown={ledger.kit.burnDown} />
-            <span className="v3ln-goal-heard"><HeardReadout heard={ledger.heard} /></span>
-          </div>
+          {/* THE BURN-DOWN IS NOT A STAKEHOLDER'S BUSINESS. It moved to Work
+              (2026-08-12): "221 open · 121 → dictionary · 4 seams" is how the
+              OPERATOR judges the programme's state, and Discover exists for the
+              questions and confirmations aimed at the people being asked. Nothing
+              was lost — Work is where it now lives, beside the round and the
+              convergence it belongs with. */}
           {/* The operator inbox moved to the INBOX view (2026-08-10, by request):
               Discover shows WHO TO ENGAGE and their questions; everything the
               OPERATOR must resolve — assign / sessions / adjudicate / in-flight /
@@ -1297,23 +1302,11 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
             <span className="v3ln-engpill is-done"><b>{engSummary.done}</b> done for now</span>
             <span className="v3ln-engbar-note">ageing is operator-tracked (the chase), not a system-tracked reply — until the link is live</span>
           </div>
-          {/* A miss stays VISIBLE: role owners with nobody behind them. Every number here
-              is soloByOwner's own count for that label — nothing is filled in. */}
-          {unbound.length ? (
-            <div className="v3ln-engbar" role="note" aria-label="Owned by nobody on the roster">
-              <span className="v3ln-engbar-l">Nobody to ask</span>
-              <span className="v3ln-engpill is-blocked">
-                <b>{unboundOpen}</b> open question{unboundOpen === 1 ? "" : "s"} owned by {unbound.length} role{unbound.length === 1 ? "" : "s"} with no person behind {unbound.length === 1 ? "it" : "them"}
-              </span>
-              {unbound.map((owner) => (
-                <span key={owner.label} className="v3ln-engpill is-blocked"
-                  title={`${owner.label} owns ${owner.open} open question${owner.open === 1 ? "" : "s"} and no one on the roster answers for that role.`}>
-                  {owner.label} · <b>{owner.open}</b>
-                </span>
-              ))}
-              <span className="v3ln-engbar-note">these are owned in the ledger and unreachable in practice — name someone for the role in the Discovery Kit, or reassign the questions in the Inbox</span>
-            </div>
-          ) : null}
+          {/* "NOBODY TO ASK" MOVED TO THE INBOX (2026-08-12). Its own note told
+              the operator to "name someone for the role in the Discovery Kit, or
+              reassign the questions in the Inbox" — an operator decision, printed
+              on the surface for stakeholder questions. The miss still stays
+              visible; it is visible where it can be acted on. */}
           <div className="v3ln-cast">
             {sortedCast.map((row, i) => {
               const eng = engagementByLabel.get(row.label);
