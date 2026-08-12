@@ -142,7 +142,10 @@ export default function TypingGrid({ ledger, onDictionary, onDone }: {
           </div>
           <ul className="v3tg-rows">
             {list.map((r) => (
-              <li key={r.about} title={r.about}>
+              <li key={r.about}
+                title={r.suggested
+                  ? `${r.about} — Aura read "${r.suggested}" from the field name, ${Math.round(r.confidence * 100)}% confident.`
+                  : r.about}>
                 <span className="v3tg-f">{r.entity}.{r.attribute}
                   {r.source
                     ? <span className="v3tg-src" title={r.source}> · from {r.source}</span>
@@ -154,11 +157,13 @@ export default function TypingGrid({ ledger, onDictionary, onDone }: {
                   <option value="">— still asking —</option>
                   {OFFERED_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                 </select>
-                {/* The reading's strength, stated. An operator scanning a screen of
-                    defaults deserves to know which ones Aura was least sure of. */}
-                {r.suggested && typeOf(r) === r.suggested ? (
-                  <span className="v3tg-c">read from the name · {Math.round(r.confidence * 100)}%</span>
-                ) : typeOf(r) ? <span className="v3tg-c yours">yours</span> : null}
+                {/* ONLY THE ROWS THAT DIFFER SAY ANYTHING. "read from the name · 60%"
+                    printed on every default row was the same sentence the header
+                    already says, repeated 60-odd times down the page — noise the
+                    operator has to read past to find the rows they changed. The
+                    strength is not lost: it is on the row's tooltip. */}
+                {r.suggested && typeOf(r) !== r.suggested && typeOf(r)
+                  ? <span className="v3tg-c yours">yours</span> : null}
               </li>
             ))}
           </ul>
@@ -168,10 +173,15 @@ export default function TypingGrid({ ledger, onDictionary, onDone }: {
       <div className="v3tg-bar">
         <button type="button" className="v3ib-btn" disabled={busy !== null || !answerable.length}
           onClick={() => void commit(answerable, "all")}>
-          {busy === "all" ? "Recording…" : `confirm all ${answerable.length}`}
+          {/* "confirm all 18" on a page headed "24 fields still need a type" reads as
+              a contradiction — all of WHAT? Both numbers, so the button says what it
+              will and will not touch. */}
+          {busy === "all" ? "Recording…" : `confirm ${answerable.length} of ${rows.length}`}
         </button>
         <span className="v3tg-m">
-          Anything left on “still asking” stays an open question — confirming records only what is set.
+          Records the type set on {answerable.length} field{answerable.length === 1 ? "" : "s"} as your answer
+          {rows.length > answerable.length ? <>; the {rows.length - answerable.length} left on “still asking”
+          {" "}stay open questions</> : null}.
         </span>
       </div>
     </section>

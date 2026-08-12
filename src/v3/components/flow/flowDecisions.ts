@@ -159,6 +159,40 @@ export function handledContradictionStatements(program: ProgramSummary): string[
 export const contradictionKey = (statement: string): string =>
   statement.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
+/**
+ * ONE CARD PER CONTRADICTION, whatever queued it.
+ *
+ * Two watchers propose contradictions — the deterministic negated-claim detector
+ * here and the model-driven one on the edge — and a dispute the model words
+ * slightly differently is a different decision id. The operator saw the same
+ * finding four times and had to judge which, if any, differed.
+ *
+ * Collapsing is by the statements a card CARRIES, so a card proposing two
+ * contradictions is never confused with one proposing a single overlapping one.
+ * Cards with no contradiction payload pass through untouched — this is not a
+ * general decision deduper, and a genuinely different dispute still gets its own
+ * card.
+ */
+export function dedupeContradictionDecisions<T extends { payload?: Record<string, unknown> | null }>(
+  decisions: readonly T[],
+): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const d of decisions) {
+    const entries = d.payload && Array.isArray(d.payload.contradictionEntries)
+      ? (d.payload.contradictionEntries as unknown[]) : null;
+    if (!entries || !entries.length) { out.push(d); continue; }
+    const key = entries
+      .map((e) => contradictionKey(String((e as { statement?: unknown })?.statement ?? "")))
+      .filter(Boolean).sort().join("|");
+    if (!key) { out.push(d); continue; }
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(d);
+  }
+  return out;
+}
+
 export function isContradictionHandled(handled: string[], statement: string): boolean {
   const s = contradictionKey(statement);
   if (s.length < 8) return false;
@@ -411,13 +445,30 @@ export function resolveFlowDecision(
     // Don't file a contradiction that's already logged — the detector can
     // re-propose the same dispute across runs, and appending it again would
     // grow duplicate "Open" rows that the gate keeps re-asking.
-    const loggedStatements = rows.map((row) => String(row.statement ?? "").trim().toLowerCase()).filter((s) => s.length >= 8);
+    // Through `contradictionKey`, like every other comparison of two statements.
+    // This site kept its OWN copy of the raw lowercase-substring rule after that
+    // rule was replaced elsewhere, so the same finding written with " · " column
+    // separators no longer matched the version written with spaces — and filed
+    // again, and again. Duplicate rows in the log, each re-asked by the gate.
+    const loggedStatements = rows
+      .map((row) => contradictionKey(String(row.statement ?? "")))
+      .filter((s) => s.length >= 8);
     const isLogged = (statement: string): boolean => {
-      const s = statement.trim().toLowerCase();
+      const s = contradictionKey(statement);
       return s.length >= 8 && loggedStatements.some((logged) => logged.includes(s) || s.includes(logged));
     };
+    // …and not twice within ONE payload either. Two watchers can propose the same
+    // dispute into the same confirm, and `isLogged` only reads what was ALREADY on
+    // file, so without this the pair lands as two rows in a single act.
+    const filing = new Set<string>();
     const additions = payload.contradictionEntries.filter(isRecord)
       .filter((entry) => entry.statement && !isLogged(String(entry.statement)))
+      .filter((entry) => {
+        const k = contradictionKey(String(entry.statement));
+        if (k.length >= 8 && filing.has(k)) return false;
+        filing.add(k);
+        return true;
+      })
       .map((entry) => ({
         statement: String(entry.statement),
         between: String(entry.between ?? ""),
