@@ -206,7 +206,7 @@ export function dictionaryToClaims(dict: ParsedDictionary, existingElementIds: S
   for (const f of dict.fields) {
     if (!f.entity) continue; // a row with no entity can't be keyed to a locus — skip, don't guess
     const eid = `el:entity:${slug(f.entity)}`;
-    const aid = `el:attr:${slug(f.entity)}.${slug(f.field)}`;
+    const aid = attrLocusId(f.entity, f.field);
     // local extension: the dictionary has a field the ontology never modelled
     if (!existingElementIds.has(aid)) {
       elements.push({ id: aid, kind: "attribute", name: f.field, of: eid });
@@ -218,6 +218,17 @@ export function dictionaryToClaims(dict: ParsedDictionary, existingElementIds: S
   }
   return { batch, elements };
 }
+
+/**
+ * THE LOCUS a dictionary row maps to — one definition.
+ *
+ * `dictionaryToClaims` builds this to WRITE claims, and every surface that wants to
+ * say "N of your open questions match" has to build the same id to COUNT them. It
+ * was written out longhand at each counting site, so a change to the slug rule
+ * would have silently made the preview's promise disagree with what committing did.
+ */
+export const attrLocusId = (entity: string, field: string): string =>
+  `el:attr:${slug(entity)}.${slug(field)}`;
 
 /** The typing slots a data dictionary answers — the wall it dissolves. */
 export const TYPING_SLOTS = new Set(["dataType", "valueSet", "optionality"]);
