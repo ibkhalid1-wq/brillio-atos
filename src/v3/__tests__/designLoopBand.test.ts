@@ -500,3 +500,52 @@ describe("§4 the controls this change ADDED meet the band's a11y bar", () => {
     expect([...seen.entries()].filter(([, n]) => n > 1)).toEqual([]);
   });
 });
+
+/**
+ * §4 — ONE NUMBER, ONE HOME.
+ *
+ * Convergence and Heard were drawn twice on the Work board: once in TheLine's Work
+ * strip and again, identically, in the Design Loop band's own header ~570px below.
+ * Two writes of the same figure drift the moment one of them gains a caveat the
+ * other does not.
+ *
+ * The band's copy is the one that had to go, and not merely because it was second.
+ * These are PROGRAMME-wide numbers, and the band is one of several on the board — a
+ * programme figure in a band-scoped position reads as that band's progress, which it
+ * never was. The surviving home is also the one you can act from: its Heard figure
+ * is a button that jumps to Discovery.
+ */
+describe("[§4] convergence and heard are stated once, in the surface that owns them", () => {
+  it("REGRESSION: the band does not redraw the programme's convergence or heard", () => {
+    mountShell(laila());
+    const b = band();
+    expect(b, "the band did not mount — this case would pass vacuously").toBeTruthy();
+    expect(b!.querySelector(".v3dl-head"), "the duplicate header is back").toBeNull();
+    expect(b!.querySelector(".v3dl-conv")).toBeNull();
+    // and not merely restyled under another class
+    expect(bandText()).not.toMatch(/convergence/i);
+    expect(bandText()).not.toMatch(/attributed closures/i);
+  });
+
+  it("the Work strip still carries BOTH, and Heard is still the way through to Discovery", () => {
+    mountShell(laila());
+    const strip = host.querySelector(".v3ln-stats.ledger") as HTMLElement | null;
+    expect(strip, "the surviving home vanished — the numbers are now nowhere").toBeTruthy();
+    expect(strip!.textContent).toMatch(/Convergence/);
+    expect(strip!.textContent).toMatch(/Heard/);
+    // the capability that made this the home worth keeping
+    const heardBtn = [...strip!.querySelectorAll("button")]
+      .find((x) => (x.textContent ?? "").includes("Heard"));
+    expect(heardBtn, "Heard stopped being the jump to Discovery").toBeTruthy();
+  });
+
+  it("the pair is drawn exactly ONCE on the board", () => {
+    mountShell(laila());
+    // Counted in the board's TEXT, not by element: the surviving label wraps a
+    // sub-note span, so an element-shaped query silently matched nothing and the
+    // case passed over an absent subject.
+    const board = (host.querySelector(".v3ln") ?? host).textContent ?? "";
+    expect(board.match(/Convergence/g) ?? []).toHaveLength(1);
+    expect(board.match(/attributed closures/g) ?? []).toHaveLength(1);
+  });
+});

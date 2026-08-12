@@ -59,7 +59,7 @@ import {
   type DesignVersion,
 } from "@/v3/components/flow/flowDesignRound";
 import {
-  OwnershipTag, HeardReadout, ConvergenceReadout, ProvisionalMark,
+  OwnershipTag, ProvisionalMark,
   ClaimStatus, SourceTag, DeviationMarker,
 } from "@/v3/components/flow/studio/ledgerPrimitives";
 
@@ -516,6 +516,16 @@ function DesignRoundZone({ program, roster, locked, onMintReview, onDesignRound 
                     {person.delegatedFrom ? <span className="v3dr-from">answering in place of {person.delegatedFrom}</span> : null}
                   </div>
                   {person.text ? <p className="v3dr-said-text">&ldquo;{person.text}&rdquo;</p> : null}
+                  {person.capture && person.capture !== "typed" ? (
+                    // Said as a note ABOUT the words, not inside them. A transcript is
+                    // a machine's reading of somebody's speech, and quoting it with no
+                    // mark reads as their writing — which overstates it.
+                    <p className="v3dr-capture">
+                      {person.capture === "mixed"
+                        ? "spoken, then corrected by them before sending"
+                        : "spoken, not written — transcribed by the browser"}
+                    </p>
+                  ) : null}
                   {person.recordingRef ? <p className="v3dr-rec">recording on file: {person.recordingRef}</p> : null}
                   {person.resolution ? (
                     <p className="v3dr-res">
@@ -631,17 +641,12 @@ export default function DesignLoopZones({ band, program, ledger, roster, onOpen,
 
   return (
     <div className="v3dl">
-      {/* convergence promoted to the header — real closures, not a 0-of-10 counter */}
-      <div className="v3dl-head">
-        <div className="v3dl-conv">
-          <span className="v3dl-conv-lbl">Convergence</span>
-          <ConvergenceReadout burnDown={ledger.kit.burnDown} />
-        </div>
-        <div className="v3dl-conv">
-          <span className="v3dl-conv-lbl">Heard</span>
-          <HeardReadout heard={ledger.heard} />
-        </div>
-      </div>
+      {/* CONVERGENCE AND HEARD ARE NOT DRAWN HERE. They are PROGRAMME-wide numbers,
+          and this is one band among several on the Work board — a programme number
+          in a band-scoped position reads as that band's progress, which it never
+          was. They were also printed identically ~570px above, in TheLine's Work
+          strip, where the Heard figure is a button that jumps to Discovery. One
+          number, one home, and the home is the one you can act from. */}
 
       {/* ZONE 1 — operator builds it, in dependency order */}
       <section className="v3dl-zone is-operator" aria-label="Operator builds it">
