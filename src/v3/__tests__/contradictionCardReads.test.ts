@@ -22,8 +22,11 @@
  *                            evidence IS an attached file.
  */
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { readableEvidenceLine, negatedClaimProposal } from "@/v3/components/flow/flowWatchers";
 import { flowMovements } from "@/v3/components/flow/flowShellData";
+import { contradictionKey, isContradictionHandled } from "@/v3/components/flow/flowDecisions";
 import type { ProgramSummary } from "@/new/types";
 
 describe("an extracted spreadsheet row still reads as a row", () => {
@@ -127,5 +130,94 @@ describe("the card's words say what they do", () => {
 
   it("the recommended action names the act, not the destination", () => {
     expect(SRC("flowWatchers.ts")).toContain('action: "Log the contradiction"');
+  });
+});
+
+/**
+ * THE SAME CONTRADICTION, TWICE, ONE IN EACH SPELLING.
+ *
+ * Changing how a statement is written re-minted every outstanding card. The
+ * handled-check compared statements by substring, so once the extractor began
+ * separating spreadsheet columns with " · ", the new text no longer CONTAINED the
+ * old and the old no longer contained the new — a formatting change read as a
+ * fresh dispute, and the operator was asked to file the same finding again.
+ *
+ * The lesson is not "that one string": it is that a dedup key must survive the
+ * text being written down differently, because it will be.
+ */
+describe("a reformatted statement is the same contradiction", () => {
+  const OLD = "Audit/previous-value fields dropped 9 Use proper change-history tracking in new system";
+  const NEW = "Audit/previous-value fields dropped · 9 · Use proper change-history tracking in new system";
+
+  it("REGRESSION: the separator change does not mint a second card", () => {
+    expect(isContradictionHandled([OLD.toLowerCase()], NEW), "filed twice, once per spelling").toBe(true);
+    expect(isContradictionHandled([NEW.toLowerCase()], OLD)).toBe(true);
+  });
+
+  it("and neither does any other punctuation or spacing drift", () => {
+    expect(isContradictionHandled([OLD], "audit/previous value fields dropped, 9 — use proper change-history tracking in new system")).toBe(true);
+    expect(isContradictionHandled([OLD], "AUDIT PREVIOUS VALUE FIELDS DROPPED 9 USE PROPER CHANGE HISTORY TRACKING IN NEW SYSTEM")).toBe(true);
+  });
+
+  it("a genuinely different statement is still unhandled", () => {
+    // The guard against over-matching: keying on words must not collapse two
+    // findings into one.
+    expect(isContradictionHandled([OLD], "Quote table is no longer the sole record of amendments")).toBe(false);
+  });
+
+  it("the key ignores punctuation but keeps the words", () => {
+    expect(contradictionKey("Audit/previous-value  fields · dropped")).toBe("audit previous value fields dropped");
+    expect(contradictionKey("   ")).toBe("");
+  });
+
+  it("the card's ID is stable across the same reformatting", () => {
+    // Two programmes whose evidence differs only in the separator must produce the
+    // same decision id, or the id itself becomes a second way to duplicate.
+    const idFor = (line: string) => {
+      const listen = flowMovements().find((m) => m.id === "listen")!;
+      const field = (listen.inputFields ?? []).find((f) => f.type === "transcript" || f.type === "document")!;
+      const program = {
+        id: "p1", name: "T",
+        rawData: { data: {
+          transformationCharter: { approach: "The programme keeps audit and previous-value fields for change history throughout." },
+          phaseInputs: { listen: { [field.id]: `— Dana Patel, RevOps, 2026-08-12 —\n${line}` } },
+        } },
+      } as unknown as ProgramSummary;
+      return negatedClaimProposal(program)?.id ?? null;
+    };
+    const a = idFor("Audit/previous-value fields dropped\t9\tUse proper change-history tracking in new system");
+    const b = idFor("Audit/previous-value fields dropped, 9, Use proper change-history tracking in new system");
+    expect(a, "the detector found nothing — this case would prove nothing").toBeTruthy();
+    expect(a).toBe(b);
+  });
+});
+
+describe("the card says what is in conflict", () => {
+  const proposal = () => {
+    const listen = flowMovements().find((m) => m.id === "listen")!;
+    const field = (listen.inputFields ?? []).find((f) => f.type === "transcript" || f.type === "document")!;
+    return negatedClaimProposal({
+      id: "p1", name: "T",
+      rawData: { data: {
+        transformationCharter: { approach: "The programme keeps audit and previous-value fields for change history throughout." },
+        phaseInputs: { listen: { [field.id]: "— Dana Patel, RevOps, 2026-08-12 —\nAudit/previous-value fields dropped\t9\tUse proper change-history tracking in new system" } },
+      } },
+    } as unknown as ProgramSummary);
+  };
+
+  it("REGRESSION: the summary carries BOTH sides, not a second copy of one", () => {
+    // The diff row already shows the statement verbatim. What the summary owes the
+    // operator is the thing they cannot see anywhere else: the standing claim it
+    // contradicts.
+    const summary = proposal()!.summary ?? "";
+    expect(summary).toContain("the charter still says");
+    expect(summary).toContain("audit and previous-value fields");
+  });
+
+  it("the recommendation block does not repeat the button's words", () => {
+    const shell = readFileSync(resolve(__dirname, "../components/flow/FlowShell.tsx"), "utf8");
+    expect(shell, "'Recommended — {action}' sits above a button built from the same string")
+      .not.toContain("Recommended — {decision.recommendation.action}");
+    expect(shell, "the button must still name the act").toContain('decision.recommendation?.action || "Confirm"');
   });
 });

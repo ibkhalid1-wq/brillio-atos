@@ -144,10 +144,28 @@ export function handledContradictionStatements(program: ProgramSummary): string[
 
 /** True when a statement matches one already handled — either-direction
  * containment, so paraphrase and slicing don't slip a duplicate through. */
+/**
+ * THE COMPARISON KEY for "have we already filed this contradiction?".
+ *
+ * Statements are compared on their WORDS, with punctuation and spacing stripped,
+ * because the same finding gets written down slightly differently over time. When
+ * the extractor began separating spreadsheet columns with " · ", every outstanding
+ * card was re-minted as a duplicate: the new text no longer CONTAINED the old and
+ * the old no longer contained the new, so a formatting change read as a fresh
+ * dispute. The operator saw the same contradiction twice, one of each spelling.
+ *
+ * Keying on words makes the match survive that, and the next reformatting too.
+ */
+export const contradictionKey = (statement: string): string =>
+  statement.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
 export function isContradictionHandled(handled: string[], statement: string): boolean {
-  const s = statement.trim().toLowerCase();
+  const s = contradictionKey(statement);
   if (s.length < 8) return false;
-  return handled.some((entry) => entry.includes(s) || s.includes(entry));
+  return handled.some((entry) => {
+    const e = contradictionKey(entry);
+    return e.length >= 8 && (e.includes(s) || s.includes(e));
+  });
 }
 
 // A resolved decision's payload has already been applied to the blob, so its
