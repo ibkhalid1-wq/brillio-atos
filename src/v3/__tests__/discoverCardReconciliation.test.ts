@@ -261,10 +261,28 @@ describe("F6 — one Discover card, ONE number, and a breakdown that reconciles 
     // the label set is derived.
     const groups = [...drawer.querySelectorAll(".v3ln-cr-qgroup")];
     const rowsIn = (g: Element) => [...g.querySelectorAll(".v3ln-cr-qs.owned > li")];
-    const items = groups.flatMap(rowsIn);
     const headline = Number(/^(\d+)/.exec(text(drawer.querySelector(".v3ln-cr-qbtn")!))?.[1]);
     expect(headline, "the card's headline count is unreadable").toBeGreaterThan(0);
-    expect(items.length, "the drawer must list every locus the headline counts").toBe(headline);
+
+    // THE HEADLINE RECONCILES ON SCREEN — but not every locus is transcribed.
+    // DELIBERATE CHANGE (2026-08-12): the dictionary bucket states "nobody needs to
+    // answer these" and then listed all 47, burying the eight this person CAN
+    // answer. It is now counted, not enumerated. F6 is still honoured: F6 was loci
+    // VANISHING, and the count of every bucket is on screen and adds to the
+    // headline. What went is a transcript of work routed elsewhere.
+    const counted = groups.reduce((n, g) => n + Number(text(g.querySelector(".v3ln-cr-qgroup-n")!) || 0), 0);
+    expect(counted, "the group counts no longer add up to the headline").toBe(headline);
+    const listed = groups.filter((g) => !g.classList.contains("dictionary"));
+    for (const g of listed) {
+      expect(rowsIn(g).length, "a bucket this person CAN answer stopped listing its questions")
+        .toBe(Number(text(g.querySelector(".v3ln-cr-qgroup-n")!)));
+    }
+    const dict = groups.find((g) => g.classList.contains("dictionary"));
+    if (dict) {
+      expect(rowsIn(dict), "the dictionary bucket is transcribing again").toHaveLength(0);
+      expect(Number(text(dict.querySelector(".v3ln-cr-qgroup-n")!)), "its count vanished with its rows")
+        .toBeGreaterThan(0);
+    }
 
     // The link's payload is exactly the on-link section — the bucket the breakdown
     // named and the mint will send.
@@ -279,8 +297,11 @@ describe("F6 — one Discover card, ONE number, and a breakdown that reconciles 
       const note = text(g.querySelector(".v3ln-cr-qgroup-note")!);
       expect(heading.trim().length, "a section with no heading").toBeGreaterThan(0);
       expect(note.trim().length, "a section with no reason").toBeGreaterThan(0);
-      expect(heading, "the heading must carry its own count").toContain(String(rowsIn(g).length));
-      expect(rowsIn(g).length, "an empty section was rendered").toBeGreaterThan(0);
+      // Against the group's own COUNT, not its row count: the dictionary bucket is
+      // counted rather than transcribed, so rows and count differ there by design.
+      const stated = Number(text(g.querySelector(".v3ln-cr-qgroup-n")!));
+      expect(heading, "the heading must carry its own count").toContain(String(stated));
+      expect(stated, "an empty section was rendered").toBeGreaterThan(0);
     }
     // A bucket that isn't on this card doesn't get a heading over nothing.
     expect(groups.length).toBeLessThanOrEqual(4);
@@ -297,6 +318,8 @@ describe("F6 — one Discover card, ONE number, and a breakdown that reconciles 
 
     for (const g of [...drawer.querySelectorAll(".v3ln-cr-qgroup")]) {
       const rows = [...g.querySelectorAll(".v3ln-cr-qs.owned > li")];
+      // the dictionary bucket is counted, not transcribed — nothing to echo on
+      if (g.classList.contains("dictionary")) { expect(rows).toHaveLength(0); continue; }
       expect(rows.length).toBeGreaterThan(0);
       // Not one row repeats the bucket's reason.
       const echoed = rows.filter((li) => /answered by the data dictionary|next link|unstick|dictionary upload/i.test(text(li)));
@@ -308,8 +331,10 @@ describe("F6 — one Discover card, ONE number, and a breakdown that reconciles 
     const dict = drawer.querySelector(".v3ln-cr-qgroup.dictionary") as HTMLDetailsElement | null;
     if (dict) {
       expect(dict.open, "the dictionary wall is open by default again").toBe(false);
-      expect(dict.querySelectorAll(".v3ln-cr-qs.owned > li").length).toBeGreaterThan(0);
       expect(dict.querySelector("summary"), "a disclosure with no summary cannot be opened").toBeTruthy();
+      // Counted, not transcribed — the count is what the operator needs, and it is
+      // in the summary they can read without opening anything.
+      expect(text(dict.querySelector(".v3ln-cr-qgroup-n")!)).toMatch(/^\d+$/);
     }
     for (const g of [...drawer.querySelectorAll(".v3ln-cr-qgroup")] as HTMLDetailsElement[]) {
       if (g === dict) continue;

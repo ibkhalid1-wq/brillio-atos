@@ -187,6 +187,23 @@ export interface BucketSection {
   title: string;
   note: string;
   /**
+   * Whether the section LISTS its questions, or only counts them.
+   *
+   * The dictionary bucket's own heading says "nobody needs to answer these — one
+   * dictionary upload closes all of them", and then it listed all 47. If nobody is
+   * going to answer them one by one, the list is not information; the count is.
+   * Enumerating them buried the eight questions this person can actually answer
+   * under forty-seven they cannot.
+   *
+   * This is not the F6 defect returning. F6 was loci VANISHING — a blocked
+   * question dropped from the card so it looked like it did not exist. Here the
+   * bucket keeps its heading, its count and its route, so the headline still
+   * reconciles on screen; what goes is a row-by-row transcript of work that is
+   * routed elsewhere.
+   */
+  listRows: boolean;
+
+  /**
    * Whether the section starts OPEN.
    *
    * The dictionary bucket is the one nobody works through: on a real card it is 36
@@ -203,22 +220,22 @@ export const BUCKET_SECTION: Record<OwnedBucket, BucketSection> = {
   "on-link": {
     title: "On this link",
     note: "these go to them when you share their link",
-    defaultOpen: true,
+    listRows: true, defaultOpen: true,
   },
   "next-link": {
     title: "On the next link",
     note: `past the ${LINK_QUESTION_CAP}-question cap a single link carries — share again once these are answered`,
-    defaultOpen: true,
+    listRows: true, defaultOpen: true,
   },
   blocked: {
     title: "Blocked",
     note: "something upstream has to be settled before these can be asked",
-    defaultOpen: true,
+    listRows: true, defaultOpen: true,
   },
   dictionary: {
     title: "Answered by the data dictionary",
-    note: "nobody needs to answer these — one dictionary upload closes all of them",
-    defaultOpen: false,
+    note: "nobody needs to answer these — one dictionary upload closes all of them, and the ask is in the Inbox",
+    listRows: false, defaultOpen: false,
   },
 };
 
