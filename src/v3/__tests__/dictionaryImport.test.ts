@@ -115,8 +115,16 @@ describe("the dictionary field: keyed per SoR, additively", () => {
   });
 
   it("a global write on a programme with no keyed uploads keeps the PLAIN CSV shape (no forced migration)", () => {
+    // The intent here is the SHAPE — a programme that never uploaded per-system
+    // must not be migrated to the keyed JSON form behind the operator's back.
     expect(writeDictionaryField(undefined, csv)).toBe(csv);
-    expect(writeDictionaryField(csv, csv2)).toBe(csv2);
+    const second = writeDictionaryField(csv, csv2);
+    expect(second.trim().startsWith("{"), "the plain CSV was migrated to the keyed shape").toBe(false);
+    // DELIBERATE CHANGE (2026-08-12): a second upload MERGES rather than replaces —
+    // see "uploads accumulate" below. Both files' rows survive; the shape does not change.
+    const entities = parseDictionaryCsv(second).fields.map((f) => f.entity);
+    expect(entities).toContain("Invoice");
+    expect(entities).toContain("Case");
   });
 
   it("a per-SoR write keys the field and PRESERVES what was already on file", () => {
@@ -127,13 +135,67 @@ describe("the dictionary field: keyed per SoR, additively", () => {
     expect(readDictionarySources(second).find((s) => s.sor === "Billing")!.dict.fields[0].entity).toBe("Invoice");
   });
 
-  it("re-uploading for a system REPLACES its dictionary — case-insensitively, never a second entry", () => {
+  it("re-uploading for a system keys to ONE entry — case-insensitively, never a second", () => {
     const once = writeDictionaryField(undefined, csv, "CRM");
     const twice = writeDictionaryField(once, csv2, "crm");
     const sources = readDictionarySources(twice);
     expect(sources).toHaveLength(1);
     expect(sources[0].sor).toBe("CRM");                            // the first spelling is kept
-    expect(sources[0].dict.fields[0].entity).toBe("Invoice");      // with the new content
+    const entities = sources[0].dict.fields.map((f) => f.entity);
+    expect(entities).toContain("Invoice");                         // with the new content
+  });
+
+  /**
+   * UPLOADS ACCUMULATE — a DELIBERATE reversal of "a re-upload replaces" (2026-08-12).
+   *
+   * One system of record does not arrive as one file. A Salesforce org exports one
+   * workbook PER OBJECT — Accounts, Opportunity, Contact — and all of them are the
+   * CRM's dictionary. Replacing meant uploading three left the operator with the
+   * third and the two before it silently gone, which is indistinguishable from the
+   * upload not working at all.
+   *
+   * The merge is by (entity, field) with the incoming row winning, which serves both
+   * cases at once: a different object adds rows and disturbs nothing, and the same
+   * object re-uploaded with corrected types replaces exactly its own rows — the
+   * correction semantics `dictionaryProvenance` is built around.
+   *
+   * The cost, stated: a field DELETED from a later export lingers, because a
+   * per-object file saying nothing about another object is not a claim that the
+   * other object is empty. Losing two files to keep that tidy is the worse trade.
+   */
+  describe("uploads accumulate", () => {
+    const accounts = ["Entity,Field,Type", "Account,name,string", "Account,tier,code"].join("\n");
+    const opportunity = ["Entity,Field,Type", "Opportunity,stage,picklist"].join("\n");
+
+    it("REGRESSION: a second object's file does not erase the first", () => {
+      const after = writeDictionaryField(writeDictionaryField(undefined, accounts, "CRM"), opportunity, "CRM");
+      const fields = readDictionarySources(after)[0].dict.fields;
+      expect(fields.map((f) => `${f.entity}.${f.field}`).sort())
+        .toEqual(["Account.name", "Account.tier", "Opportunity.stage"]);
+    });
+
+    it("three files, one system, all of it kept", () => {
+      const contact = ["Entity,Field,Type", "Contact,email,email"].join("\n");
+      let raw: unknown;
+      for (const f of [accounts, opportunity, contact]) raw = writeDictionaryField(raw, f, "CRM");
+      expect(readDictionarySources(raw)[0].dict.fields).toHaveLength(4);
+      expect(readDictionarySources(raw)).toHaveLength(1);           // still ONE entry
+    });
+
+    it("the same object re-uploaded CORRECTS its own rows", () => {
+      const corrected = ["Entity,Field,Type", "Account,tier,picklist"].join("\n");
+      const after = writeDictionaryField(writeDictionaryField(undefined, accounts, "CRM"), corrected, "CRM");
+      const fields = readDictionarySources(after)[0].dict.fields;
+      expect(fields.find((f) => f.field === "tier")!.dataType).toBe("picklist");
+      expect(fields.find((f) => f.field === "name"), "an untouched row was dropped").toBeTruthy();
+      expect(fields).toHaveLength(2);                               // corrected, not duplicated
+    });
+
+    it("one system's upload never reaches another's", () => {
+      const after = writeDictionaryField(writeDictionaryField(undefined, accounts, "CRM"), opportunity, "Finance");
+      const byS = Object.fromEntries(readDictionarySources(after).map((x) => [x.sor, x.dict.fields.length]));
+      expect(byS).toEqual({ CRM: 2, Finance: 1 });
+    });
   });
 
   it("a per-SoR dictionary reconciles into the store exactly like the global one (same path, same claims)", () => {

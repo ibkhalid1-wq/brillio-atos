@@ -295,16 +295,50 @@ export function readDictionarySources(raw: unknown): DictionarySource[] {
  * Keys match case-insensitively: re-uploading for "crm" replaces the "CRM" entry
  * rather than creating a second dictionary for one system.
  */
+/**
+ * MERGE AN UPLOAD INTO WHAT THAT SYSTEM ALREADY HAS — never replace it.
+ *
+ * One system of record does not arrive as one file. A Salesforce org exports one
+ * workbook PER OBJECT: an Accounts workbook, an Opportunity workbook, a Contact
+ * workbook — all of them the CRM's dictionary. Writing the new CSV over the old
+ * one meant uploading three files left the operator with the third, and the two
+ * before it silently gone. "I uploaded three and nothing happened" is what that
+ * looks like from outside.
+ *
+ * The merge is by (entity, field) with the INCOMING row winning, which is the only
+ * rule that serves both cases: a different object adds rows and touches nothing,
+ * and re-uploading the same object with corrected types replaces exactly those
+ * rows — the correction semantics `dictionaryProvenance` documents. Rows the new
+ * file does not mention are kept, because a per-object export saying nothing about
+ * Contact is not a claim that Contact has no fields.
+ */
+export function mergeDictionaryCsv(existingCsv: string, incomingCsv: string): string {
+  const prior = parseDictionaryCsv(existingCsv).fields;
+  const next = parseDictionaryCsv(incomingCsv).fields;
+  if (!prior.length) return incomingCsv;
+  if (!next.length) return existingCsv;
+  const keyOf = (f: DictField) => `${f.entity.trim().toLowerCase()} ${f.field.trim().toLowerCase()}`;
+  const merged = new Map<string, DictField>();
+  for (const f of prior) merged.set(keyOf(f), f);
+  for (const f of next) merged.set(keyOf(f), f);      // the newer upload wins its own rows
+  return fieldsToCsv([...merged.values()]);
+}
+
 export function writeDictionaryField(raw: unknown, csv: string, sor?: string | null): string {
   const existing = storedMap(raw);
   const wanted = (sor ?? "").trim();
   if (!wanted) {
     const hasKeyed = Object.keys(existing).some((k) => k !== GLOBAL_DICTIONARY_KEY);
-    if (!hasKeyed) return csv;                       // the shape every reader already knows
-    return JSON.stringify({ ...existing, [GLOBAL_DICTIONARY_KEY]: csv });
+    const atGlobal = existing[GLOBAL_DICTIONARY_KEY];
+    const priorGlobal = typeof atGlobal === "string" ? atGlobal : "";
+    const next = mergeDictionaryCsv(priorGlobal, csv);
+    if (!hasKeyed) return next;                      // the shape every reader already knows
+    return JSON.stringify({ ...existing, [GLOBAL_DICTIONARY_KEY]: next });
   }
   const key = Object.keys(existing).find((k) => k.toLowerCase() === wanted.toLowerCase()) ?? wanted;
-  return JSON.stringify({ ...existing, [key]: csv });
+  const at = existing[key];
+  const prior = typeof at === "string" ? at : "";
+  return JSON.stringify({ ...existing, [key]: mergeDictionaryCsv(prior, csv) });
 }
 
 // ── spreadsheet uploads ─────────────────────────────────────────────────────────────

@@ -25,7 +25,7 @@ import { renderQuestion } from "@/v3/lib/ledger/renderQuestion";
 import { ClaimStatus, OwnershipTag, ProvisionalMark, SourceTag } from "@/v3/components/flow/studio/ledgerPrimitives";
 import { asksNeedingChase, isSystemOwner, type ArtifactAskMark } from "@/v3/lib/ledger/artifactAsks";
 import { operatorQueueCounts, sessionQuestionCount, unfrozenQueues } from "@/v3/lib/ledger/operatorQueue";
-import { parseDictionaryCsv, isSpreadsheetName, readDictionaryWorkbook, SPREADSHEET_EXTENSIONS } from "@/v3/lib/ledger/dictionary";
+import { parseDictionaryCsv, isSpreadsheetName, readDictionaryWorkbook, mergeDictionaryCsv, SPREADSHEET_EXTENSIONS } from "@/v3/lib/ledger/dictionary";
 import { retractProposal } from "@/v3/lib/ledger/curation";
 import { displayPersonLabel } from "@/v3/components/flow/flowStakeholders";
 
@@ -167,7 +167,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
   } | null>(null);
   /** A file that could not be read at all — reported where the upload was, never swallowed. */
   const [dictError, setDictError] = useState<{ name: string; reason: string; sor: string | null } | null>(null);
-  const readDictionaryFile = async (file: File, sor: string | null, scopeLoci: string[]) => {
+  const readDictionaryFile = async (file: File, sor: string | null, scopeLoci: string[], carry = "", name = "") => {
     // EVERYTHING below can throw: `arrayBuffer()` on an unreadable file, the
     // dynamic `import("xlsx")`, `XLSX.read` on a corrupt or password-protected
     // workbook, `text()` on a binary blob. This function used to have no catch
@@ -177,13 +177,18 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
     // outcome for an upload, because the operator's next move is to attach it
     // again and watch nothing happen again.
     try {
-      await readDictionaryFileUnsafe(file, sor, scopeLoci);
+      return await readDictionaryFileUnsafe(file, sor, scopeLoci, carry, name);
     } catch (err) {
-      setDictPreview(null);
+      // One unreadable file among several does not discard the ones already read:
+      // the running merge is returned unchanged and the failure is named. Selecting
+      // three and losing all three to one corrupt workbook is the behaviour this
+      // whole path exists to prevent.
+      if (!carry) setDictPreview(null);
       setDictError({ name: file.name, sor, reason: (err as Error)?.message?.slice(0, 140) || "the file could not be read" });
+      return carry;
     }
   };
-  const readDictionaryFileUnsafe = async (file: File, sor: string | null, scopeLoci: string[]) => {
+  const readDictionaryFileUnsafe = async (file: File, sor: string | null, scopeLoci: string[], carry = "", name = "") => {
     // EVERY sheet of a workbook is read and merged, then handed to the SAME parser a
     // .csv upload uses — one definition of a dictionary row, whatever the operator
     // exported. A real master workbook splits its dictionary across tabs (fields and
@@ -192,8 +197,14 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
     // read, what was skipped, and any entity inferred from the file's own title are
     // all carried into the preview and shown BEFORE the operator commits.
     const workbook = isSpreadsheetName(file.name) ? await readDictionaryWorkbook(await file.arrayBuffer(), file.name) : null;
-    const csv = workbook ? workbook.csv : await file.text();
-    const parsed = parseDictionaryCsv(csv, file.name.replace(/\.[^.]+$/, ""));
+    const own = workbook ? workbook.csv : await file.text();
+    // SEVERAL FILES, ONE ASK. A system of record exports one workbook per object,
+    // so the operator selects Accounts + Opportunity + Contact together and the
+    // preview has to describe the whole selection, not the last file read. Each is
+    // merged into the running CSV by the SAME rule the stored field uses, so what
+    // the preview counts is what committing will store.
+    const csv = mergeDictionaryCsv(carry, own);
+    const parsed = parseDictionaryCsv(csv, name);
     // Measured against THIS ask's loci when the upload is for one system; against
     // every open typing locus for the programme-wide one. Same count either way —
     // the loci the file actually names, never an estimate.
@@ -207,6 +218,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
       used: workbook?.used, sheets: workbook?.sheets.length,
       entity: workbook?.entity ?? null, entityFrom: workbook?.entityFrom ?? null,
     });
+    return csv;
   };
   const [sel, setSel] = useState<Record<string, string>>({});
   const [other, setOther] = useState<Record<string, string>>({});
@@ -517,11 +529,24 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                     taken out of the tab order and out of the accessibility tree, so a
                     keyboard user is not dropped onto an unnamed "choose file" control
                     that no sighted user can see. `.click()` still opens the dialog. */}
-                <input ref={dictRef} type="file" accept={[".csv", ".tsv", ".txt", ...SPREADSHEET_EXTENSIONS].join(",")} className="v3ib-sr"
+                <input ref={dictRef} type="file" multiple accept={[".csv", ".tsv", ".txt", ...SPREADSHEET_EXTENSIONS].join(",")} className="v3ib-sr"
                   tabIndex={-1} aria-hidden="true"
                   onChange={(e) => {
-                    const f = e.target.files?.[0]; e.target.value = "";
-                    if (f) void readDictionaryFile(f, pendingSor.current, pendingScope.current);
+                    // SEVERAL AT ONCE. One system exports one workbook per object, so
+                    // Accounts + Opportunity + Contact are one ask, not three. Read in
+                    // the order selected and merged as they go, so the preview counts
+                    // the whole selection and one commit stores all of it.
+                    const files = [...(e.target.files ?? [])]; e.target.value = "";
+                    if (!files.length) return;
+                    void (async () => {
+                      let carry = "";
+                      for (const f of files) {
+                        const before = carry;
+                        carry = await readDictionaryFile(f, pendingSor.current, pendingScope.current, carry,
+                          files.length === 1 ? f.name.replace(/\.[^.]+$/, "") : `${files.length} files`);
+                        if (carry === before && files.length === 1) return;   // it failed; the error is shown
+                      }
+                    })();
                   }} />
                 {uploadRow(null, ledger.typingLoci.map((i) => i.about))}
               </>
