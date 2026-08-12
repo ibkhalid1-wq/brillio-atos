@@ -51,7 +51,7 @@ import { dictionaryCoverage, isSpreadsheetName, mergeDictionaryCsv, parseDiction
 import { currentDesignRound } from "@/v3/components/flow/flowDesignRound";
 import { renderQuestion } from "@/v3/lib/ledger/renderQuestion";
 import {
-  emptyOwnedLoad, ownedLoadBreakdown, ownedLoadFor, ownedLoadSections, sendableCount,
+  emptyOwnedLoad, ownedLoadBreakdown, ownedLoadFor, ownedLoadSections, personOwned, sendableCount,
   unboundOpenTotal, unboundOwners, type OwnedBucket, type OwnedLoad,
 } from "@/v3/lib/ledger/ownedLoad";
 import "./theLine.css";
@@ -1374,7 +1374,7 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                             * owned-load: the headline the button shows, and where the
                             * rest of it went. No second derivation, and no subtraction
                             * left to the operator. */}
-                          {load.owned.length ? (
+                          {personOwned(load) ? (
                             <span className="v3ln-eng-why"
                               title="Every locus this person owns, split by whether a link minted now can carry it: the pack caps the ask, blocked loci need unsticking first, and typing loci are answered by the data dictionary rather than by them.">
                               {ownedLoadBreakdown(load)}{e.state === "ready" ? " — send a link" : ""}
@@ -1400,7 +1400,7 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                   <button type="button" className="v3ln-cr-qbtn" aria-expanded={!!qOpen[row.label]}
                     title={`${ownedLoadBreakdown(load)}. Open unknowns on loci this person OWNS — seam questions are in the session queue, not here.`}
                     onClick={() => setQOpen((s) => ({ ...s, [row.label]: !s[row.label] }))}>
-                    {load.owned.length} owned question{load.owned.length === 1 ? "" : "s"}
+                    {personOwned(load)} owned question{personOwned(load) === 1 ? "" : "s"}
                     <span aria-hidden="true">{qOpen[row.label] ? " ▴" : " ▾"}</span>
                   </button>
                     );

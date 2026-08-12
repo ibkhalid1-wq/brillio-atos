@@ -172,6 +172,8 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
   const [dictError, setDictError] = useState<{ name: string; reason: string; sor: string | null } | null>(null);
   /** The confirmation grid is opened deliberately — it is a pass of work, not a banner. */
   const [showGrid, setShowGrid] = useState(false);
+  /** The questions behind a count, opened from the count itself. */
+  const [peek, setPeek] = useState<{ sor: string; abouts: string[] } | null>(null);
   const readDictionaryFile = async (file: File, sor: string | null, scopeLoci: string[], carry = "", name = "") => {
     // EVERYTHING below can throw: `arrayBuffer()` on an unreadable file, the
     // dynamic `import("xlsx")`, `XLSX.read` on a corrupt or password-protected
@@ -527,10 +529,30 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                       {ask.entityCount === 0 ? "(named in Frame — nothing modelled against it yet)" : `(${ask.entityCount} entit${ask.entityCount === 1 ? "y" : "ies"})`}
                     </span>
                     {" "}→ <b>{owner ?? "no one named yet"}</b>{owner && ownerRole && ownerRole !== owner ? ` · ${ownerRole}` : ""}
-                    {ask.entityCount === 0 ? null : <>{" "}· <b>closes {ask.weight}</b> open question{ask.weight === 1 ? "" : "s"}</>}
+                    {ask.entityCount === 0 ? null : (
+                      <>{" "}·{" "}
+                      {/* THE COUNT IS A DOOR. "closes 10 open questions" is a claim
+                          about work nobody could see: an operator deciding whether
+                          to chase a dictionary should be able to read the ten
+                          questions it would close, without leaving the page. */}
+                      <button type="button" className="v3ib-peek"
+                        aria-label={spoken(`Show the ${ask.weight} open questions the ${ask.sor} dictionary would close`)}
+                        onClick={() => setPeek({ sor: ask.sor, abouts: ask.abouts })}>
+                        <b>closes {ask.weight}</b> open question{ask.weight === 1 ? "" : "s"}
+                      </button></>
+                    )}
                   </span>
                   <span className="v3ib-dict-msg">
-                    {ask.state === "reopened" ? (
+                    {ask.state === "unclassified" ? (
+                      <><b>not classified</b> — is this system being <b>replaced</b>, or do we <b>integrate</b> with it?
+                      {" "}A dictionary is the ask for a system whose schema we are migrating; for one we merely
+                      exchange fields with, nobody writes a dictionary and its schema was never the client&rsquo;s
+                      to produce. Either way the {ask.weight} open typing question{ask.weight === 1 ? "" : "s"} stay open.</>
+                    ) : ask.state === "integration" ? (
+                      <><b>integrated with, not replaced</b> — no dictionary is owed. Its {ask.weight} typing
+                      question{ask.weight === 1 ? "" : "s"} stay open and counted; they are answered where fields are
+                      typed, not by chasing a document nobody wrote.</>
+                    ) : ask.state === "reopened" ? (
                       <><b>reopened</b> — {ask.weight} typing question{ask.weight === 1 ? "" : "s"} since the import attach to this same ask (never a second one). If the upload was all this system has, settle it — the questions stay open and counted, they just stop waiting on a file.</>
                     ) : ask.state === "requested" ? (
                       <>requested · <span className={`v3ln-age${age !== null && age >= 21 ? " hot" : age !== null && age >= 9 ? " warm" : ""}`}>awaiting {age !== null ? `· ${age}d` : ""} · operator-tracked</span></>
@@ -541,6 +563,18 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                   </span>
                   {onAskMark ? (
                     <span className="v3ib-dict-actions">
+                      {/* THE CLASSIFYING QUESTION, asked once and before anything
+                          else — the right ask depends entirely on the answer. */}
+                      {ask.state === "unclassified" || ask.state === "integration" ? (
+                        <button type="button" className="v3ib-btn ghost sm"
+                          aria-label={spoken(`Record that ${ask.sor} is being replaced`)}
+                          onClick={() => onAskMark({ sor: ask.sor, disposition: "replace", by, at: nowISO() })}>we&rsquo;re replacing it</button>
+                      ) : null}
+                      {ask.state === "unclassified" ? (
+                        <button type="button" className="v3ib-btn ghost sm"
+                          aria-label={spoken(`Record that we integrate with ${ask.sor}`)}
+                          onClick={() => onAskMark({ sor: ask.sor, disposition: "integrate", by, at: nowISO() })}>we integrate with it</button>
+                      ) : null}
                       {ask.state === "unrequested" || ask.state === "reopened" ? (
                         <button type="button" className="v3ib-btn ghost sm" aria-label={spoken(`Mark the ${ask.sor} dictionary as requested`)} onClick={() => onAskMark({ sor: ask.sor, mark: "requested", by, at: nowISO() })}>mark requested</button>
                       ) : null}
@@ -557,14 +591,17 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                           aria-label={spoken(`Record that the ${ask.sor} dictionary on file is all there is`)}
                           onClick={() => onAskMark({ sor: ask.sor, mark: "complete", by, at: nowISO() })}>that&rsquo;s the whole dictionary</button>
                       ) : null}
-                      {ask.state !== "has-none" ? (
+                      {ask.state !== "has-none" && ask.state !== "unclassified" && ask.state !== "integration" ? (
                         <button type="button" className="v3ib-btn ghost sm" aria-label={spoken(`Record that ${ask.sor} has no data dictionary`)} onClick={() => onAskMark({ sor: ask.sor, mark: "has-none", by, at: nowISO() })}>has no dictionary</button>
                       ) : null}
                     </span>
                   ) : null}
                   {/* EACH ask takes its OWN dictionary — a CRM export answers nothing
-                      about the finance system, so the upload is keyed to this SoR. */}
-                  {uploadRow(ask.sor, ask.abouts)}
+                      about the finance system, so the upload is keyed to this SoR.
+                      Offered only once somebody has said a dictionary IS the right
+                      ask: prompting before that is what put four unanswerable
+                      "upload the HubSpot dictionary" buttons on the board. */}
+                  {ask.state === "unclassified" || ask.state === "integration" ? null : uploadRow(ask.sor, ask.abouts)}
                 </div>
               );
             })}
@@ -895,6 +932,39 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
             ))}
           </ul>
         </section>
+      ) : null}
+
+      {/* THE QUESTIONS BEHIND A COUNT. Read-only and dismissible: it exists so the
+          operator can SEE what "closes 10 open questions" means before deciding to
+          chase a document for it. Rendered through the one question renderer, so
+          the wording here is the wording the stakeholder would be sent. */}
+      {peek ? (
+        <>
+          <div className="v3ib-peek-backdrop" onClick={() => setPeek(null)} aria-hidden="true" />
+          <div className="v3ib-peek-panel" role="dialog" aria-modal="true"
+            aria-label={`Open questions on ${peek.sor}`}>
+            <header className="v3ib-peek-h">
+              <span className="v3ib-peek-t">
+                <b>{peek.abouts.length}</b> open question{peek.abouts.length === 1 ? "" : "s"} on <b>{peek.sor}</b>
+              </span>
+              <button type="button" className="v3ib-btn ghost sm" onClick={() => setPeek(null)}>close</button>
+            </header>
+            <span className="v3ib-peek-m">
+              These are what a {peek.sor} dictionary would close. They stay open and counted until
+              something answers them — a dictionary, or the types confirmed by hand.
+            </span>
+            <ul className="v3ib-peek-rows">
+              {peek.abouts.map((about) => {
+                const q = Q(about);
+                return (
+                  <li key={about} title={about}>
+                    <span className="v3ib-peek-tag">{q.typeTag}</span>{q.question}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </>
       ) : null}
     </div>
   );

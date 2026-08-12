@@ -26,20 +26,33 @@ describe("ownedLoadSections — sections describe what is actually there", () =>
   const it_ = (bucket: OwnedBucket, about: string) => ({ about, slot: "s", bucket });
 
   it("an empty bucket gets no heading", () => {
-    const sections = ownedLoadSections([it_("on-link", "a"), it_("dictionary", "b")]);
-    expect(sections.map((s) => s.bucket)).toEqual(["on-link", "dictionary"]);
+    const sections = ownedLoadSections([it_("on-link", "a"), it_("blocked", "b")]);
+    expect(sections.map((s) => s.bucket)).toEqual(["on-link", "blocked"]);
     expect(sections.every((s) => s.items.length > 0)).toBe(true);
+  });
+
+  it("REGRESSION: the dictionary bucket is not a section on a person's card", () => {
+    // DELIBERATE (2026-08-12). Discover answers "who do I reach and what do they
+    // owe". A locus routed to a data dictionary owes this person nothing — no
+    // answer of theirs closes it and no link carries it — so it is not their row.
+    // It stays in the ledger, the burn-down, the Record and the Inbox's dictionary
+    // ask, which is where that work is chased and by whom.
+    expect(ownedLoadSections([it_("dictionary", "d")])).toHaveLength(0);
+    expect(BUCKET_SECTION.dictionary.onPersonCard).toBe(false);
+    for (const b of ["on-link", "next-link", "blocked"] as OwnedBucket[]) {
+      expect(BUCKET_SECTION[b].onPersonCard, `${b} is this person's work`).toBe(true);
+    }
   });
 
   it("sections keep list order regardless of the order items arrive in", () => {
     const sections = ownedLoadSections([
-      it_("dictionary", "d"), it_("blocked", "c"), it_("next-link", "b"), it_("on-link", "a"),
+      it_("blocked", "c"), it_("next-link", "b"), it_("on-link", "a"),
     ]);
-    expect(sections.map((s) => s.bucket)).toEqual(["on-link", "next-link", "blocked", "dictionary"]);
+    expect(sections.map((s) => s.bucket)).toEqual(["on-link", "next-link", "blocked"]);
   });
 
   it("every item lands in exactly one section — nothing is dropped or doubled", () => {
-    const items = [it_("on-link", "a"), it_("on-link", "b"), it_("blocked", "c"), it_("dictionary", "d")];
+    const items = [it_("on-link", "a"), it_("on-link", "b"), it_("blocked", "c")];
     const out = ownedLoadSections(items).flatMap((s) => s.items);
     expect(out).toHaveLength(items.length);
     expect(new Set(out.map((i) => i.about)).size).toBe(items.length);

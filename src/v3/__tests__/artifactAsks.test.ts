@@ -45,10 +45,15 @@ describe("preventive ask — born at SoR identification, per SoR", () => {
   const store = laila();
   const view = deriveArtifactAsks(store, {});
 
-  it("Laila: one ask per named SoR (5), no dictionary yet → all unrequested → Frame incomplete", () => {
+  it("Laila: one ask per named SoR (5), nothing said about any of them → all unclassified → Frame incomplete", () => {
     expect(view.asks.map((a) => a.sor).sort()).toEqual(
       ["CRM", "Content Management System", "Contract Management System", "Finance System", "Project Management System"]);
-    expect(view.asks.every((a) => a.state === "unrequested")).toBe(true);
+    // DELIBERATE CHANGE (2026-08-12): a system nobody has classified is
+    // `unclassified`, not `unrequested`. "Unrequested" said the dictionary had not
+    // been asked for; for four of these five that is the wrong ask entirely, and
+    // the state now says the real thing — nobody has said whether the system is
+    // being replaced or merely integrated with.
+    expect(view.asks.every((a) => a.state === "unclassified")).toBe(true);
     expect(view.frameComplete).toBe(false);
   });
 
@@ -113,7 +118,14 @@ describe("state machine — request, provide (self-clear), reopen (never a secon
     store.addElement({ id: "el:attr:case.acuity", kind: "attribute", name: "acuity", of: "el:entity:case" });
     store.assert({ about: "el:attr:case.acuity#dataType", value: { kind: "unknown" }, world: "to-be", layer: "configuration",
       source: "generated", ownerWhileOpen: { kind: "unowned" }, status: "open" });
-    const v = deriveArtifactAsks(store, { dictionaryName: "ehr-dd" });
+    // The system is a REPLACEMENT — stated, because since 2026-08-12 the
+    // classification comes first: a system nobody has classified is `unclassified`
+    // whatever files exist, since whether to chase more schema depends on it. This
+    // case is about the reopen mechanic, so it says which kind of system it is.
+    const v = deriveArtifactAsks(store, {
+      dictionaryName: "ehr-dd",
+      marks: [{ sor: "EHR", disposition: "replace", at: "2026-08-12T00:00:00Z" }],
+    });
     const ehrAsks = v.asks.filter((a) => a.sor === "EHR");
     expect(ehrAsks).toHaveLength(1);            // ONE ask, always
     expect(ehrAsks[0].state).toBe("reopened");  // the same ask reopened
@@ -153,7 +165,7 @@ describe("Frame SoR input — the ask is born when the sponsor names the system"
   it("declared with NO ontology: the ask exists, unrequested, and CHASES (nothing modelled to weigh yet)", () => {
     const v = deriveArtifactAsks(migrate(empty), { declaredSors: ["Salesforce CRM"] });
     expect(v.asks.map((a) => a.sor)).toEqual(["Salesforce CRM"]);
-    expect(v.asks[0].state).toBe("unrequested");
+    expect(v.asks[0].state).toBe("unclassified");
     expect(v.asks[0].source).toBe("frame");
     expect(v.asks[0].entityCount).toBe(0);
     expect(v.asks[0].weight).toBe(0);          // honest: nothing modelled against it yet
@@ -239,7 +251,7 @@ describe("each ask consumes its own dictionary", () => {
     expect(ehr.dictionary).toBe("ehr-dd");
     expect(ehr.ownDictionary).toBe(true);
     // the honest part: nothing about Billing was answered by the EHR file
-    expect(billing.state).toBe("unrequested");
+    expect(billing.state).toBe("unclassified");
     expect(billing.dictionary).toBeNull();
     expect(billing.weight).toBeGreaterThan(0);
     expect(asksNeedingChase(v).map((a) => a.sor)).toEqual(["Billing"]);
@@ -249,7 +261,12 @@ describe("each ask consumes its own dictionary", () => {
   it("the PROGRAMME-WIDE upload still claims to cover everything — the old behaviour, kept and named", () => {
     const store = migrate(twoSystems);
     importFor(store, "EHR");
-    const v = deriveArtifactAsks(store, { dictionaryName: "everything-dd" });
+    const v = deriveArtifactAsks(store, {
+      dictionaryName: "everything-dd",
+      // classified, so the ask is about the dictionary rather than about which
+      // kind of system this is
+      marks: [{ sor: "Billing", disposition: "replace", at: "2026-08-12T00:00:00Z" }],
+    });
     const billing = v.asks.find((a) => a.sor === "Billing")!;
     expect(billing.state).toBe("reopened");        // covered, but questions remain
     expect(billing.dictionary).toBe("everything-dd");
@@ -377,5 +394,105 @@ describe("the 'that's the whole dictionary' disposition", () => {
   it("has-none still wins over complete — the stronger statement", () => {
     const after = withDict([{ sor: "EHR", mark: "has-none", at: "2026-08-12T00:00:00Z" }]);
     expect(after.asks.find((a) => a.sor === "EHR")!.state).toBe("has-none");
+  });
+});
+
+/**
+ * REPLACED, OR INTEGRATED WITH? — asked before a dictionary is.
+ *
+ * Four "upload the HubSpot dictionary" buttons sat on the board beside one for
+ * Salesforce. For Salesforce — the migration source, seven entities — a dictionary
+ * is exactly right. For HubSpot at two entities and ten fields it is the wrong ask
+ * entirely: nobody writes a data dictionary for a product they merely call, and
+ * its published schema was never the client's to produce.
+ *
+ * Aura could not tell the two apart because the model had no field for it. It has
+ * one now, and the right ask follows from the answer.
+ */
+describe("a system is classified before its dictionary is chased", () => {
+  const mark = (sor: string, over: Partial<ArtifactAskMark>): ArtifactAskMark =>
+    ({ sor, at: "2026-08-12T00:00:00Z", ...over });
+
+  it("REGRESSION: nothing said → the ask is the CLASSIFICATION, not a dictionary", () => {
+    const v = deriveArtifactAsks(migrate(surgery), {});
+    const ehr = v.asks.find((a) => a.sor === "EHR")!;
+    expect(ehr.state).toBe("unclassified");
+    expect(ehr.disposition).toBeNull();
+    expect(asksNeedingChase(v).some((a) => a.sor === "EHR"), "an unclassified system is still work").toBe(true);
+  });
+
+  it("integrated with → no dictionary is owed, and it leaves the chase", () => {
+    const v = deriveArtifactAsks(migrate(surgery), { marks: [mark("EHR", { disposition: "integrate" })] });
+    const ehr = v.asks.find((a) => a.sor === "EHR")!;
+    expect(ehr.state).toBe("integration");
+    expect(asksNeedingChase(v).some((a) => a.sor === "EHR")).toBe(false);
+  });
+
+  it("REGRESSION: an integration's questions stay OPEN and counted", () => {
+    // The whole point is not to lose them: they are answered wherever fields are
+    // typed, not by chasing a document nobody wrote.
+    const before = deriveArtifactAsks(migrate(surgery), {});
+    const after = deriveArtifactAsks(migrate(surgery), { marks: [mark("EHR", { disposition: "integrate" })] });
+    const w = (v: typeof before) => v.asks.find((a) => a.sor === "EHR")!.weight;
+    expect(w(after)).toBe(w(before));
+    expect(w(after)).toBeGreaterThan(0);
+  });
+
+  it("being replaced → the ordinary dictionary ask, as before", () => {
+    const v = deriveArtifactAsks(migrate(surgery), { marks: [mark("EHR", { disposition: "replace" })] });
+    expect(v.asks.find((a) => a.sor === "EHR")!.state).toBe("unrequested");
+  });
+
+  it("the two axes are independent — a disposition never clears a state", () => {
+    // They were one field in the first draft, and the log is last-wins per system:
+    // recording "we integrate with it" would have wiped "requested".
+    const v = deriveArtifactAsks(migrate(surgery), {
+      marks: [mark("EHR", { mark: "requested" }), mark("EHR", { disposition: "replace" })],
+    });
+    const ehr = v.asks.find((a) => a.sor === "EHR")!;
+    expect(ehr.state).toBe("requested");
+    expect(ehr.disposition).toBe("replace");
+
+    // BOTH ORDERS. This one is the discriminating case: with a single last-wins
+    // map over every mark, the later state-only entry has no disposition and the
+    // "replace" said first is lost. The order above happens to survive that bug,
+    // so on its own it proved nothing.
+    const reversed = deriveArtifactAsks(migrate(surgery), {
+      marks: [mark("EHR", { disposition: "replace" }), mark("EHR", { mark: "requested" })],
+    });
+    const r = reversed.asks.find((a) => a.sor === "EHR")!;
+    expect(r.disposition, "a later state mark erased the disposition").toBe("replace");
+    expect(r.state).toBe("requested");
+  });
+
+  it("its OWN dictionary classifies it implicitly — no one is asked twice", () => {
+    // Somebody produced a schema for THIS system, so it is plainly in scope.
+    const v = deriveArtifactAsks(migrate(surgery), { dictionaryBySor: new Map([["ehr", "ehr-dd"]]) });
+    expect(v.asks.find((a) => a.sor === "EHR")!.state).toBe("reopened");
+  });
+
+  it("REGRESSION: the PROGRAMME-WIDE upload does not classify anything", () => {
+    // It claims to cover everything, which says nothing about whether one
+    // particular system is being replaced. Treating it as an answer is what kept
+    // the question off the systems that most needed it.
+    const v = deriveArtifactAsks(migrate(surgery), { dictionaryName: "everything-dd" });
+    expect(v.asks.find((a) => a.sor === "EHR")!.state).toBe("unclassified");
+  });
+
+  it("a fully-answered system is never asked to classify itself", () => {
+    // Nothing is left to chase, so there is no decision to make.
+    const store = migrate(surgery);
+    const v0 = deriveArtifactAsks(store, {});
+    for (const about of v0.asks[0].abouts) {
+      store.assert({ about, value: { kind: "scalar", value: "string" }, world: "to-be", layer: "configuration",
+        source: "code-derived", ownerWhileOpen: { kind: "unowned" }, status: "weak",
+        closedBy: { method: "import", by: "dictionary:x" } });
+    }
+    expect(deriveArtifactAsks(store, { dictionaryName: "x" }).asks.find((a) => a.sor === "EHR")!.state)
+      .toBe("provided");
+  });
+
+  it("an unclassified system leaves the Frame incomplete", () => {
+    expect(deriveArtifactAsks(migrate(surgery), {}).frameComplete).toBe(false);
   });
 });
