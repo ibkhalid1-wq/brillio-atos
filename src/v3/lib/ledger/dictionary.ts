@@ -197,6 +197,26 @@ function splitRow(line: string, sep: string): string[] {
 export const dictionaryProvenance = (name: string): string => `dictionary:${name}`;
 
 /**
+ * ONE SHAPE FOR AN IMPORTED TYPING CLAIM — the only place the neutral owner band
+ * is spent.
+ *
+ * Two sources now emit these: an uploaded dictionary, and a type Aura read from a
+ * field name. Writing the shape twice would put a second notion of who owns an
+ * import into the codebase, and the constant-owner guard in `finalGateInvariants`
+ * exists precisely because that class of duplication is how a fabricated owner got
+ * in last time. `by` is the provenance token, which is what actually distinguishes
+ * the two — a document the client wrote from a reading of a name.
+ *
+ * Always `code-derived · weak`: deviatable by anyone, losing to every human answer.
+ */
+export function importedTypingClaim(about: string, value: ClaimValue, by: string): AssertInput {
+  return {
+    about, value, source: "code-derived", world: "to-be", layer: "configuration",
+    ownerWhileOpen: OWNER, status: "weak", closedBy: { method: "import", by },
+  };
+}
+
+/**
  * Emit the dictionary as an AssertInput[] batch for reconcile — the SAME batch shape the
  * FHIR/Salesforce adapters produce. Closes dataType / valueSet / optionality unknowns as
  * `code-derived · weak · to-be`. Fields not already in the ontology are LOCAL EXTENSIONS:
@@ -209,9 +229,7 @@ export function dictionaryToClaims(dict: ParsedDictionary, existingElementIds: S
   const batch: AssertInput[] = [];
   const elements: LedgerElement[] = [];
   const by = dictionaryProvenance(dict.name);
-  const closedBy = { method: "import" as const, by };
-  const add = (about: string, value: ClaimValue) =>
-    batch.push({ about, value, source: "code-derived", world: "to-be", layer: "configuration", ownerWhileOpen: OWNER, status: "weak", closedBy });
+  const add = (about: string, value: ClaimValue) => batch.push(importedTypingClaim(about, value, by));
   for (const f of dict.fields) {
     if (!f.entity) continue; // a row with no entity can't be keyed to a locus — skip, don't guess
     const eid = `el:entity:${slug(f.entity)}`;
