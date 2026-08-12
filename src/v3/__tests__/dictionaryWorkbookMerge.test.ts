@@ -256,11 +256,21 @@ describe("[D4] finding the header, and knowing a dictionary from a list", () => 
   });
 
   it("REGRESSION: a comma-joined column set is not a field name", () => {
-    // The List Views tab: one cell holds a whole view's column list.
+    // The List Views tab: one cell holds a whole view's column list. Measured on
+    // the real workbook these run 123–201 characters with several commas.
     expect(parseDictionaryCsv(csv([
       "Columns,Data Type",
-      '"Account_ID__c, ACCOUNT.NAME, ACCOUNT.TYPE",Text',
+      '"Account_ID__c, ACCOUNT.NAME, Account_Region__c, ACCOUNT.ADDRESS1_STATE",Text',
     ])).fields).toHaveLength(0);
+  });
+
+  it("but a real name that HAPPENS to contain a comma is kept", () => {
+    // The rule is "not a list", not "no commas". Rejecting every comma also
+    // rejected legitimate names — which the typing grid can emit, so the two
+    // halves have to agree.
+    expect(parseDictionaryCsv(csv([
+      "Field API Name,Data Type", '"name, legal",Text',
+    ])).fields[0]).toMatchObject({ field: "name, legal" });
   });
 
   it("REGRESSION: a URL is not a field name", () => {

@@ -18,7 +18,8 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
-  derivedTypeProposals, derivedTypeClaims, DERIVED_TYPE_FLOOR, DERIVED_TYPE_PROVENANCE,
+  derivedTypeProposals, derivedTypeClaims, derivedTypeSuggestions,
+  DERIVED_TYPE_FLOOR, DERIVED_TYPE_PROVENANCE, SUGGEST_FLOOR,
 } from "@/v3/lib/ledger/derivedTypes";
 import { dictionaryProvenance } from "@/v3/lib/ledger/dictionary";
 import { migrate, type Snapshot } from "@/v3/lib/ledger/migrate";
@@ -154,6 +155,29 @@ describe("on the real ontology", () => {
     const roles = deriveRoles(ontology() as Record<string, unknown>).attributeRoles as never[];
     expect(derivedTypeProposals(roles, stillOpen).some((p) => p.about === first.about),
       "a reading was proposed over a locus a person had answered").toBe(false);
+  });
+});
+
+describe("a default has to be better than a coin-flip", () => {
+  it("REGRESSION: a fallback reading is never offered as an answer", () => {
+    // Seen on screen: 46 fields pre-set to "text" beside "confirm 46 as text",
+    // every one of them `free-text @0.4` — semanticRoles' FALLBACK role, which
+    // means "no signal", not "probably text". One click would have recorded 46
+    // guesses as the operator's own statement.
+    expect(SUGGEST_FLOOR).toBe(0.5);
+    expect(derivedTypeSuggestions(
+      [{ entity: "Account", attribute: "trade show", role: "free-text", confidence: 0.4 }],
+      new Set([locus("Account", "trade show")]),
+    ), "a 0.4 fallback was dressed as an answer").toHaveLength(0);
+  });
+
+  it("a real-but-weak reading IS offered — that is the whole point", () => {
+    // 0.6 is a signal ("segment" → category). Too weak to assert, strong enough
+    // to pre-answer, which is the gap the grid exists to fill.
+    expect(derivedTypeSuggestions(
+      [{ entity: "Account", attribute: "segment", role: "category", confidence: 0.6 }],
+      new Set([locus("Account", "segment")]),
+    )).toHaveLength(1);
   });
 });
 

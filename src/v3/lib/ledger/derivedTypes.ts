@@ -49,6 +49,19 @@ export const DERIVED_TYPE_FLOOR = 0.7;
 export const DERIVED_TYPE_PROVENANCE = "derived:semantic-roles";
 
 /**
+ * The confidence below which a reading is not even offered as a DEFAULT.
+ *
+ * Seen on screen, the reason: 46 fields arrived pre-set to "text" beside a button
+ * reading "confirm 46 as text" — all of them `free-text @0.4`, which is
+ * `semanticRoles`' FALLBACK role. 0.4 does not mean "probably text", it means "no
+ * signal", and dressing it as an answer invites a single click that records 46
+ * guesses as the operator's own statement. A default has to be better than a
+ * coin-flip or it is a trap, so below this they are shown as unread and asked
+ * properly.
+ */
+export const SUGGEST_FLOOR = 0.5;
+
+/**
  * Semantic role → the data type an operator would recognise.
  *
  * Roles the ontology models as REFERENCES (`parent-ref`, `person-ref`,
@@ -98,6 +111,43 @@ export interface AttributeRoleLike {
  * `openDataTypeLoci` is the set of `…#dataType` abouts still unanswered. Nothing
  * outside it is touched, so this can only ever fill a gap.
  */
+/**
+ * The same readings WITHOUT the confidence floor — for a question's DEFAULT, not
+ * for a claim.
+ *
+ * A 0.6 reading is too weak to assert and far too useful to throw away. Measured
+ * on Laila New: of the 30 typing questions still open after seeding, 27 have a
+ * reading below the floor and NONE has no reading at all. Asked as
+ * "what type of value is Account.segment?" that knowledge is wasted and the
+ * operator types an answer; offered as "a category?" it costs them a tap.
+ *
+ * The distinction that keeps this honest: a suggestion is never written anywhere.
+ * It seeds a control the operator can change, and only their confirmation is
+ * recorded — as their statement, not the machine's.
+ */
+export function derivedTypeSuggestions(
+  roles: readonly AttributeRoleLike[],
+  openDataTypeLoci: ReadonlySet<string>,
+): DerivedTypeProposal[] {
+  const out: DerivedTypeProposal[] = [];
+  const seen = new Set<string>();
+  for (const r of roles) {
+    if (r.confidence < SUGGEST_FLOOR) continue;   // no signal is not a default
+    const dataType = ROLE_TYPE[r.role];
+    if (!dataType) continue;
+    const about = aboutOf(attrLocusId(r.entity, r.attribute), "dataType");
+    if (!openDataTypeLoci.has(about) || seen.has(about)) continue;
+    seen.add(about);
+    out.push({ about, entity: r.entity, attribute: r.attribute, role: r.role, dataType, confidence: r.confidence });
+  }
+  return out;
+}
+
+/** Every type the grid offers, in the order an operator scans them. */
+export const OFFERED_TYPES = [
+  "text", "code", "number", "currency", "percent", "date", "boolean", "picklist", "reference",
+] as const;
+
 export function derivedTypeProposals(
   roles: readonly AttributeRoleLike[],
   openDataTypeLoci: ReadonlySet<string>,

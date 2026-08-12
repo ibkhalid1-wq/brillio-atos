@@ -142,13 +142,20 @@ export function parseDictionaryCsv(csv: string, name = "uploaded-dictionary"): P
   for (const r of rows.slice(1)) {
     const field = (r[cField] ?? "").trim();
     if (!field) continue;
-    // A field NAME with a comma or a URL path in it is not a field name. This is the
-    // row-level counterpart to the header check: a "List Views" tab legitimately has
-    // a column of field names, but each cell holds the whole comma-joined column set
-    // of a view ("Account_ID__c, ACCOUNT.NAME, ..."), and a links tab holds
-    // "/apex/CloneListPage?source=...". Admitting either invents attributes that the
+    // A LIST of field names is not a field name. The row-level counterpart to the
+    // header check: a "List Views" tab legitimately has a column of field names, but
+    // each cell holds a whole view's comma-joined column set, and a links tab holds
+    // "/apex/CloneListPage?source=...". Admitting either invents attributes the
     // client's system does not have.
-    if (/[,/]/.test(field)) continue;
+    //
+    // Measured on the real workbook, those cells run 123–201 characters and carry
+    // several commas; a genuine name that happens to contain one ("name, legal") is
+    // short and carries one. So the test is for a LIST, not for a comma — rejecting
+    // every comma also rejected real names, which the typing grid can emit.
+    // Known limit, accepted: a short single-comma filter expression
+    // ("Account_Rank__c equals Top 150,Top 400") still passes, and is visible as an
+    // odd row in the preview rather than silently landing.
+    if (field.includes("/") || /,.*,/.test(field) || (field.includes(",") && field.length > 40)) continue;
     const entity = (cEntity >= 0 ? r[cEntity] : "").trim();
     const rawType = cType >= 0 ? (r[cType] ?? "").trim() : "";
     const rawValues = cValues >= 0 ? (r[cValues] ?? "").trim() : "";
