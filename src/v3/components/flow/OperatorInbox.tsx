@@ -26,6 +26,7 @@ import { ClaimStatus, OwnershipTag, ProvisionalMark, SourceTag } from "@/v3/comp
 import { asksNeedingChase, isSystemOwner, type ArtifactAskMark } from "@/v3/lib/ledger/artifactAsks";
 import { operatorQueueCounts, sessionQuestionCount, unfrozenQueues } from "@/v3/lib/ledger/operatorQueue";
 import { parseDictionaryCsv, isSpreadsheetName, readDictionaryWorkbook, mergeDictionaryCsv, dictionaryCoverage, SPREADSHEET_EXTENSIONS } from "@/v3/lib/ledger/dictionary";
+import TypingGrid from "@/v3/components/flow/TypingGrid";
 import { retractProposal } from "@/v3/lib/ledger/curation";
 import { displayPersonLabel } from "@/v3/components/flow/flowStakeholders";
 
@@ -169,6 +170,8 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
   } | null>(null);
   /** A file that could not be read at all — reported where the upload was, never swallowed. */
   const [dictError, setDictError] = useState<{ name: string; reason: string; sor: string | null } | null>(null);
+  /** The confirmation grid is opened deliberately — it is a pass of work, not a banner. */
+  const [showGrid, setShowGrid] = useState(false);
   const readDictionaryFile = async (file: File, sor: string | null, scopeLoci: string[], carry = "", name = "") => {
     // EVERYTHING below can throw: `arrayBuffer()` on an unreadable file, the
     // dynamic `import("xlsx")`, `XLSX.read` on a corrupt or password-protected
@@ -565,6 +568,35 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                 </div>
               );
             })}
+            {/* ANSWER THEM HERE INSTEAD. The asks above chase a document, which is
+                the better answer and often weeks away. This is the other road: the
+                same questions, pre-answered from the field names, confirmable in
+                one pass. It sits under the asks because a real dictionary still
+                beats it — and it is only offered when there is something to
+                confirm. */}
+            {onDictionary && showGrid ? (
+              <TypingGrid ledger={ledger} onDictionary={onDictionary} onDone={() => setShowGrid(false)} />
+            ) : onDictionary && ledger.typingLoci.length ? (
+              // NOT `.v3ib-dict-ask`: that class IS the chase row, counted one per
+              // SoR by the badge-equals-page guard. This is a door into a pass of
+              // work, not another thing being chased, and counting it as one would
+              // have made the rail badge disagree with the page by exactly one.
+              <div className="v3ib-dict-answerhere">
+                <span className="v3ib-dict-to">
+                  <b>{ledger.typingLoci.length}</b> typing question{ledger.typingLoci.length === 1 ? "" : "s"} are still open
+                </span>
+                <span className="v3ib-dict-msg">
+                  A dictionary is the better answer. If one is not coming, answer them here — Aura has
+                  read most of them from the field names already and sets them as the answer, so it is a
+                  pass of confirmations rather than {ledger.typingLoci.length} questions.
+                </span>
+                <span className="v3ib-dict-actions">
+                  <button type="button" className="v3ib-btn ghost sm" onClick={() => setShowGrid(true)}>
+                    confirm the types here
+                  </button>
+                </span>
+              </div>
+            ) : null}
             {settled.length ? (
               <div className="v3ib-dict-settled">
                 <span className="v3ib-dict-settled-t">

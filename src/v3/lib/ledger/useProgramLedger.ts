@@ -38,7 +38,7 @@ import { reconcile } from "./merge";
 import { readDictionarySources, dictionaryToClaims, TYPING_SLOTS } from "./dictionary";
 import { deriveRoles } from "@shared/semanticRoles.ts";
 import {
-  derivedTypeProposals, derivedTypeClaims,
+  derivedTypeProposals, derivedTypeClaims, derivedTypeSuggestions,
   type DerivedTypeProposal, type AttributeRoleLike,
 } from "./derivedTypes";
 import type { LedgerStore } from "./store";
@@ -196,6 +196,9 @@ export interface ProgramLedger {
    *  many questions left the wall this way: a burn-down that shrinks because the
    *  machine guessed must SAY the machine guessed. */
   derivedTypes: DerivedTypeProposal[];
+  /** A suggested type for each STILL-OPEN typing locus — below the assert floor, so
+   *  never written: it seeds the answer a confirmation grid offers. */
+  typeSuggestions: DerivedTypeProposal[];
   /** The ASSIGN queue — unowned questions that genuinely need a HUMAN owner: NON-typing
    *  (phase / decision / …). Typing questions are excluded (they route to the dictionary,
    *  not to a person). So burn-down `unownedOpen` = assignQueue.length + the unowned slice
@@ -246,6 +249,7 @@ export function useProgramLedger(program?: ProgramSummary): ProgramLedger {
     // uploaded dictionary always wins and a heuristic only ever fills a gap.
     // `code-derived · weak`, deviatable, and counted separately as PROPOSED —
     // these are readings of a name, not knowledge of the client's business.
+    let suggestions: DerivedTypeProposal[] = [];
     const derivedTypes: DerivedTypeProposal[] = (() => {
       const ontologyDoc = snap.ontology;
       if (!ontologyDoc || typeof ontologyDoc !== "object") return [];
@@ -261,6 +265,14 @@ export function useProgramLedger(program?: ProgramSummary): ProgramLedger {
       } catch { return []; }   // a reading that throws proposes nothing
       const proposals = derivedTypeProposals(roles, openTypeLoci);
       if (proposals.length) reconcile(migrated, derivedTypeClaims(proposals), new Set(migrated.elements().map((e) => e.id)));
+      // What is STILL open now carries a below-floor reading — too weak to assert,
+      // strong enough to pre-answer the question. Kept for the grid's defaults.
+      const stillOpen = new Set(
+        buildUnknownQueue(migrated).items
+          .filter((i) => i.status === "open" && i.slot === "dataType")
+          .map((i) => i.about),
+      );
+      suggestions = derivedTypeSuggestions(roles, stillOpen);
       return proposals;
     })();
 
@@ -380,6 +392,7 @@ export function useProgramLedger(program?: ProgramSummary): ProgramLedger {
       typingLoci,
       dictionaryName,
       derivedTypes,
+      typeSuggestions: suggestions,
       assignQueue,
     };
   }, [program]);

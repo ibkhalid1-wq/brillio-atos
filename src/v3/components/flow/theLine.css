@@ -701,6 +701,31 @@
 .v3ib-dict-derivedtypes{display:flex;flex-direction:column;gap:3px;margin-top:6px;padding:7px 11px;
   border-left:2px dashed color-mix(in srgb,var(--v3-amber) 55%,transparent);
   background:color-mix(in srgb,var(--v3-amber) 4%,transparent);border-radius:0 8px 8px 0}
+
+/* ── THE TYPING GRID — the same questions, pre-answered and grouped by answer ── */
+.v3ib-dict-answerhere{display:flex;flex-direction:column;gap:3px;margin-top:6px;padding:7px 11px;
+  border:1px dashed var(--fs-line);border-radius:8px}
+.v3tg{display:flex;flex-direction:column;gap:10px;margin-top:8px;padding:11px 13px;
+  border:1px solid var(--fs-line);border-radius:10px;background:var(--fs-card)}
+.v3tg-h{display:flex;flex-direction:column;gap:3px}
+.v3tg-t{font-size:12.5px;color:var(--v3-text-primary)}
+.v3tg-m{font-size:10.5px;line-height:1.5;color:var(--v3-text-muted);max-width:70ch}
+.v3tg-g{display:flex;flex-direction:column;gap:4px}
+.v3tg-g-h{display:flex;align-items:center;gap:8px}
+.v3tg-g-t{font-size:9.5px;font-weight:750;letter-spacing:.07em;text-transform:uppercase;color:var(--v3-accent-2)}
+.v3tg-g-n{font-size:9.5px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--v3-accent-2);
+  background:color-mix(in srgb,var(--v3-accent-2) 13%,transparent);border-radius:999px;padding:0 6px;line-height:1.6}
+/* the group Aura could not read is the only one owed a real answer — say so in form */
+.v3tg-g.unread .v3tg-g-t{color:var(--v3-amber)}
+.v3tg-g.unread .v3tg-g-n{color:var(--v3-amber);background:color-mix(in srgb,var(--v3-amber) 13%,transparent)}
+.v3tg-rows{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px}
+.v3tg-rows li{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--v3-text-primary)}
+.v3tg-f{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.v3tg-sel{font:inherit;font-size:11px;padding:1px 5px;border:1px solid var(--fs-line);border-radius:6px;
+  background:var(--v3-surface);color:var(--v3-text-primary)}
+.v3tg-c{font-size:10px;color:var(--v3-text-muted);flex:none;min-width:15ch}
+.v3tg-c.yours{color:var(--v3-accent-2);font-weight:650}
+.v3tg-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding-top:4px;border-top:1px solid var(--fs-line)}
 /* An upload that could not be read says so WHERE the upload button was. The
    read path had no catch and its caller used `void`, so a rejected promise was
    discarded and the operator saw nothing at all — the failure mode that reads
