@@ -702,6 +702,15 @@
 .v3ib-dict-derived{display:block;margin:4px 0 5px;padding-left:8px;font-size:11px;line-height:1.45;
   color:var(--v3-text-muted);border-left:2px dashed color-mix(in srgb,var(--v3-amber) 55%,transparent)}
 .v3ib-dict-derived b{color:var(--v3-amber);font-weight:700}
+
+/* THE SECOND READING of an attachment — it is going onto the record as evidence
+   either way; this says what else is in it. Kept visually distinct from the
+   capture form so it reads as a finding about the file, not another field. */
+.v3ln-cap-dict{display:flex;flex-direction:column;align-items:flex-start;gap:5px;margin:8px 0 0;
+  padding:9px 12px;border:1px solid color-mix(in srgb,var(--v3-accent-2) 35%,var(--fs-line));
+  border-radius:9px;background:color-mix(in srgb,var(--v3-accent-2) 5%,var(--fs-card))}
+.v3ln-cap-dict-t{font-size:12px;line-height:1.5;color:var(--v3-text-primary)}
+.v3ln-cap-dict-m{font-size:10.5px;line-height:1.5;color:var(--v3-text-muted);max-width:60ch}
 .v3ib-marked{font-size:11px;color:var(--v3-positive);font-weight:600}
 .v3ib-nodate{color:var(--v3-amber);font-weight:700}
 /* Sessions summary — the whole header is ONE disclosure button (⋈ Sessions · N seams,

@@ -25,7 +25,7 @@ import { renderQuestion } from "@/v3/lib/ledger/renderQuestion";
 import { ClaimStatus, OwnershipTag, ProvisionalMark, SourceTag } from "@/v3/components/flow/studio/ledgerPrimitives";
 import { asksNeedingChase, isSystemOwner, type ArtifactAskMark } from "@/v3/lib/ledger/artifactAsks";
 import { operatorQueueCounts, sessionQuestionCount, unfrozenQueues } from "@/v3/lib/ledger/operatorQueue";
-import { parseDictionaryCsv, isSpreadsheetName, readDictionaryWorkbook, mergeDictionaryCsv, SPREADSHEET_EXTENSIONS } from "@/v3/lib/ledger/dictionary";
+import { parseDictionaryCsv, isSpreadsheetName, readDictionaryWorkbook, mergeDictionaryCsv, attrLocusId, SPREADSHEET_EXTENSIONS } from "@/v3/lib/ledger/dictionary";
 import { retractProposal } from "@/v3/lib/ledger/curation";
 import { displayPersonLabel } from "@/v3/components/flow/flowStakeholders";
 
@@ -209,10 +209,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
     // every open typing locus for the programme-wide one. Same count either way —
     // the loci the file actually names, never an estimate.
     const scope = new Set(scopeLoci.map((about) => elementIdOf(about)));
-    const closes = parsed.fields.reduce((n, f) => {
-      const id = `el:attr:${f.entity.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-")}.${f.field.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
-      return n + (scope.has(id) ? 1 : 0);
-    }, 0);
+    const closes = parsed.fields.reduce((n, f) => n + (scope.has(attrLocusId(f.entity, f.field)) ? 1 : 0), 0);
     setDictPreview({
       name: parsed.name, fields: parsed.fields.length, closes, csv, sor, scope: scopeLoci.length,
       used: workbook?.used, sheets: workbook?.sheets.length,

@@ -60,7 +60,20 @@ async function fileToBase64(file: File): Promise<string> {
 /** Any document → reviewable text via flow-extract (decode, Office XML, or the
  * model reading PDFs/images natively). The operator reads the extraction in
  * the form before "Add the document" makes it evidence — nothing lands blind. */
-export function AttachFileButton({ programId, onExtracted }: { programId: string; onExtracted: (filename: string, text: string, sourceKey?: string) => void }) {
+/**
+ * `onFile` hands the caller the RAW file alongside the extraction.
+ *
+ * The edge returns prose — the right shape for evidence, and the wrong shape for a
+ * data dictionary, whose value is in its columns. A caller that wants to notice
+ * "this attachment is also a dictionary" has to read the bytes itself, and cannot
+ * do that from text the edge has already flattened. The attachment still becomes
+ * evidence either way; this only lets the caller offer the second reading.
+ */
+export function AttachFileButton({ programId, onExtracted, onFile }: {
+  programId: string;
+  onExtracted: (filename: string, text: string, sourceKey?: string) => void;
+  onFile?: (file: File) => void;
+}) {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
@@ -94,7 +107,9 @@ export function AttachFileButton({ programId, onExtracted }: { programId: string
         onChange={(event) => {
           const file = event.target.files?.[0];
           event.target.value = "";
-          if (file) void ingest(file);
+          if (!file) return;
+          onFile?.(file);            // the caller's own reading, before the edge flattens it
+          void ingest(file);
         }} />
       <button type="button" className="v3fs-a" disabled={busy} onClick={() => inputRef.current?.click()}>
         {busy ? "Reading…" : "⌲ Attach a file — PDF, Word, Excel, text…"}

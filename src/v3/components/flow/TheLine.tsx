@@ -47,6 +47,7 @@ import { pinsForSend } from "@/v3/lib/ledger/operatorActions";
 import { HeardReadout, ConvergenceReadout, ProvisionalMark, ClaimStatus, SourceTag } from "@/v3/components/flow/studio/ledgerPrimitives";
 import DesignLoopZones from "@/v3/components/flow/DesignLoopZones";
 import { ownerLabelsForCast } from "@/v3/lib/ledger/ownerBinding";
+import { attrLocusId, isSpreadsheetName, parseDictionaryCsv, readDictionaryWorkbook } from "@/v3/lib/ledger/dictionary";
 import { currentDesignRound } from "@/v3/components/flow/flowDesignRound";
 import { renderQuestion } from "@/v3/lib/ledger/renderQuestion";
 import {
@@ -991,11 +992,45 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
    * Capture is pressed, and an extraction is exactly the kind of text that has
    * to be looked at first (a spreadsheet, a deck, a scanned PDF). */
   const [capDocs, setCapDocs] = useState<Array<{ filename: string; text: string; sourceKey?: string }>>([]);
+  /**
+   * AN ATTACHMENT THAT IS ALSO A DICTIONARY.
+   *
+   * "Add to the record" files a document as evidence — the edge flattens it to
+   * prose and it lands as a "— Document —" entry. That is the right home for an
+   * interview transcript and the wrong one for a data dictionary, whose whole
+   * value is in its columns: filed as prose it reads fine and closes nothing.
+   *
+   * So the file is ALSO read here, by the same parser the Inbox ask uses, and when
+   * it parses the operator is offered the second reading. Nothing is redirected:
+   * they attached it to the record, so it still becomes evidence. This only stops
+   * the answers inside it going unnoticed.
+   */
+  const [capDict, setCapDict] = useState<{ name: string; fields: number; closes: number; csv: string } | null>(null);
+  const [capDictBusy, setCapDictBusy] = useState(false);
+  const readAttachedDictionary = async (file: File) => {
+    try {
+      const wb = isSpreadsheetName(file.name) ? await readDictionaryWorkbook(await file.arrayBuffer(), file.name) : null;
+      const csv = wb ? wb.csv : await file.text();
+      const parsed = parseDictionaryCsv(csv, file.name.replace(/\.[^.]+$/, ""));
+      if (!parsed.fields.length) { setCapDict(null); return; }
+      const openTyping = new Set(ledger.typingLoci.map((i) => i.about.split("#")[0]));
+      const closes = parsed.fields.reduce((n, f) => {
+        const id = attrLocusId(f.entity, f.field);
+        return n + (openTyping.has(id) ? 1 : 0);
+      }, 0);
+      setCapDict({ name: parsed.name, fields: parsed.fields.length, closes, csv });
+    } catch {
+      // Unreadable as a dictionary is not an error here — it is simply not one.
+      setCapDict(null);
+    }
+  };
+
   const openCapture = (row?: CastRow) => {
     setCapFor(row ?? "open");
     setCapWho(row?.label ?? cast[0]?.label ?? "");
     setCapText("");
     setCapDocs([]);
+    setCapDict(null);   // a new capture starts with no reading of a previous file
   };
   const saveCapture = async () => {
     const row = cast.find((r) => r.label === capWho);
@@ -1026,7 +1061,7 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
         : { action: `Captured — ${row.label}` },
     });
     onRunAgent?.("contradiction-detector", row.movementId);
-    setCapFor(null); setCapText(""); setCapDocs([]);
+    setCapFor(null); setCapText(""); setCapDocs([]); setCapDict(null);
     const what = docs.length
       ? `${docs.length} document${docs.length === 1 ? "" : "s"} added${text ? " with a capture" : ""}`
       : "Captured";
@@ -1672,9 +1707,41 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                   nothing becomes evidence until Capture is pressed. */}
               <div className="v3ln-cap-ins">
                 <AttachFileButton programId={program.id}
+                  onFile={(file) => void readAttachedDictionary(file)}
                   onExtracted={(filename, text, sourceKey) => setCapDocs((current) => [...current, { filename, text, sourceKey }])} />
                 <TranscribeButton onText={(transcript) => setCapText((current) => (current.trim() ? `${current.trim()}\n\n${transcript}` : transcript))} />
               </div>
+              {/* THE SECOND READING. The attachment is already on its way to the
+                  record as evidence; this says what else is in it and offers to
+                  use it. Stated, never taken: applying is a click. */}
+              {capDict ? (
+                <div className="v3ln-cap-dict">
+                  <span className="v3ln-cap-dict-t">
+                    <b>{capDict.name}</b> also reads as a <b>data dictionary</b> —
+                    {" "}{capDict.fields} field{capDict.fields === 1 ? "" : "s"},
+                    {" "}<b>{capDict.closes}</b> of your open typing question{capDict.closes === 1 ? "" : "s"} match
+                    {capDict.closes === 0 ? " — nothing here matches an open locus, so it would close nothing" : ""}
+                  </span>
+                  <span className="v3ln-cap-dict-m">
+                    Filed on the record it stays prose and closes nothing. Applied, it answers those
+                    questions as <i>code-derived · weak</i> — anyone can still deviate. It lands
+                    programme-wide; the Inbox is where a dictionary is attached to one system of record.
+                  </span>
+                  {/* The SAME channel this surface already writes assigns and pins
+                      on (`useOperatorCommits`) — a dictionary applied from here is
+                      indistinguishable from one applied in the Inbox, because it is
+                      the same call. `canWrite` is false when the shell passed no
+                      save handler, and then there is nothing to offer. */}
+                  {commits.canWrite && capDict.closes > 0 ? (
+                    <button type="button" className="v3ln-btn" disabled={capDictBusy}
+                      onClick={() => {
+                        setCapDictBusy(true);
+                        void commits.commitDictionary(capDict.csv, null)
+                          .finally(() => { setCapDictBusy(false); setCapDict(null); });
+                      }}>{capDictBusy ? "Applying…" : "apply as a data dictionary"}</button>
+                  ) : null}
+                </div>
+              ) : null}
               <div className="v3ln-cap-bar">
                 <button type="button" className="v3ln-btn" disabled={(!capText.trim() && !capDocs.some((doc) => doc.text.trim())) || !capWho}
                   onClick={() => void saveCapture()}>Capture</button>
