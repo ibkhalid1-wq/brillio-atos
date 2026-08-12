@@ -22,6 +22,12 @@
  *  · provided    — a dictionary is on file and no typing question remains for this SoR.
  *  · reopened    — a dictionary is on file but typing questions (re)accumulated —
  *                  ontology growth after import attaches HERE, never a second ask.
+ *  · complete    — a dictionary is on file and the operator recorded that it is ALL
+ *                  the system has. The remaining typing questions stay OPEN and stay
+ *                  counted; they simply stop being chased as a dictionary ask,
+ *                  because no further upload is coming. Only meaningful with a
+ *                  dictionary on file — the mark is ignored without one, since
+ *                  "that is all of it" says nothing about a system that gave none.
  *  · has-none    — the operator explicitly recorded the SoR has no dictionary.
  *
  * Owner: the SoR's system owner from the roster (one shared detection), else null —
@@ -36,10 +42,10 @@ import type { LedgerStore } from "./store";
 import { elementIdOf, isLive } from "./types";
 import { buildUnknownQueue, dictionaryBucket } from "./projections";
 
-export type ArtifactAskState = "unrequested" | "requested" | "provided" | "reopened" | "has-none";
+export type ArtifactAskState = "unrequested" | "requested" | "provided" | "reopened" | "complete" | "has-none";
 
 /** A persisted operator mark on a SoR's ask (underscore-field `_artifactAsks`). */
-export interface ArtifactAskMark { sor: string; mark: "requested" | "has-none"; by?: string; at: string; }
+export interface ArtifactAskMark { sor: string; mark: "requested" | "has-none" | "complete"; by?: string; at: string; }
 
 export interface ArtifactAsk {
   sor: string;                 // the system of record, verbatim from the data
@@ -187,9 +193,13 @@ export function deriveArtifactAsks(
     const dictionary = own ?? dictionaryName;
     const state: ArtifactAskState =
       mark?.mark === "has-none" ? "has-none"
-        : dictionary ? (abouts.length ? "reopened" : "provided")
-          : mark?.mark === "requested" ? "requested"
-            : "unrequested";
+        // `complete` needs a dictionary to be about. Without one it is not a
+        // statement anybody can act on, so the ask falls through to its real state
+        // rather than being silently settled by a mark that describes nothing.
+        : dictionary && mark?.mark === "complete" ? "complete"
+          : dictionary ? (abouts.length ? "reopened" : "provided")
+            : mark?.mark === "requested" ? "requested"
+              : "unrequested";
     return {
       sor, state,
       owner: systemOwner?.label ?? null,
@@ -210,6 +220,15 @@ export function deriveArtifactAsks(
  * nothing to weigh, and dropping it would make the preventive ask invisible exactly
  * when it is cheapest to satisfy. Weight 0 with entities modelled means there is
  * genuinely nothing left for a dictionary to close: no chase.
+ */
+/**
+ * The asks still worth chasing. `provided`, `has-none` and `complete` are settled —
+ * each for a different reason, and `complete` is the one an operator chooses: a
+ * dictionary arrived, it was not exhaustive, and there is no more coming.
+ *
+ * A settled ask keeps its WEIGHT and stays in `view.asks`, so conservation is
+ * untouched and its open questions remain in the burn-down. Settling stops the
+ * chase, never the count.
  */
 export const asksNeedingChase = (view: ArtifactAskView): ArtifactAsk[] =>
   view.asks.filter((a) => (a.state === "unrequested" || a.state === "requested" || a.state === "reopened")

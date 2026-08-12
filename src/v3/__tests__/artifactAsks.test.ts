@@ -16,6 +16,7 @@ import { migrate, type Snapshot } from "@/v3/lib/ledger/migrate";
 import { buildUnknownQueue, dictionaryBucket } from "@/v3/lib/ledger/projections";
 import {
   deriveArtifactAsks, asksNeedingChase, frameSorReadiness, parseDeclaredSors,
+  type ArtifactAskMark,
 } from "@/v3/lib/ledger/artifactAsks";
 import { flowMovements, gateChecklist } from "@/v3/components/flow/flowShellData";
 
@@ -311,5 +312,70 @@ describe("the Frame GATE surfaces the sponsor's declaration — before any ontol
     expect(perSor.label).toContain("Billing");        // the one still unanswered, named
     const global = sorItem(withInputs({ _dataDictionary: csv }))!;
     expect(global.done).toBe(true);                   // the un-keyed upload claims to cover everything
+  });
+});
+
+/**
+ * SETTLING AN ASK THAT ALREADY HAS A DICTIONARY.
+ *
+ * A dictionary arrives, closes some of the typing wall and not all of it, so the
+ * ask REOPENS and keeps chasing. The only disposition on offer was "has no
+ * dictionary" — false the moment one has been uploaded. The operator's real
+ * position ("that upload is everything this system has") had no way onto the
+ * record, so quieting the card meant recording something untrue.
+ *
+ * `complete` says the true thing. What it does NOT do is make the remaining
+ * questions go away: they stay open, stay counted, stay in the burn-down. It ends
+ * the chase, not the count.
+ */
+describe("the 'that's the whole dictionary' disposition", () => {
+  // The surgery shape: the EHR names two entities, so a dictionary on file that
+  // does not answer everything leaves the ask REOPENED — the state this exists for.
+  const withDict = (marks: ArtifactAskMark[] = []) =>
+    deriveArtifactAsks(migrate(surgery), { dictionaryBySor: new Map([["ehr", "EHR dictionary"]]), marks });
+
+  it("REGRESSION: a reopened ask can be settled without claiming there is no dictionary", () => {
+    const before = withDict();
+    const ask = before.asks.find((a) => a.sor === "EHR")!;
+    expect(ask.state, "the precondition — a dictionary is on file and questions remain").toBe("reopened");
+    expect(asksNeedingChase(before).some((a) => a.sor === "EHR")).toBe(true);
+
+    const after = withDict([{ sor: "EHR", mark: "complete", at: "2026-08-12T00:00:00Z", by: "op" }]);
+    expect(after.asks.find((a) => a.sor === "EHR")!.state).toBe("complete");
+    expect(asksNeedingChase(after).some((a) => a.sor === "EHR"), "still chasing a settled ask").toBe(false);
+  });
+
+  it("settling ends the CHASE, never the count", () => {
+    const before = withDict();
+    const after = withDict([{ sor: "EHR", mark: "complete", at: "2026-08-12T00:00:00Z" }]);
+    const w = (v: typeof before) => v.asks.find((a) => a.sor === "EHR")!.weight;
+    expect(w(after), "the open questions were swallowed by the disposition").toBe(w(before));
+    // conservation is over ALL asks, so a settled one must still be in the list
+    expect(after.asks.some((a) => a.sor === "EHR")).toBe(true);
+  });
+
+  it("'complete' with NO dictionary on file is ignored — it describes nothing", () => {
+    const v = deriveArtifactAsks(migrate(surgery), {
+      marks: [{ sor: "EHR", mark: "complete", at: "2026-08-12T00:00:00Z" }],
+    });
+    const ask = v.asks.find((a) => a.sor === "EHR")!;
+    expect(ask.state, "an ask with nothing on file was settled by a mark about a file").not.toBe("complete");
+    expect(asksNeedingChase(v).some((a) => a.sor === "EHR"), "the ask stopped being chased anyway").toBe(true);
+  });
+
+  it("a later mark supersedes it — settling is reversible", () => {
+    const after = withDict([
+      { sor: "EHR", mark: "complete", at: "2026-08-12T00:00:00Z" },
+      { sor: "EHR", mark: "requested", at: "2026-08-12T01:00:00Z" },
+    ]);
+    // With a dictionary on file the ask returns to `reopened`, which is the truth:
+    // there is one, and questions remain.
+    expect(after.asks.find((a) => a.sor === "EHR")!.state).toBe("reopened");
+    expect(asksNeedingChase(after).some((a) => a.sor === "EHR")).toBe(true);
+  });
+
+  it("has-none still wins over complete — the stronger statement", () => {
+    const after = withDict([{ sor: "EHR", mark: "has-none", at: "2026-08-12T00:00:00Z" }]);
+    expect(after.asks.find((a) => a.sor === "EHR")!.state).toBe("has-none");
   });
 });

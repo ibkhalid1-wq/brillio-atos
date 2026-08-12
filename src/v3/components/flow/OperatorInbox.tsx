@@ -399,7 +399,14 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
       {(() => {
         const chase = asksNeedingChase(ledger.artifactAsks);
         const unattributed = ledger.artifactAsks.unattributed;
-        if (!chase.length && !unattributed.weight) return null;   // self-cleared → hidden
+        // SETTLED BY A DECISION, not by the data — "that's the whole dictionary" and
+        // "has no dictionary" are things an operator said, and they stay visible with
+        // a way back. Settling would otherwise be a one-way door: the ask leaves the
+        // chase, taking its own upload control and its own buttons with it, and a
+        // mis-click could not be undone from the surface that caused it. `provided`
+        // is NOT here — nothing was decided, the questions simply all closed.
+        const settled = ledger.artifactAsks.asks.filter((a) => a.state === "complete" || a.state === "has-none");
+        if (!chase.length && !unattributed.weight && !settled.length) return null;   // self-cleared → hidden
         const now = Date.now();
         // The systems that actually have a row on screen right now. A preview or
         // an error naming anything else is an ORPHAN and must fall through to the
@@ -498,7 +505,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                   </span>
                   <span className="v3ib-dict-msg">
                     {ask.state === "reopened" ? (
-                      <><b>reopened</b> — {ask.weight} typing question{ask.weight === 1 ? "" : "s"} since the import attach to this same ask (never a second one).</>
+                      <><b>reopened</b> — {ask.weight} typing question{ask.weight === 1 ? "" : "s"} since the import attach to this same ask (never a second one). If the upload was all this system has, settle it — the questions stay open and counted, they just stop waiting on a file.</>
                     ) : ask.state === "requested" ? (
                       <>requested · <span className={`v3ln-age${age !== null && age >= 21 ? " hot" : age !== null && age >= 9 ? " warm" : ""}`}>awaiting {age !== null ? `· ${age}d` : ""} · operator-tracked</span></>
                     ) : (
@@ -511,6 +518,19 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                       {ask.state === "unrequested" || ask.state === "reopened" ? (
                         <button type="button" className="v3ib-btn ghost sm" aria-label={spoken(`Mark the ${ask.sor} dictionary as requested`)} onClick={() => onAskMark({ sor: ask.sor, mark: "requested", by, at: nowISO() })}>mark requested</button>
                       ) : null}
+                      {/* A DICTIONARY IS ON FILE AND IT IS ALL THERE IS.
+                          Until now the only way to stop a reopened ask chasing was
+                          "has no dictionary" — which is false once one has been
+                          uploaded, and would have put a wrong fact on the record to
+                          quiet a card. This says the true thing instead: what
+                          arrived is everything the system has, so no further upload
+                          is coming. Only offered where it is meaningful — an ask
+                          with no dictionary has nothing to call complete. */}
+                      {ask.state === "reopened" ? (
+                        <button type="button" className="v3ib-btn ghost sm"
+                          aria-label={spoken(`Record that the ${ask.sor} dictionary on file is all there is`)}
+                          onClick={() => onAskMark({ sor: ask.sor, mark: "complete", by, at: nowISO() })}>that&rsquo;s the whole dictionary</button>
+                      ) : null}
                       {ask.state !== "has-none" ? (
                         <button type="button" className="v3ib-btn ghost sm" aria-label={spoken(`Record that ${ask.sor} has no data dictionary`)} onClick={() => onAskMark({ sor: ask.sor, mark: "has-none", by, at: nowISO() })}>has no dictionary</button>
                       ) : null}
@@ -522,6 +542,23 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                 </div>
               );
             })}
+            {settled.length ? (
+              <div className="v3ib-dict-settled">
+                <span className="v3ib-dict-settled-t">
+                  <b>{settled.length}</b> settled by you —{" "}
+                  {settled.map((a) => `${a.sor} (${a.state === "complete" ? "whole dictionary on file" : "has none"})`).join(" · ")}
+                </span>
+                {onAskMark ? (
+                  <span className="v3ib-dict-actions">
+                    {settled.map((a) => (
+                      <button key={a.sor} type="button" className="v3ib-btn ghost sm"
+                        aria-label={spoken(`Chase the ${a.sor} dictionary again`)}
+                        onClick={() => onAskMark({ sor: a.sor, mark: "requested", by, at: nowISO() })}>chase {a.sor} again</button>
+                    ))}
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
             {unattributed.weight ? (
               <div className="v3ib-dict-ask">
                 <span className="v3ib-dict-to"><b>{unattributed.weight}</b> typing question{unattributed.weight === 1 ? "" : "s"} on entities with <b>no system of record named</b></span>
