@@ -85,3 +85,40 @@ describe("the dictionary upload can never fail silently", () => {
     expect(btn.length).toBeGreaterThan(0);
   });
 });
+
+/**
+ * SEVERAL FILES, ONE ASK.
+ *
+ * A system of record exports one workbook per OBJECT, so "the CRM dictionary" is
+ * three files. The input took one at a time and each stored write replaced the
+ * last, so uploading three left the operator with the third and no sign the other
+ * two had ever been read.
+ */
+describe("the upload takes more than one file", () => {
+  const src = () => readFileSync(SRC, "utf8");
+
+  it("the file input accepts a multiple selection", () => {
+    const input = src().slice(src().indexOf("ref={dictRef}"), src().indexOf("ref={dictRef}") + 400);
+    expect(input, "the dictionary input is single-file again").toContain("multiple");
+  });
+
+  it("every selected file is read, not just the first", () => {
+    const s = src();
+    const handler = s.slice(s.indexOf("ref={dictRef}"), s.indexOf("uploadRow(null"));
+    expect(handler, "only files[0] is read — the rest of the selection is dropped")
+      .not.toMatch(/files\?\.\[0\]/);
+    expect(handler).toContain("for (const f of files)");
+  });
+
+  it("the preview merges through the SAME rule the stored field uses", () => {
+    // Or the count shown before committing is not the count that lands.
+    expect(src()).toContain("mergeDictionaryCsv");
+  });
+
+  it("a file that fails does not discard the ones already read", () => {
+    const s = src();
+    const start = s.indexOf("const readDictionaryFile ");
+    const body = s.slice(start, s.indexOf("const readDictionaryFileUnsafe", start));
+    expect(body).toContain("return carry;");
+  });
+});
