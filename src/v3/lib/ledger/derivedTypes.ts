@@ -173,3 +173,29 @@ export function derivedTypeClaims(proposals: readonly DerivedTypeProposal[]): As
     p.about, { kind: "scalar", value: p.dataType }, DERIVED_TYPE_PROVENANCE,
   ));
 }
+
+// ── where a field came from ────────────────────────────────────────────────────────
+/**
+ * THE EVIDENCE FOR ONE FIELD, or null when the record does not say.
+ *
+ * Null is the answer that matters. An attribute has always been a bare string in
+ * the generated ontology, so a field carried no provenance of its own — only its
+ * entity did. Tracing `Account.segment` reached the ENTITY's evidence ("dev demo
+ * extract", a workflow-design document, schema.org/Organization) and stopped:
+ * nothing distinguished a field somebody named in an interview from one the model
+ * listed while summarising a document, and both were being asked about equally.
+ *
+ * A surface that shows this can stop treating those two the same. `null` is not a
+ * failure to look — it is the record saying nothing, which is itself the finding.
+ */
+export function attributeEvidence(
+  store: { liveClaimsAbout: (about: string) => Array<{ value: unknown }> },
+  attributeElementId: string,
+): string | null {
+  const claims = store.liveClaimsAbout(`${attributeElementId}#evidence`);
+  for (const c of claims) {
+    const v = c.value as { kind?: string; value?: unknown } | undefined;
+    if (v?.kind === "scalar" && typeof v.value === "string" && v.value.trim()) return v.value.trim();
+  }
+  return null;
+}
