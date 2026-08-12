@@ -314,11 +314,11 @@ describe("decorative glyphs are hidden from the reading order", () => {
    * they are RECORDED rather than silently tolerated. The list is exact: a THIRD
    * offender, or either of these moving, turns this red.
    *   · "＋ add to the record"  — .v3ln-a, rendered by TheLine.tsx
-   *   · "⌲ Attach a file …"     — .v3fs-a,  rendered by AttachFileButton in flowCapture.tsx
+   *   · "⌲ Attach files …"    — .v3fs-a,  rendered by AttachFileButton in flowCapture.tsx
    */
   const NOT_OURS: Array<{ cls: string; name: RegExp; owner: string }> = [
     { cls: "v3ln-a", name: /^＋ add to the record$/, owner: "TheLine.tsx" },
-    { cls: "v3fs-a", name: /^⌲ Attach a file/, owner: "flowCapture.tsx (AttachFileButton)" },
+    { cls: "v3fs-a", name: /^⌲ Attach files?/, owner: "flowCapture.tsx (AttachFileButton)" },
   ];
   const excused = (el: Element, name: string) =>
     NOT_OURS.some((x) => (el.getAttribute("class") ?? "").split(/\s+/).includes(x.cls) && x.name.test(name));
@@ -350,7 +350,7 @@ describe("decorative glyphs are hidden from the reading order", () => {
       }
     }
     expect([...found].sort()).toEqual([
-      "v3fs-a|⌲ Attach a file — PDF, W",
+      "v3fs-a|⌲ Attach files — PDF, Wo",
       "v3ln-a|＋ add to the record",
     ]);
   });
@@ -411,7 +411,7 @@ describe("the artifact studios say what their controls do", () => {
         if (isWordless(name)) { offenders.push(`${title}: ${describeEl(el)} → nameless ${JSON.stringify(name)}`); continue; }
         const hit = name.match(GLYPHS);
         // The Library page itself stays mounted behind the studio, and its one
-        // excused control (flowCapture's "⌲ Attach a file") is not ours to fix here.
+        // excused control (flowCapture's "⌲ Attach files") is not ours to fix here.
         if (hit && !(el.getAttribute("class") ?? "").split(/\s+/).includes("v3fs-a")) {
           offenders.push(`${title}: ${describeEl(el)} → glyph ${JSON.stringify(hit[0])} in ${JSON.stringify(name)}`);
         }
