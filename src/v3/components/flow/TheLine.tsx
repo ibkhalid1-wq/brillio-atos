@@ -1522,13 +1522,17 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                               <span className="v3ln-cr-qgroup-n">{items.length}</span>
                               <span className="v3ln-cr-qgroup-note">{section.note}</span>
                             </summary>
-                            <ul className="v3ln-cr-qs owned">
-                              {items.map((q) => (
-                                <li key={q.about} title={q.about}>
-                                  <span className="v3ln-cr-qtype">{q.typeTag}</span>{q.question}
-                                </li>
-                              ))}
-                            </ul>
+                            {/* A bucket routed away from this person is COUNTED, not
+                                transcribed — see `listRows`. */}
+                            {section.listRows ? (
+                              <ul className="v3ln-cr-qs owned">
+                                {items.map((q) => (
+                                  <li key={q.about} title={q.about}>
+                                    <span className="v3ln-cr-qtype">{q.typeTag}</span>{q.question}
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : null}
                           </details>
                         ))}
                         {seams.length ? (
