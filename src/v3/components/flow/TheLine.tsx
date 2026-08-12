@@ -1027,7 +1027,11 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
           <div><span className="v3ln-sl">Round</span><span className="v3ln-sv">{model.round}</span></div>
           <button type="button" className="v3ln-statbtn wide" onClick={() => setTab("discovery")}
             title="Attributed closures — a person closed the slot. The honest heard-count, not a roster tally.">
-            <span className="v3ln-sl">Heard <span className="v3ln-sl-note">attributed closures</span></span>
+            {/* No "attributed closures" sub-note here: HeardReadout prints the
+                number WITH that unit four pixels to the right, so the label was
+                the same two words twice. The button's title still carries the
+                distinction that matters (attributed vs machine-import). */}
+            <span className="v3ln-sl">Heard</span>
             <HeardReadout heard={ledger.heard} />
           </button>
           <div className="v3ln-stat-wide">

@@ -375,12 +375,6 @@
 
 /* ══ The Design Loop as a ledger surface — three ownership zones ══ */
 .v3dl{display:flex;flex-direction:column;gap:14px;padding:4px 2px 6px}
-/* convergence header — real closures, promoted out of a corner counter */
-.v3dl-head{display:flex;flex-wrap:wrap;gap:14px 34px;align-items:flex-start;
-  padding:11px 14px;border:1px solid var(--fs-line);border-radius:12px;
-  background:linear-gradient(color-mix(in srgb,var(--mv) 6%,var(--fs-card)),var(--fs-card))}
-.v3dl-conv{display:flex;flex-direction:column;gap:6px}
-.v3dl-conv-lbl{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--v3-text-muted);font-weight:700}
 /* a zone — its ownership class colours the spine, never colour alone (tag+title carry it) */
 .v3dl-zone{border:1px solid var(--fs-line);border-left:4px solid var(--fs-line);border-radius:12px;
   background:var(--fs-card);padding:12px 15px 14px;display:flex;flex-direction:column;gap:11px}
@@ -513,7 +507,10 @@
 .v3dr-link.is-none{font-style:italic}
 .v3dr-stale,.v3dr-from{font-size:10px;color:var(--v3-amber)}
 .v3dr-said-text{margin:0;font-size:11px;line-height:1.5;color:var(--v3-text-secondary)}
-.v3dr-rec,.v3dr-res,.v3dr-guard{margin:0;font-size:10.5px;color:var(--v3-text-muted);line-height:1.5}
+.v3dr-rec,.v3dr-res,.v3dr-guard,.v3dr-capture{margin:0;font-size:10.5px;color:var(--v3-text-muted);line-height:1.5}
+/* a note ABOUT the quote — set apart from it so it never reads as part of what
+   they said (which is the whole point of recording how the words were produced) */
+.v3dr-capture{font-style:italic}
 .v3dr-guard{font-style:italic}
 .v3dr-disc{align-self:flex-start;font:inherit;font-size:10.5px;font-weight:650;color:var(--mv);background:none;
   border:1px solid var(--v3-control-line);border-radius:6px;padding:2px 8px;cursor:pointer}
