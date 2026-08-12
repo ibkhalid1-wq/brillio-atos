@@ -696,6 +696,11 @@
 .v3ib-dict-settled{display:flex;flex-direction:column;gap:5px;margin-top:6px;padding:7px 11px;
   border:1px dashed var(--fs-line);border-radius:8px;background:transparent}
 .v3ib-dict-settled-t{font-size:11px;line-height:1.5;color:var(--v3-text-muted)}
+/* Types the MACHINE proposed — marked as a reading, like the derived entity on a
+   dictionary preview, because that is what it is. */
+.v3ib-dict-derivedtypes{display:flex;flex-direction:column;gap:3px;margin-top:6px;padding:7px 11px;
+  border-left:2px dashed color-mix(in srgb,var(--v3-amber) 55%,transparent);
+  background:color-mix(in srgb,var(--v3-amber) 4%,transparent);border-radius:0 8px 8px 0}
 /* An upload that could not be read says so WHERE the upload button was. The
    read path had no catch and its caller used `void`, so a rejected promise was
    discarded and the operator saw nothing at all — the failure mode that reads

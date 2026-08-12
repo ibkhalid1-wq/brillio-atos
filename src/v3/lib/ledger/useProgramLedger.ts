@@ -36,6 +36,11 @@ import { projectKitQuestions, type KitQuestion } from "./kitProjection";
 import { deriveArtifactAsks, parseDeclaredSors, type ArtifactAskMark, type ArtifactAskView } from "./artifactAsks";
 import { reconcile } from "./merge";
 import { readDictionarySources, dictionaryToClaims, TYPING_SLOTS } from "./dictionary";
+import { deriveRoles } from "@shared/semanticRoles.ts";
+import {
+  derivedTypeProposals, derivedTypeClaims,
+  type DerivedTypeProposal, type AttributeRoleLike,
+} from "./derivedTypes";
 import type { LedgerStore } from "./store";
 import { isLive, slotOf } from "./types";
 import {
@@ -186,6 +191,11 @@ export interface ProgramLedger {
   /** The applied data dictionary's name, or null — when set, the typing wall self-closed
    *  from it (code-derived · weak, deviatable). */
   dictionaryName: string | null;
+  /** Types Aura PROPOSED by reading the field names, for loci nothing else answered.
+   *  `code-derived · weak` — deviatable by anyone. Exposed so a surface can say how
+   *  many questions left the wall this way: a burn-down that shrinks because the
+   *  machine guessed must SAY the machine guessed. */
+  derivedTypes: DerivedTypeProposal[];
   /** The ASSIGN queue — unowned questions that genuinely need a HUMAN owner: NON-typing
    *  (phase / decision / …). Typing questions are excluded (they route to the dictionary,
    *  not to a person). So burn-down `unownedOpen` = assignQueue.length + the unowned slice
@@ -227,6 +237,32 @@ export function useProgramLedger(program?: ProgramSummary): ProgramLedger {
       if (sor) dictionaryBySor.set(sor.trim().toLowerCase(), name);
       else dictionaryName = name;
     }
+
+    // ── derived types (the LAST word, and the weakest) ──
+    // Aura's own semantic-role reader already types these field names — it is how
+    // the prototype renders a currency column — so asking a person "what type of
+    // value is Account.annual revenue?" was asking for something already worked
+    // out. Seeded AFTER every real source, over the loci still OPEN, so an
+    // uploaded dictionary always wins and a heuristic only ever fills a gap.
+    // `code-derived · weak`, deviatable, and counted separately as PROPOSED —
+    // these are readings of a name, not knowledge of the client's business.
+    const derivedTypes: DerivedTypeProposal[] = (() => {
+      const ontologyDoc = snap.ontology;
+      if (!ontologyDoc || typeof ontologyDoc !== "object") return [];
+      const openTypeLoci = new Set(
+        buildUnknownQueue(migrated).items
+          .filter((i) => i.status === "open" && i.slot === "dataType")
+          .map((i) => i.about),
+      );
+      if (!openTypeLoci.size) return [];
+      let roles: AttributeRoleLike[] = [];
+      try {
+        roles = (deriveRoles(ontologyDoc as Record<string, unknown>).attributeRoles ?? []) as AttributeRoleLike[];
+      } catch { return []; }   // a reading that throws proposes nothing
+      const proposals = derivedTypeProposals(roles, openTypeLoci);
+      if (proposals.length) reconcile(migrated, derivedTypeClaims(proposals), new Set(migrated.elements().map((e) => e.id)));
+      return proposals;
+    })();
 
     // ── artifact-ask marks (preventive dictionary ask, one per SoR) — same
     //    fingerprint-safe underscore pattern as the dictionary itself ──
@@ -343,6 +379,7 @@ export function useProgramLedger(program?: ProgramSummary): ProgramLedger {
       sessionQueue,
       typingLoci,
       dictionaryName,
+      derivedTypes,
       assignQueue,
     };
   }, [program]);

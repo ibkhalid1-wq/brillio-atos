@@ -406,7 +406,12 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
         // mis-click could not be undone from the surface that caused it. `provided`
         // is NOT here — nothing was decided, the questions simply all closed.
         const settled = ledger.artifactAsks.asks.filter((a) => a.state === "complete" || a.state === "has-none");
-        if (!chase.length && !unattributed.weight && !settled.length) return null;   // self-cleared → hidden
+        // Defensive: a ledger built before this field existed still renders.
+        const derived = ledger.derivedTypes ?? [];
+        // `derived` is IN the guard. Proposals that left the burn-down without
+        // anyone answering them must never be the reason the section is empty —
+        // that would be the silent shrink this whole block exists to prevent.
+        if (!chase.length && !unattributed.weight && !settled.length && !derived.length) return null;
         const now = Date.now();
         // The systems that actually have a row on screen right now. A preview or
         // an error naming anything else is an ORPHAN and must fall through to the
@@ -484,6 +489,24 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
               <span className="v3ib-verb">Data dictionary</span>
               <span className="v3ib-lead"><b>{chase.length}</b> system{chase.length === 1 ? "" : "s"} of record with an unprovided dictionary — <b>one upload each</b> closes the typing wall, not form fields to the domain expert. Dictionary claims land <b>code-derived · weak</b> — any owner can still deviate.</span>
             </header>
+            {/* A BURN-DOWN THAT SHRANK BECAUSE THE MACHINE GUESSED MUST SAY SO.
+                These left the wall without anybody answering them, so the count is
+                stated here rather than quietly absorbed. They are the weakest claim
+                the ledger holds and lose to any human answer — but an operator who
+                is not told will read them as settled. */}
+            {derived.length ? (
+              <div className="v3ib-dict-derivedtypes">
+                <span className="v3ib-dict-to">
+                  <b>{derived.length}</b> type{derived.length === 1 ? " was" : "s were"} read from the field names, not answered by anyone
+                </span>
+                <span className="v3ib-dict-msg">
+                  {derived.slice(0, 3).map((d) => `${d.entity}.${d.attribute} → ${d.dataType}`).join(" · ")}
+                  {derived.length > 3 ? ` · +${derived.length - 3} more` : ""}
+                  {" "}— <b>code-derived · weak</b>, the weakest claim on the record: a dictionary or an owner
+                  overrules any of them. A real dictionary is still the better answer.
+                </span>
+              </div>
+            ) : null}
             {chase.map((ask) => {
               // owner: the derivation's, else the shared detection over the roster, else TBC — never fabricated
               const fallback = candidates.find((c) => isSystemOwner(c.label, c.role));
