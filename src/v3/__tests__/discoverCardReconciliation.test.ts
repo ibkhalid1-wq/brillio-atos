@@ -357,3 +357,111 @@ describe("role owners with nobody behind them are VISIBLE on Discover", () => {
     expect(total).toBe(listed.reduce((n, o) => n + o.open, 0));
   });
 });
+
+/**
+ * THE ROW SWALLOWED THE CLICK THAT WAS MEANT FOR THE SECTION.
+ *
+ * The whole roster row is clickable — it toggles the question drawer — with an
+ * escape hatch for clicks that already mean something:
+ *
+ *     if (e.target.closest("button, a, input, select, textarea")) return;
+ *
+ * `summary` was not on that list. It is an interactive control that is not a
+ * <button>, so clicking "Answered by the data dictionary" opened the section AND
+ * fell through to the row handler, which closed the drawer the section lived in.
+ * Reported as "clicking it does not expand" — the section did expand, for the one
+ * frame before its parent was destroyed.
+ */
+describe("a click meant for a question-group heading does not close the drawer", () => {
+  const openDrawer = () => {
+    mount();
+    const { card } = readCard(PERSON);
+    act(() => { (card.querySelector(".v3ln-cr-qbtn") as HTMLButtonElement).click(); });
+    return cardFor(PERSON);
+  };
+
+  it("REGRESSION: clicking a section heading leaves the drawer open", () => {
+    const drawer = openDrawer();
+    const summary = drawer.querySelector(".v3ln-cr-qgroup summary") as HTMLElement;
+    expect(summary, "no section heading to click — this case would pass vacuously").toBeTruthy();
+
+    act(() => { summary.click(); });
+
+    // the drawer survived: its sections are still in the document
+    expect(cardFor(PERSON).querySelectorAll(".v3ln-cr-qgroup").length).toBeGreaterThan(0);
+    expect((cardFor(PERSON).querySelector(".v3ln-cr-qbtn") as HTMLElement).getAttribute("aria-expanded"))
+      .toBe("true");
+  });
+
+  it("the row still toggles from a click that means nothing else", () => {
+    // The guard must not have turned the whole row inert — clicking the body
+    // background is still how you close the drawer.
+    const drawer = openDrawer();
+    const body = drawer.querySelector(".v3ln-cr-body") as HTMLElement;
+    act(() => { body.click(); });
+    expect((cardFor(PERSON).querySelector(".v3ln-cr-qbtn") as HTMLElement).getAttribute("aria-expanded"))
+      .toBe("false");
+  });
+
+  it("every escape-hatch selector names a real interactive control", () => {
+    // Source scan: the list is the whole reason a nested control works, and it is
+    // written as one string, so a future control added to a row has one place to
+    // be registered. `summary` being missing is exactly what this catches.
+    const src = readFileSync(resolve(__dirname, "../components/flow/TheLine.tsx"), "utf8");
+    const m = src.match(/closest\("([^"]*)"\)\) return;/);
+    expect(m, "the row's escape hatch moved — re-anchor this scan").toBeTruthy();
+    const selectors = m![1].split(",").map((s) => s.trim());
+    for (const control of ["button", "a", "input", "select", "textarea", "summary"]) {
+      expect(selectors, `${control} is not exempt from the row toggle`).toContain(control);
+    }
+  });
+});
+
+/**
+ * AREA CHIPS — removed from the roster row (2026-08-11, by request).
+ *
+ * Filtering by area is NOT lost with them, which is the only reason removing them
+ * was safe: the band header carries a labelled "Area" dropdown that does the same
+ * job with a count per area. This holds both halves.
+ */
+describe("the roster row shows no area chips, and area filtering survives", () => {
+  it("no area chip is rendered on any row", () => {
+    mount();
+    expect(cardFor(PERSON).querySelectorAll(".v3ln-cr-areas")).toHaveLength(0);
+    const discover = host.querySelector('[aria-label="Discover"]') ?? host;
+    expect(discover.querySelectorAll(".v3ln-cr-area")).toHaveLength(0);
+  });
+
+  it("EVERY row reserves its role line, so the column cannot go ragged", () => {
+    // The heights themselves are layout, which jsdom does not compute — what IS
+    // checkable is the structure that makes them equal: the line exists on every
+    // row, empty for people whose role adds nothing to their name. Rendering it
+    // conditionally is what made some rows two lines tall and others three.
+    mount();
+    const discover = host.querySelector('[aria-label="Discover"]') ?? host;
+    const rows = [...discover.querySelectorAll(".v3ln-cr-who")];
+    expect(rows.length, "no roster rows mounted — this case would pass vacuously").toBeGreaterThan(1);
+    for (const who of rows) {
+      expect(who.querySelector(".v3ln-cr-role"), "a row with no reserved role line").toBeTruthy();
+    }
+    // Every person in THIS fixture happens to carry a distinct role, so the DOM
+    // above cannot show the empty case the reservation exists for (it occurs on
+    // the live roster, where several rows are a bare function name). The
+    // invariant is therefore asserted where it is decided: the element is
+    // rendered unconditionally, with the text — not the element — being what
+    // goes empty.
+    const src = readFileSync(resolve(__dirname, "../components/flow/TheLine.tsx"), "utf8");
+    const i = src.indexOf('<span className="v3ln-cr-role">');
+    expect(i, "the reserved role line is gone — re-anchor this scan").toBeGreaterThan(-1);
+    const block = src.slice(i, src.indexOf("</span>", i));
+    expect(block, "the role line is conditional again — rows will go ragged")
+      .toMatch(/\?\s*row\.role\s*:\s*""/);
+  });
+
+  it("the Area dropdown is still there, and still filters", () => {
+    mount();
+    const select = host.querySelector('select[aria-label="Filter the roster by area"]') as HTMLSelectElement | null;
+    expect(select, "the only remaining way to filter by area is gone").toBeTruthy();
+    expect(select!.options.length).toBeGreaterThan(1);
+  });
+});

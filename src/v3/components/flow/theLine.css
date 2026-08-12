@@ -233,15 +233,27 @@
 .v3ln-cr{display:flex;flex-direction:column;gap:7px;padding:9px 14px;border-bottom:1px solid var(--fs-line);cursor:pointer}
 .v3ln-cr:hover{background:color-mix(in srgb,var(--v3-accent-2) 3%,var(--fs-card))}
 /* the top bar never moves — expansion only adds a body below it. Grid keeps
- * every control in its column: dot · persona · areas (wrap in their own track)
- * · one right cluster holding questions/journey/actions. */
-.v3ln-cr-top{display:grid;grid-template-columns:auto minmax(140px,max-content) 1fr auto;
+ * every control in its column: dot · persona · one right cluster holding
+ * questions/journey/actions. (The area-chip track went with the chips; leaving
+ * the fourth `auto` behind would have parked the right cluster in the 1fr.) */
+/* ONE LINE PER ROW, ALWAYS. The controls used to sit in a wrapping flex box in a
+ * `1fr` track, so a row's HEIGHT depended on whether that person happened to have
+ * an open link: with "close link" the cluster needed 572px, had 553, and broke to
+ * a second line (57px tall); without it the same row was 23px. Scanning a roster
+ * where the row height encodes nothing was the cost.
+ * The controls now take `max-content` — the width they actually need — and the
+ * NAME yields instead, truncating with an ellipsis. Nothing wraps, so every row
+ * is the same height whatever state its link is in. */
+.v3ln-cr-top{display:grid;grid-template-columns:auto minmax(0,1fr) max-content;
   align-items:center;gap:12px}
-.v3ln-cr-top .v3ln-cr-who{flex:none}
-.v3ln-cr-areas{justify-content:flex-end}
-.v3ln-cr-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+/* a grid child will not shrink below its content unless told it may */
+.v3ln-cr-top .v3ln-cr-who{flex:none;min-width:0}
+.v3ln-cr-who b,.v3ln-cr-who span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.v3ln-cr-right{display:flex;align-items:center;gap:10px;flex-wrap:nowrap;justify-content:flex-end}
 @media(max-width:680px){.v3ln-cr-top{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-  .v3ln-cr-areas{justify-content:flex-start}}
+  /* below this width there is nothing to be strict with — wrapping beats truncating */
+  .v3ln-cr-right,.v3ln-cr-act{flex-wrap:wrap}
+  .v3ln-cr-who b,.v3ln-cr-who span{overflow:visible;white-space:normal}}
 .v3ln-cr-body{display:flex;flex-direction:column;gap:8px;padding:0 0 2px 21px}
 .v3ln-cr-qs{margin:0;padding:0 0 0 16px;max-width:560px;font-size:11px;color:var(--v3-text-muted)}
 .v3ln-cr-qs li{margin:0 0 4px;line-height:1.45}
@@ -250,22 +262,17 @@
 .v3ln-dot.d{background:var(--ln-m4-fill)}
 .v3ln-dot.w{background:var(--ln-m1-fill)}
 .v3ln-dot.t{background:var(--fs-line);border:1px solid var(--v3-text-muted)}
-.v3ln-cr-who{display:flex;flex-direction:column;min-width:150px;flex:1}
+.v3ln-cr-who{display:flex;flex-direction:column;min-width:0;flex:1}
 .v3ln-cr-who b{font-size:12.5px;font-weight:650;color:var(--v3-text-primary)}
 .v3ln-cr-who span{font-size:10.5px;color:var(--v3-text-muted)}
-.v3ln-cr-areas{display:flex;gap:4px;flex-wrap:wrap}
 .v3ln-cr-area{font:inherit;font-weight:600;font-size:11px;line-height:1.5;color:var(--v3-accent-2);
   background:color-mix(in srgb,var(--v3-accent-2) 8%,transparent);border:0;border-radius:999px;
   padding:3px 10px;white-space:nowrap;cursor:pointer}
 .v3ln-cr-area:hover{background:color-mix(in srgb,var(--v3-accent-2) 16%,transparent)}
 .v3ln-cr-area:focus-visible{outline:2px solid var(--v3-accent-2);outline-offset:1px}
-/* an active filter lights its chip and dulls the rest */
-.v3ln-cr-area.on{background:var(--v3-accent-2);color:#fff}
-.v3ln-cr-area.on:hover{background:color-mix(in srgb,var(--v3-accent-2) 85%,#000)}
-.v3ln-cr-area.dim{color:var(--v3-text-muted);opacity:.5;
-  background:color-mix(in srgb,var(--v3-text-muted) 8%,transparent)}
-.v3ln-cr-area.dim:hover{opacity:1;color:var(--v3-accent-2);
-  background:color-mix(in srgb,var(--v3-accent-2) 12%,transparent)}
+/* NOTE: `.v3ln-cr-area` itself stays — the RECORD tab still draws an area chip
+   with it. Its .on/.dim filter states went with the roster chips, which were the
+   only thing that ever set them. */
 .v3ln-filter{display:flex;align-items:center;gap:7px;font-size:10px;letter-spacing:.05em;
   text-transform:uppercase;color:var(--v3-text-muted)}
 .v3ln-filter select{font:inherit;font-weight:600;font-size:12px;line-height:1.4;color:var(--v3-text-primary);border:1px solid var(--fs-line);
@@ -280,7 +287,15 @@
 .v3ln-cr-qbtn:focus-visible{outline:2px solid var(--v3-accent-2);outline-offset:1px}
 .v3ln-cr-qbtn[aria-expanded="true"]{border-color:var(--v3-accent-2);
   background:color-mix(in srgb,var(--v3-accent-2) 7%,transparent)}
-.v3ln-cr-act{display:flex;gap:6px;flex:none}
+/* The action cluster reserves the width of its WIDEST state (link · close link ·
+   capture · invite) so the controls to its left — the owned-questions button and
+   the phase badges — sit at the same x on every row. Without it a person with an
+   open link pushed their whole row ~90px left of a person without one, and the
+   columns you scan down were not columns.
+   The value is that widest state, measured; a rarer wider state (a closed link,
+   which adds "link closed · reopen") simply grows past it, so alignment degrades
+   on that row instead of the buttons being clipped. */
+.v3ln-cr-act{display:flex;gap:6px;flex:none;flex-wrap:nowrap;min-width:284px;justify-content:flex-end}
 .v3ln-cr-url-row{flex-basis:100%;display:flex;gap:8px;align-items:center}
 .v3ln-cr-url{flex:1;min-width:0;font:11px var(--mono,ui-monospace);color:var(--v3-text-muted);
   border:1px dashed var(--fs-line);border-radius:4px;padding:5px 9px;background:none;margin-top:2px}
@@ -563,7 +578,16 @@
 .v3ln-eng-hdr.is-ready{color:var(--v3-accent-2)}
 .v3ln-eng-hdr.is-in-flight{color:var(--v3-amber)}
 .v3ln-eng-hdr.is-blocked{color:#5a4fa0}
-.v3ln-engrow{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:2px}
+/* ONE LINE. The status chip, any ageing chip and the reconciliation sentence used
+   to wrap to two lines on the people who had most to say, which is exactly the
+   population whose rows you compare. The sentence truncates instead — it is
+   repeated in full in the button's title and, itemised, in the drawer's section
+   headings, so nothing is only here. */
+.v3ln-engrow{display:inline-flex;align-items:center;gap:6px;flex-wrap:nowrap;margin-top:2px;min-width:0}
+.v3ln-engrow > .v3ln-eng,.v3ln-engrow > .v3ln-age{flex:none}
+.v3ln-engrow > .v3ln-eng-why{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* the reserved role line — blank for people who have none, so the column lines up */
+.v3ln-cr-role{min-height:16px}
 .v3ln-eng{font-size:9.5px;font-weight:750;letter-spacing:.04em;text-transform:uppercase;border-radius:5px;padding:1px 7px;border:1px solid var(--fs-line);color:var(--v3-text-muted)}
 .v3ln-eng.is-ready{color:var(--v3-accent-2);border-color:color-mix(in srgb,var(--v3-accent-2) 40%,var(--fs-line));background:color-mix(in srgb,var(--v3-accent-2) 7%,transparent)}
 .v3ln-eng.is-in-flight{color:var(--v3-amber);border-color:color-mix(in srgb,var(--v3-amber) 40%,var(--fs-line))}

@@ -727,7 +727,6 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
   // that only writes to a denied clipboard reads as broken.
   const [linkShown, setLinkShown] = useState<{ who: string; url: string } | null>(null);
   const [qOpen, setQOpen] = useState<Record<string, boolean>>({});
-  const [areaOpen, setAreaOpen] = useState<Record<string, boolean>>({});
   // Company brief — who the client IS. A web-fetched DRAFT the operator
   // confirms or overrides; only their save writes it to the record.
   const [briefOpen, setBriefOpen] = useState(false);
@@ -1208,7 +1207,13 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                 onClick={(e) => {
                   // The whole row toggles the expansion — except clicks that
                   // already mean something (buttons, links, inputs).
-                  if ((e.target as HTMLElement).closest("button, a, input, select, textarea")) return;
+                  //
+                  // `summary` belongs on this list and was missing: it is an
+                  // interactive control that is not a <button>, so a click on a
+                  // question-group heading opened the group AND fell through to
+                  // here, which collapsed the whole drawer in the same gesture.
+                  // The section appeared not to open at all.
+                  if ((e.target as HTMLElement).closest("button, a, input, select, textarea, summary")) return;
                   setQOpen((s) => ({ ...s, [row.label]: !s[row.label] }));
                 }}>
                 {/* The top bar holds everything actionable and NEVER moves —
@@ -1221,8 +1226,15 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                       * token. Rendered through the ONE helper the Inbox already uses, so
                       * Discover stops leaking it as if it were somebody's name. */}
                     <b>{displayPersonLabel(row.label)}</b>
-                    {row.isRole ? <span>role — assign a name to send</span>
-                      : row.role && row.role !== row.label ? <span>{row.role}</span> : null}
+                    {/* ALWAYS RENDERED, blank when there is nothing to say. It used to
+                        appear only for people whose role differs from their name, so a
+                        roster row was two lines tall for some and three for others and
+                        nothing lined up down the column. An empty line reserved costs
+                        one row of leading; a ragged column costs every scan. */}
+                    <span className="v3ln-cr-role">
+                      {row.isRole ? "role — assign a name to send"
+                        : row.role && row.role !== row.label ? row.role : ""}
+                    </span>
                     {(() => {
                       const e = engagementByLabel.get(row.label);
                       if (!e) return null;
@@ -1253,38 +1265,13 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                       );
                     })()}
                   </span>
-                  <span className="v3ln-cr-areas">
-                    {/* Routing signal (which turf each person covers) — kept, but collapsed
-                        to the primary few + "+N more" (the same idiom the seams strip uses),
-                        so seven tags don't clutter the row. Filtered area is always shown. */}
-                    {(() => {
-                      const CAP = 3;
-                      const expanded = !!areaOpen[row.label];
-                      // Keep the active filter visible even if it sits past the cap.
-                      const primary = row.areas.slice(0, CAP);
-                      if (areaFilter && row.areas.includes(areaFilter) && !primary.includes(areaFilter)) primary[CAP - 1] = areaFilter;
-                      const shown = expanded ? row.areas : primary;
-                      const hidden = row.areas.length - shown.length;
-                      return (
-                        <>
-                          {shown.map((area) => (
-                            <button key={area} type="button"
-                              className={`v3ln-cr-area${areaFilter === area ? " on" : areaFilter && castAreas.includes(areaFilter) ? " dim" : ""}`}
-                              title={areaFilter === area ? "Show all areas" : `Filter to ${area}`}
-                              onClick={() => setAreaFilter(areaFilter === area ? "" : area)}>{area}</button>
-                          ))}
-                          {hidden > 0 && !expanded ? (
-                            <button type="button" className="v3ln-cr-area more"
-                              title={`Also covers: ${row.areas.slice(CAP).join(", ")}`}
-                              onClick={(e) => { e.stopPropagation(); setAreaOpen((s) => ({ ...s, [row.label]: true })); }}>+{hidden} more</button>
-                          ) : expanded && row.areas.length > CAP ? (
-                            <button type="button" className="v3ln-cr-area more"
-                              onClick={(e) => { e.stopPropagation(); setAreaOpen((s) => ({ ...s, [row.label]: false })); }}>less</button>
-                          ) : null}
-                        </>
-                      );
-                    })()}
-                  </span>
+                  {/* AREA CHIPS REMOVED (2026-08-11, by request). Up to three turf
+                      tags plus a "+N more" sat on every roster row and said nothing
+                      about what to do with the person; the row's job is who to reach
+                      and what they owe. Filtering by area is NOT lost — the "Area"
+                      dropdown in the band header above does it, with a count per
+                      area, and is a labelled control rather than a tag you have to
+                      guess is clickable. */}
                   <span className="v3ln-cr-right">
                   {(() => {
                     // THE HEADLINE — the owned-load's own total, the same object the
