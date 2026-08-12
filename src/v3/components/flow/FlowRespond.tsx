@@ -749,15 +749,12 @@ export default function FlowRespond({ token }: { token: string }) {
                     ? "Design review round — I approve this design as the one we build on."
                     : "Design review round — not yet; I am asking for changes.",
                   feedback,
-                  // TYPED OR DICTATED, in the TEXT as well as on the item. The
-                  // structured `capture` below is the field the operator reads,
-                  // but only `text` survives the hop into the round's own
-                  // `DesignRoundResponse` (see the report: the model has no
-                  // `capture` field yet), and a transcript that reaches the
-                  // record dressed as somebody's writing overstates itself.
-                  capture && capture !== "typed"
-                    ? `— Dictated${capture === "mixed" ? " and corrected" : ""} by ${state.pack.stakeholder}, not typed.`
-                    : "",
+                  // How the words were produced is NOT written into the words. It
+                  // rides as the structured `capture` below, which now survives the
+                  // hop into the round's own DesignRoundResponse and is drawn beside
+                  // the quote. It used to be appended here as an English sentence
+                  // because the model had no field for it, which made the stakeholder
+                  // appear to have written a remark about their own dictation.
                   demoRunBlock,
                 ].filter(Boolean).join("\n\n"),
                 // The word the inbox already stores for a demo verdict, so the round's

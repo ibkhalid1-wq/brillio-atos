@@ -144,6 +144,28 @@ export type DesignParticipantState =
   | "waived"
   | "delegated";
 
+/**
+ * HOW THE WORDS WERE PRODUCED — the stakeholder typed them, spoke them, or spoke
+ * them and then corrected the transcript. It lives HERE, with the round that stores
+ * it, rather than in the review surface that collects it: the surface is one of
+ * several producers, and a vocabulary owned by one producer is a vocabulary the
+ * others have to guess at. Lockstepped with `CAPTURE_MODES` in
+ * `supabase/functions/flow-portal/index.ts`, which is the only place the value is
+ * allowed onto the record.
+ *
+ * It is carried as a FIELD because a transcript is a machine's reading of what
+ * someone said, and evidence that reads as their writing when it is a machine's
+ * reading of their speech overstates itself. It used to ride inside the response
+ * TEXT as a sentence ("— Dictated by X, not typed."), which meant the only way to
+ * know how an answer was produced was to parse English out of the answer.
+ */
+export type CaptureMode = "typed" | "dictated" | "mixed";
+
+/** The same three values at runtime — a writer validates against this rather than
+ *  trusting a cast, so an unknown mode from an older or hostile client is dropped
+ *  instead of landing on the record as a made-up word. */
+export const CAPTURE_MODES: ReadonlySet<string> = new Set<CaptureMode>(["typed", "dictated", "mixed"]);
+
 /** One recorded answer. Kept in full on `history` — a later answer never erases an
  * earlier one, so "what did they say the first time" stays answerable. */
 export interface DesignRoundResponse {
@@ -154,6 +176,10 @@ export interface DesignRoundResponse {
   text?: string;
   /** A recording of the response — reference only; this module stores no media. */
   recordingRef?: string;
+  /** Typed, dictated, or dictated-then-corrected. Absent on rows written before the
+   *  field existed, and on any producer that does not know — never defaulted to
+   *  "typed", which would assert authorship nobody claimed. */
+  capture?: CaptureMode;
   /** The design version this answer was ABOUT — what a regeneration answers. */
   designVersion: string;
   /** Operator captures: who wrote it down. Absent on self-attested answers. */
@@ -413,6 +439,7 @@ export interface RecordVerdictInput {
   attestation: DesignAttestation;
   text?: string;
   recordingRef?: string;
+  capture?: CaptureMode;
   source?: string;
 }
 
@@ -462,6 +489,7 @@ export function recordDesignRoundVerdict(
     verdict: input.verdict,
     text: text || undefined,
     recordingRef: String(input.recordingRef ?? "").trim() || undefined,
+    capture: CAPTURE_MODES.has(String(input.capture ?? "")) ? input.capture : undefined,
     designVersion: round.design.key,
     recordedBy: input.attestation === "operator" ? actor : undefined,
     source: String(input.source ?? "").trim() || (input.attestation === "self" ? "portal" : "meeting"),
@@ -595,6 +623,9 @@ export interface DesignRoundPerson {
   respondedAt?: string;
   text?: string;
   recordingRef?: string;
+  /** Typed, dictated, or corrected-dictation — so a surface can say so beside the
+   *  words instead of the words having to say it about themselves. */
+  capture?: CaptureMode;
   resolution?: DesignRoundResolution;
   delegatedFrom?: string;
   /** The design version their answer was about. */
@@ -674,6 +705,7 @@ export function designRoundRollup(program: ProgramSummary, roundId?: string): De
       respondedAt: person.response?.at,
       text: person.response?.text,
       recordingRef: person.response?.recordingRef,
+      capture: person.response?.capture,
       resolution: person.resolution,
       delegatedFrom: person.delegatedFrom,
       answeredVersion: person.response?.designVersion,
@@ -847,6 +879,9 @@ export interface InboxRoundAttribution {
   designVersion: string;
   verdict?: DesignVerdict;
   text: string;
+  /** How the portal says the words were produced, whitelisted onto the quarantined
+   *  item by the edge. Absent when the sender's client never sent one. */
+  capture?: CaptureMode;
 }
 
 /**
@@ -884,6 +919,9 @@ export function inboxItemRoundAttribution(program: ProgramSummary, itemId: strin
     designVersion: round.design.key,
     verdict,
     text: String(item.text ?? "").trim().slice(0, TEXT_CAP),
+    // Validated, not cast: the edge whitelists this onto the quarantined item, and
+    // anything else an item carries under that key is dropped rather than believed.
+    capture: CAPTURE_MODES.has(String(item.capture ?? "")) ? (item.capture as CaptureMode) : undefined,
   };
 }
 
@@ -902,6 +940,9 @@ export function recordInboxResponseOnRound(program: ProgramSummary, itemId: stri
     verdict: attribution.verdict,
     attestation: "self",
     text: attribution.text,
+    // The hop that used to lose it: only `text` survived from the inbox into the
+    // round, so how the answer was produced had to ride inside the answer.
+    capture: attribution.capture,
     source: "portal",
   }, actor);
 }
