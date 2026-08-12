@@ -27,6 +27,9 @@ const OWNER: Owner = { kind: "role", role: "System Owner" };
 export interface DictField {
   entity: string;
   field: string;
+  /** The human name the dictionary gives this field, when it gives one. Salesforce
+   *  and most migration workbooks carry both: `StageName` beside "Stage". */
+  label?: string;
   dataType?: string;              // e.g. "date", "string", "code"
   valueSet?: string[];            // enumerated allowed values, if the dictionary lists them
   required?: boolean;             // NOT NULL / mandatory, if the dictionary states it
@@ -49,6 +52,9 @@ const HEADER_ALIASES: Record<keyof DictField | "sep", string[]> = {
   entity: ["entity name", "object name", "table name", "entity", "object", "table", "resource", "sobject"],
   field: ["field api name", "api name", "field name", "column name", "attribute name", "property name",
     "field", "attribute", "column", "element", "property", "name"],
+  // Deliberately WITHOUT a bare "name": that belongs to `field`, and a sheet whose
+  // only heading is "Name" is naming the field, not labelling it.
+  label: ["recommended label", "field label", "display label", "display name", "business name", "label"],
   dataType: ["data type", "datatype", "data_type", "field type", "type", "format"],
   valueSet: ["picklist values", "picklist value", "allowed values", "value set", "valueset",
     "values", "picklist", "enum", "codes"],
@@ -127,6 +133,7 @@ export function parseDictionaryCsv(csv: string, name = "uploaded-dictionary"): P
   const headers = rows[0].map((h) => h.trim().toLowerCase());
   const cEntity = findCol(headers, HEADER_ALIASES.entity);
   const cField = findCol(headers, HEADER_ALIASES.field);
+  const cLabel = findCol(headers, HEADER_ALIASES.label);
   const cType = findCol(headers, HEADER_ALIASES.dataType);
   const cValues = findCol(headers, HEADER_ALIASES.valueSet);
   const cReq = findCol(headers, HEADER_ALIASES.required);
@@ -147,6 +154,8 @@ export function parseDictionaryCsv(csv: string, name = "uploaded-dictionary"): P
     const rawValues = cValues >= 0 ? (r[cValues] ?? "").trim() : "";
     const rawReq = cReq >= 0 ? (r[cReq] ?? "").trim().toLowerCase() : "";
     const f: DictField = { entity, field };
+    const label = cLabel >= 0 && cLabel !== cField ? (r[cLabel] ?? "").trim() : "";
+    if (label && label.toLowerCase() !== field.toLowerCase()) f.label = label;
     if (rawType) f.dataType = rawType;                                             // stated → claim; silent → ?unknown
     if (rawValues) { const vs = rawValues.split(/[|;,]/).map((v) => v.trim()).filter(Boolean); if (vs.length) f.valueSet = vs; }
     if (rawReq) { if (/^(y|yes|true|required|not ?null|mandatory)$/.test(rawReq)) f.required = true; else if (/^(n|no|false|nullable|optional)$/.test(rawReq)) f.required = false; }
@@ -206,7 +215,7 @@ export function dictionaryToClaims(dict: ParsedDictionary, existingElementIds: S
   for (const f of dict.fields) {
     if (!f.entity) continue; // a row with no entity can't be keyed to a locus — skip, don't guess
     const eid = `el:entity:${slug(f.entity)}`;
-    const aid = attrLocusId(f.entity, f.field);
+    const aid = dictLocusId(f, existingElementIds);
     // local extension: the dictionary has a field the ontology never modelled
     if (!existingElementIds.has(aid)) {
       elements.push({ id: aid, kind: "attribute", name: f.field, of: eid });
@@ -229,6 +238,77 @@ export function dictionaryToClaims(dict: ParsedDictionary, existingElementIds: S
  */
 export const attrLocusId = (entity: string, field: string): string =>
   `el:attr:${slug(entity)}.${slug(field)}`;
+
+/**
+ * WHICH LOCUS A DICTIONARY ROW ANSWERS — the API name, or the human label.
+ *
+ * A dictionary and an ontology name the same field differently and both are right.
+ * A Salesforce export keys on `StageName`, `Name`, `CloseDate`; the ontology was
+ * written from how the business talks, so it holds `stage`, `opportunity name`,
+ * `expected close date`. Keyed on the API name alone, a 434-field export of real
+ * answers matched ZERO of 63 open typing questions — the file was full of the
+ * answer and the ledger could not see it.
+ *
+ * The bridge is stated IN the file: these workbooks carry the label beside the API
+ * name ("StageName" → "Stage"). So a row binds to whichever of its two names the
+ * ontology actually modelled, preferring the API name when both exist or neither
+ * does — that is the system's true key, and a field the ontology never modelled is
+ * a local extension that should carry it.
+ *
+ * This is reading what the dictionary says, not guessing: no fuzzy match, no
+ * stemming, no distance. A label that names nothing in the ontology changes
+ * nothing.
+ */
+export function dictLocusId(f: DictField, existing?: ReadonlySet<string>): string {
+  const byField = attrLocusId(f.entity, f.field);
+  if (!f.label || !existing) return byField;
+  if (existing.has(byField)) return byField;
+  const byLabel = attrLocusId(f.entity, f.label);
+  return existing.has(byLabel) ? byLabel : byField;
+}
+
+/**
+ * WHAT A DICTIONARY COVERS, AND WHAT IT MATCHED INSIDE THAT.
+ *
+ * "0 of the 63 open typing questions match" was true and useless. Fifty-nine of
+ * those sixty-three were on Lead, Campaign and Account — entities an
+ * Opportunity-only export never claimed to answer. Measured against everything
+ * open, a per-object file can only ever look like a failure, and the operator
+ * cannot tell "this file is wrong" from "this file is one of five".
+ *
+ * So the denominator is the questions on the entities the file actually NAMES, and
+ * the rest are reported separately as out of its scope rather than as its misses.
+ */
+export interface DictionaryCoverage {
+  /** entity names the dictionary states, in first-seen order */
+  entities: string[];
+  /** open loci on those entities */
+  inScope: number;
+  /** how many of those this dictionary answers */
+  matched: number;
+  /** open loci on entities the dictionary says nothing about */
+  outside: number;
+}
+
+export function dictionaryCoverage(fields: readonly DictField[], openElementIds: ReadonlySet<string>): DictionaryCoverage {
+  const entities: string[] = [];
+  const seen = new Set<string>();
+  for (const f of fields) {
+    const e = f.entity.trim();
+    if (!e || seen.has(slug(e))) continue;
+    seen.add(slug(e));
+    entities.push(e);
+  }
+  const prefixes = [...seen].map((e) => `el:attr:${e}.`);
+  let inScope = 0;
+  for (const id of openElementIds) if (prefixes.some((p) => id.startsWith(p))) inScope += 1;
+  const matched = new Set<string>();
+  for (const f of fields) {
+    const id = dictLocusId(f, openElementIds);
+    if (openElementIds.has(id)) matched.add(id);
+  }
+  return { entities, inScope, matched: matched.size, outside: openElementIds.size - inScope };
+}
 
 /** The typing slots a data dictionary answers — the wall it dissolves. */
 export const TYPING_SLOTS = new Set(["dataType", "valueSet", "optionality"]);
@@ -479,9 +559,9 @@ const csvCell = (v: string): string => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '
 /** The merged dictionary as the canonical CSV `parseDictionaryCsv` reads back — one
  *  shape in, one shape out, so what is stored re-parses to what was previewed. */
 export function fieldsToCsv(fields: DictField[]): string {
-  const head = ["entity", "field", "type", "values", "required"];
+  const head = ["entity", "field", "label", "type", "values", "required"];
   const rows = fields.map((f) => [
-    f.entity, f.field, f.dataType ?? "",
+    f.entity, f.field, f.label ?? "", f.dataType ?? "",
     f.valueSet?.length ? f.valueSet.join("|") : "",
     f.required === undefined ? "" : f.required ? "Yes" : "No",
   ].map(csvCell).join(","));
@@ -509,6 +589,7 @@ export async function readDictionaryWorkbook(bytes: ArrayBuffer, title = ""): Pr
       if (!at) { merged.set(k, { ...f, valueSet: f.valueSet ? [...f.valueSet] : undefined }); continue; }
       // ADDITIVE. A later sheet fills gaps and accumulates values; it never
       // overwrites a stated type or flips a stated optionality.
+      if (!at.label && f.label) at.label = f.label;
       if (!at.dataType && f.dataType) at.dataType = f.dataType;
       if (at.required === undefined && f.required !== undefined) at.required = f.required;
       if (f.valueSet?.length) {

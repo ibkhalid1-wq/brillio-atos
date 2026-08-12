@@ -61,8 +61,11 @@ describe("what the panel reads, and how it counts", () => {
     // The preview promises "N of your open typing questions match". If this site
     // built the locus id its own way, that promise could disagree with what
     // committing actually closes.
-    expect(offerBlock()).toContain("attrLocusId");
-    expect(INBOX, "the Inbox kept its own copy of the locus rule").toContain("attrLocusId");
+    // `dictLocusId` is the resolver: it wraps `attrLocusId` and adds the bridge a
+    // real export needs — a row binds by whichever of its two names (API name or
+    // stated label) the ontology actually modelled.
+    expect(offerBlock()).toContain("dictLocusId");
+    expect(INBOX, "the Inbox kept its own copy of the locus rule").toMatch(/dictLocusId|dictionaryCoverage/);
     expect(offerBlock(), "a hand-rolled slug is back").not.toMatch(/replace\(\/\[\^a-z0-9\]/);
   });
 

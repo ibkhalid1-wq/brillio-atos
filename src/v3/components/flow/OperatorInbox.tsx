@@ -25,7 +25,7 @@ import { renderQuestion } from "@/v3/lib/ledger/renderQuestion";
 import { ClaimStatus, OwnershipTag, ProvisionalMark, SourceTag } from "@/v3/components/flow/studio/ledgerPrimitives";
 import { asksNeedingChase, isSystemOwner, type ArtifactAskMark } from "@/v3/lib/ledger/artifactAsks";
 import { operatorQueueCounts, sessionQuestionCount, unfrozenQueues } from "@/v3/lib/ledger/operatorQueue";
-import { parseDictionaryCsv, isSpreadsheetName, readDictionaryWorkbook, mergeDictionaryCsv, attrLocusId, SPREADSHEET_EXTENSIONS } from "@/v3/lib/ledger/dictionary";
+import { parseDictionaryCsv, isSpreadsheetName, readDictionaryWorkbook, mergeDictionaryCsv, dictionaryCoverage, SPREADSHEET_EXTENSIONS } from "@/v3/lib/ledger/dictionary";
 import { retractProposal } from "@/v3/lib/ledger/curation";
 import { displayPersonLabel } from "@/v3/components/flow/flowStakeholders";
 
@@ -162,6 +162,8 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
     name: string; fields: number; closes: number; csv: string; sor: string | null; scope: number;
     /** sheets that contributed rows, and how many the workbook had */
     used?: string[]; sheets?: number;
+    /** the entities this file names, and the open questions inside / outside them */
+    covers?: string[]; inScope?: number; outside?: number;
     /** an entity read from the file's own title because no sheet named one */
     entity?: string | null; entityFrom?: string | null;
   } | null>(null);
@@ -209,10 +211,16 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
     // every open typing locus for the programme-wide one. Same count either way —
     // the loci the file actually names, never an estimate.
     const scope = new Set(scopeLoci.map((about) => elementIdOf(about)));
-    const closes = parsed.fields.reduce((n, f) => n + (scope.has(attrLocusId(f.entity, f.field)) ? 1 : 0), 0);
+    // Measured against the entities this file NAMES, not against every open
+    // question: an Opportunity-only export is not failing when it says nothing
+    // about Lead. `dictLocusId` binds a row by whichever of its two names the
+    // ontology modelled, and the count here is the one that lands.
+    const cover = dictionaryCoverage(parsed.fields, scope);
+    const closes = cover.matched;
     setDictPreview({
       name: parsed.name, fields: parsed.fields.length, closes, csv, sor, scope: scopeLoci.length,
       used: workbook?.used, sheets: workbook?.sheets.length,
+      covers: cover.entities, inScope: cover.inScope, outside: cover.outside,
       entity: workbook?.entity ?? null, entityFrom: workbook?.entityFrom ?? null,
     });
     return csv;
@@ -420,9 +428,13 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                 <>
                   <span className="v3ib-dict-prev">
                     <b>{dictPreview.name}</b> · {dictPreview.fields} field{dictPreview.fields === 1 ? "" : "s"} parsed ·
-                    {" "}<b>{dictPreview.closes}</b> of the {dictPreview.scope} open typing question{dictPreview.scope === 1 ? "" : "s"}
-                    {sor ? ` on ${sor}` : ""} match
-                    {dictPreview.closes === 0 ? " — nothing here matches an open locus; check the entity/field columns" : ""}
+                    {" "}<b>{dictPreview.closes}</b> of the {dictPreview.inScope ?? dictPreview.scope} open typing question
+                    {(dictPreview.inScope ?? dictPreview.scope) === 1 ? "" : "s"}
+                    {dictPreview.covers?.length ? ` on ${dictPreview.covers.slice(0, 3).join(", ")}${dictPreview.covers.length > 3 ? ` +${dictPreview.covers.length - 3} more` : ""}` : sor ? ` on ${sor}` : ""}
+                    {" "}match
+                    {dictPreview.outside ? ` · ${dictPreview.outside} more are on entities this file does not cover` : ""}
+                    {dictPreview.closes === 0 && (dictPreview.inScope ?? 0) > 0
+                      ? " — nothing here matches an open locus; check the entity/field columns" : ""}
                     {dictPreview.used?.length && (dictPreview.sheets ?? 1) > 1
                       ? ` · merged ${dictPreview.used.length} of ${dictPreview.sheets} sheets: ${dictPreview.used.join(", ")}`
                       : ""}
