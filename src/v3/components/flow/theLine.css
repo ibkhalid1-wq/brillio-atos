@@ -718,6 +718,12 @@
 .v3ib-peek-m{font-size:10.5px;line-height:1.5;color:var(--v3-text-muted);max-width:70ch}
 .v3ib-peek-rows{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:5px}
 .v3ib-peek-rows li{display:flex;gap:7px;align-items:baseline;font-size:11.5px;line-height:1.45;color:var(--v3-text-primary)}
+.v3ib-peek-q{flex:1;min-width:0}
+/* where a field came from — quiet when stated, MARKED when the record says nothing,
+   because the absence is the thing worth noticing */
+.v3ib-peek-src,.v3tg-src{font-size:10px;color:var(--v3-text-muted);flex:none;max-width:32ch;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.v3ib-peek-src.none,.v3tg-src.none{color:var(--v3-amber);font-style:italic}
 .v3ib-peek-tag{font-size:9px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;
   color:var(--v3-accent-2);flex-shrink:0}
 .v3ib-dict-answerhere{display:flex;flex-direction:column;gap:3px;margin-top:6px;padding:7px 11px;

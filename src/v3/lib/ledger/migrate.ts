@@ -304,6 +304,22 @@ export function migrate(snap: Snapshot): LedgerStore {
       const aid = `el:attr:${slug(name)}.${slug(an)}`;
       store.addElement({ id: aid, kind: "attribute", name: an, of: eid });
       A(aboutOf(aid, "exists"), s(true), "code-derived", "to-be", "configuration", owner, { closed: { by: "prototype" }, status: "weak" });
+      // WHERE THIS FIELD CAME FROM, when the ontology says.
+      //
+      // An attribute has always been a bare string in the generated ontology, so a
+      // field carried no provenance of its own — only its ENTITY did. Tracing
+      // `Account.segment` reached "Laila Prototype — CRM Domain Ontology (dev demo
+      // extract)" for Account and stopped: nothing said whether `segment` was a
+      // field somebody named in an interview or one the model listed while
+      // summarising a document. Fifty-three type questions were being asked with no
+      // way to tell which were about real fields.
+      //
+      // The generator may now state it per attribute (`{name, evidence}`), and a
+      // bare string stays valid — every artifact ever written is one. The claim is
+      // WEAK and never open: it records a source, it does not ask anything, so a
+      // field whose origin is unstated shows as unstated rather than as a question.
+      const aev = typeof a === "string" ? "" : String((a as { evidence?: unknown })?.evidence ?? "").trim();
+      if (aev) A(aboutOf(aid, "evidence"), s(aev), "generated", "to-be", "domain", owner, { status: "weak" });
       A(aboutOf(aid, "dataType"), OPEN, "generated", "to-be", "configuration", owner, { status: "open" }); // F-D — owned by the attribute's OWN entity area, not a constant
       if (ENUMISH.test(an)) A(aboutOf(aid, "valueSet"), OPEN, "generated", "to-be", "domain", owner, { status: "open" }); // F-F
     }

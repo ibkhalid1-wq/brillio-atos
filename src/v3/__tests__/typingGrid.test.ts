@@ -23,8 +23,8 @@ import { typingRows, confirmedCsv, type TypingRow } from "@/v3/components/flow/T
 import { parseDictionaryCsv } from "@/v3/lib/ledger/dictionary";
 import { attrLocusId } from "@/v3/lib/ledger/dictionary";
 
-const row = (entity: string, attribute: string, suggested = "", confidence = 0): TypingRow => ({
-  about: `${attrLocusId(entity, attribute)}#dataType`, entity, attribute, suggested, confidence,
+const row = (entity: string, attribute: string, suggested = "", confidence = 0, source: string | null = null): TypingRow => ({
+  about: `${attrLocusId(entity, attribute)}#dataType`, entity, attribute, suggested, confidence, source,
 });
 
 describe("what a confirmation writes", () => {
@@ -71,8 +71,19 @@ describe("what a confirmation writes", () => {
 });
 
 describe("the rows it offers", () => {
-  const ledger = (typingLoci: Array<{ about: string }>, elements: Array<Record<string, unknown>>, suggestions: unknown[] = []) =>
-    ({ typingLoci, typeSuggestions: suggestions, store: { elements: () => elements } }) as never;
+  const ledger = (
+    typingLoci: Array<{ about: string }>,
+    elements: Array<Record<string, unknown>>,
+    suggestions: unknown[] = [],
+    evidence: Record<string, string> = {},
+  ) => ({
+    typingLoci, typeSuggestions: suggestions,
+    store: {
+      elements: () => elements,
+      liveClaimsAbout: (about: string) => (evidence[about]
+        ? [{ value: { kind: "scalar", value: evidence[about] } }] : []),
+    },
+  }) as never;
 
   it("resolves the NAMES a person recognises, not the slugs", () => {
     const rows = typingRows(ledger(

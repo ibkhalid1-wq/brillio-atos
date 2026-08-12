@@ -24,7 +24,7 @@
  */
 import { useCallback, useMemo, useState } from "react";
 import type { ProgramLedger } from "@/v3/lib/ledger/useProgramLedger";
-import { OFFERED_TYPES } from "@/v3/lib/ledger/derivedTypes";
+import { OFFERED_TYPES, attributeEvidence } from "@/v3/lib/ledger/derivedTypes";
 import { elementIdOf } from "@/v3/lib/ledger/types";
 
 /** One field awaiting a type, with whatever Aura made of its name. */
@@ -35,6 +35,10 @@ export interface TypingRow {
   /** the derived reading, or "" when the name said nothing */
   suggested: string;
   confidence: number;
+  /** what the ontology says named this field, or null when it says nothing. Null is
+   *  the useful answer: it separates a field somebody stated from one the model
+   *  listed while summarising, which until now read identically. */
+  source: string | null;
 }
 
 /**
@@ -58,6 +62,7 @@ export function typingRows(ledger: ProgramLedger): TypingRow[] {
     rows.push({
       about: item.about, entity, attribute: el.name,
       suggested: s?.dataType ?? "", confidence: s?.confidence ?? 0,
+      source: attributeEvidence(ledger.store, el.id),
     });
   }
   return rows;
@@ -138,7 +143,11 @@ export default function TypingGrid({ ledger, onDictionary, onDone }: {
           <ul className="v3tg-rows">
             {list.map((r) => (
               <li key={r.about} title={r.about}>
-                <span className="v3tg-f">{r.entity}.{r.attribute}</span>
+                <span className="v3tg-f">{r.entity}.{r.attribute}
+                  {r.source
+                    ? <span className="v3tg-src" title={r.source}> · from {r.source}</span>
+                    : <span className="v3tg-src none"> · no source on record</span>}
+                </span>
                 <select className="v3tg-sel" value={typeOf(r)}
                   aria-label={`Type of ${r.entity}.${r.attribute}`}
                   onChange={(e) => setChosen((c) => ({ ...c, [r.about]: e.target.value }))}>

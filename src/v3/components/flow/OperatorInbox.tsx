@@ -22,6 +22,7 @@ import type { OperatorAction } from "@/v3/lib/ledger/operatorActions";
 import { slotOf, elementIdOf } from "@/v3/lib/ledger/types";
 import { readableName } from "@/v3/lib/ledger/phrasing";
 import { renderQuestion } from "@/v3/lib/ledger/renderQuestion";
+import { attributeEvidence } from "@/v3/lib/ledger/derivedTypes";
 import { ClaimStatus, OwnershipTag, ProvisionalMark, SourceTag } from "@/v3/components/flow/studio/ledgerPrimitives";
 import { asksNeedingChase, isSystemOwner, type ArtifactAskMark } from "@/v3/lib/ledger/artifactAsks";
 import { operatorQueueCounts, sessionQuestionCount, unfrozenQueues } from "@/v3/lib/ledger/operatorQueue";
@@ -952,13 +953,24 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
             <span className="v3ib-peek-m">
               These are what a {peek.sor} dictionary would close. They stay open and counted until
               something answers them — a dictionary, or the types confirmed by hand.
+              {" "}Each says where its field came from; <b>no source on record</b> means the ontology
+              named the field without saying who or what named it, which is worth knowing before
+              anyone is asked about it.
             </span>
             <ul className="v3ib-peek-rows">
               {peek.abouts.map((about) => {
                 const q = Q(about);
+                // WHERE THE FIELD CAME FROM. A question about a field somebody named
+                // in an interview and one about a field the model listed while
+                // summarising a document read identically until this line existed.
+                const src = attributeEvidence(ledger.store, elementIdOf(about));
                 return (
                   <li key={about} title={about}>
-                    <span className="v3ib-peek-tag">{q.typeTag}</span>{q.question}
+                    <span className="v3ib-peek-tag">{q.typeTag}</span>
+                    <span className="v3ib-peek-q">{q.question}</span>
+                    {src
+                      ? <span className="v3ib-peek-src" title={src}>from: {src}</span>
+                      : <span className="v3ib-peek-src none">no source on record</span>}
                   </li>
                 );
               })}
