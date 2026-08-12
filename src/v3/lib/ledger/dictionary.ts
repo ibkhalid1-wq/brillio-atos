@@ -36,23 +36,94 @@ export interface ParsedDictionary { name: string; fields: DictField[] }
 // ── Deterministic parser: CSV / TSV (structured formats parse with NO model) ──
 // Freeform documents (Word tables, ERD exports, Confluence) are the GATED, model-assisted
 // path — specced in the doc, not built here. This handles the common tabular export.
+/**
+ * Header aliases, MOST SPECIFIC FIRST — the order is load-bearing.
+ *
+ * A real export does not head its column "field". The workbook that exposed this
+ * heads it "Field API Name", beside a "Field Label" and a "Maps To New Field";
+ * matching had to tell those three apart. So each alias list runs specific →
+ * general and the first alias that hits any header wins, which is why
+ * "field api name" sits above the bare "field".
+ */
 const HEADER_ALIASES: Record<keyof DictField | "sep", string[]> = {
-  entity: ["entity", "object", "table", "resource"],
-  field: ["field", "attribute", "column", "element", "property", "name"],
-  dataType: ["type", "datatype", "data type", "data_type", "format"],
-  valueSet: ["values", "valueset", "value set", "allowed values", "picklist", "enum", "codes"],
-  required: ["required", "mandatory", "nullable", "not null", "notnull"],
+  entity: ["entity name", "object name", "table name", "entity", "object", "table", "resource", "sobject"],
+  field: ["field api name", "api name", "field name", "column name", "attribute name", "property name",
+    "field", "attribute", "column", "element", "property", "name"],
+  dataType: ["data type", "datatype", "data_type", "field type", "type", "format"],
+  valueSet: ["picklist values", "picklist value", "allowed values", "value set", "valueset",
+    "values", "picklist", "enum", "codes"],
+  required: ["required", "requirement", "mandatory", "nullable", "not null", "notnull"],
   sep: [],
 };
-const findCol = (headers: string[], aliases: string[]): number =>
-  headers.findIndex((h) => aliases.includes(h.trim().toLowerCase()));
+
+const tokens = (h: string): string[] => h.trim().toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+const startsWith = (hs: string[], as: string[]) => as.every((t, i) => hs[i] === t);
+const contains = (hs: string[], as: string[]) => as.every((t) => hs.includes(t));
+
+/**
+ * The column an alias names, or -1.
+ *
+ * Three passes, each over the WHOLE alias list before the next begins, so a
+ * specific alias always beats a general one no matter where its column sits:
+ * exact header, then header that BEGINS with the alias, then header that merely
+ * contains it. The prefix pass is what keeps "Maps To New Field" — where "field"
+ * is the last token — from being read as the field column when a real one exists.
+ */
+const findCol = (headers: string[], aliases: string[]): number => {
+  const toks = headers.map(tokens);
+  for (const alias of aliases) {
+    const a = tokens(alias);
+    const hit = toks.findIndex((h) => h.length === a.length && startsWith(h, a));
+    if (hit >= 0) return hit;
+  }
+  for (const alias of aliases) {
+    const a = tokens(alias);
+    const hit = toks.findIndex((h) => startsWith(h, a));
+    if (hit >= 0) return hit;
+  }
+  for (const alias of aliases) {
+    const a = tokens(alias);
+    const hit = toks.findIndex((h) => contains(h, a));
+    if (hit >= 0) return hit;
+  }
+  return -1;
+};
 
 /** Parse a CSV/TSV data dictionary deterministically. Returns [] on an unrecognisable header. */
 export function parseDictionaryCsv(csv: string, name = "uploaded-dictionary"): ParsedDictionary {
   const text = csv.replace(/\r\n?/g, "\n").trim();
   if (!text) return { name, fields: [] };
   const sep = text.includes("\t") && !text.split("\n")[0].includes(",") ? "\t" : ",";
-  const rows = text.split("\n").map((line) => splitRow(line, sep));
+  const all = text.split("\n").map((line) => splitRow(line, sep));
+  // THE HEADER IS NOT ALWAYS ROW 1. A hand-built export leads with a title row
+  // ("Recommended Opportunity Schema — 130 Essential Fields") and sometimes a note
+  // under it, putting the real header on row 2 or 3. Reading row 1 unconditionally
+  // found no field column and returned nothing for the whole workbook.
+  // So: the FIRST row within the opening few that names a field column and carries
+  // at least two headings. Two, because a lone stray match in a sentence is not a
+  // header row, and every real one labels more than one column.
+  const HEADER_SCAN_ROWS = 10;
+  // A field column ALONE is not a dictionary. Scanning for one was enough to pull in
+  // a workbook's validation rules ("Rule Name"), its web links (whose "field" values
+  // were URLs like /apex/CloneListPage) and its list views — ~80 fabricated
+  // attributes from three tabs that describe the object's UI, not its data. A
+  // dictionary row says something ABOUT a field, so the header must also name at
+  // least one of: the entity, a type, a value set, or optionality. A bare list of
+  // field names states nothing and closes nothing, so losing it costs nothing.
+  const isHeader = (cells: string[]): boolean => {
+    const lower = cells.map((h) => h.toLowerCase());
+    if (findCol(lower, HEADER_ALIASES.field) < 0) return false;
+    return [HEADER_ALIASES.entity, HEADER_ALIASES.dataType, HEADER_ALIASES.valueSet, HEADER_ALIASES.required]
+      .some((aliases) => findCol(lower, aliases) >= 0);
+  };
+  let headerAt = -1;
+  for (let i = 0; i < Math.min(HEADER_SCAN_ROWS, all.length); i++) {
+    const cells = all[i].map((h) => h.trim());
+    if (cells.filter(Boolean).length < 2) continue;
+    if (isHeader(cells)) { headerAt = i; break; }
+  }
+  if (headerAt < 0) return { name, fields: [] };
+  const rows = all.slice(headerAt);
   const headers = rows[0].map((h) => h.trim().toLowerCase());
   const cEntity = findCol(headers, HEADER_ALIASES.entity);
   const cField = findCol(headers, HEADER_ALIASES.field);
@@ -64,6 +135,13 @@ export function parseDictionaryCsv(csv: string, name = "uploaded-dictionary"): P
   for (const r of rows.slice(1)) {
     const field = (r[cField] ?? "").trim();
     if (!field) continue;
+    // A field NAME with a comma or a URL path in it is not a field name. This is the
+    // row-level counterpart to the header check: a "List Views" tab legitimately has
+    // a column of field names, but each cell holds the whole comma-joined column set
+    // of a view ("Account_ID__c, ACCOUNT.NAME, ..."), and a links tab holds
+    // "/apex/CloneListPage?source=...". Admitting either invents attributes that the
+    // client's system does not have.
+    if (/[,/]/.test(field)) continue;
     const entity = (cEntity >= 0 ? r[cEntity] : "").trim();
     const rawType = cType >= 0 ? (r[cType] ?? "").trim() : "";
     const rawValues = cValues >= 0 ? (r[cValues] ?? "").trim() : "";
@@ -274,7 +352,13 @@ export interface WorkbookPick {
  */
 export async function pickDictionarySheet(bytes: ArrayBuffer): Promise<WorkbookPick> {
   const XLSX = await import("xlsx");
-  const wb = XLSX.read(bytes, { type: "array" });
+  // A Uint8Array, NOT the raw ArrayBuffer. `type: "array"` means "array of bytes",
+  // and handing SheetJS an ArrayBuffer under that type does not throw — it fails
+  // SILENTLY, returning a workbook with one sheet called "Sheet1" whose only
+  // content is the file's own ZIP header read as text ("PK\u0003\u0004..."). Every
+  // xlsx dictionary therefore parsed zero fields and the operator was told their
+  // file matched nothing, which looks exactly like a data problem and is not one.
+  const wb = XLSX.read(new Uint8Array(bytes), { type: "array" });
   const sheets = wb.SheetNames.slice();
   if (sheets.length === 0) return { csv: "", sheet: "", sheets };
   let best: WorkbookPick | null = null;
@@ -285,4 +369,127 @@ export async function pickDictionarySheet(bytes: ArrayBuffer): Promise<WorkbookP
     if (fields > bestFields) { bestFields = fields; best = { csv, sheet, sheets }; }
   }
   return best ?? { csv: "", sheet: sheets[0], sheets };
+}
+
+// ── the whole workbook, not one sheet ───────────────────────────────────────────────
+/**
+ * A REAL export is a workbook, not a sheet.
+ *
+ * The master workbook that exposed this has twelve tabs: a README cover, a
+ * `01_Master_Field_List` carrying the fields and their types, and a
+ * `06_Picklist_Values` carrying the allowed values, one row per value. Choosing a
+ * single sheet cannot read it — pick the field list and every value set is lost;
+ * pick by row count and the 442-row picklist tab beats the field list outright and
+ * the TYPES are lost instead. Neither is a defensible answer, so this reads EVERY
+ * sheet and merges them into one dictionary.
+ *
+ * The merge is by (entity, field) and it is additive, never overwriting: a field
+ * sheet contributes the type and the optionality, a value sheet contributes values,
+ * and a workbook stating values in both places accumulates them. Sheets that parse
+ * to nothing (covers, notes, release logs) contribute nothing and are named in
+ * `skipped`, so what was ignored is visible rather than guessed at.
+ */
+export interface WorkbookRead {
+  /** The merged dictionary as normalized CSV — what gets stored and re-parsed. */
+  csv: string;
+  /** Sheets that contributed rows, in workbook order. */
+  used: string[];
+  /** Sheets that parsed to nothing. */
+  skipped: string[];
+  /** Every sheet, in order. */
+  sheets: string[];
+  /** Rows in the merged dictionary. */
+  fields: number;
+  /** Set when NO sheet named an entity and one was read from the workbook instead —
+   *  the phrase names where it came from, for the operator to accept or reject. */
+  entityFrom: string | null;
+  /** The entity that was applied, when `entityFrom` is set. */
+  entity: string | null;
+}
+
+/**
+ * The object a single-object workbook is ABOUT, when no sheet says so in a column.
+ *
+ * A per-object export (`... - Accounts Object.xlsx`, README titled `... Accounts
+ * Object`) names its subject once, in prose, and never repeats it per row. Every
+ * row therefore parses with an empty entity and `dictionaryToClaims` correctly
+ * skips all of them, because a row with no entity cannot be keyed to a locus. The
+ * file is full of answers and closes nothing.
+ *
+ * Reading the subject from the title is a DERIVATION, not something the file states
+ * per row, so it is returned separately for the operator to see before anything is
+ * committed — never folded in silently. Narrow by design: an explicit "<Name>
+ * Object" phrase, nothing cleverer, and null when the phrase is absent.
+ */
+export function entityFromTitle(text: string): string | null {
+  const m = /\b([A-Za-z][A-Za-z0-9 _-]{1,40}?)\s+Object\b/i.exec(String(text ?? ""));
+  if (!m) return null;
+  const raw = (m[1].trim().split(/[\s_-]+/).pop() ?? "").trim();
+  if (!raw) return null;
+  return raw.replace(/s$/i, "") || null;
+}
+
+const csvCell = (v: string): string => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+
+/** The merged dictionary as the canonical CSV `parseDictionaryCsv` reads back — one
+ *  shape in, one shape out, so what is stored re-parses to what was previewed. */
+export function fieldsToCsv(fields: DictField[]): string {
+  const head = ["entity", "field", "type", "values", "required"];
+  const rows = fields.map((f) => [
+    f.entity, f.field, f.dataType ?? "",
+    f.valueSet?.length ? f.valueSet.join("|") : "",
+    f.required === undefined ? "" : f.required ? "Yes" : "No",
+  ].map(csvCell).join(","));
+  return [head.join(","), ...rows].join("\n");
+}
+
+/** Read and merge every sheet. `title` (the file name) is consulted ONLY when no
+ *  sheet names an entity — see `entityFromTitle`. */
+export async function readDictionaryWorkbook(bytes: ArrayBuffer, title = ""): Promise<WorkbookRead> {
+  const XLSX = await import("xlsx");
+  const wb = XLSX.read(new Uint8Array(bytes), { type: "array" });
+  const sheets = wb.SheetNames.slice();
+  const used: string[] = [];
+  const skipped: string[] = [];
+  const merged = new Map<string, DictField>();
+  const keyOf = (f: DictField) => `${f.entity.trim().toLowerCase()} ${f.field.trim().toLowerCase()}`;
+
+  for (const sheet of sheets) {
+    const parsed = parseDictionaryCsv(XLSX.utils.sheet_to_csv(wb.Sheets[sheet]), sheet);
+    if (!parsed.fields.length) { skipped.push(sheet); continue; }
+    used.push(sheet);
+    for (const f of parsed.fields) {
+      const k = keyOf(f);
+      const at = merged.get(k);
+      if (!at) { merged.set(k, { ...f, valueSet: f.valueSet ? [...f.valueSet] : undefined }); continue; }
+      // ADDITIVE. A later sheet fills gaps and accumulates values; it never
+      // overwrites a stated type or flips a stated optionality.
+      if (!at.dataType && f.dataType) at.dataType = f.dataType;
+      if (at.required === undefined && f.required !== undefined) at.required = f.required;
+      if (f.valueSet?.length) {
+        const seen = new Set(at.valueSet ?? []);
+        for (const v of f.valueSet) if (!seen.has(v)) { seen.add(v); (at.valueSet ??= []).push(v); }
+      }
+    }
+  }
+
+  let fields = [...merged.values()];
+  let entity: string | null = null;
+  let entityFrom: string | null = null;
+  if (fields.length && fields.every((f) => !f.entity.trim())) {
+    // No sheet named an entity anywhere. Read the workbook's own subject: the file
+    // name first (an operator renames a file to say what it holds), then the first
+    // sheet's text, which on a cover page is the workbook's title.
+    const coverText = sheets.length ? XLSX.utils.sheet_to_csv(wb.Sheets[sheets[0]]).slice(0, 400) : "";
+    const fromName = entityFromTitle(title);
+    const fromCover = entityFromTitle(coverText);
+    entity = fromName ?? fromCover;
+    entityFrom = entity ? (fromName ? "the file name" : `the "${sheets[0]}" sheet`) : null;
+    if (entity) fields = fields.map((f) => ({ ...f, entity: entity as string }));
+  }
+
+  return {
+    csv: fields.length ? fieldsToCsv(fields) : "",
+    used, skipped, sheets, fields: fields.length, entityFrom, entity,
+  };
 }
