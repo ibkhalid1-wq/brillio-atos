@@ -38,7 +38,7 @@ import { migrate, type Snapshot } from "@/v3/lib/ledger/migrate";
 import { buildUnknownQueue, type QueueItem } from "@/v3/lib/ledger/projections";
 import { TYPING_SLOTS } from "@/v3/lib/ledger/dictionary";
 import {
-  LINK_QUESTION_CAP, assertOwnedLoad, ownedLoadBreakdown, ownedLoadFor, sendableCount,
+  LINK_QUESTION_CAP, assertOwnedLoad, ownedLoadBreakdown, ownedLoadFor, personOwned, sendableCount,
   unboundOpenTotal, unboundOwners, type OwnedLoadReads,
 } from "@/v3/lib/ledger/ownedLoad";
 import TheLine from "@/v3/components/flow/TheLine";
@@ -118,8 +118,15 @@ describe("ownedLoad — ONE partition whose buckets add up to the headline", () 
     const text = ownedLoadBreakdown(load);
     const head = Number(/^(\d+) owned/.exec(text)![1]);
     const parts = [...text.slice(text.indexOf("=") + 1).matchAll(/(\d+)/g)].map((x) => Number(x[1]));
-    expect(head).toBe(load.owned.length);
+    // The head is what this PERSON owes, not every locus keyed to them: a typing
+    // locus routed to a data dictionary is not their work and is no longer on
+    // their card (2026-08-12). The sentence's own arithmetic still has to hold,
+    // which is what F6 was ever about.
+    expect(head).toBe(personOwned(load));
     expect(parts.reduce((a, b) => a + b, 0)).toBe(head);
+    expect(text, "the dictionary bucket is back on a person's card").not.toContain("dictionary");
+    // and nothing was lost — the partition still accounts for every locus
+    expect(load.owned.length).toBe(personOwned(load) + load.toDictionary.length);
     expect(text).toContain(`${LINK_QUESTION_CAP} on this link`);
   });
 });

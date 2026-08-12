@@ -42,10 +42,39 @@ import type { LedgerStore } from "./store";
 import { elementIdOf, isLive } from "./types";
 import { buildUnknownQueue, dictionaryBucket } from "./projections";
 
-export type ArtifactAskState = "unrequested" | "requested" | "provided" | "reopened" | "complete" | "has-none";
+export type ArtifactAskState =
+  | "unrequested" | "requested" | "provided" | "reopened" | "complete" | "has-none"
+  /** the system is integrated with, not replaced — no dictionary is owed */
+  | "integration"
+  /** nobody has said yet whether this system is replaced or integrated with, and
+   *  the right ask depends entirely on which */
+  | "unclassified";
 
 /** A persisted operator mark on a SoR's ask (underscore-field `_artifactAsks`). */
-export interface ArtifactAskMark { sor: string; mark: "requested" | "has-none" | "complete"; by?: string; at: string; }
+/**
+ * A persisted operator mark on a SoR's ask. TWO INDEPENDENT AXES, and a mark
+ * carries either — never both.
+ *
+ * `mark` is the ask's STATE (chased, settled, none to be had). `disposition` is what
+ * the system IS to this programme: replaced, or integrated with. They were one
+ * field in the first draft and that was wrong — recording "we integrate with
+ * HubSpot" would have wiped "requested", because the log is last-wins per system.
+ */
+export interface ArtifactAskMark {
+  sor: string;
+  mark?: "requested" | "has-none" | "complete";
+  /** REPLACED — its schema is the migration source, so its dictionary is the ask.
+   *  INTEGRATED — you exchange a few fields with it; nobody writes a dictionary for
+   *  a product they merely call, and its published schema is not the client's to
+   *  produce.
+   *
+   *  Named `disposition`, not `role`: `role: "..."` is the shape of an OWNER literal
+   *  everywhere else in the ledger, and the constant-owner guard reads it as one.
+   *  This says what a SYSTEM is to the programme, which is a different thing. */
+  disposition?: "replace" | "integrate";
+  by?: string;
+  at: string;
+}
 
 export interface ArtifactAsk {
   sor: string;                 // the system of record, verbatim from the data
@@ -61,6 +90,9 @@ export interface ArtifactAsk {
   dictionary: string | null;
   /** True when the dictionary on file is this SoR's OWN, not the global upload. */
   ownDictionary: boolean;
+  /** What this system IS to the programme — replaced, integrated with, or not yet
+   *  said. Null is a real answer here: it means nobody has been asked. */
+  disposition: "replace" | "integrate" | null;
   /** Where the SoR was named. `frame` = the sponsor's Frame input only (no ontology
    *  models it yet — the ask is born at Frame time); `ontology` = entities carry it;
    *  `both` = the sponsor named it AND the model holds it. Never inferred. */
@@ -164,7 +196,11 @@ export function deriveArtifactAsks(
 
   // ── one shared owner detection ──
   const systemOwner = roster.find((r) => isSystemOwner(r.label, r.role)) ?? null;
-  const markBySor = new Map(marks.map((m) => [m.sor.trim().toLowerCase(), m] as const));
+  // Two axes, two last-wins reductions. A role-only mark must not clear a state,
+  // nor a state mark a disposition.
+  const markBySor = new Map(marks.filter((m) => m.mark).map((m) => [m.sor.trim().toLowerCase(), m] as const));
+  const dispositionBySor = new Map(
+    marks.filter((m) => m.disposition).map((m) => [m.sor.trim().toLowerCase(), m.disposition!] as const));
 
   // ── the SoR set: the ontology's + the sponsor's Frame declaration, merged
   //    CASE-INSENSITIVELY so one system can never become two asks. The MODELLED
@@ -186,31 +222,50 @@ export function deriveArtifactAsks(
     const key = sor.trim().toLowerCase();
     const abouts = aboutsBySor.get(sor) ?? [];
     const mark = markBySor.get(key);
+    const disposition = dispositionBySor.get(key) ?? null;
     // THIS SoR's own dictionary answers it; the programme-wide upload answers it only
     // because it claims to cover everything. A CRM export says nothing about the
     // finance system, so an ask is never marked provided by another SoR's file.
     const own = dictionaryBySor.get(key) ?? null;
     const dictionary = own ?? dictionaryName;
+    // ── the ask's state, most-decisive first ──
+    // 1 said to be an integration        → no dictionary is owed
+    // 2 said to have none                → settled
+    // 3 ITS OWN dictionary, nothing left → provided (classification implicit:
+    //   somebody produced a schema for THIS system, so it is plainly in scope)
+    // 4 ANY dictionary, nothing left     → provided; there is no ask to classify
+    // 5 its own dictionary, residue      → reopened
+    // 6 the operator asked for it        → implicitly a replacement
+    // 7 nobody has said which, and work REMAINS → ask that first. Whether to chase
+    //   a schema at all depends on it, and the programme-wide upload is no answer:
+    //   it claims to cover everything, which says nothing about this system.
+    // 8 classified as a replacement      → the ordinary dictionary states
     const state: ArtifactAskState =
-      mark?.mark === "has-none" ? "has-none"
-        // `complete` needs a dictionary to be about. Without one it is not a
-        // statement anybody can act on, so the ask falls through to its real state
-        // rather than being silently settled by a mark that describes nothing.
-        : dictionary && mark?.mark === "complete" ? "complete"
-          : dictionary ? (abouts.length ? "reopened" : "provided")
-            : mark?.mark === "requested" ? "requested"
-              : "unrequested";
+      disposition === "integrate" ? "integration"
+        : mark?.mark === "has-none" ? "has-none"
+          : dictionary && !abouts.length ? "provided"
+            : own && mark?.mark === "complete" ? "complete"
+              : own ? "reopened"
+                : mark?.mark === "requested" ? "requested"
+                  : mark?.mark === "complete" && dictionary ? "complete"
+                    : disposition === null ? "unclassified"
+                      : dictionary ? "reopened"
+                        : "unrequested";
     return {
       sor, state,
       owner: systemOwner?.label ?? null,
       ownerRole: systemOwner?.role ?? null,
       weight: abouts.length, abouts, entityCount,
       requestedAt: mark?.mark === "requested" ? mark.at : null,
-      source, dictionary, ownDictionary: !!own,
+      source, dictionary, ownDictionary: !!own, disposition,
     };
   }).sort((a, b) => b.weight - a.weight || a.sor.localeCompare(b.sor));
 
-  const frameComplete = asks.every((a) => a.state !== "unrequested");
+  // A named system with NOTHING said about it is an incomplete Frame item, whether
+  // that silence is "no dictionary requested yet" or "nobody has said whether we
+  // replace it or integrate with it". Both leave the programme unable to plan the
+  // system; `unclassified` is the newer and now commoner of the two.
+  const frameComplete = asks.every((a) => a.state !== "unrequested" && a.state !== "unclassified");
   return { asks, unattributed: { weight: unattributed.length, abouts: unattributed }, frameComplete };
 }
 
@@ -231,7 +286,8 @@ export function deriveArtifactAsks(
  * chase, never the count.
  */
 export const asksNeedingChase = (view: ArtifactAskView): ArtifactAsk[] =>
-  view.asks.filter((a) => (a.state === "unrequested" || a.state === "requested" || a.state === "reopened")
+  view.asks.filter((a) => (a.state === "unclassified" || a.state === "unrequested"
+    || a.state === "requested" || a.state === "reopened")
     && (a.weight > 0 || a.entityCount === 0));
 
 /**

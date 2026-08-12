@@ -154,16 +154,31 @@ export const sendableCount = (load: OwnedLoad): number => load.onLink.length + l
  * nothing to reconcile, and "8 owned = 8 on this link" reads like a defect).
  */
 export function ownedLoadBreakdown(load: OwnedLoad): string {
-  const total = load.owned.length;
+  const total = personOwned(load);
   if (total === 0) return "0 owned questions";
   const parts: string[] = [];
   if (load.onLink.length) parts.push(`${load.onLink.length} on this link`);
   if (load.nextLink.length) parts.push(`${load.nextLink.length} on the next link`);
   if (load.blocked.length) parts.push(`${load.blocked.length} blocked`);
-  if (load.toDictionary.length) parts.push(`${load.toDictionary.length} → dictionary`);
   const head = `${total} owned`;
   return parts.length <= 1 ? `${head} — ${parts[0] ?? "unbucketed"}` : `${head} = ${parts.join(" · ")}`;
 }
+
+/**
+ * WHAT THIS PERSON OWES — the card's number.
+ *
+ * `owned` is every locus the ledger keys to them, which is the right total for
+ * conservation and the wrong one for a card about a person. A typing locus routed
+ * to a data dictionary is not their work: no answer of theirs closes it and no
+ * link carries it. The card counted them anyway, so a person with eight questions
+ * to answer was labelled with sixty-seven.
+ *
+ * The loci are NOT lost. They stay on `load.toDictionary`, in the burn-down, on
+ * the Record, and in the Inbox's dictionary ask — which is where that work is
+ * actually chased, and by whom.
+ */
+export const personOwned = (load: OwnedLoad): number =>
+  load.onLink.length + load.nextLink.length + load.blocked.length;
 
 /**
  * How each bucket is HEADED in the expanded question list.
@@ -204,6 +219,18 @@ export interface BucketSection {
   listRows: boolean;
 
   /**
+   * Whether the bucket appears on a PERSON'S card at all.
+   *
+   * Discover answers one question: who do I reach, and what do they owe? A bucket
+   * routed to a data dictionary owes this person nothing — no action of theirs
+   * closes it, and no link carries it. Counting it there did not make the card
+   * more honest, it made the ask look like theirs. The loci stay in the ledger,
+   * stay in the burn-down, and remain visible on the Record and in the Inbox,
+   * which is where the dictionary is actually chased.
+   */
+  onPersonCard: boolean;
+
+  /**
    * Whether the section starts OPEN.
    *
    * The dictionary bucket is the one nobody works through: on a real card it is 36
@@ -220,22 +247,22 @@ export const BUCKET_SECTION: Record<OwnedBucket, BucketSection> = {
   "on-link": {
     title: "On this link",
     note: "these go to them when you share their link",
-    listRows: true, defaultOpen: true,
+    listRows: true, onPersonCard: true, defaultOpen: true,
   },
   "next-link": {
     title: "On the next link",
     note: `past the ${LINK_QUESTION_CAP}-question cap a single link carries — share again once these are answered`,
-    listRows: true, defaultOpen: true,
+    listRows: true, onPersonCard: true, defaultOpen: true,
   },
   blocked: {
     title: "Blocked",
     note: "something upstream has to be settled before these can be asked",
-    listRows: true, defaultOpen: true,
+    listRows: true, onPersonCard: true, defaultOpen: true,
   },
   dictionary: {
     title: "Answered by the data dictionary",
     note: "nobody needs to answer these — one dictionary upload closes all of them, and the ask is in the Inbox",
-    listRows: false, defaultOpen: false,
+    listRows: false, onPersonCard: false, defaultOpen: false,
   },
 };
 
@@ -247,6 +274,7 @@ export function ownedLoadSections<T extends { bucket: OwnedBucket }>(
 ): Array<{ bucket: OwnedBucket; section: BucketSection; items: T[] }> {
   const order: OwnedBucket[] = ["on-link", "next-link", "blocked", "dictionary"];
   return order
+    .filter((bucket) => BUCKET_SECTION[bucket].onPersonCard)
     .map((bucket) => ({ bucket, section: BUCKET_SECTION[bucket], items: items.filter((i) => i.bucket === bucket) }))
     .filter((g) => g.items.length > 0);
 }
