@@ -34,7 +34,7 @@ import FlowRespond from "@/v3/components/flow/FlowRespond";
 import {
   DESIGN_ROUND_REVIEW_KIND, attachDesignRoundLinks, currentDesignRound, designRoundGate,
   designRoundReviewInput, designRoundRollup, openDesignRound, recordDesignRoundVerdict,
-  recordInboxResponseOnRound, waiveDesignRoundParticipant,
+  recordInboxResponseOnRound, waiveDesignRoundParticipant, inboxItemRoundAttribution,
 } from "@/v3/components/flow/flowDesignRound";
 import { mintReviewPack, ingestPortalResponse, listPortalInbox } from "@/v3/components/flow/flowPortal";
 import { accessibleName, interactiveElements, isWordless } from "./helpers/accessibleName";
@@ -564,6 +564,62 @@ describe("ingest wires a quarantined response to the round, in that order", () =
     expect(priya.state).toBe("accepted");
     expect(priya.attestation).toBe("self");
     expect(listPortalInbox(after).some((i) => i.id === "pi-round")).toBe(false);
+  });
+
+  /**
+   * HOW THE WORDS WERE PRODUCED SURVIVES THE HOP.
+   *
+   * `recordInboxResponseOnRound` used to forward only `text`, so a dictated answer
+   * arrived at the round indistinguishable from a typed one. The portal worked
+   * around it by appending "— Dictated by X, not typed." INSIDE the answer, which
+   * put a remark about the stakeholder's dictation into the stakeholder's own
+   * words. `capture` is a field on DesignRoundResponse now, and this is the hop
+   * that has to carry it.
+   */
+  const withReply2 = (capture?: string): ProgramSummary => {
+    const p = withReply();
+    const inner = (p.rawData as { data: Record<string, unknown> }).data;
+    const inbox = (inner.flowPortalInbox as Array<Record<string, unknown>>)
+      .map((i) => (capture === undefined ? i : { ...i, capture }));
+    return apply(p, { data: { ...inner, flowPortalInbox: inbox } });
+  };
+  const priyaAfter = (capture?: string) =>
+    designRoundRollup(ingestLikeTheShell(withReply2(capture), "pi-round"))
+      .people.find((x) => x.name === "Priya Nair")!;
+
+  it("REGRESSION: a dictated answer reaches the round marked as dictated", () => {
+    expect(priyaAfter("dictated").capture).toBe("dictated");
+    expect(priyaAfter("mixed").capture).toBe("mixed");
+    expect(priyaAfter("typed").capture).toBe("typed");
+    // and the words themselves stay the stakeholder's, unadorned
+    expect(priyaAfter("dictated").text).toBe("I approve this design as the one we build on.");
+  });
+
+  it("an item with NO capture stays absent — never defaulted to \"typed\"", () => {
+    // Rows written before the field existed, and clients that do not send one, must
+    // not be recorded as having claimed authorship they never claimed.
+    expect(priyaAfter(undefined).capture).toBeUndefined();
+    // and the answer still lands — the field is additive, not a gate
+    expect(priyaAfter(undefined).state).toBe("accepted");
+  });
+
+  it("a word outside the vocabulary is DROPPED, not stored", () => {
+    // The edge whitelists this key, but the model validates rather than trusting a
+    // cast: an older or hostile client cannot invent a mode.
+    expect(priyaAfter("handwritten").capture).toBeUndefined();
+    expect(priyaAfter("").capture).toBeUndefined();
+  });
+
+  it("the ATTRIBUTION validates on its own, not only on the way through record()", () => {
+    // Asserted at this level deliberately. Through the ingest path the value passes
+    // recordDesignRoundVerdict, which validates again — so removing the guard HERE
+    // changed nothing any end-to-end case could see, and a test written only at the
+    // far end would have passed over a guard that had stopped working.
+    // `inboxItemRoundAttribution` is exported and returns `capture` to whoever asks,
+    // so it has to be honest by itself.
+    expect(inboxItemRoundAttribution(withReply2("dictated"), "pi-round")?.capture).toBe("dictated");
+    expect(inboxItemRoundAttribution(withReply2("handwritten"), "pi-round")?.capture).toBeUndefined();
+    expect(inboxItemRoundAttribution(withReply2(undefined), "pi-round")?.capture).toBeUndefined();
   });
 
   it("REVERSED, the verdict is lost — which is why the order is not a preference", () => {

@@ -161,7 +161,14 @@ describe("the record says whether the words were typed or dictated", () => {
   it("REGRESSION: dictated feedback is recorded as DICTATED, not as their writing", async () => {
     await approveAnd(() => speak("this is exactly how we quote"));
     expect(sent()[0].capture).toBe("dictated");
-    expect(String(sent()[0].answers)).toContain("Dictated by Ibrahim Khalid, not typed.");
+    // NOT written into the answer. It used to be appended as an English sentence
+    // ("— Dictated by X, not typed.") because DesignRoundResponse had no field for
+    // it and only `text` survived the hop into the round — which made the
+    // stakeholder appear to have written a remark about their own dictation. The
+    // field carries it now, so the words stay theirs.
+    expect(String(sent()[0].answers)).not.toContain("Dictated");
+    // their words reach the record intact — the sentence went, the speech did not
+    expect(String(sent()[0].answers)).toContain("This is exactly how we quote");
   });
 
   it("a transcript its author corrected is MIXED — a stronger claim than a raw one", async () => {
@@ -170,7 +177,7 @@ describe("the record says whether the words were typed or dictated", () => {
       typeInto(field(), "This is exactly how we quote.");
     });
     expect(sent()[0].capture).toBe("mixed");
-    expect(String(sent()[0].answers)).toContain("Dictated and corrected by Ibrahim Khalid, not typed.");
+    expect(String(sent()[0].answers)).not.toContain("Dictated");
   });
 
   it("the verdict and the QUARANTINE path are untouched by any of it", async () => {
@@ -193,8 +200,18 @@ describe("client ↔ edge lockstep on the capture vocabulary", () => {
     const edgeSet = EDGE.match(/const CAPTURE_MODES = new Set\(\[([^\]]*)\]\)/);
     expect(edgeSet, "edge CAPTURE_MODES not found").toBeTruthy();
     const edgeWords = [...edgeSet![1].matchAll(/"([a-z]+)"/g)].map((m) => m[1]).sort();
-    const clientUnion = SURFACE.match(/export type CaptureMode = ([^;]+);/);
+    // The vocabulary moved to the MODEL that stores it (flowDesignRound) — the
+    // review surface is one producer of several, and a type owned by one producer
+    // is a type the others have to guess at. Read it where it is declared.
+    const MODEL = readFileSync(resolve(__dirname, "../components/flow/flowDesignRound.ts"), "utf8");
+    const clientUnion = MODEL.match(/export type CaptureMode = ([^;]+);/);
     expect(clientUnion, "client CaptureMode not found").toBeTruthy();
+    // and the runtime guard beside it must list the same three, or a writer
+    // validates against a set the type does not describe
+    const guard = MODEL.match(/CAPTURE_MODES: ReadonlySet<string> = new Set<CaptureMode>\(\[([^\]]*)\]\)/);
+    expect(guard, "runtime CAPTURE_MODES guard not found").toBeTruthy();
+    expect([...guard![1].matchAll(/"([a-z]+)"/g)].map((m) => m[1]).sort())
+      .toEqual([...clientUnion![1].matchAll(/"([a-z]+)"/g)].map((m) => m[1]).sort());
     const clientWords = [...clientUnion![1].matchAll(/"([a-z]+)"/g)].map((m) => m[1]).sort();
     expect(edgeWords).toEqual(clientWords);
     expect(edgeWords).toEqual(["dictated", "mixed", "typed"]);

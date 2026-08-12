@@ -646,14 +646,12 @@ export interface DesignRoundReviewStamp {
 export type DesignRoundVerdict = "accepted" | "rework";
 
 /**
- * HOW THE WORDS WERE PRODUCED — the stakeholder typed them, spoke them, or spoke
- * them and then corrected the transcript. Carried alongside the feedback because a
- * transcript is a machine's reading of what someone said, and evidence that reads
- * as their writing when it is a machine's reading of their speech overstates itself.
- * Lockstepped with `CAPTURE_MODES` in `supabase/functions/flow-portal/index.ts`,
- * which is the only place the value is allowed to land on the record.
+ * HOW THE WORDS WERE PRODUCED — re-exported from `flowDesignRound`, which owns the
+ * vocabulary because it is what STORES the value. This surface is one producer of
+ * several; a type owned by one producer is a type the others have to guess at.
  */
-export type CaptureMode = "typed" | "dictated" | "mixed";
+export type { CaptureMode } from "@/v3/components/flow/flowDesignRound";
+import type { CaptureMode } from "@/v3/components/flow/flowDesignRound";
 
 /**
  * THE REVIEW PAGE for one stakeholder in a design review round: the prototype they
