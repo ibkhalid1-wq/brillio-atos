@@ -696,6 +696,12 @@
    as "I attached a file and nothing happened". --color-danger is AA on both
    surfaces (see a11yContrast). */
 .v3ib-dict-err{display:block;font-size:11px;line-height:1.45;color:var(--color-danger);margin-bottom:5px}
+/* An entity read from the file's own title rather than stated in a column. Marked
+   as a reading, not a fact, because it is one: dashed rule, the amber that means
+   "operator, look at this", and the sentence names where it came from. */
+.v3ib-dict-derived{display:block;margin:4px 0 5px;padding-left:8px;font-size:11px;line-height:1.45;
+  color:var(--v3-text-muted);border-left:2px dashed color-mix(in srgb,var(--v3-amber) 55%,transparent)}
+.v3ib-dict-derived b{color:var(--v3-amber);font-weight:700}
 .v3ib-marked{font-size:11px;color:var(--v3-positive);font-weight:600}
 .v3ib-nodate{color:var(--v3-amber);font-weight:700}
 /* Sessions summary — the whole header is ONE disclosure button (⋈ Sessions · N seams,

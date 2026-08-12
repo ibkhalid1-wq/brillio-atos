@@ -36,7 +36,11 @@ describe("the dictionary upload can never fail silently", () => {
   it("still HAS an upload path (the scan is not vacuous)", () => {
     const src = source();
     expect(src).toContain("readDictionaryFile");
-    expect(src).toContain("pickDictionarySheet");
+    // `readDictionaryWorkbook`, not `pickDictionarySheet`: a real master workbook
+    // splits its dictionary across tabs (types on the field list, allowed values on
+    // a picklist tab), so choosing one "best" sheet loses half the file whichever it
+    // picks. The reader merges every sheet.
+    expect(src).toContain("readDictionaryWorkbook");
     expect(src).toContain("parseDictionaryCsv");
   });
 
