@@ -47,6 +47,7 @@ import { pinsForSend } from "@/v3/lib/ledger/operatorActions";
 import { HeardReadout, ConvergenceReadout, ProvisionalMark, ClaimStatus, SourceTag } from "@/v3/components/flow/studio/ledgerPrimitives";
 import DesignLoopZones from "@/v3/components/flow/DesignLoopZones";
 import { ownerLabelsForCast } from "@/v3/lib/ledger/ownerBinding";
+import { currentDesignRound } from "@/v3/components/flow/flowDesignRound";
 import { renderQuestion } from "@/v3/lib/ledger/renderQuestion";
 import {
   emptyOwnedLoad, ownedLoadBreakdown, ownedLoadFor, ownedLoadSections, sendableCount,
@@ -127,11 +128,45 @@ interface PersonaJourney { listen: SignoffItem[]; loop: SignoffItem[]; verdict: 
 
 /** How a whole phase's sign-offs read at a glance: every item approved fresh,
  * something out for review, or nothing sent. */
-function phaseState(items: SignoffItem[]): "approved" | "pending" | "open" | "none" {
+export function phaseState(items: SignoffItem[]): "approved" | "pending" | "open" | "none" {
   if (!items.length) return "none";
   if (items.every((i) => i.status === "approved" && !i.preDatesDocument)) return "approved";
   if (items.some((i) => i.status === "in-review")) return "pending";
   return "open";
+}
+
+/**
+ * WHICH JOURNEY SEGMENTS A ROW DRAWS — the decision, out of the render so it can
+ * be asserted rather than inferred from a screenshot.
+ *
+ * A segment appears when the person has MOVED, not when they exist. "open" is the
+ * state everybody starts in and stays in until they sign something (items exist,
+ * none approved, none in review), so drawing it put 42 identical chips across 21
+ * rows on the live CRM — same label, same state, same colour — saying what the
+ * engagement chip beside them already said.
+ *
+ * Loop additionally needs a round to EXIST. Its items appear as soon as the
+ * prototype artifact does, which says the person could be asked, not that they
+ * were: with no round opened every row still claimed "Loop — open" while the band
+ * above it said the round was not opened. A recorded verdict is its own evidence
+ * and stands with or without a round.
+ */
+export function journeySegments(
+  j: { listen: SignoffItem[]; loop: SignoffItem[]; verdict: string | null },
+  roundOpened: boolean,
+): { listen: "approved" | "pending" | null; loop: ReturnType<typeof phaseState> | null; verdict: string | null } {
+  // `loop` can legitimately be "none" — a recorded verdict with no sign-off items
+  // yet is still movement, and the verdict is what the segment reads.
+  const worth = (state: ReturnType<typeof phaseState>) => state !== "none" && state !== "open";
+  const listenState = phaseState(j.listen);
+  const loopState = phaseState(j.loop);
+  const verdict = j.verdict?.trim() || null;
+  const showLoop = (verdict || roundOpened) && (worth(loopState) || !!verdict);
+  return {
+    listen: worth(listenState) ? (listenState as "approved" | "pending") : null,
+    loop: showLoop ? loopState : null,
+    verdict,
+  };
 }
 
 function Segments({ station }: { station: LineStation }) {
@@ -660,6 +695,11 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
   // and signs off the ontology in Listen, then meets the built prototype in the
   // Design Loop (a demo verdict, then a prototype sign-off). One row, two phases
   // — matched by name because there is no portable person-id across movements.
+  /** Has a design review round actually been opened? The Loop journey segment is
+   *  gated on this: the person's `loop` sign-off items exist as soon as the
+   *  prototype artifact does, which says they COULD be asked, not that they were. */
+  const designRoundOpened = useMemo(() => !!currentDesignRound(program), [program]);
+
   const journeys = useMemo(() => {
     const byMovement = new Map(flowMovements().map((m) => [m.id, m] as const));
     const cards = new Map<string, ArtifactCardModel[]>();
@@ -1293,8 +1333,18 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                     // travels the spine.
                     const j = journeys.get(row.label);
                     if (!j || (!j.listen.length && !j.loop.length && !j.verdict)) return null;
-                    const seg = (label: string, state: ReturnType<typeof phaseState>, extra?: string) =>
-                      state === "none" && !extra ? null : (
+                    // A SEGMENT APPEARS WHEN THE PERSON HAS MOVED, not when they exist.
+                    //
+                    // It used to render for any state but "none", and "open" is the
+                    // state everybody starts in and stays in until they sign something:
+                    // sign-off items exist, none approved, none in review. On the live
+                    // CRM that was 42 chips across 21 rows, every one reading "open",
+                    // every dot the same colour — two columns of the row spent saying
+                    // what the engagement chip beside them ("Ready") already said.
+                    // The information was always in the TRANSITION, so only the
+                    // transition is drawn now: approved, in review, or a verdict.
+                    // `journeySegments` decides WHETHER; this only decides how it reads.
+                    const seg = (label: string, state: ReturnType<typeof phaseState>, extra?: string) => (
                         <span className={`v3ln-jseg ${state}`} title={`${label} — ${extra || state}`}>
                           <span className="v3ln-jdot" aria-hidden="true" />{label}{extra ? ` · ${extra}` : ""}
                         </span>
@@ -1302,10 +1352,14 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                     const verdictShort = j.verdict
                       ? /objection/i.test(j.verdict) ? "objection" : /changes/i.test(j.verdict) ? "changes" : /accept/i.test(j.verdict) ? "accepted" : j.verdict.toLowerCase()
                       : undefined;
+                    const show = journeySegments(j, designRoundOpened);
+                    const listenSeg = show.listen ? seg("Listen", show.listen) : null;
+                    const loopSeg = show.loop ? seg("Loop", show.loop, verdictShort) : null;
+                    if (!listenSeg && !loopSeg) return null;
                     return (
                       <span className="v3ln-journey" aria-label={`${displayPersonLabel(row.label)} journey`}>
-                        {seg("Listen", phaseState(j.listen))}
-                        {j.loop.length || j.verdict ? seg("Loop", phaseState(j.loop), verdictShort) : null}
+                        {listenSeg}
+                        {loopSeg}
                       </span>
                     );
                   })()}
