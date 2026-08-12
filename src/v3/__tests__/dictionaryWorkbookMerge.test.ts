@@ -39,6 +39,7 @@ import { resolve } from "node:path";
 import * as XLSX from "xlsx";
 import {
   readDictionaryWorkbook, parseDictionaryCsv, entityFromTitle, fieldsToCsv, dictionaryToClaims,
+  dictLocusId, dictionaryCoverage,
 } from "@/v3/lib/ledger/dictionary";
 
 /** The real workbook's shape: a cover, a field list keyed by API name with no entity
@@ -288,5 +289,101 @@ describe("[D4] finding the header, and knowing a dictionary from a list", () => 
     );
     expect(r.fields).toBe(0);
     expect(r.csv).toBe("");
+  });
+});
+
+/**
+ * D5 — THE DICTIONARY AND THE ONTOLOGY NAME THE SAME FIELD DIFFERENTLY.
+ *
+ * With every parsing defect fixed, the Opportunity workbook read 434 fields and
+ * matched ZERO of 63 open typing questions. Both sides were right and neither
+ * could see the other: a Salesforce export keys on `StageName`, `Name`,
+ * `CloseDate`; the ontology was written from how the business talks, so it holds
+ * `stage`, `opportunity name`, `expected close date`.
+ *
+ * The bridge is stated IN the file — these workbooks carry the label beside the
+ * API name — so a row binds to whichever of its two names the ontology modelled.
+ * No fuzzy match, no stemming: a label that names nothing changes nothing, and
+ * "TCV" still does not become "value".
+ *
+ * And the DENOMINATOR was the second half of the same problem. "0 of 63" was true
+ * and useless: 59 of those were on Lead, Campaign and Account, which an
+ * Opportunity-only export never claimed to answer.
+ */
+describe("[D5] binding a dictionary row to the locus it answers", () => {
+  const f = (over: Partial<Parameters<typeof dictLocusId>[0]>) =>
+    ({ entity: "Opportunity", field: "StageName", ...over }) as Parameters<typeof dictLocusId>[0];
+
+  it("REGRESSION: the label binds when the ontology modelled the label", () => {
+    const open = new Set(["el:attr:opportunity.stage"]);
+    expect(dictLocusId(f({ label: "Stage" }), open)).toBe("el:attr:opportunity.stage");
+  });
+
+  it("the API name wins when the ontology modelled THAT", () => {
+    const open = new Set(["el:attr:opportunity.stagename", "el:attr:opportunity.stage"]);
+    expect(dictLocusId(f({ label: "Stage" }), open)).toBe("el:attr:opportunity.stagename");
+  });
+
+  it("neither modelled → the API name, because that is the system's real key", () => {
+    expect(dictLocusId(f({ label: "Stage" }), new Set())).toBe("el:attr:opportunity.stagename");
+    expect(dictLocusId(f({ label: "Stage" }))).toBe("el:attr:opportunity.stagename");
+  });
+
+  it("a label that names nothing changes nothing — no fuzzy match", () => {
+    // "TCV" is the label on `Amount`; the ontology says "value". They stay apart.
+    const open = new Set(["el:attr:opportunity.value"]);
+    expect(dictLocusId(f({ field: "Amount", label: "TCV" }), open)).toBe("el:attr:opportunity.amount");
+  });
+
+  it("the label is parsed, and a label equal to the field is not stored", () => {
+    const rows = parseDictionaryCsv([
+      "API Name (existing),Recommended Label,Data Type",
+      "StageName,Stage,Picklist",
+      "Amount,Amount,Currency",
+    ].join("\n")).fields;
+    expect(rows[0]).toMatchObject({ field: "StageName", label: "Stage" });
+    expect(rows[1].label, "a label identical to the field is noise").toBeUndefined();
+  });
+
+  it("the label survives the merged CSV round trip", () => {
+    const back = parseDictionaryCsv(fieldsToCsv([
+      { entity: "Opportunity", field: "StageName", label: "Stage", dataType: "Picklist" },
+    ]));
+    expect(back.fields[0]).toMatchObject({ field: "StageName", label: "Stage" });
+  });
+});
+
+describe("[D5] the denominator is what the file covers", () => {
+  const fields = [
+    { entity: "Opportunity", field: "StageName", label: "Stage" },
+    { entity: "Opportunity", field: "Amount", label: "TCV" },
+  ];
+  const open = new Set([
+    "el:attr:opportunity.stage", "el:attr:opportunity.value",
+    "el:attr:lead.status", "el:attr:campaign.channel",
+  ]);
+
+  it("REGRESSION: questions on entities the file never names are not its misses", () => {
+    const c = dictionaryCoverage(fields, open);
+    expect(c.entities).toEqual(["Opportunity"]);
+    expect(c.inScope, "Opportunity has two open questions").toBe(2);
+    expect(c.matched, "Stage matched through its label").toBe(1);
+    expect(c.outside, "Lead and Campaign are outside this file's scope").toBe(2);
+  });
+
+  it("a dictionary covering several entities scopes to all of them", () => {
+    const c = dictionaryCoverage([...fields, { entity: "Lead", field: "status" }], open);
+    expect(c.entities).toEqual(["Opportunity", "Lead"]);
+    expect(c.inScope).toBe(3);
+    expect(c.matched).toBe(2);
+    expect(c.outside).toBe(1);
+  });
+
+  it("counts loci, not rows — two rows on one locus are one match", () => {
+    const c = dictionaryCoverage(
+      [{ entity: "Opportunity", field: "stage" }, { entity: "Opportunity", field: "Stage" }],
+      new Set(["el:attr:opportunity.stage"]),
+    );
+    expect(c.matched).toBe(1);
   });
 });

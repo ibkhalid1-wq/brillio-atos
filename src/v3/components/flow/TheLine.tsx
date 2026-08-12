@@ -47,7 +47,7 @@ import { pinsForSend } from "@/v3/lib/ledger/operatorActions";
 import { HeardReadout, ConvergenceReadout, ProvisionalMark, ClaimStatus, SourceTag } from "@/v3/components/flow/studio/ledgerPrimitives";
 import DesignLoopZones from "@/v3/components/flow/DesignLoopZones";
 import { ownerLabelsForCast } from "@/v3/lib/ledger/ownerBinding";
-import { attrLocusId, isSpreadsheetName, parseDictionaryCsv, readDictionaryWorkbook } from "@/v3/lib/ledger/dictionary";
+import { dictLocusId, isSpreadsheetName, parseDictionaryCsv, readDictionaryWorkbook } from "@/v3/lib/ledger/dictionary";
 import { currentDesignRound } from "@/v3/components/flow/flowDesignRound";
 import { renderQuestion } from "@/v3/lib/ledger/renderQuestion";
 import {
@@ -1015,8 +1015,7 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
       if (!parsed.fields.length) { setCapDict(null); return; }
       const openTyping = new Set(ledger.typingLoci.map((i) => i.about.split("#")[0]));
       const closes = parsed.fields.reduce((n, f) => {
-        const id = attrLocusId(f.entity, f.field);
-        return n + (openTyping.has(id) ? 1 : 0);
+        return n + (openTyping.has(dictLocusId(f, openTyping)) ? 1 : 0);
       }, 0);
       setCapDict({ name: parsed.name, fields: parsed.fields.length, closes, csv });
     } catch {
