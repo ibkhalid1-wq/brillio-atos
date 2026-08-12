@@ -42,6 +42,7 @@ import {
   unboundOpenTotal, unboundOwners, type OwnedLoadReads,
 } from "@/v3/lib/ledger/ownedLoad";
 import TheLine from "@/v3/components/flow/TheLine";
+import { ownerLabelsForCast } from "@/v3/lib/ledger/ownerBinding";
 
 // ── the real programme ──────────────────────────────────────────────────────────────
 const snap = (f: string) => JSON.parse(readFileSync(resolve(__dirname, `../../../docs/laila/snapshot-2026-08-07/${f}`), "utf8"));
@@ -369,24 +370,45 @@ describe("the '— TBC' machine token never reaches a Discover card", () => {
   });
 });
 
-describe("role owners with nobody behind them are VISIBLE on Discover", () => {
-  it("the strip states the miss, with soloByOwner's own counts and no invented person", () => {
+/**
+ * ROLES NOBODY ANSWERS FOR — the miss is still visible, in the INBOX.
+ *
+ * MOVED (2026-08-12). The strip's own note told the operator to "name someone for
+ * the role in the Discovery Kit, or reassign the questions in the Inbox" — two
+ * operator actions, printed on the surface whose job is the questions aimed at
+ * stakeholders. Discover asks people things; the Inbox is where the operator
+ * decides. So the miss moved to where it can be acted on.
+ *
+ * The invariant is unchanged and is what these hold: it is stated SOMEWHERE, with
+ * the ledger's own counts, and nobody is invented to fill the gap.
+ */
+describe("role owners with nobody behind them", () => {
+  it("REGRESSION: the strip is no longer on Discover", () => {
     mount();
-    const strip = host.querySelector('[aria-label="Owned by nobody on the roster"]');
-    expect(strip, "no unbound-owner strip rendered").toBeTruthy();
-    const pills = [...strip!.querySelectorAll(".v3ln-engpill")].slice(1).map(text);
-    const listed = pills.map((t) => {
-      const m = /^(.*) · (\d+)$/.exec(t)!;
-      return { label: m[1].trim(), open: Number(m[2]) };
-    });
+    expect(host.querySelector('[aria-label="Owned by nobody on the roster"]'),
+      "an operator decision is back on the stakeholder surface").toBeNull();
+  });
+
+  it("the model still reports it, with soloByOwner's own counts and no invented person", () => {
+    // The data half, which is what the Inbox renders. Bound labels come through the
+    // SAME rule Discover binds a person by, so the two can never disagree.
+    const bound = new Set<string>();
+    for (const labels of ownerLabelsForCast(
+      [{ label: HEAVY, role: HEAVY }], [...soloByOwner.keys()],
+    ).values()) for (const l of labels) bound.add(l);
+
+    const listed = unboundOwners(LEDGER, bound);
     expect(listed.length).toBeGreaterThan(0);
-    // Every count is the ledger's own, and the roster-bound owner is NOT in here.
     for (const o of listed) expect(o.open, o.label).toBe(soloByOwner.get(o.label)?.length);
-    expect(listed.map((o) => o.label)).not.toContain("Sales Leaders");
-    expect(listed.map((o) => o.label)).toContain("Talent Acquisition");
-    // The headline is the sum of the roles it lists — one number, not a second count.
-    const total = Number(/(\d+) open question/.exec(text(strip))![1]);
-    expect(total).toBe(listed.reduce((n, o) => n + o.open, 0));
+    expect(listed.map((o) => o.label), "the bound owner is not a miss").not.toContain(HEAVY);
+    // one number, not a second count
+    expect(unboundOpenTotal(listed)).toBe(listed.reduce((n, o) => n + o.open, 0));
+  });
+
+  it("and the Inbox is where it is drawn", () => {
+    const inbox = readFileSync(resolve(__dirname, "../components/flow/OperatorInbox.tsx"), "utf8");
+    expect(inbox).toContain("Nobody to ask");
+    expect(inbox, "the Inbox derives it through the shared binding rule").toContain("ownerLabelsForCast");
   });
 });
 

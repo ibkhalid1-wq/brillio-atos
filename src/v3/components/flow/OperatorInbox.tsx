@@ -16,7 +16,7 @@
  * ticks heard. Assign, reassign, decide-fate, mark-session, redirect, release and
  * operator-captured entries never do — none is injected into the store heard reads.
  */
-import { useRef, useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode, useMemo } from "react";
 import type { ProgramLedger } from "@/v3/lib/ledger/useProgramLedger";
 import type { OperatorAction } from "@/v3/lib/ledger/operatorActions";
 import { slotOf, elementIdOf } from "@/v3/lib/ledger/types";
@@ -28,6 +28,8 @@ import { asksNeedingChase, isSystemOwner, type ArtifactAskMark } from "@/v3/lib/
 import { operatorQueueCounts, sessionQuestionCount, unfrozenQueues } from "@/v3/lib/ledger/operatorQueue";
 import { parseDictionaryCsv, isSpreadsheetName, readDictionaryWorkbook, mergeDictionaryCsv, dictionaryCoverage, SPREADSHEET_EXTENSIONS } from "@/v3/lib/ledger/dictionary";
 import TypingGrid from "@/v3/components/flow/TypingGrid";
+import { ownerLabelsForCast } from "@/v3/lib/ledger/ownerBinding";
+import { unboundOwners, unboundOpenTotal } from "@/v3/lib/ledger/ownedLoad";
 import { retractProposal } from "@/v3/lib/ledger/curation";
 import { displayPersonLabel } from "@/v3/components/flow/flowStakeholders";
 
@@ -175,6 +177,29 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
   const [showGrid, setShowGrid] = useState(false);
   /** The questions behind a count, opened from the count itself. */
   const [peek, setPeek] = useState<{ sor: string; abouts: string[] } | null>(null);
+
+  /**
+   * ROLES NOBODY ANSWERS FOR — moved here from Discover (2026-08-12).
+   *
+   * Its own note told the operator to "name someone for the role in the Discovery
+   * Kit, or reassign the questions in the Inbox", and it was printed on the surface
+   * for questions aimed at stakeholders. Both of those actions are the operator's,
+   * so the miss belongs where it can be acted on.
+   *
+   * Bound labels come through `ownerLabelsForCast` — the same rule Discover binds a
+   * person by, so the two surfaces can never disagree about who is covered.
+   */
+  const unbound = useMemo(() => {
+    // Defensive: a ledger assembled without `soloByOwner` still renders the page.
+    if (!ledger.soloByOwner) return [];
+    const bound = new Set<string>();
+    const rows = candidates.map((c) => ({ label: c.label, role: c.role }));
+    for (const labels of ownerLabelsForCast(rows, [...ledger.soloByOwner.keys()]).values()) {
+      for (const label of labels) bound.add(label);
+    }
+    return unboundOwners(ledger, bound);
+  }, [candidates, ledger]);
+  const unboundOpen = unboundOpenTotal(unbound);
   const readDictionaryFile = async (file: File, sor: string | null, scopeLoci: string[], carry = "", name = "") => {
     // EVERYTHING below can throw: `arrayBuffer()` on an unreadable file, the
     // dynamic `import("xlsx")`, `XLSX.read` on a corrupt or password-protected
@@ -395,6 +420,31 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
         </span>
         <span className="v3ib-of">the operator-decision queue — four sources, each a section below. The burn-down above is the goal.</span>
       </header>
+      ) : null}
+
+      {/* 0a · ROLES NOBODY ANSWERS FOR — an operator decision, so it lives here.
+              Every number is `soloByOwner`'s own count for that label: no person is
+              invented to fill the gap and no number is invented to describe it. */}
+      {unbound.length ? (
+        <section className="v3ib-src v3ib-unbound">
+          <header className="v3ib-h">
+            <span className="v3ib-verb">Nobody to ask</span>
+            <span className="v3ib-lead">
+              <b>{unboundOpen}</b> open question{unboundOpen === 1 ? "" : "s"} are owned by{" "}
+              {unbound.length} role{unbound.length === 1 ? "" : "s"} with no person behind{" "}
+              {unbound.length === 1 ? "it" : "them"} — owned in the ledger, unreachable in practice.
+              Name someone for the role in the Discovery Kit, or reassign the questions below.
+            </span>
+          </header>
+          <div className="v3ib-unbound-rows">
+            {unbound.map((owner: { label: string; open: number }) => (
+              <span key={owner.label} className="v3ib-unbound-row"
+                title={`${owner.label} owns ${owner.open} open question${owner.open === 1 ? "" : "s"} and no one on the roster answers for that role.`}>
+                {owner.label} · <b>{owner.open}</b>
+              </span>
+            ))}
+          </div>
+        </section>
       ) : null}
 
       {/* 0 · ARTIFACT ASKS — the dictionary ask, PREVENTIVE by default: one ask per
