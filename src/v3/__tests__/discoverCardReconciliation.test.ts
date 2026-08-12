@@ -234,21 +234,22 @@ describe("F6 — one Discover card, ONE number, and a breakdown that reconciles 
     expect(mints[0].scripted).toBeUndefined();
   });
 
-  it("the loci a link CANNOT carry stay visible in the drawer, each tagged with why", () => {
+  it("the loci a link CANNOT carry stay visible in the drawer, each under a heading that says why", () => {
     mount();
     const { card } = readCard(PERSON);
     act(() => { (card.querySelector(".v3ln-cr-qbtn") as HTMLButtonElement).click(); });
-    // The drawer's last row can be the SEAM NOTE ("+ seam questions … are in the
-    // session queue"), which is a pointer, not an owned question. Excluding it by
-    // its own text keeps the count comparing like with like.
-    const allRows = [...cardFor(PERSON).querySelectorAll(".v3ln-cr-qs.owned > li")];
-    const seamNote = allRows.filter((li) => /seam questions .* session queue/.test(text(li)));
-    const items = allRows.filter((li) => !seamNote.includes(li));
-    // And it must be THERE: before the seam-label fix (B3d) this person's seam wore
-    // a raw-token label their identity never matched, so the one piece of work that
-    // needs a joint session was invisible on their card. Its appearance is the fix.
+    const drawer = cardFor(PERSON);
+
+    // The seam pointer is a POINTER, not an owned question, so it sits outside the
+    // sections rather than as a last row inside one. It must still be there: before
+    // the seam-label fix (B3d) this person's seam wore a raw-token label their
+    // identity never matched, so the one piece of work that needs a joint session
+    // was invisible on their card. Its appearance is the fix.
+    const seamNote = [...drawer.querySelectorAll(".v3ln-cr-seamnote")]
+      .filter((el) => /seam questions .* session queue/.test(text(el)));
     expect(seamNote, "the seam pointer vanished — this person owns a seam and is not told")
       .toHaveLength(1);
+
     // Compare the drawer against the number THE CARD ITSELF claims, read from its
     // own headline — not against a load rebuilt here from a hand-written label
     // list. Those were two different computations that happened to agree: the
@@ -258,13 +259,66 @@ describe("F6 — one Discover card, ONE number, and a breakdown that reconciles 
     // accused of over-rendering. The invariant that actually matters is that the
     // drawer lists exactly what the headline promises, and it is immune to how
     // the label set is derived.
-    const headline = Number(/^(\d+)/.exec(text(cardFor(PERSON).querySelector(".v3ln-cr-qbtn")!))?.[1]);
+    const groups = [...drawer.querySelectorAll(".v3ln-cr-qgroup")];
+    const rowsIn = (g: Element) => [...g.querySelectorAll(".v3ln-cr-qs.owned > li")];
+    const items = groups.flatMap(rowsIn);
+    const headline = Number(/^(\d+)/.exec(text(drawer.querySelector(".v3ln-cr-qbtn")!))?.[1]);
     expect(headline, "the card's headline count is unreadable").toBeGreaterThan(0);
     expect(items.length, "the drawer must list every locus the headline counts").toBe(headline);
-    // Everything that cannot ride this link is tagged with why; the untagged
-    // remainder is exactly the link's payload.
-    const tagged = items.filter((li) => /blocked|dictionary|next link/.test(text(li)));
-    expect(items.length - tagged.length).toBe(LINK_QUESTION_CAP);
+
+    // The link's payload is exactly the on-link section — the bucket the breakdown
+    // named and the mint will send.
+    const onLinkGroup = groups.find((g) => g.classList.contains("on-link"))!;
+    expect(onLinkGroup, "no on-link section — the sendable questions lost their heading").toBeTruthy();
+    expect(rowsIn(onLinkGroup)).toHaveLength(LINK_QUESTION_CAP);
+
+    // Everything that cannot ride is still ACCOUNTED FOR, and its reason is stated
+    // where the reason belongs — once, on the group.
+    for (const g of groups) {
+      const heading = text(g.querySelector(".v3ln-cr-qgroup-h")!);
+      const note = text(g.querySelector(".v3ln-cr-qgroup-note")!);
+      expect(heading.trim().length, "a section with no heading").toBeGreaterThan(0);
+      expect(note.trim().length, "a section with no reason").toBeGreaterThan(0);
+      expect(heading, "the heading must carry its own count").toContain(String(rowsIn(g).length));
+      expect(rowsIn(g).length, "an empty section was rendered").toBeGreaterThan(0);
+    }
+    // A bucket that isn't on this card doesn't get a heading over nothing.
+    expect(groups.length).toBeLessThanOrEqual(4);
+  });
+
+  it("REGRESSION: the reason a bucket can't ride is stated ONCE, not on every row", () => {
+    // The Head of Marketing card printed "answered by the data dictionary, not by
+    // them" ten times — once per typing question — down the side of the drawer. One
+    // fact, restated until it read as noise, crowding out the questions themselves.
+    mount();
+    const { card } = readCard(PERSON);
+    act(() => { (card.querySelector(".v3ln-cr-qbtn") as HTMLButtonElement).click(); });
+    const drawer = cardFor(PERSON);
+
+    for (const g of [...drawer.querySelectorAll(".v3ln-cr-qgroup")]) {
+      const rows = [...g.querySelectorAll(".v3ln-cr-qs.owned > li")];
+      expect(rows.length).toBeGreaterThan(0);
+      // Not one row repeats the bucket's reason.
+      const echoed = rows.filter((li) => /answered by the data dictionary|next link|unstick|dictionary upload/i.test(text(li)));
+      expect(echoed, "the group's reason is repeated on its rows").toHaveLength(0);
+    }
+    // COLLAPSE IS NOT CONCEALMENT. The dictionary section starts closed, but every
+    // row is still in the document and still counted by the headline — a card that
+    // dropped them to look tidy is the defect this whole file exists to prevent.
+    const dict = drawer.querySelector(".v3ln-cr-qgroup.dictionary") as HTMLDetailsElement | null;
+    if (dict) {
+      expect(dict.open, "the dictionary wall is open by default again").toBe(false);
+      expect(dict.querySelectorAll(".v3ln-cr-qs.owned > li").length).toBeGreaterThan(0);
+      expect(dict.querySelector("summary"), "a disclosure with no summary cannot be opened").toBeTruthy();
+    }
+    for (const g of [...drawer.querySelectorAll(".v3ln-cr-qgroup")] as HTMLDetailsElement[]) {
+      if (g === dict) continue;
+      expect(g.open, "a section addressed to this person is hidden behind a click").toBe(true);
+    }
+
+    // And the dictionary sentence appears at most once in the whole drawer.
+    const occurrences = text(drawer).match(/data dictionary/gi) ?? [];
+    expect(occurrences.length, "the dictionary fact is stated more than once").toBeLessThanOrEqual(1);
   });
 });
 
