@@ -351,6 +351,22 @@ export function retroAttributionProposal(program: ProgramSummary): WatcherPropos
 }
 
 /**
+ * AN EXTRACTED ROW READ AS A SENTENCE.
+ *
+ * Evidence extracted from a spreadsheet arrives TAB-separated — one line per row,
+ * one tab per column. Rendered into HTML those tabs collapse to a single space, so
+ * a three-column row surfaced on a decision card as
+ *
+ *   "Audit/previous-value fields dropped 9 Use proper change-history tracking"
+ *
+ * — a run-on with a bare "9" wedged in the middle, which is the count column. The
+ * operator was asked to confirm a claim they could not parse. Columns keep a
+ * visible separator so the row still reads as a row.
+ */
+export const readableEvidenceLine = (line: string): string =>
+  line.replace(/\t+/g, " · ").replace(/ {2,}/g, " ").replace(/(?: · )+/g, " · ").trim();
+
+/**
  * Deterministic negated-claim detector — the contradiction the record can
  * prove without a model.
  *
@@ -364,6 +380,7 @@ export function retroAttributionProposal(program: ProgramSummary): WatcherPropos
  * into the contradiction log, same routing onward to the sponsor's and the
  * involved stakeholders' follow-up scripts.
  */
+
 const NEGATION = /\b(no longer|not (?:be )?using|instead of|won'?t (?:be )?(?:using|building)|moving away from|dropp(?:ed|ing)|abandon(?:ed|ing)|scrapp(?:ed|ing)|decided against)\b/i;
 const STOPWORDS = new Set(["their", "there", "these", "those", "which", "about", "would", "should", "could", "using", "instead", "longer", "going", "still", "every", "other", "because"]);
 
@@ -379,6 +396,7 @@ export function negatedClaimProposal(program: ProgramSummary): WatcherProposal |
     }
   }
   if (!claims.length) return null;
+
 
   const entries = flowMovements().flatMap((movement) => movementEvidence(program, movement))
     .filter((entry) => entry.text && entry.text.length > 40)
@@ -403,10 +421,11 @@ export function negatedClaimProposal(program: ProgramSummary): WatcherProposal |
       const key = line.toLowerCase().slice(0, 80);
       if (seen.has(key)) continue;
       seen.add(key);
+      const shown = readableEvidenceLine(line);
       collected.push({
-        statement: line.slice(0, 140),
+        statement: shown.slice(0, 140),
         between: `${entry.who.split(",")[0].trim() || "new evidence"} vs Transformation Charter (${hit.key})`,
-        positions: `Evidence: "${line.slice(0, 90)}" · Charter still asserts: "${hit.text.replace(/\s+/g, " ").slice(0, 90)}"`,
+        positions: `Evidence: "${shown.slice(0, 90)}" · Charter still asserts: "${hit.text.replace(/\s+/g, " ").slice(0, 90)}"`,
       });
       if (collected.length >= 4) break;
     }
@@ -428,11 +447,14 @@ export function negatedClaimProposal(program: ProgramSummary): WatcherProposal |
     status: "open",
     agentId: "contradiction-watcher",
     movementId: "listen",
-    title: `File ${found.length} contradiction${found.length === 1 ? "" : "s"} to the log`,
+    // "File N contradictions to the log" — `File` is the imperative verb, but on a
+    // card whose evidence IS an attached file it read as the noun. `Log` cannot be
+    // misread the same way here: nothing else on the card is a log.
+    title: `Log ${found.length} contradiction${found.length === 1 ? "" : "s"} against the charter`,
     summary: found.map((f) => f.statement).join(" · ").slice(0, 220),
     blocking: "New evidence plainly negates a standing charter claim — documents built on the disputed claim keep asserting it until this is logged.",
     recommendation: {
-      action: "File to the contradiction log",
+      action: "Log the contradiction",
       rationale: "Logging it makes Listen re-ask the question, routes the dispute to the sponsor's and the involved stakeholders' follow-ups, and the affected documents rebuild on regeneration.",
       band: "proposal — additive, log rows only",
     },

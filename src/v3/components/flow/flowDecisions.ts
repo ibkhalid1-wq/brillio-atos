@@ -616,7 +616,10 @@ export function describeDecisionChanges(program: ProgramSummary, decision: FlowD
     const entries = payload.contradictionEntries.filter(isRecord).filter((entry) => entry.statement);
     changes.push({
       target: "Contradiction log (Listen)",
-      effect: `${entries.length} open row${entries.length === 1 ? "" : "s"} file — Listen's gate re-asks until resolved`,
+      // "1 open row file" read as a noun phrase — a row-file — because `file` is the
+      // verb and it landed directly after a noun. The target is the subject of this
+      // sentence, so the verb goes first and agrees with it.
+      effect: `gains ${entries.length} open row${entries.length === 1 ? "" : "s"} — Listen's gate re-asks until each is resolved`,
       rows: entries.slice(0, 6).map((entry) => `${String(entry.statement)}${entry.between ? ` (${String(entry.between)})` : ""}`.slice(0, 110)),
     });
   }
