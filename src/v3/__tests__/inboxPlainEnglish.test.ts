@@ -206,7 +206,7 @@ describe("a count you cannot open is not an answer", () => {
     // MUTATION: drop the `assignable` branch → RED.
     expect(inbox).toContain('className="v3ib-qrow-assign"');
     expect(inbox, "the per-row act must write through the same assign the bulk one uses")
-      .toContain("run(about, assignAction(about, pickedOwner(about)!))");
+      .toContain("run(about, assignAction(about, pickedOwner(about)!),");
   });
 });
 
@@ -431,7 +431,9 @@ describe("a control that cannot act does not look like one", () => {
     // MUTATION: restore the separate `reassign` button → RED.
     expect(inbox, "the dead-until-armed button is back")
       .not.toMatch(/disabled=\{busy === a\.about \|\| !pickedOwner\(a\.about\)\}/);
-    expect(inbox).toContain("(owner) => void run(a.about, assignAction(a.about, owner))");
+    // The third argument is the acknowledgement — see "every write says so": the act
+    // was saving all along, and saying nothing about it read as not saving.
+    expect(inbox).toContain("(owner) => void run(a.about, assignAction(a.about, owner),");
   });
 
   it("but 'Someone else…' still waits for the typed name", () => {
@@ -491,7 +493,7 @@ describe("the detail pane", () => {
   it("anchors its acts at the bottom, which is the point of having it", () => {
     expect(css).toContain(".v3ib-pane-acts{margin-top:auto");
     // and they are the SAME calls the row would have made
-    expect(inbox).toContain("(owner) => void run(about, assignAction(about, owner))");
+    expect(inbox).toContain("(owner) => void run(about, assignAction(about, owner),");
   });
 
   it("says 'no source on record' rather than leaving a blank", () => {
@@ -522,5 +524,40 @@ describe("the detail pane", () => {
   it("collapses to one column on a split view", () => {
     // A 240px pane beside a squeezed list is worse than no pane.
     expect(css).toMatch(/@media \(max-width:1100px\)\{[\s\S]{0,120}\.v3ib\.has-pane\{display:flex/);
+  });
+});
+
+describe("a write that says nothing reads as a write that did not happen", () => {
+  /**
+   * "not able to reassign. not saving." It WAS saving — picking an owner committed it
+   * and the record kept it across a full reload. What the operator saw was a select
+   * snapping back to "Reassign to…" (correct: it is a reassign-TO control and the pick
+   * is spent) beside an owner line that changed one small word. Nothing said anything,
+   * so nothing appeared to happen.
+   */
+  const inbox = SRC("OperatorInbox.tsx");
+
+  it("acknowledges the write, and only after it lands", () => {
+    // MUTATION: set the note before `await onCommit` → it would claim a write that
+    // failed, which is worse than saying nothing at all.
+    const at = inbox.indexOf("const run = async (key: string");
+    const body = inbox.slice(at, at + 900);
+    expect(body).toContain("await onCommit(action);");
+    expect(body.indexOf("await onCommit(action);"), "the note is set before the write lands")
+      .toBeLessThan(body.indexOf("setNote((n) => ({ ...n, [key]: said }))"));
+  });
+
+  it("clears itself, so the board does not fill with old confirmations", () => {
+    expect(inbox).toContain("window.setTimeout(() => setNote((n) => { const next = { ...n }; delete next[key]; return next; }), 5000)");
+  });
+
+  it("says what the record now holds, in the operator's words", () => {
+    expect(inbox).toContain("`reassigned to ${displayPersonLabel(owner)}`");
+    expect(inbox).toContain('"unassigned — back to the unowned queue"');
+  });
+
+  it("is announced, not just coloured", () => {
+    // A confirmation only a sighted user receives is not a confirmation.
+    expect(inbox).toMatch(/className="v3ib-said" role="status"/);
   });
 });

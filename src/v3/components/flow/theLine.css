@@ -897,6 +897,12 @@
 .v3ib-src.is-schedule::before{background:var(--v3-amber)}
 .v3ib-src.is-adjudicate::before{background:var(--aura-kind-adjudicate)}
 
+/* THE ACKNOWLEDGEMENT. Quiet and short-lived: it confirms a write the operator just
+   made, and a confirmation that shouts or lingers becomes the loudest thing on a
+   board full of things that matter more. */
+.v3ib-said{display:inline-flex;align-items:center;font-size:var(--aura-t-body);
+  font-weight:600;color:var(--v3-accent-2);margin:0}
+
 /* ════ THE DETAIL PANE ═════════════════════════════════════════════════════════
    Two columns when a question is selected, one when nothing is. The pane is
    STICKY rather than fixed: it belongs to the board it is describing, and a fixed
