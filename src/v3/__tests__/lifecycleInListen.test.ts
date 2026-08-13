@@ -11,6 +11,8 @@
  * and a name on its own is a suggestion rather than a finding.
  */
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { lifecycleEntities, lifecycleLoci, lifecycleReason } from "@/v3/lib/ledger/lifecycle";
 import { createLedgerStore } from "@/v3/lib/ledger/store";
 import { aboutOf } from "@/v3/lib/ledger/types";
@@ -151,5 +153,60 @@ describe("the confirmation writes through the path a schema writes through", () 
     expect(ed).not.toContain('EdCard label="Workflow machines"');
     expect(ed, "the field must stay on the document — removal is from the STUDIO, not the record")
       .toContain("workflowMachines");
+  });
+});
+
+describe("a lifecycle's stages are a person's question", () => {
+  /**
+   * The defect the Discover strip made visible: it listed seven findings and every
+   * row said "stages not stated yet" with no control on it — informational text on
+   * the surface for stakeholder questions.
+   *
+   * The cause was one line up the stack. Every `#valueSet` locus went to the
+   * dictionary bucket, which is excluded from `soloByOwner`, so "what stages does an
+   * Opportunity go through" sat on NOBODY's card, waiting on a schema export. The
+   * whole point of confirming lifecycles in Listen is that the people who move the
+   * thing state the stages — including their ORDER, which no dictionary carries.
+   */
+  it("a confident lifecycle's value-set locus is not in the dictionary bucket", () => {
+    const { store, ids } = storeWith({
+      entity: "Claim",
+      attributes: ["status", "opened date", "closed date"],
+    });
+    const about = aboutOf(ids["status"], "valueSet");
+    // MUTATION: drop the `!lifecycleAsks.has(...)` filter in useProgramLedger → the
+    // locus goes back to the dictionary and off every person's card.
+    expect(lifecycleLoci(store).has(about),
+      "the stage question is still routed to a schema, not a person").toBe(true);
+  });
+
+  it("a one-signal guess does NOT get put on someone's link", () => {
+    // The floor earns its keep here: a name-only reading must not mint a question
+    // for a person, because being asked about a lifecycle that isn't one is worse
+    // than not being asked.
+    const { store, ids } = storeWith({ entity: "Ticket", attributes: ["stage"] });
+    expect(lifecycleLoci(store).has(aboutOf(ids["stage"], "valueSet"))).toBe(false);
+  });
+
+  it("the routing and the question text read the SAME set", () => {
+    // Two readers of one rule: if they ever diverge, a person is asked "what values
+    // can X take" about a locus routed to them as a lifecycle, or the reverse.
+    const hook = readFileSync(resolve(__dirname, "../lib/ledger/useProgramLedger.ts"), "utf8");
+    const render = readFileSync(resolve(__dirname, "../lib/ledger/renderQuestion.ts"), "utf8");
+    expect(hook).toContain("lifecycleLoci(store)");
+    expect(render).toContain("lifecycleAbouts(store).has(about)");
+  });
+
+  it("the question asks for the ORDER, which is the part only a person has", () => {
+    const render = readFileSync(resolve(__dirname, "../lib/ledger/renderQuestion.ts"), "utf8");
+    // MUTATION: restore the single "What values can X take?" → RED.
+    expect(render).toContain("move through, in order?");
+    // …and it names the FIELD, not just the entity. Opportunity carries three
+    // lifecycle attributes on Laila New (stage, forecast status, MSA status), so a
+    // question naming only the entity goes out three times, identically, with
+    // nothing to tell the recipient which field each is about.
+    expect(render, "the question dropped the field name").toContain("${name} — what stages");
+    expect(render, "the schema question must survive for everything that is NOT a lifecycle")
+      .toContain("What values can ${name} take?");
   });
 });

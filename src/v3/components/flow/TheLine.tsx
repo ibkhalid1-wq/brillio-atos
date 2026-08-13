@@ -13,7 +13,7 @@
  * One write path, one view: nothing renders a second copy of these numbers, so
  * there is nothing left for a second surface to disagree with.
  */
-import { Fragment, Suspense, lazy, useEffect, useMemo, useState, type ComponentProps, useRef } from "react";
+import { Fragment, Suspense, lazy, useEffect, useMemo, useState, type ComponentProps, useRef, useCallback } from "react";
 import type { ProgramSummary } from "@/new/types";
 import { buildLineModel, LINE_GLYPHS, type LineBand, type LineStation } from "@/v3/lib/lineModel";
 import {
@@ -1043,6 +1043,13 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
   /** Read, never written from here — one definition, in lifecycle.ts. */
   const lifecycles = useMemo(() => lifecycleEntities(ledger.store), [ledger.store]);
   const shownLifecycles = useMemo(() => lifecycles.filter((l) => l.confident), [lifecycles]);
+  /** Who the stage question is now ON — read from the queue, never re-derived here. */
+  const ownerOfLocus = useCallback((about: string) => {
+    const it = ledger.queue.items.find((i) => i.about === about);
+    return it && it.owner.kind === "role" ? it.ownerLabel : "";
+  }, [ledger.queue.items]);
+  const hasOpenStageQuestion = useCallback((about: string) =>
+    ledger.queue.items.some((i) => i.about === about), [ledger.queue.items]);
   const maybeLifecycles = useMemo(() => lifecycles.filter((l) => !l.confident), [lifecycles]);
   const readAttachedDictionary = async (files: File[]) => {
     // SEQUENTIALLY, into one running CSV. A system's dictionary arrives as several
@@ -1304,8 +1311,9 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                 {shownLifecycles.length === 1 ? "has" : "have"} a lifecycle
               </span>
               <span className="v3ln-lifecycle-m">
-                A thing the business moves through stages. Confirm the stages with the people who
-                move it — the stage list is theirs to state, not the schema&rsquo;s.
+                A thing the business moves through stages. Each one&rsquo;s stage question is now on
+                its owner&rsquo;s card below — it goes out on their link like any other question,
+                because the order of the stages is theirs to state and no dictionary carries it.
               </span>
               {shownLifecycles.map((lc) => (
                 <div key={lc.about} className="v3ln-lifecycle-row">
@@ -1335,7 +1343,18 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                     </span>
                   ) : (
                     <span className="v3ln-lifecycle-stages none">
-                      stages not stated yet
+                      {/* THREE DIFFERENT TRUTHS, and they were one sentence.
+                          Measured on Laila New: of seven confident lifecycles, only
+                          TWO have an open stage question in the ledger at all. Saying
+                          "on nobody's list" for the other five implies a question is
+                          waiting for an owner when none exists — nothing will ever be
+                          asked about them, which is the more useful thing to know and
+                          the one this row now says. */}
+                      {ownerOfLocus(lc.about)
+                        ? <>on {ownerOfLocus(lc.about)}&rsquo;s list</>
+                        : hasOpenStageQuestion(lc.about)
+                          ? <>needs an owner</>
+                          : <>no stage question on the record</>}
                     </span>
                   )}
                 </div>

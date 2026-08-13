@@ -41,6 +41,7 @@ import {
   derivedTypeProposals, derivedTypeClaims, derivedTypeSuggestions,
   type DerivedTypeProposal, type AttributeRoleLike,
 } from "./derivedTypes";
+import { lifecycleLoci } from "./lifecycle";
 import type { LedgerStore } from "./store";
 import { isLive, slotOf } from "./types";
 import {
@@ -346,11 +347,26 @@ export function useProgramLedger(program?: ProgramSummary): ProgramLedger {
     // Conservation (asserted in tests): all-unowned = assignQueue + the unowned slice of
     // typingLoci — nothing vanishes, nothing double-counted.
     const assignQueue = openOwnerQuestions(queue);
-    const typingLoci = dictionaryBucket(queue);
+    /**
+     * A LIFECYCLE'S STAGES ARE ASKED OF PEOPLE, NOT CHASED FROM A SCHEMA.
+     *
+     * Every `#valueSet` locus went to the dictionary bucket, which excludes it from
+     * `soloByOwner` — so "what stages does an Opportunity go through" sat on NOBODY's
+     * card, waiting on a document, while the Discover strip that found it could only
+     * describe it. That is the opposite of the direction it was built for: lifecycle
+     * stages are confirmed during Listen, by the people who move the thing.
+     *
+     * Only CONFIDENT readings move (name plus a second signal — see lifecycle.ts). A
+     * one-signal guess must not put a question on a person's link.
+     */
+    const lifecycleAsks = lifecycleLoci(store);
+    const typingLoci = dictionaryBucket(queue).filter((i) => !lifecycleAsks.has(i.about));
     const soloByOwner = new Map<string, QueueItem[]>();
     const sessionMap = new Map<string, QueueItem[]>();
     for (const it of queue.items) {
-      if (it.status === "open" && TYPING_SLOTS.has(it.slot)) continue;   // typing → dictionary bucket
+      // typing → dictionary bucket, EXCEPT a lifecycle's stages, which are a person's
+      // to state and fall through to their card below.
+      if (it.status === "open" && TYPING_SLOTS.has(it.slot) && !lifecycleAsks.has(it.about)) continue;
       if (it.owner.kind === "joint") { (sessionMap.get(it.ownerLabel) ?? sessionMap.set(it.ownerLabel, []).get(it.ownerLabel)!).push(it); continue; }
       if (it.owner.kind !== "role" || it.status !== "open") continue;    // unowned → assignQueue; blocked → needs unsticking
       (soloByOwner.get(it.ownerLabel) ?? soloByOwner.set(it.ownerLabel, []).get(it.ownerLabel)!).push(it);
