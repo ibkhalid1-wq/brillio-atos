@@ -552,12 +552,32 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
                 "currently regenerate is hidden under the menu". A primary action for
                 a generated document belongs in the header at all times; it now
                 renders whenever the document can be regenerated, and the menu no
-                longer carries a second copy of it. */}
+                longer carries a second copy of it.
+
+                ONE control per screen, named for what it does in the state it is in.
+                A stale document's band used to carry its own "↻ Rebuild in full"
+                button — right when the header was showing "↻ Regenerate" — so a
+                stale screen offered two differently-named controls for one act. The
+                band keeps every word of its explanation (it is the only place that
+                says a full rebuild does not merge hand corrections); the button is
+                here, and takes the band's honest wording while it is stale. */}
             {onRegenerate ? (
               <button type="button" className="v3fs-btn v3fs-btn-regen" disabled={!!regenerating}
                 onClick={() => { guardedRegenerate(); if (!embedded) onClose(); }}
-                title={artifact.present ? "Resynthesize this document from the latest evidence" : "Generate this document from the evidence on record"}>
-                {regenerating ? "Generating…" : artifact.present ? "↻ Regenerate" : "✦ Generate"}
+                title={!artifact.present ? "Generate this document from the evidence on record"
+                  : artifact.stale ? "A full rebuild REPLACES the whole document from the current claims — the affected-sections-only update is not yet wired"
+                  : "Resynthesize this document from the latest evidence"}>
+                {/* The glyph is decoration and is hidden from the reading order —
+                    the accessible name is the WORD. It used to be inside the label,
+                    which nothing caught while this button only rendered on a stale
+                    document; drawing it on every artifact screen put "↻ Regenerate"
+                    into the name on every studio and the a11y guard said so. */}
+                {regenerating ? "Generating…" : (
+                  <>
+                    <span aria-hidden="true">{artifact.present ? "↻ " : "✦ "}</span>
+                    {!artifact.present ? "Generate" : artifact.stale ? "Rebuild in full" : "Regenerate"}
+                  </>
+                )}
               </button>
             ) : null}
             {entry ? (
@@ -620,11 +640,11 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
               <b>The claims this {artifact.title} rests on moved</b> since it was generated — an upstream deliverable was rebuilt or its own inputs changed.{overrideCount > 0
                 ? ` ⚠ ${overrideCount} stakeholder correction${overrideCount === 1 ? "" : "s"} would be replaced — a full rebuild does not merge them.`
                 : ""} A <b>targeted update of just the affected sections</b> is the intended path; today only a full rebuild is wired.
+              {onRegenerate ? <> The header&rsquo;s <b>↻ Rebuild in full</b> is that rebuild.</> : null}
             </span>
-            {onRegenerate ? (
-              <button type="button" className="v3fs-btn" title="A full rebuild REPLACES the whole document from the current claims — the affected-sections-only update is not yet wired"
-                onClick={() => { guardedRegenerate(); onClose(); }}>↻ Rebuild in full</button>
-            ) : null}
+            {/* The button that stood here said the same thing as the header's, two
+                inches away and under a different name. The explanation is what this
+                band is for; the act is one control, at the top. */}
           </div>
         ) : null}
         {regenPending ? (

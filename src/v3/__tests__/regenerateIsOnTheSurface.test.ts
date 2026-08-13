@@ -40,6 +40,40 @@ const overflowMenu = (() => {
   return src.slice(from, to).replace(/\{\/\*[\s\S]*?\*\/\}/g, "");
 })();
 
+describe("every surface that opens an artifact wires the act", () => {
+  /**
+   * The button is only as real as the handler behind it. `FlowArtifactStudio` draws
+   * nothing without `onRegenerate`, and the Library's mount passed none — so the
+   * fix above was invisible on that surface, and a STALE document there showed the
+   * "claims moved" band with nothing to press.
+   *
+   * This is a source guard because the two mounts are what it is about: a DOM test
+   * would prove one of them and say nothing about the other appearing later.
+   */
+  const mounts = ["TheLine.tsx", "FlowShell.tsx"].map((f) => ({
+    file: f,
+    src: readFileSync(resolve(__dirname, `../components/flow/${f}`), "utf8"),
+  }));
+
+  it.each(mounts)("$file passes onRegenerate to the artifact studio", ({ src: text }) => {
+    const at = text.indexOf("<FlowArtifactStudio");
+    expect(at, "this file no longer mounts the artifact studio — move or drop this guard").toBeGreaterThan(-1);
+    const mount = text.slice(at, text.indexOf("/>", at));
+    expect(mount, "an artifact opens here with no way to rebuild it").toContain("onRegenerate=");
+    expect(mount, "…and nothing tells the header a rebuild is already out").toContain("regenerating=");
+  });
+
+  it("both take the dispatch from one definition, not a second copy", () => {
+    // MUTATION: paste the busy-tracking back into either file → RED. Two copies of
+    // "is it back yet" is two answers to it, and the flag is the part that was
+    // wrong before (a write-only latch reading "Generating…" for ever).
+    for (const { file, src: text } of mounts) {
+      expect(text, `${file} does not use the shared regen hook`).toContain("useArtifactRegen(");
+      expect(text, `${file} keeps its own in-flight bookkeeping`).not.toContain("setRegenBusy");
+    }
+  });
+});
+
 describe("the regenerate control on a generated document", () => {
   it("renders on the header whenever the document can be regenerated", () => {
     // MUTATION: restore `onRegenerate && (!artifact.present || artifact.stale || regenerating)` → RED.
@@ -48,16 +82,33 @@ describe("the regenerate control on a generated document", () => {
   });
 
   it("is not gated on staleness — the fingerprint is not the only reason to rebuild", () => {
-    // The whole defect in one assertion: the header's gate must not consult the
-    // stale flag, or a current document goes back to offering nothing.
-    expect(headerCta, "the header regenerate is conditioned on staleness again")
-      .not.toContain("artifact.stale");
+    // The whole defect in one assertion, and it is about the GATE, not the label:
+    // staleness may choose the WORD on the button (see below), but it must never
+    // decide whether the button exists, or a current document offers nothing again.
+    const gate = headerCta.slice(headerCta.indexOf("{onRegenerate"), headerCta.indexOf("<button", headerCta.indexOf("{onRegenerate")));
+    expect(gate, "the header regenerate is conditioned on staleness again").not.toContain("artifact.stale");
   });
 
-  it("still names the act correctly for a document that does not exist yet", () => {
-    // Generate and Regenerate are the same control and must not become the same
-    // WORD: one creates, the other replaces.
-    expect(headerCta).toContain("artifact.present ? \"↻ Regenerate\" : \"✦ Generate\"");
+  it("names the act for the state the document is in", () => {
+    // Three states, three words: nothing to replace yet (Generate), claims moved
+    // (Rebuild in full — the honest name, because it does NOT merge hand
+    // corrections), and everything else (Regenerate).
+    expect(headerCta).toContain('!artifact.present ? "Generate"');
+    expect(headerCta).toContain('artifact.stale ? "Rebuild in full" : "Regenerate"');
+    // …and the glyph is decoration, not part of the name a screen reader reads.
+    expect(headerCta).toContain('<span aria-hidden="true">{artifact.present ? "↻ " : "✦ "}</span>');
+  });
+
+  it("is the only control for that act on the screen", () => {
+    // The stale band used to carry its own "Rebuild in full" button while the
+    // header showed "Regenerate" — two names, one act, two inches apart. The band
+    // keeps the explanation; it must not grow the button back.
+    const from = src.indexOf('<div className="v3fs-dv-band amber">');
+    const band = src.slice(from, src.indexOf("</div>", from)).replace(/\{\/\*[\s\S]*?\*\/\}/g, "");
+    expect(from, "the stale band is gone").toBeGreaterThan(-1);
+    expect(band, "the stale band has a second regenerate button again").not.toMatch(/<button/);
+    // …and it still says what a full rebuild costs, which is the only place that does.
+    expect(band).toContain("targeted update of just the affected sections");
   });
 
   it("is not duplicated inside the ⋯ menu", () => {

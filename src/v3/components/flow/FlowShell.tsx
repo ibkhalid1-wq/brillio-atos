@@ -44,6 +44,7 @@ import {
   listFlowTracks, trackAcceptance, trackPace,
 } from "@/v3/components/flow/flowTracks";
 import { readFlowGovernance, flowAgentTier } from "@/v3/components/flow/flowGovernance";
+import { useArtifactRegen } from "@/v3/components/flow/useArtifactRegen";
 import { resolveMovementStakeholders, deliveryRoleDirectory, readDirectoryPeople, validateProgramRole, readRoleBindings, knownProgramRoles, kitPersonaDirectory, readSuggestedVoices, readListenPlan, listenPlanWrite, dismissedListenRoles, labelIdentity, personKey, dedupePeopleRows, reconcilePeopleWithKit, reconcileDirectoryWrite, removeDirectoryPerson, UNNAMED_SUFFIX_RE } from "@/v3/components/flow/flowStakeholders";
 import DiscoveryKitAlign from "@/v3/components/flow/DiscoveryKitAlign";
 import TheLine from "@/v3/components/flow/TheLine";
@@ -957,7 +958,7 @@ export default function FlowShell(props: FlowShellProps) {
         ) : view === "people" ? (
           <FlowPeople program={program} onSaveInputs={props.onSaveInputs} onRenamePerson={props.onRenamePerson} onGoInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }} />
         ) : view === "library" ? (
-          <FlowLibrary program={program} programs={props.programs} onSelectProgram={props.onSelectProgram} onSaveInputs={props.onSaveInputs} onTagClaim={props.onTagClaim} onComment={props.onComment} onSaveArtifactDoc={props.onSaveArtifactDoc} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }} onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} onRenamePerson={props.onRenamePerson} onRenameRole={props.onRenameRole} />
+          <FlowLibrary program={program} programs={props.programs} onSelectProgram={props.onSelectProgram} onSaveInputs={props.onSaveInputs} onTagClaim={props.onTagClaim} onComment={props.onComment} onSaveArtifactDoc={props.onSaveArtifactDoc} onRunAgent={props.onRunAgent} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }} onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} onRenamePerson={props.onRenamePerson} onRenameRole={props.onRenameRole} />
         ) : view === "mission" ? (
           <FlowMission
             aiStatus={props.aiStatus}
@@ -2872,7 +2873,7 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
   );
 }
 
-function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagClaim, onComment, onSaveArtifactDoc, onOpenInbox, onGoFlow, onRenamePerson, onRenameRole }: { program: ProgramSummary; programs: ProgramSummary[]; onSelectProgram: (id: string) => void; onSaveInputs?: FlowShellProps["onSaveInputs"]; onTagClaim?: FlowShellProps["onTagClaim"]; onComment?: FlowShellProps["onComment"]; onSaveArtifactDoc: FlowShellProps["onSaveArtifactDoc"]; onOpenInbox?: () => void; onGoFlow?: () => void; onRenamePerson?: FlowShellProps["onRenamePerson"]; onRenameRole?: FlowShellProps["onRenameRole"] }) {
+function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagClaim, onComment, onSaveArtifactDoc, onOpenInbox, onGoFlow, onRenamePerson, onRenameRole, onRunAgent }: { program: ProgramSummary; programs: ProgramSummary[]; onSelectProgram: (id: string) => void; onSaveInputs?: FlowShellProps["onSaveInputs"]; onTagClaim?: FlowShellProps["onTagClaim"]; onComment?: FlowShellProps["onComment"]; onSaveArtifactDoc: FlowShellProps["onSaveArtifactDoc"]; onOpenInbox?: () => void; onGoFlow?: () => void; onRenamePerson?: FlowShellProps["onRenamePerson"]; onRenameRole?: FlowShellProps["onRenameRole"]; onRunAgent?: FlowShellProps["onRunAgent"] }) {
   const claims = listClaimTags(program);
   const tagTargets = useMemo(() => claimTargets(program), [program]);
   const [claimHighlight, setClaimHighlight] = useState<string | undefined>(undefined);
@@ -2941,6 +2942,9 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
     } finally { setPullBusy(null); }
   };
   const [docFor, setDocFor] = useState<import("@/v3/components/flow/flowShellData").ArtifactCardModel | null>(null);
+  // Regeneration, from the same definition the Work board uses. No toast here: the
+  // act happens inside the open document, which is where its own header reports it.
+  const { regenerate, regenerating } = useArtifactRegen(program, onRunAgent);
   const all = useMemo(() => ({
     // Approver sign-offs are first-class evidence — projected alongside the
     // captured transcripts so the Library reads them the same way.
@@ -3241,7 +3245,13 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
           );
         })}
       </div>
-      {docFor ? <Suspense fallback={null}><FlowArtifactStudio program={program} artifact={docFor} onClose={() => setDocFor(null)} onSaveDoc={onSaveArtifactDoc} onSaveInputs={onSaveInputs} onComment={onComment} onOpenInbox={onOpenInbox}
+      {/* THE SAME DOCUMENT, THE SAME ACTS. This mount passed no `onRegenerate`, so an
+          artifact opened from the Library had a header of ⋯ and Close — and a STALE one
+          drew the "the claims this rests on moved" band with no button under it. The only
+          offer was a link sending the operator to the Flow page to do it there. The
+          dispatch lives in `useArtifactRegen`, so both surfaces share one definition of
+          what is in flight and when it came back. */}
+      {docFor ? <Suspense fallback={null}><FlowArtifactStudio program={program} artifact={docFor} onClose={() => setDocFor(null)} onSaveDoc={onSaveArtifactDoc} onSaveInputs={onSaveInputs} onComment={onComment} onOpenInbox={onOpenInbox} onRegenerate={regenerate ? () => regenerate(docFor) : undefined} regenerating={regenerating(docFor.id)}
         header={docFor.id === "discovery-kit"
           ? <DiscoveryKitAlign program={program} onSaveInputs={onSaveInputs} onRenamePerson={onRenamePerson} onRenameRole={onRenameRole} />
           : undefined}

@@ -457,18 +457,24 @@ describe("a busy flag that nothing clears is a lie", () => {
    * latch: regenerate an artifact once and its entry stayed true for the life of the
    * component, so opening that document later showed a run that had long since
    * landed.
+   *
+   * It lived in `TheLine` until the Library needed the same act on the same
+   * documents; it is `useArtifactRegen` now. These assertions follow the property,
+   * not the address — the file it lives in was never what mattered.
    */
+  const regen = SRC("useArtifactRegen.ts");
   const line = SRC("TheLine.tsx");
 
   it("stores the document as it was, and clears when it changes", () => {
     // MUTATION: revert to `Record<string, boolean>` with `true` → RED.
-    expect(line).toContain("const [regenBusy, setRegenBusy] = useState<Record<string, string>>({});");
-    expect(line).toContain("artifactDocument(program, card.id) ?? \"\"");
-    expect(line).toContain('(artifactDocument(program, id) ?? "") !== busy[id]');
+    expect(regen).toContain("useState<Record<string, string>>({})");
+    expect(regen).toContain("artifactDocument(program, card.id) ?? \"\"");
+    expect(regen).toContain('(artifactDocument(program, id) ?? "") !== current[id]');
   });
 
   it("children still receive booleans — the snapshot is bookkeeping, not their business", () => {
-    expect(line).toContain("Object.fromEntries(Object.keys(regenBusy).map((id) => [id, true]))");
+    expect(regen, "the snapshot leaked out of the hook").toContain("regeneratingIds: Object.keys(busy)");
+    expect(line).toContain("Object.fromEntries(regeneratingIds.map((id) => [id, true]))");
   });
 });
 
