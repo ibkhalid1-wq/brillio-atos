@@ -80,10 +80,13 @@ export function confirmedCsv(rows: readonly TypingRow[], chosen: Readonly<Record
   return lines.length > 1 ? lines.join("\n") : "";
 }
 
-export default function TypingGrid({ ledger, onDictionary, onDone, rows: given }: {
+export default function TypingGrid({ ledger, onDictionary, onDone, onClose, rows: given }: {
   ledger: ProgramLedger;
   onDictionary: (csv: string, sor: string | null) => void | Promise<void>;
   onDone?: () => void;
+  /** Close without answering anything. The grid can be a page long, so the trigger
+   *  that opened it is usually scrolled out of sight by the time you want out. */
+  onClose?: () => void;
   /**
    * The rows to work, when they are NOT the open typing wall.
    *
@@ -139,6 +142,16 @@ export default function TypingGrid({ ledger, onDictionary, onDone, rows: given }
           <b>{rows.length}</b> field{rows.length === 1 ? "" : "s"}{" "}
           {given ? "Aura typed from their names" : "still need a type"}
         </span>
+        {/* NAMED BY WHAT IT CLOSES. Both grids can be open at once — the open typing
+            wall and the review of Aura's own readings — and two buttons called
+            "close" leave a screen-reader user with no way to tell which one they are
+            about to press. */}
+        {onClose ? (
+          <button type="button" className="v3ib-btn ghost sm v3tg-x" onClick={onClose}
+            aria-label={given
+              ? "Close the review of the fields Aura typed, without recording anything"
+              : "Close the type grid, without recording anything"}>close</button>
+        ) : null}
         <span className="v3tg-m">
           {given ? (
             <>These are already on the record as <b>code-derived · weak</b> — Aura&rsquo;s reading of

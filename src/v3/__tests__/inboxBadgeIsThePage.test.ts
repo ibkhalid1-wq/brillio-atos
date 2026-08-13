@@ -206,8 +206,17 @@ const badge = (): number => Number(host.querySelector(".v3fs-dock-n")?.textConte
 const sessionsLine = (): number => {
   const line = host.querySelector("#ib-sessions button[aria-expanded]");
   if (!line) return 0;                                      // 0 seams → the section is hidden
-  const m = /(\d+)\s+question/.exec(line.textContent ?? "");
-  if (!m) throw new Error(`no question total on the sessions line: ${line.textContent}`);
+  // The count is the header's COUNT BADGE now (2026-08-12): every Inbox section grew
+  // the same header, so the number that used to be prose inside each section's lead
+  // is one element in one place. Read the badge, not the sentence around it — the
+  // sentence is free to change wording and this must not care.
+  const badge = line.querySelector(".v3ib-n");
+  if (!badge) throw new Error(`no count badge on the sessions header: ${line.textContent}`);
+  // Sessions counts TWO things — seams and the questions across them — so its badge
+  // states both ("4 seams, 25 questions"). This guard is about the QUESTION total,
+  // which is the number the rows below add up to.
+  const m = /(\d+)\s+questions?/.exec(badge.textContent ?? "");
+  if (!m) throw new Error(`no question total on the sessions badge: ${badge.textContent}`);
   return Number(m[1]);
 };
 

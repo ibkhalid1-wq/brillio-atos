@@ -102,35 +102,21 @@ export function SessionsSection({ sessionQueue, plannedPairs, busy, onPropose }:
   busy: string | null;
   onPropose: (pair: string, abouts: string[]) => void;
 }) {
-  const [open, setOpen] = useState(false);
   // EMPTY-STATE: 0 seams → section HIDDEN (by request, 2026-08-10) — rule unchanged.
   if (sessionQueue.length === 0) return null;
   const seams = sessionQueue.length;
   const questions = sessionQuestionCount(sessionQueue);   // === the header's sessions stat
   return (
-    <section id="ib-sessions" className="v3ib-src">
-      <header className="v3ib-h">
-        <button type="button" className="v3ib-disc" aria-expanded={open}
-          aria-controls={open ? "ib-sessions-rows" : undefined}
-          title={open ? "Hide the pairs" : "Show the pairs"}
-          onClick={() => setOpen((v) => !v)}>
-          <span className="v3ib-disc-c" aria-hidden="true">{open ? "▾" : "▸"}</span>
-          <OwnershipTag cls="joint" showLabel={false} />
-          <span className="v3ib-verb">Sessions</span>
-          <span className="v3ib-lead">
-            <span className="v3ib-disc-sep" aria-hidden="true">· </span>
-            <b>{seams}</b> seam{seams === 1 ? "" : "s"}, <b>{questions}</b> question{questions === 1 ? "" : "s"}
-            {" — need a joint conversation; scheduling gated"}
-          </span>
-        </button>
-        <ProvisionalMark what="scheduling a real date is a gated write — 'propose a time' records the intent only" />
-      </header>
-      {/* Expanded: today's per-pair rows, unchanged — pair, joint-question count,
+    <IbSection id="ib-sessions" verb="Sessions" count={questions} unit="question" defaultOpen={false}
+      tag={<OwnershipTag cls="joint" showLabel={false} />}
+      badge={<>{seams} seam{seams === 1 ? "" : "s"}, {questions} question{questions === 1 ? "" : "s"}</>}
+      lead={<>They need a joint conversation; scheduling gated.</>}
+      provisional="scheduling a real date is a gated write — 'propose a time' records the intent only">
+      {/* The per-pair rows, unchanged — pair, joint-question count,
           awaiting-a-date, propose-a-time. Joint ownership is AUTO-SET at seam detection
           (migrate: jointOrOwner), so there is nothing to "mark"; the only pending thing
           is a DATE, which is gated. */}
-      {open ? (
-        <ul id="ib-sessions-rows" className="v3ib-seams">
+      <ul id="ib-sessions-rows" className="v3ib-seams">
           {sessionQueue.map(({ pair, abouts }) => {
             const planned = plannedPairs.has(pair);
             return (
@@ -147,8 +133,75 @@ export function SessionsSection({ sessionQueue, plannedPairs, busy, onPropose }:
               </li>
             );
           })}
-        </ul>
-      ) : null}
+      </ul>
+    </IbSection>
+  );
+}
+
+/**
+ * ONE HEADER FOR EVERY SECTION OF THIS INBOX.
+ *
+ * Eight sections had grown eight headers. Measured before this existed: five carried
+ * an ownership or source tag and three did not; one collapsed and seven could not;
+ * seven bolded their count and "Decided" printed a bare number in prose. Nothing was
+ * wrong with any one of them, which is exactly why it drifted — a header is written
+ * once, beside the section it belongs to, and the next one is written the same way
+ * only if somebody remembers.
+ *
+ * So the contract is structural: a TAG saying whose claim this is, the VERB, the
+ * COUNT of what the section holds, the LEAD explaining it, an optional provisional
+ * mark, and a disclosure that collapses the body. A section that wants extra controls
+ * passes them; it cannot skip the parts every section owes the reader.
+ */
+function IbSection({ id, className, tag, verb, count, unit, unitPlural, badge, lead, provisional, actions, defaultOpen = true, children }: {
+  id?: string;
+  /** A section's own marker class, kept: `.v3ib-dict` and `.v3ib-unbound` carry
+   *  styling and are what the miss-stays-visible guards look for. The shared header
+   *  must not quietly take a section's identity away with its markup. */
+  className?: string;
+  /** Whose claim the section is about — rendered as the ledger's own tag. */
+  tag: ReactNode;
+  verb: string;
+  count: number;
+  /** What the count counts, singular. Pluralised here so no section spells its own —
+   *  but only by appending "s", which is wrong for a compound noun: "system of record"
+   *  became "0 system of records" on the live board. A unit whose plural is not the
+   *  singular plus s states it. */
+  unit: string;
+  unitPlural?: string;
+  /** A section counting TWO things (Sessions: seams AND questions) states both here.
+   *  `count` still drives the accessible name, so the badge and the announcement
+   *  cannot disagree about the headline number. */
+  badge?: ReactNode;
+  lead: ReactNode;
+  provisional?: string;
+  actions?: ReactNode;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const bodyId = id ? `${id}-body` : undefined;
+  return (
+    <section id={id} className={`v3ib-src${className ? ` ${className}` : ""}`}>
+      <header className="v3ib-h">
+        <button type="button" className="v3ib-disc" aria-expanded={open}
+          aria-controls={open ? bodyId : undefined}
+          aria-label={`${open ? "Hide" : "Show"} ${verb} — ${count} ${count === 1 ? unit : unitPlural ?? `${unit}s`}`}
+          onClick={() => setOpen((v) => !v)}>
+          <span className="v3ib-disc-c" aria-hidden="true">{open ? "▾" : "▸"}</span>
+          {tag}
+          <span className="v3ib-verb">{verb}</span>
+          {/* The unit is VISIBLE, not only announced. A bare "1" beside "Adjudicate"
+              makes the reader supply the noun, and every section used to print it
+              ("1 conflict", "24 questions") — losing it to an aria-label would have
+              been an accessibility win paid for with a legibility loss. */}
+          <span className="v3ib-n">{badge ?? <>{count} {count === 1 ? unit : unitPlural ?? `${unit}s`}</>}</span>
+        </button>
+        <span className="v3ib-lead">{lead}</span>
+        {provisional ? <ProvisionalMark what={provisional} /> : null}
+        {actions ? <span className="v3ib-h-acts">{actions}</span> : null}
+      </header>
+      {open ? <div id={bodyId}>{children}</div> : null}
     </section>
   );
 }
@@ -452,18 +505,15 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
               Every number is `soloByOwner`'s own count for that label: no person is
               invented to fill the gap and no number is invented to describe it. */}
       {unbound.length ? (
-        <section className="v3ib-src v3ib-unbound">
-          <header className="v3ib-h">
-            <span className="v3ib-verb">Nobody to ask</span>
-            <span className="v3ib-lead">
-              <b>{unboundOpen}</b> open question{unboundOpen === 1 ? "" : "s"} are owned by{" "}
-              {unbound.length} role{unbound.length === 1 ? "" : "s"} with no person behind{" "}
+        <IbSection className="v3ib-unbound" verb="Nobody to ask" count={unboundOpen} unit="open question"
+          tag={<OwnershipTag cls="operator" showLabel={false} />}
+          lead={<>
+              Owned by {unbound.length} role{unbound.length === 1 ? "" : "s"} with no person behind{" "}
               {unbound.length === 1 ? "it" : "them"} — owned in the ledger, unreachable in practice.
               {" "}Hand them to someone here, or add a person to the Discovery Kit whose role is
               spelt EXACTLY as it appears below — the binding is an exact match on the role, so
               &ldquo;Exec Sponsor&rdquo; does not answer for &ldquo;Executive Sponsor&rdquo;.
-            </span>
-          </header>
+          </>}>
           {/* THE ACT, not a description of one. This strip said "reassign them below"
               and then drew a COUNT — the operator was told to do something and given
               nothing to do it with. The reassignment machinery already existed for
@@ -490,7 +540,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
               );
             })}
           </div>
-        </section>
+        </IbSection>
       ) : null}
 
       {/* 0 · ARTIFACT ASKS — the dictionary ask, PREVENTIVE by default: one ask per
@@ -585,12 +635,12 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
           );
         };
         return (
-          <section className="v3ib-src v3ib-dict">
-            <header className="v3ib-h">
-              <SourceTag source="code-derived" />
-              <span className="v3ib-verb">Data dictionary</span>
-              <span className="v3ib-lead"><b>{chase.length}</b> system{chase.length === 1 ? "" : "s"} of record with an unprovided dictionary — <b>one upload each</b> closes the typing wall, not form fields to the domain expert. Dictionary claims land <b>code-derived · weak</b> — any owner can still deviate.</span>
-            </header>
+          <IbSection id="ib-dictionary" className="v3ib-dict" verb="Data dictionary" count={chase.length} unit="system of record"
+            unitPlural="systems of record"
+            tag={<SourceTag source="code-derived" />}
+            lead={<>With an unprovided dictionary — <b>one upload each</b> closes the typing wall, not
+              form fields to the domain expert. Dictionary claims land <b>code-derived · weak</b> —
+              any owner can still deviate.</>}>
             {/* A BURN-DOWN THAT SHRANK BECAUSE THE MACHINE GUESSED MUST SAY SO.
                 These left the wall without anybody answering them, so the count is
                 stated here rather than quietly absorbed. They are the weakest claim
@@ -615,8 +665,14 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                     a set of rows that are not the open wall. */}
                 {onDictionary ? (
                   <span className="v3ib-dict-actions">
-                    <button type="button" className="v3ib-btn ghost sm" onClick={() => setShowDerived(true)}>
-                      review the {derived.length}
+                    {/* A TOGGLE, NOT A ONE-WAY SWITCH. It opened the grid and there was
+                        no way back: the only thing that closed it was committing a
+                        confirmation, so an operator who opened it to LOOK had to
+                        either answer something or reload the page. */}
+                    <button type="button" className="v3ib-btn ghost sm"
+                      aria-expanded={showDerived}
+                      onClick={() => setShowDerived((v) => !v)}>
+                      {showDerived ? "hide these" : `review the ${derived.length}`}
                     </button>
                   </span>
                 ) : null}
@@ -624,7 +680,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
             ) : null}
             {onDictionary && showDerived ? (
               <TypingGrid ledger={ledger} onDictionary={onDictionary} rows={derivedRows}
-                onDone={() => setShowDerived(false)} />
+                onDone={() => setShowDerived(false)} onClose={() => setShowDerived(false)} />
             ) : null}
             {chase.map((ask) => {
               // owner: the derivation's, else the shared detection over the roster, else TBC — never fabricated
@@ -726,7 +782,8 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                 beats it — and it is only offered when there is something to
                 confirm. */}
             {onDictionary && showGrid ? (
-              <TypingGrid ledger={ledger} onDictionary={onDictionary} onDone={() => setShowGrid(false)} />
+              <TypingGrid ledger={ledger} onDictionary={onDictionary} onDone={() => setShowGrid(false)}
+                onClose={() => setShowGrid(false)} />
             ) : onDictionary && ledger.typingLoci.length ? (
               // NOT `.v3ib-dict-ask`: that class IS the chase row, counted one per
               // SoR by the badge-equals-page guard. This is a door into a pass of
@@ -742,8 +799,10 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                   pass of confirmations rather than {ledger.typingLoci.length} questions.
                 </span>
                 <span className="v3ib-dict-actions">
-                  <button type="button" className="v3ib-btn ghost sm" onClick={() => setShowGrid(true)}>
-                    confirm the types here
+                  <button type="button" className="v3ib-btn ghost sm"
+                    aria-expanded={showGrid}
+                    onClick={() => setShowGrid((v) => !v)}>
+                    {showGrid ? "hide the grid" : "confirm the types here"}
                   </button>
                 </span>
               </div>
@@ -829,7 +888,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                 {uploadRow(null, ledger.typingLoci.map((i) => i.about))}
               </>
             ) : null}
-          </section>
+          </IbSection>
         );
       })()}
 
@@ -837,15 +896,11 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
       {/* EMPTY-STATE: a 0 section is HIDDEN (by request, 2026-08-10) — the inbox shows
           only what needs acting on; the header stats carry the summary. */}
       {unowned.length === 0 ? null : (
-      <section id="ib-assign" className="v3ib-src">
-        <header className="v3ib-h">
-          <OwnershipTag cls="operator" showLabel={false} />
-          <span className="v3ib-verb">Need an owner</span>
-          {/* QUESTIONS is the unit (same as the burn-down); the 12 is ELEMENTS, labelled. Only
-              PHASE / DECISION questions are here — value-set/type questions route to the
-              dictionary, so each row is a genuine ownership decision, not a typing chore. */}
-          <span className="v3ib-lead"><b>{unowned.length}</b> question{unowned.length === 1 ? "" : "s"} <span className="v3ib-unit">(phase · decision)</span> across <b>{unownedGroups.size}</b> <span className="v3ib-unit">element{unownedGroups.size === 1 ? "" : "s"}</span> — route each element&apos;s questions to an owner. Not an answer; heard-count untouched.</span>
-        </header>
+      <IbSection id="ib-assign" verb="Need an owner" count={unowned.length} unit="question"
+        tag={<OwnershipTag cls="operator" showLabel={false} />}
+        lead={<><span className="v3ib-unit">(phase · decision)</span> across{" "}
+          <b>{unownedGroups.size}</b> <span className="v3ib-unit">element{unownedGroups.size === 1 ? "" : "s"}</span>
+          {" "}— route each element&rsquo;s questions to an owner. Not an answer; heard-count untouched.</>}>
           <ul className="v3ib-list">
             {[...unownedGroups.entries()].map(([group, items]) => {
               const key = `grp:${group}`;
@@ -893,7 +948,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
               );
             })}
           </ul>
-      </section>
+      </IbSection>
       )}
 
       {/* 2 · SEAMS → the session queue. One summary line, expandable (see SessionsSection). */}
@@ -908,12 +963,10 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
       {/* EMPTY-STATE: 0 conflicts → section HIDDEN (by request, 2026-08-10; the earlier
           "passed check" band retired with it). */}
       {ledger.conflicts.length === 0 ? null : (
-      <section id="ib-adjudicate" className="v3ib-src">
-        <header className="v3ib-h">
-          <span className="v3ib-verb">Adjudicate</span>
-          <span className="v3ib-lead"><b>{ledger.conflicts.length}</b> conflict{ledger.conflicts.length === 1 ? "" : "s"} — two live claims on one locus; the element <b>freezes</b>, no auto-winner.</span>
-          <ProvisionalMark what="resolution completion is a write — gated; read-side only for now" />
-        </header>
+      <IbSection id="ib-adjudicate" verb="Adjudicate" count={ledger.conflicts.length} unit="conflict"
+        tag={<OwnershipTag cls="operator" showLabel={false} />}
+        lead={<>Two live claims on one locus; the element <b>freezes</b>, no auto-winner.</>}
+        provisional="resolution completion is a write — gated; read-side only for now">
         <ul className="v3ib-list">
           {ledger.conflicts.map((c) => (
             <li key={c.about} className="v3ib-row is-frozen">
@@ -922,7 +975,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
             </li>
           ))}
         </ul>
-      </section>
+      </IbSection>
       )}
 
       {/* 4 · PINNED IN FLIGHT → the routing DECISION. A link was sent carrying these
@@ -934,15 +987,10 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
           There is no automatic sweep, and no silent re-attribution of a sent question.
           EMPTY-STATE: 0 → section hidden, like every other section here. */}
       {ledger.pinConflicts.length === 0 ? null : (
-      <section id="ib-pinned" className="v3ib-src">
-        <header className="v3ib-h">
-          <OwnershipTag cls="operator" showLabel={false} />
-          <span className="v3ib-verb">Pinned — in flight</span>
-          <span className="v3ib-lead">
-            <b>{ledger.pinConflicts.length}</b> question{ledger.pinConflicts.length === 1 ? "" : "s"} already <b>sent on a link</b> that a
-            fresh derivation would re-route. The link&apos;s recipient <b>keeps</b> them until you say otherwise — decide each one.
-          </span>
-        </header>
+            <IbSection id="ib-pinned" verb="Pinned — in flight" count={ledger.pinConflicts.length} unit="question"
+        tag={<OwnershipTag cls="operator" showLabel={false} />}
+        lead={<>Already <b>sent on a link</b> that a fresh derivation would re-route. The link&rsquo;s
+          recipient <b>keeps</b> them until you say otherwise — decide each one.</>}>
         <ul className="v3ib-list">
           {ledger.pinConflicts.map((c) => {
             const sent = c.pin.sentAt ? c.pin.sentAt.slice(0, 10) : null;
@@ -967,20 +1015,17 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
             );
           })}
         </ul>
-      </section>
+      </IbSection>
       )}
 
       {/* OWNED & IN-FLIGHT → reassign / unassign + the stakeholder's three exits */}
       {/* EMPTY-STATE: 0 in-flight → section HIDDEN (by request, 2026-08-10). */}
       {ledger.assignments.length === 0 ? null : (
-      <section id="ib-inflight" className="v3ib-src is-gated">
-        <>
-          <header className="v3ib-h">
-            <OwnershipTag cls="stakeholder" showLabel={false} />
-            <span className="v3ib-verb">Owned &amp; in-flight</span>
-            <span className="v3ib-lead">Reassign if you routed wrong; or record the holder&apos;s exit. Operator-entered captures: <b>{ledger.captures.length}</b> — <b>not</b> counted as heard.</span>
-            <ProvisionalMark what="only a stakeholder ANSWER through the system ticks heard — gated" />
-          </header>
+      <IbSection id="ib-inflight" className="is-gated" verb="Owned &amp; in-flight" count={ledger.assignments.length} unit="question"
+        tag={<OwnershipTag cls="stakeholder" showLabel={false} />}
+        lead={<>Reassign if you routed wrong, or record the holder&rsquo;s exit. Operator-entered
+          captures: <b>{ledger.captures.length}</b> — <b>not</b> counted as heard.</>}
+        provisional="only a stakeholder ANSWER through the system ticks heard — gated">
           <ul className="v3ib-list">
             {ledger.assignments.map((a) => {
               const cap = ledger.captures.find((c) => c.about === a.about);
@@ -1056,14 +1101,15 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
               );
             })}
           </ul>
-        </>
-      </section>
+      </IbSection>
       )}
 
       {/* DECIDED trace */}
       {ledger.decideFates.length ? (
-        <section className="v3ib-src">
-          <header className="v3ib-h"><span className="v3ib-verb">Decided</span><span className="v3ib-lead">{ledger.decideFates.length} unknown{ledger.decideFates.length === 1 ? "" : "s"} the operator ruled on — an honest trace.</span></header>
+        <IbSection id="ib-decided" verb="Decided" count={ledger.decideFates.length} unit="unknown"
+          tag={<SourceTag source="dispositioned" />}
+          lead={<>Questions the operator ruled on rather than answered — an honest trace, kept
+            because a thing ruled out of scope must not read as a thing nobody got to.</>}>
           <ul className="v3ib-list">
             {ledger.decideFates.map((d) => (
               <li key={d.about} className="v3ib-row is-decided">
@@ -1071,7 +1117,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
               </li>
             ))}
           </ul>
-        </section>
+        </IbSection>
       ) : null}
 
       {/* THE QUESTIONS BEHIND A COUNT. Read-only and dismissible: it exists so the

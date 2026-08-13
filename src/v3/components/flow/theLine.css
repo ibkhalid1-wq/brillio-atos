@@ -754,7 +754,13 @@
   border:1px dashed var(--fs-line);border-radius:8px}
 .v3tg{display:flex;flex-direction:column;gap:10px;margin-top:8px;padding:11px 13px;
   border:1px solid var(--fs-line);border-radius:10px;background:var(--fs-card)}
-.v3tg-h{display:flex;flex-direction:column;gap:3px}
+/* The header is a column of sentences; the close sits on the first line's right,
+   which a column layout cannot do — so the header becomes a two-column grid whose
+   right track is the button and whose left track holds the text as before. */
+.v3tg-h{display:grid;grid-template-columns:minmax(0,1fr) max-content;align-items:start;gap:3px 10px}
+.v3tg-h > .v3tg-t{grid-column:1}
+.v3tg-h > .v3tg-m{grid-column:1}
+.v3tg-x{grid-column:2;grid-row:1;justify-self:end}
 .v3tg-t{font-size:12.5px;color:var(--v3-text-primary)}
 .v3tg-m{font-size:10.5px;line-height:1.5;color:var(--v3-text-muted);max-width:70ch}
 .v3tg-g{display:flex;flex-direction:column;gap:4px}
@@ -804,6 +810,18 @@
 .v3ib-disc:focus-visible{outline:2px solid var(--v3-accent-2);outline-offset:3px}
 .v3ib-disc-c{flex:none;width:9px;font-size:10px;color:var(--v3-text-muted)}
 .v3ib-disc-sep{color:var(--v3-text-muted)}
+/* THE COUNT BADGE every section header now carries. It was prose in some headers
+   ("18 types were read…"), a bolded number in others, and absent from Decided — so
+   the same fact was three shapes down one column. One badge, tabular so the digits
+   line up between sections. */
+.v3ib-n{flex:none;font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;
+  color:var(--v3-text-secondary);background:var(--v3-surface-2);border:1px solid var(--fs-line);
+  border-radius:999px;padding:0 7px;line-height:17px}
+.v3ib-disc:hover .v3ib-n{border-color:var(--v3-accent-2);color:var(--v3-accent-2)}
+/* Extra controls a section needs in its header (export, filters) sit after the lead,
+   never inside the disclosure button — a button inside a button is not a control. */
+.v3ib-h-acts{display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px;flex-basis:100%}
+
 /* seam "on the session plan" — intent recorded, date still gated */
 .v3ib-seam.planned{border-left-style:solid;background:color-mix(in srgb,#6C5FAE 8%,var(--fs-card))}
 .v3ib-onplan{font-size:11px;color:var(--v3-seam-ink);font-weight:650}
