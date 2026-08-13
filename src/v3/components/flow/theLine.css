@@ -854,6 +854,10 @@
 .v3ib-form-note{font-size:10px;color:var(--v3-text-muted)}.v3ib-form-note b{color:var(--v3-text-secondary)}
 .v3ib-captured-tag{font-weight:700;color:var(--v3-amber);display:inline-flex;align-items:center;gap:4px}
 .v3ib-captured-body{color:var(--v3-text-secondary);font-style:italic}
+/* The consequence, beside the quote: a note is not an answer and the question is
+   still open. Same size as the body it qualifies — a caveat set smaller than the
+   claim it qualifies is a caveat nobody reads. */
+.v3ib-captured-open{color:var(--v3-text-secondary);flex-basis:100%}
 .v3ib-referral-l{color:var(--v3-text-secondary)}.v3ib-referral-l b{color:var(--v3-text-primary)}
 .v3ib-fate-tag{font-size:var(--ib-t-meta);font-weight:700}
 .v3ib-fate-tag.oos{color:var(--v3-text-muted)}.v3ib-fate-tag.esc{color:var(--v3-amber)}

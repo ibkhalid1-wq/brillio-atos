@@ -272,12 +272,25 @@ deterministic assembly, so the linked page can state its provenance for the firs
   had the operator confirm it into an assign, which the reassign select does in one step;
   release wrote an unassign with `reason: "release"`, and the unassign button is in the same
   row. Only ANSWER records something no routing control can — what the person said.
-- **What the claim says, and what it does NOT.** "Record it" is exactly what happens: the
-  answer is written as a `capture`, attributed to who said it, and the line under the form
+- **What the claim says, and what it does NOT.** "Note it" is exactly what happens: the
+  reply is written as a `capture`, attributed to who said it, and the line under the form
   states the limit in the same breath — **operator-entered, not counted as heard**. It does
   not claim the stakeholder answered through the system, and it must never be reworded to
   imply that: only a genuine stakeholder answer ticks the heard count, and this is the one
   place an operator can put words in a stakeholder's mouth.
+- **Reworded 2026-08-13 — the second inference nobody had accounted for.** The control was
+  labelled **`answer`**, the form's button **`record answer`**, and the result **"answer
+  captured via team"**. Every one of those was true about PROVENANCE and silent about
+  CONSEQUENCE — and the consequence is what an operator actually infers from a button
+  called "answer": that the question is now dealt with. It is not. A capture is
+  deliberately kept beside the ledger and never becomes a claim, so the locus stays open,
+  stays on the burn-down, and stays in Owned & in-flight. Asked directly: *"what is the
+  operator action or is this informational only"*.
+  Now: the control reads **"note what they said"**, the button **"save the note"**, the
+  result **"noted by you — not their answer"**, and both the form note and the recorded
+  block state that the question **stays open until they answer through the system**. The
+  boundary itself is unchanged and correct — only the labels stopped implying otherwise.
 - **Status:** **TRUE** — pinned by the heard-count boundary tests (a capture never moves
-  `heard`) and by the form note that ships beside the control.
+  `heard`), by the form note that ships beside the control, and by the recorded block that
+  states what is still open.
 

@@ -1476,18 +1476,32 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                     </span>
                   </span>
                   {cap ? (
-                    <span className="v3ib-captured"><span className="v3ib-captured-tag"><span aria-hidden="true">▧</span> answer captured via team</span><span className="v3ib-captured-body">&ldquo;{cap.answer}&rdquo; — {cap.saidByName}{cap.saidByRole ? `, ${cap.saidByRole}` : ""}</span><ProvisionalMark what="operator-entered, not a stakeholder assertion; not counted as heard" /></span>
+                    /* WHAT WAS RECORDED, AND WHAT IS STILL OPEN. This said "answer
+                       captured via team" and stopped — true about provenance, silent
+                       about consequence, and the consequence is the thing an operator
+                       assumes. A capture is deliberately kept BESIDE the ledger and
+                       never becomes a claim, so the question it is about is still
+                       open, still on the burn-down, and still in this section. The
+                       row now says so in the same breath as the quote. */
+                    <span className="v3ib-captured"><span className="v3ib-captured-tag"><span aria-hidden="true">▧</span> noted by you — not their answer</span><span className="v3ib-captured-body">&ldquo;{cap.answer}&rdquo; — {cap.saidByName}{cap.saidByRole ? `, ${cap.saidByRole}` : ""}</span><span className="v3ib-captured-open">The question is <b>still open</b>: it closes when {a.owner.label} answers through the system, or when you rule it out of scope.</span><ProvisionalMark what="operator-entered, not a stakeholder assertion; not counted as heard, and does not close the question" /></span>
                   ) : ref ? (
                     <span className="v3ib-referral"><span className="v3ib-referral-l"><span aria-hidden="true">↪ </span>referral: {ref.saidByName} said ask <b>{ref.toOwner}</b> instead</span>
                       <button type="button" className="v3ib-btn" disabled={busy === a.about} onClick={() => void run(a.about, assignAction(a.about, ref.toOwner))}>confirm<span aria-hidden="true"> → </span>reassign to {ref.toOwner}</button></span>
                   ) : (
                     <span className="v3ib-exits">
-                      <span className="v3ib-exits-l">awaiting {a.owner.label} — if they replied out of band, record it:</span>
-                      {/* One set of these per in-flight question, and the visible word
-                          ("answer") is the same on all of them — so the accessible name
-                          names the QUESTION and the holder as well, or a screen-reader
-                          user hears "answer button" twenty times with no way to tell
-                          which question they are about to record against. */}
+                      <span className="v3ib-exits-l">awaiting {a.owner.label} — if they replied out of band, note it:</span>
+                      {/* THE BUTTON SAYS WHAT IT RECORDS. It said "answer", and what it
+                          writes is a CAPTURE: operator-entered, never counted as heard,
+                          and — the part nothing on the row admitted — never a claim, so
+                          it does not close the question. A control called "answer" that
+                          cannot answer is the mislabel; the heard-count boundary behind
+                          it is correct and unchanged. An operator retyping what somebody
+                          said in a corridor is a note, and it is now called one. */}
+                      {/* One set of these per in-flight question, and the visible words
+                          are the same on all of them — so the accessible name names the
+                          QUESTION and the holder as well, or a screen-reader user hears
+                          the same button twenty times with no way to tell which question
+                          they are about to record against. */}
                       {/* THREE EXITS BECAME ONE, because two of them were reassignment
                           under other names. "Redirect" recorded "they said ask X
                           instead" and then had the operator confirm it into an ASSIGN —
@@ -1503,8 +1517,8 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                           nothing that exists stops working. */}
                       {(["answer"] as const).map((k) => (
                         <button key={k} type="button" className="v3ib-tab" aria-pressed={openExit === k}
-                          aria-label={spoken(`Record ${a.owner.label}'s ${k} for: ${Q(a.about).question}`)}
-                          onClick={() => setExit((s) => ({ ...s, [a.about]: openExit === k ? null : k }))}>{k}</button>
+                          aria-label={spoken(`Note what ${a.owner.label} said out of band, about: ${Q(a.about).question}. Recorded as your note — it does not close the question.`)}
+                          onClick={() => setExit((s) => ({ ...s, [a.about]: openExit === k ? null : k }))}>note what they said</button>
                       ))}
                     </span>
                   )}
@@ -1513,9 +1527,15 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                       <textarea rows={2} aria-label={spoken(`What ${a.owner.label} said, captured out-of-band, about: ${Q(a.about).question}`)} placeholder="What they said (captured out-of-band)…" value={f1[a.about] ?? ""} onChange={(e) => setF1((s) => ({ ...s, [a.about]: e.target.value }))} />
                       <span className="v3ib-form-r">
                         <input aria-label={spoken(`Name of the person who said it, for: ${Q(a.about).question}`)} placeholder="Said by (name)" value={f2[a.about] ?? ""} onChange={(e) => setF2((s) => ({ ...s, [a.about]: e.target.value }))} />
-                        <button type="button" className="v3ib-btn" disabled={busy === a.about || !f1[a.about]?.trim() || !f2[a.about]?.trim()} onClick={() => void run(a.about, { kind: "capture", about: a.about, slot: slotOf(a.about), answer: f1[a.about].trim(), saidByName: f2[a.about].trim(), saidByRole: "", by, at: nowISO() })} aria-label={spoken(`Record the answer to: ${Q(a.about).question}`)}>record answer</button>
+                        <button type="button" className="v3ib-btn" disabled={busy === a.about || !f1[a.about]?.trim() || !f2[a.about]?.trim()} onClick={() => void run(a.about, { kind: "capture", about: a.about, slot: slotOf(a.about), answer: f1[a.about].trim(), saidByName: f2[a.about].trim(), saidByRole: "", by, at: nowISO() },
+                          // EVERY WRITE SAYS SO — and this one has to say what it did
+                          // NOT do, or the acknowledgement re-tells the lie the button
+                          // label just stopped telling.
+                          "noted — the question stays open until they answer through the system")}
+                          aria-label={spoken(`Save your note about: ${Q(a.about).question}`)}>save the note</button>
                       </span>
-                      <span className="v3ib-form-note">Operator-entered · attributed to who said it · <b>not</b> counted as heard.</span>
+                      <span className="v3ib-form-note">Operator-entered · attributed to who said it · <b>not</b> counted as heard,
+                        and the question <b>stays open</b> until they answer through the system.</span>
                     </span>
                   ) : null}
                   {/* The redirect FORM is gone with its tab — see the note above. */}
