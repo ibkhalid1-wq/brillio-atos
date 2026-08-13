@@ -34,7 +34,7 @@
   border-radius:10px;overflow:hidden;background:var(--fs-card);
   box-shadow:0 1px 2px rgba(23,21,31,.04),0 6px 18px -12px rgba(23,21,31,.20)}
 .v3ln-band-h{display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--fs-line);flex-wrap:wrap}
-.v3ln-band-n{font-weight:750;font-size:14px;color:var(--v3-text-primary)}
+.v3ln-band-n{font-weight:700;font-size:14px;color:var(--v3-text-primary)}
 /* spine headers — the movements are the backbone of the board, so their signage
  * reads a register louder than everything inside the band */
 .v3ln-band-h.spine{padding:12px 16px;
@@ -92,12 +92,12 @@
   box-shadow:0 0 0 4px var(--fs-card),0 2px 6px -1px color-mix(in srgb,var(--mv) 55%,transparent)}
 @media(max-width:680px){.v3ln-spine-row{grid-template-columns:34px minmax(0,1fr)}
   .v3ln-spine-row::before{left:16px}}
-.v3ln-band-h.spine .v3ln-band-n{font-size:15px;font-weight:800;letter-spacing:.11em;
+.v3ln-band-h.spine .v3ln-band-n{font-size:15px;font-weight:700;letter-spacing:.11em;
   text-transform:uppercase;color:color-mix(in srgb,var(--mv) 70%,var(--v3-text-primary))}
 .v3ln-half,.v3ln-scope{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--v3-text-muted)}
 /* gate chips — quiet pills in sentence case; tone carries the state, the
  * chevron whispers "openable" */
-.v3ln-chip{font:inherit;font-weight:650;font-size:11px;line-height:1.4;padding:4px 11px;border-radius:999px;
+.v3ln-chip{font:inherit;font-weight:600;font-size:11px;line-height:1.4;padding:4px 11px;border-radius:999px;
   border:1px solid var(--fs-line);background:var(--fs-card);
   color:var(--v3-text-muted);cursor:pointer;white-space:nowrap}
 .v3ln-chip:hover{border-color:var(--v3-accent-2);color:var(--v3-accent-2)}
@@ -189,7 +189,7 @@
 
 /* gate record/reopen — armed two-step confirm */
 .v3ln-gate-actions{display:flex;padding:12px 0 2px}
-.v3ln-gate-act{font:inherit;font-size:11.5px;font-weight:650;border:1px solid var(--v3-accent-2);
+.v3ln-gate-act{font:inherit;font-size:11.5px;font-weight:600;border:1px solid var(--v3-accent-2);
   border-radius:99px;padding:6px 14px;background:none;color:var(--v3-accent-2);cursor:pointer;
   transition:background .15s ease}
 .v3ln-gate-act:hover{background:color-mix(in srgb,var(--v3-accent-2) 10%,transparent)}
@@ -215,7 +215,7 @@
 .v3ln-rec-row:hover{background:color-mix(in srgb,var(--v3-accent-2) 4%,var(--fs-card))}
 .v3ln-rec-row:focus-visible{outline:2px solid var(--v3-accent-2);outline-offset:-2px}
 .v3ln-rec-top{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}
-.v3ln-rec-top b{font-size:12.5px;font-weight:650;color:var(--v3-text-primary)}
+.v3ln-rec-top b{font-size:12.5px;font-weight:600;color:var(--v3-text-primary)}
 .v3ln-rec-fl{font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--v3-text-muted)}
 .v3ln-rec-when{margin-left:auto;font-size:10.5px;color:var(--v3-text-muted);
   font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -263,7 +263,7 @@
 .v3ln-dot.w{background:var(--ln-m1-fill)}
 .v3ln-dot.t{background:var(--fs-line);border:1px solid var(--v3-text-muted)}
 .v3ln-cr-who{display:flex;flex-direction:column;min-width:0;flex:1}
-.v3ln-cr-who b{font-size:12.5px;font-weight:650;color:var(--v3-text-primary)}
+.v3ln-cr-who b{font-size:12.5px;font-weight:600;color:var(--v3-text-primary)}
 .v3ln-cr-who span{font-size:10.5px;color:var(--v3-text-muted)}
 .v3ln-cr-area{font:inherit;font-weight:600;font-size:11px;line-height:1.5;color:var(--v3-accent-2);
   background:color-mix(in srgb,var(--v3-accent-2) 8%,transparent);border:0;border-radius:999px;
@@ -323,7 +323,7 @@
 .v3ln-cap-doc .v3ln-cap-doc-n{text-transform:none;letter-spacing:0;font-size:11.5px;
   font-weight:600;color:var(--v3-text-primary);overflow-wrap:anywhere;min-width:0}
 .v3ln-btn{background:var(--v3-accent-2);color:#fff;border:0;border-radius:4px;padding:8px 16px;
-  font:inherit;font-weight:650;font-size:12.5px;line-height:1.4;cursor:pointer;flex:none}
+  font:inherit;font-weight:600;font-size:12.5px;line-height:1.4;cursor:pointer;flex:none}
 .v3ln-btn:disabled{opacity:.5;cursor:default}
 
 .v3ln-gate-backdrop{position:fixed;inset:0;background:rgba(23,21,31,.35);z-index:60}
@@ -332,7 +332,7 @@
   background:var(--fs-card);border:1px solid var(--fs-line);border-radius:8px;
   box-shadow:0 18px 50px -18px rgba(23,21,31,.4);padding:0 0 4px}
 .v3ln-gate-h{display:flex;align-items:center;gap:10px;padding:14px 18px 10px;border-bottom:1px solid var(--fs-line)}
-.v3ln-gate-h h3{margin:0;font-size:14.5px;font-weight:750;flex:1;color:var(--v3-text-primary)}
+.v3ln-gate-h h3{margin:0;font-size:14.5px;font-weight:700;flex:1;color:var(--v3-text-primary)}
 .v3ln-x{border:0;background:none;font-size:13px;color:var(--v3-text-muted);cursor:pointer;padding:4px 6px}
 .v3ln-x:hover{color:var(--v3-text-primary)}
 .v3ln-crit{list-style:none;margin:0;padding:6px 18px}
@@ -356,7 +356,7 @@
 .v3ln-cr-invite input[type="date"]:focus-visible{outline:2px solid var(--v3-accent-2);outline-offset:-1px}
 
 /* ── sign-offs on Discover rows ── */
-.v3ln-appr{font:inherit;font-weight:650;font-size:10.5px;border-radius:999px;padding:2px 9px;white-space:nowrap}
+.v3ln-appr{font:inherit;font-weight:600;font-size:10.5px;border-radius:999px;padding:2px 9px;white-space:nowrap}
 .v3ln-appr.ok{background:#E6F2EC;color:var(--ln-m4)}
 .v3ln-appr.wait{background:#FBF0DC;color:var(--ln-m1)}
 .v3ln-cr-appr{display:flex;flex-direction:column;gap:6px;border-top:1px dashed var(--fs-line);padding-top:8px}
@@ -397,7 +397,7 @@
 .v3dl-zone.is-stakeholder{border-left-color:var(--v3-positive)}
 .v3dl-zone.is-joint{border-left-color:var(--mv)}
 .v3dl-zone-h{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
-.v3dl-zone-t{font-size:14px;font-weight:750;color:var(--v3-text-primary)}
+.v3dl-zone-t{font-size:14px;font-weight:700;color:var(--v3-text-primary)}
 .v3dl-zone-d{font-size:11.5px;color:var(--v3-text-muted);flex-basis:100%}
 /* operator tiles — decided-with-basis, not refreshable blobs */
 .v3dl-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}
@@ -422,7 +422,7 @@
 .v3dl-tile.present .v3dl-sec{background:var(--v3-bg)}
 .v3dl-tile-foot{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;padding:7px 12px;
   border-top:1px solid var(--fs-line);background:color-mix(in srgb,var(--fs-line) 25%,transparent)}
-.v3dl-mini{font:inherit;font-size:10.5px;font-weight:650;color:var(--mv);background:none;
+.v3dl-mini{font:inherit;font-size:10.5px;font-weight:600;color:var(--mv);background:none;
   border:1px solid color-mix(in srgb,var(--mv) 40%,var(--fs-line));border-radius:6px;padding:2px 8px;cursor:pointer}
 .v3dl-mini:hover:not(:disabled){background:color-mix(in srgb,var(--mv) 8%,transparent)}
 /* was `opacity:.6` — the label faded to 2.47:1 and became unreadable. Grey it
@@ -439,7 +439,7 @@
 /* RULES BEHIND A BUTTON. Teaching copy is true on every render, so it is a real
    disclosure with aria-expanded rather than a paragraph competing with the state
    beside it. Same --mv ink as .v3dl-mini, on the same card. */
-.v3dl-help{font:inherit;font-size:10.5px;font-weight:650;color:var(--mv);background:none;
+.v3dl-help{font:inherit;font-size:10.5px;font-weight:600;color:var(--mv);background:none;
   border:0;border-bottom:1px dashed color-mix(in srgb,var(--mv) 45%,transparent);
   border-radius:0;padding:0 0 1px;margin-left:auto;cursor:pointer}
 .v3dl-help:hover{border-bottom-style:solid}
@@ -451,17 +451,17 @@
    it reports where the loop stands, it is not a way to jump between stages.
    Separators are pseudo-content so no decorative glyph reaches the a11y tree. */
 .v3dl-rail{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;align-items:baseline;gap:0}
-.v3dl-railstep{font-size:11px;font-weight:650;color:var(--v3-text-muted)}
+.v3dl-railstep{font-size:11px;font-weight:600;color:var(--v3-text-muted)}
 .v3dl-railstep+.v3dl-railstep::before{content:"›";margin:0 7px;color:var(--v3-text-muted);font-weight:400}
 .v3dl-railstep.is-done{color:var(--v3-text-muted)}
-.v3dl-railstep.is-now{color:var(--v3-text-primary);font-weight:800}
+.v3dl-railstep.is-now{color:var(--v3-text-primary);font-weight:700}
 .v3dl-railstep.is-now::after{content:"";display:block;height:2px;border-radius:2px;background:var(--mv);margin-top:2px}
 /* the band's FOOT — what is not drawn, and where the other loop lives */
 .v3dl-foot{display:flex;flex-direction:column;gap:6px}
 .v3dl-quiet{margin:0;display:flex;flex-wrap:wrap;align-items:baseline;gap:3px 10px;
   border:1px dashed var(--fs-line);border-radius:9px;padding:7px 11px;background:var(--v3-surface-2);
   font-size:10.5px;color:var(--v3-text-muted);line-height:1.5}
-.v3dl-quiet-l{font-weight:800;letter-spacing:.05em;text-transform:uppercase}
+.v3dl-quiet-l{font-weight:700;letter-spacing:.05em;text-transform:uppercase}
 .v3dl-quiet-i{display:inline-flex;flex-wrap:wrap;align-items:baseline;gap:4px}
 .v3dl-quiet-i+.v3dl-quiet-i::before{content:"·";margin-right:5px}
 .v3dl-elsewhere{margin:0;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px;
@@ -474,7 +474,7 @@
 .v3dl-golink:focus-visible{outline:2px solid var(--v3-accent-2);outline-offset:1px}
 /* the deviation section — drawn only when there are deviations to settle */
 .v3dl-devreg{border:1px dashed color-mix(in srgb,var(--mv) 45%,var(--fs-line));border-radius:10px;padding:11px 12px;display:flex;flex-direction:column;gap:7px;background:color-mix(in srgb,var(--mv) 4%,var(--fs-card))}
-.v3dl-devreg-t{font-size:11px;font-weight:750;letter-spacing:.03em;text-transform:uppercase;color:var(--mv)}
+.v3dl-devreg-t{font-size:11px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--mv)}
 .v3dl-devlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
 .v3dl-devlist li{display:flex;flex-direction:column;gap:3px;font-size:10.5px}
 .v3dl-devlist code{font-size:10px;background:var(--v3-bg);border:1px solid var(--v3-border-soft);border-radius:4px;padding:1px 5px;align-self:flex-start}
@@ -492,7 +492,7 @@
 .v3dr-gate-dot{width:8px;height:8px;border-radius:50%;background:var(--v3-text-muted);flex-shrink:0;align-self:center}
 .v3dr-gate.tone-green .v3dr-gate-dot{background:var(--v3-positive)}
 .v3dr-gate.tone-amber .v3dr-gate-dot{background:var(--v3-amber)}
-.v3dr-gate-l{font-size:12px;font-weight:750;color:var(--v3-text-primary)}
+.v3dr-gate-l{font-size:12px;font-weight:700;color:var(--v3-text-primary)}
 .v3dr-gate-d{font-size:11px;color:var(--v3-text-muted);flex-basis:100%}
 .v3dr-counts{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:baseline;font-size:11px;color:var(--v3-text-secondary)}
 .v3dr-count b{font-size:15px;color:var(--v3-text-primary);font-variant-numeric:tabular-nums;margin-right:3px}
@@ -513,7 +513,7 @@
 .v3dr-state{font-size:10px;font-weight:700;letter-spacing:.02em;text-transform:uppercase;color:var(--v3-text-muted)}
 .v3dr-state.is-accepted{color:var(--v3-positive)}
 .v3dr-state.is-objected{color:var(--v3-amber)}
-.v3dr-att{font-size:10px;font-weight:650;border-radius:999px;padding:1px 8px}
+.v3dr-att{font-size:10px;font-weight:600;border-radius:999px;padding:1px 8px}
 .v3dr-att.is-self{color:var(--v3-positive);border:1px solid color-mix(in srgb,var(--v3-positive) 55%,transparent);
   background:color-mix(in srgb,var(--v3-positive) 10%,transparent)}
 .v3dr-att.is-operator{color:var(--v3-amber);border:1px dashed color-mix(in srgb,var(--v3-amber) 65%,transparent);
@@ -527,12 +527,12 @@
    they said (which is the whole point of recording how the words were produced) */
 .v3dr-capture{font-style:italic}
 .v3dr-guard{font-style:italic}
-.v3dr-disc{align-self:flex-start;font:inherit;font-size:10.5px;font-weight:650;color:var(--mv);background:none;
+.v3dr-disc{align-self:flex-start;font:inherit;font-size:10.5px;font-weight:600;color:var(--mv);background:none;
   border:1px solid var(--v3-control-line);border-radius:6px;padding:2px 8px;cursor:pointer}
 .v3dr-disc:focus-visible{outline:2px solid var(--mv);outline-offset:2px}
 .v3dr-panel{display:flex;flex-direction:column;gap:7px;border-top:1px dashed var(--fs-line);padding-top:7px}
 .v3dr-verdicts{display:flex;flex-wrap:wrap;gap:6px}
-.v3dr-vbtn{font:inherit;font-size:10.5px;font-weight:650;background:none;border:1px solid var(--v3-control-line);
+.v3dr-vbtn{font:inherit;font-size:10.5px;font-weight:600;background:none;border:1px solid var(--v3-control-line);
   border-radius:6px;padding:3px 9px;cursor:pointer;color:var(--v3-text-secondary)}
 .v3dr-vbtn.on{border-color:var(--mv);color:var(--mv);background:color-mix(in srgb,var(--mv) 10%,transparent)}
 .v3dr-vbtn:focus-visible{outline:2px solid var(--mv);outline-offset:2px}
@@ -561,13 +561,13 @@
 .v3ln-rec-attr b{color:var(--v3-text-primary);font-variant-numeric:tabular-nums}
 /* the goal headline — one denominator, the burn-down, above the inbox */
 .v3ln-goal{display:flex;flex-direction:column;gap:8px;margin:0 0 12px;padding:12px 15px;border:1px solid var(--fs-line);border-radius:12px;background:linear-gradient(color-mix(in srgb,var(--v3-accent-2) 5%,var(--fs-card)),var(--fs-card))}
-.v3ln-goal-lead{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--v3-text-muted)}
+.v3ln-goal-lead{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--v3-text-muted)}
 .v3ln-goal-stats{font-size:13px;color:var(--v3-text-secondary)}
 .v3ln-goal-stats b{font-size:17px;color:var(--v3-text-primary);font-variant-numeric:tabular-nums;margin:0 1px}
 .v3ln-goal-heard{font-size:11px}
 /* Discover engagement dashboard: who to engage, sorted by state */
 .v3ln-engbar{display:flex;flex-wrap:wrap;align-items:center;gap:7px 12px;margin:0 0 10px;padding:8px 12px;border:1px solid var(--fs-line);border-radius:10px;background:var(--v3-surface-2)}
-.v3ln-engbar-l{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--v3-text-muted)}
+.v3ln-engbar-l{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--v3-text-muted)}
 .v3ln-engpill{font-size:11px;color:var(--v3-text-secondary);display:inline-flex;align-items:center;gap:4px}
 .v3ln-engpill b{font-size:14px;color:var(--v3-text-primary);font-variant-numeric:tabular-nums}
 .v3ln-engpill.is-ready b{color:var(--v3-accent-2)}
@@ -591,7 +591,7 @@
 .v3ln-lifecycle-stage{font-size:11px;color:var(--v3-text-primary);background:var(--v3-surface);border:1px solid var(--fs-line);border-radius:6px;padding:1px 6px}
 .v3ln-lifecycle-stages.none{font-size:10px;color:var(--v3-text-muted);font-style:italic}
 .v3ln-lifecycle-more{display:block;margin-top:6px;font-size:10px;color:var(--v3-text-muted)}
-.v3ln-eng-hdr{margin:10px 0 4px;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--v3-text-muted);border-bottom:1px solid var(--fs-line);padding-bottom:4px}
+.v3ln-eng-hdr{margin:10px 0 4px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--v3-text-muted);border-bottom:1px solid var(--fs-line);padding-bottom:4px}
 .v3ln-eng-hdr.is-ready{color:var(--v3-accent-2)}
 .v3ln-eng-hdr.is-in-flight{color:var(--v3-amber)}
 .v3ln-eng-hdr.is-blocked{color:#5a4fa0}
@@ -605,7 +605,7 @@
 .v3ln-engrow > .v3ln-eng-why{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* the reserved role line — blank for people who have none, so the column lines up */
 .v3ln-cr-role{min-height:16px}
-.v3ln-eng{font-size:9.5px;font-weight:750;letter-spacing:.04em;text-transform:uppercase;border-radius:5px;padding:1px 7px;border:1px solid var(--fs-line);color:var(--v3-text-muted)}
+.v3ln-eng{font-size:9.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;border-radius:5px;padding:1px 7px;border:1px solid var(--fs-line);color:var(--v3-text-muted)}
 .v3ln-eng.is-ready{color:var(--v3-accent-2);border-color:color-mix(in srgb,var(--v3-accent-2) 40%,var(--fs-line));background:color-mix(in srgb,var(--v3-accent-2) 7%,transparent)}
 .v3ln-eng.is-in-flight{color:var(--v3-amber);border-color:color-mix(in srgb,var(--v3-amber) 40%,var(--fs-line))}
 .v3ln-eng.is-blocked{color:#5a4fa0;border-color:color-mix(in srgb,#6C5FAE 40%,var(--fs-line));background:color-mix(in srgb,#6C5FAE 6%,transparent)}
@@ -614,7 +614,7 @@
 /* inline ageing — to-do escalation, never alarm; intensifies with age */
 .v3ln-age{font-size:10px;font-weight:600;color:var(--v3-text-muted);display:inline-flex;align-items:center;gap:3px}
 .v3ln-age.warm{color:var(--v3-amber);font-weight:700}
-.v3ln-age.hot{color:var(--v3-amber);font-weight:800;background:color-mix(in srgb,var(--v3-amber) 12%,transparent);border-radius:5px;padding:1px 6px}
+.v3ln-age.hot{color:var(--v3-amber);font-weight:700;background:color-mix(in srgb,var(--v3-amber) 12%,transparent);border-radius:5px;padding:1px 6px}
 
 /* ══ Operator inbox — assign / decide-fate / schedule / adjudicate + exits ══ */
 .v3ib{display:flex;flex-direction:column;gap:11px;margin:0 0 16px}
@@ -639,6 +639,44 @@
    A control is 11px text with 4px/10px padding, so a button and a select set
    beside each other are the same height. That is most of what "consistent" means
    here — the eye reads a row of mismatched heights long before it reads the words. */
+/* ════ AND ITS TYPE ════════════════════════════════════════════════════════════
+   The sizes were fixed first and the page still read as unfinished, which is the
+   usual result of fixing sizes alone. Measured again, on the text nodes only:
+
+     SIX weights            400, 600, 650, 700, 750, 800 — 650 and 750 are arbitrary
+                            stops nobody chose deliberately
+     FIVE line-heights      at 11px alone, including `normal` on ninety elements, so
+                            two paragraphs of the same size sat on different leading
+     FIVE letter-spacings   including −0.07px across forty-eight elements of body
+                            text: negative tracking is for display sizes, and at
+                            10–11px it closes the counters and makes the text look
+                            smudged rather than tight
+     ITALICS at 10px        Inter's italic at that size is a texture, not an emphasis
+
+   Three weights, two leadings, tracking only where the type is uppercase.
+
+     400  running text          1.5  everything you read
+     600  labels and emphasis   1.35 titles and single-line controls
+     700  titles and numbers
+
+   Numbers are tabular everywhere, so a column of counts lines up. */
+.v3ib,.v3ib *{letter-spacing:normal}
+.v3ib{line-height:1.5;font-variant-numeric:tabular-nums}
+.v3ib b,.v3ib strong{font-weight:600}
+.v3ib .v3ib-verb,.v3ib .v3ib-card-t b,.v3ib .v3ib-title{font-weight:700}
+.v3ib .v3ib-btn{font-weight:600;line-height:1.35}
+/* Uppercase micro-labels are the ONE place tracking earns its keep: caps set solid
+   are hard to read at 10px, and this is the size every label on the board uses. */
+.v3ib .v3ib-qtype,.v3ib .v3ib-peek-tag,.v3ib .v3ib-title,.v3ib .v3ib-of{letter-spacing:.055em}
+/* Italic said "this is an aside" in a place where colour and size already said it. */
+.v3ib .v3ib-unit,.v3ib .v3ib-peek-src{font-style:normal}
+/* The shared claim chips carry the APP's weights (650) and their own leading. Those
+   belong to the rest of the product — the appbar and the hero are built on them — so
+   they are brought onto the Inbox's scale HERE, inside the Inbox, rather than
+   restyling every surface to settle one board. */
+.v3ib .v3lc-src,.v3ib .v3lc-status,.v3ib .v3lc-own{font-weight:600}
+.v3ib .v3lc-status-g{font-size:var(--ib-t-body);line-height:1.35}
+
 :root{--ib-t-meta:10px;--ib-t-body:11px;--ib-t-title:12px;--ib-t-verb:13px;
   --ib-r-ctl:6px;--ib-r-box:10px;--ib-ctl-h:26px}
 
@@ -650,13 +688,13 @@
   min-height:var(--ib-ctl-h);display:inline-flex;align-items:center}
 
 .v3ib-top{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;padding:9px 13px;border:1px solid color-mix(in srgb,var(--v3-accent-2) 30%,var(--fs-line));border-radius:var(--ib-r-box);background:color-mix(in srgb,var(--v3-accent-2) 5%,var(--fs-card))}
-.v3ib-title{font-size:var(--ib-t-verb);font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--v3-accent-2)}
+.v3ib-title{font-size:var(--ib-t-verb);font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--v3-accent-2)}
 .v3ib-count{font-size:12px;color:var(--v3-text-secondary)}.v3ib-count b{font-size:18px;color:var(--v3-text-primary);font-variant-numeric:tabular-nums;margin-right:2px}
 .v3ib-of{font-size:11px;color:var(--v3-text-muted);flex:1;min-width:220px}
 .v3ib-src{border:1px solid var(--fs-line);border-radius:var(--ib-r-box);background:var(--fs-card);padding:10px 13px 12px;display:flex;flex-direction:column;gap:7px}
 .v3ib-src.is-gated{border-style:dashed;background:var(--v3-surface-2)}
 .v3ib-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.v3ib-verb{font-size:var(--ib-t-verb);font-weight:800;color:var(--v3-text-primary)}
+.v3ib-verb{font-size:var(--ib-t-verb);font-weight:700;color:var(--v3-text-primary)}
 .v3ib-lead{font-size:11px;color:var(--v3-text-secondary);flex:1;min-width:200px}
 .v3ib-lead b{color:var(--v3-text-primary);font-variant-numeric:tabular-nums}
 .v3ib-empty{margin:2px 0 0;font-size:11px;color:var(--v3-text-muted);font-style:italic}
@@ -667,7 +705,7 @@
 .v3ib-row-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .v3ib-slot{font-size:12px;font-weight:700;color:var(--v3-text-primary);text-transform:capitalize}
 .v3ib-about{font-size:var(--ib-t-meta);color:var(--v3-text-muted);background:var(--v3-bg);border:1px solid var(--v3-border-soft);border-radius:var(--ib-r-ctl);padding:1px 5px}
-.v3ib-owner{font-size:11px;font-weight:650;color:var(--v3-accent-2)}
+.v3ib-owner{font-size:11px;font-weight:600;color:var(--v3-accent-2)}
 .v3ib-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 .v3ib-controls,.v3ib-reassign,.v3ib-fate,.v3ib-form-r{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .v3ib-reassign{margin-left:auto}
@@ -685,7 +723,7 @@
 .v3ib-btn:disabled{opacity:1;cursor:default;color:var(--v3-text-muted);background:var(--v3-surface-3);border-color:var(--v3-control-line)}
 .v3ib-btn.ghost:disabled{background:none;border-color:var(--v3-control-line)}
 .v3ib-btn:focus-visible{outline:2px solid var(--v3-accent-2);outline-offset:2px}
-.v3ib-btn.ghost{color:var(--v3-text-secondary);background:none;border-color:var(--fs-line);font-weight:650}
+.v3ib-btn.ghost{color:var(--v3-text-secondary);background:none;border-color:var(--fs-line);font-weight:600}
 .v3ib-btn.ghost:hover:not(:disabled){background:var(--fs-card);filter:none}
 .v3ib-fate{padding:6px 8px;border-top:1px dashed var(--fs-line);margin-top:2px}
 .v3ib-fate-l{font-size:var(--ib-t-meta);color:var(--v3-text-muted);flex-basis:100%}
@@ -693,7 +731,7 @@
 .v3ib-seams{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
 .v3ib-seam{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:7px 11px;border:1px solid color-mix(in srgb,#6C5FAE 35%,var(--fs-line));border-left:3px double #6C5FAE;border-radius:8px;background:color-mix(in srgb,#6C5FAE 5%,var(--fs-card))}
 .v3ib-seam.booked{border-color:color-mix(in srgb,var(--v3-positive) 40%,var(--fs-line));border-left-color:var(--v3-positive);background:color-mix(in srgb,var(--v3-positive) 5%,var(--fs-card))}
-.v3ib-seam-h{font-size:12px;font-weight:750;color:var(--v3-seam-ink)}
+.v3ib-seam-h{font-size:12px;font-weight:700;color:var(--v3-seam-ink)}
 .v3ib-seam.booked .v3ib-seam-h{color:var(--v3-text-primary)}
 .v3ib-seam-n{font-size:11px;color:var(--v3-text-muted);flex:1;min-width:150px}
 .v3ib-booked{font-size:11px;font-weight:700;color:var(--v3-positive);display:inline-flex;align-items:center;gap:4px}
@@ -715,8 +753,8 @@
 .v3ib-fate-reason{font-size:11px;color:var(--v3-text-muted);font-style:italic}
 /* plain-language question is the primary label; type tag + raw id are secondary */
 .v3ib-q{display:inline-flex;align-items:baseline;gap:7px;flex-wrap:wrap;flex:1;min-width:180px}
-.v3ib-qtype{font-size:var(--ib-t-meta);font-weight:750;letter-spacing:.05em;text-transform:uppercase;color:var(--v3-text-muted);background:var(--v3-bg);border:1px solid var(--v3-border-soft);border-radius:var(--ib-r-ctl);padding:1px 5px;white-space:nowrap}
-.v3ib-qtext{font-size:12px;font-weight:650;color:var(--v3-text-primary)}
+.v3ib-qtype{font-size:var(--ib-t-meta);font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--v3-text-muted);background:var(--v3-bg);border:1px solid var(--v3-border-soft);border-radius:var(--ib-r-ctl);padding:1px 5px;white-space:nowrap}
+.v3ib-qtext{font-size:12px;font-weight:600;color:var(--v3-text-primary)}
 /* `sm` was 10px/2px 8px — a full step smaller than the button beside it, which is
    why a card's reveal and its write never sat on one line. It is now the same
    control with less horizontal room, not a different one. */
@@ -724,7 +762,7 @@
 /* unowned grouped by element — one assign per group, cascades to its questions */
 .v3ib-grp{border:1px solid var(--fs-line);border-radius:var(--ib-r-box);background:var(--v3-surface-2);padding:8px 10px;display:flex;flex-direction:column;gap:6px}
 .v3ib-grp-h{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
-.v3ib-grp-n{font-size:var(--ib-t-title);font-weight:750;color:var(--v3-text-primary);text-transform:capitalize}
+.v3ib-grp-n{font-size:var(--ib-t-title);font-weight:700;color:var(--v3-text-primary);text-transform:capitalize}
 .v3ib-grp-c{font-size:var(--ib-t-meta);color:var(--v3-text-muted)}
 .v3ib-grp-h .v3ib-controls{margin-left:auto}
 .v3ib-grp-qs{list-style:none;margin:0;padding:0 0 0 2px;display:flex;flex-direction:column;gap:4px;border-top:1px dashed var(--fs-line);padding-top:6px}
@@ -837,7 +875,7 @@
 .v3tg-m{font-size:10.5px;line-height:1.5;color:var(--v3-text-muted);max-width:70ch}
 .v3tg-g{display:flex;flex-direction:column;gap:4px}
 .v3tg-g-h{display:flex;align-items:center;gap:8px}
-.v3tg-g-t{font-size:9.5px;font-weight:750;letter-spacing:.07em;text-transform:uppercase;color:var(--v3-accent-2)}
+.v3tg-g-t{font-size:9.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--v3-accent-2)}
 .v3tg-g-n{font-size:9.5px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--v3-accent-2);
   background:color-mix(in srgb,var(--v3-accent-2) 13%,transparent);border-radius:999px;padding:0 6px;line-height:1.6}
 /* the group Aura could not read is the only one owed a real answer — say so in form */
@@ -849,7 +887,7 @@
 .v3tg-sel{font:inherit;font-size:11px;padding:1px 5px;border:1px solid var(--fs-line);border-radius:6px;
   background:var(--v3-surface);color:var(--v3-text-primary)}
 .v3tg-c{font-size:10px;color:var(--v3-text-muted);flex:none;min-width:15ch}
-.v3tg-c.yours{color:var(--v3-accent-2);font-weight:650}
+.v3tg-c.yours{color:var(--v3-accent-2);font-weight:600}
 .v3tg-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding-top:4px;border-top:1px solid var(--fs-line)}
 /* An upload that could not be read says so WHERE the upload button was. The
    read path had no catch and its caller used `void`, so a rejected promise was
@@ -888,7 +926,7 @@
    line up between sections. */
 .v3ib-n{flex:none;font-size:var(--ib-t-body);font-weight:700;font-variant-numeric:tabular-nums;
   color:var(--v3-text-secondary);background:var(--v3-surface-2);border:1px solid var(--fs-line);
-  border-radius:999px;padding:0 7px;line-height:17px}
+  border-radius:999px;padding:2px 8px;line-height:1.35}
 .v3ib-disc:hover .v3ib-n{border-color:var(--v3-accent-2);color:var(--v3-accent-2)}
 /* Extra controls a section needs in its header (export, filters) sit after the lead,
    never inside the disclosure button — a button inside a button is not a control. */
@@ -896,7 +934,7 @@
 
 /* seam "on the session plan" — intent recorded, date still gated */
 .v3ib-seam.planned{border-left-style:solid;background:color-mix(in srgb,#6C5FAE 8%,var(--fs-card))}
-.v3ib-onplan{font-size:11px;color:var(--v3-seam-ink);font-weight:650}
+.v3ib-onplan{font-size:11px;color:var(--v3-seam-ink);font-weight:600}
 /* blocked-unowned tag in the assign list */
 .v3ib-blk{font-size:10px;font-weight:700;letter-spacing:.02em;text-transform:uppercase;color:var(--v3-amber);border:1px solid color-mix(in srgb,var(--v3-amber) 45%,transparent);border-radius:var(--ib-r-ctl);padding:0 4px;margin-left:4px}
 /* PROPOSED — a curated element minted from an ontology-gap kit question. Dashed border
@@ -934,7 +972,7 @@
 .v3ln-cr-qgroup-h::before{content:"";flex-shrink:0;width:0;height:0;border-left:4px solid var(--g);border-top:3.5px solid transparent;border-bottom:3.5px solid transparent;transform:translateY(-1px);transition:transform .15s ease}
 .v3ln-cr-qgroup[open]>.v3ln-cr-qgroup-h::before{transform:translateY(-1px) rotate(90deg)}
 @media (prefers-reduced-motion:reduce){.v3ln-cr-qgroup-h::before{transition:none}}
-.v3ln-cr-qgroup-t{font-size:9.5px;font-weight:750;letter-spacing:.07em;text-transform:uppercase;color:var(--g)}
+.v3ln-cr-qgroup-t{font-size:9.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--g)}
 /* tabular so the counts line up down a card with several sections */
 .v3ln-cr-qgroup-n{font-size:9.5px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.6;color:var(--g);background:color-mix(in srgb,var(--g) 13%,transparent);border-radius:999px;padding:0 6px}
 .v3ln-cr-qgroup-note{font-size:10.5px;line-height:1.45;color:var(--v3-text-muted)}

@@ -257,3 +257,51 @@ describe("the Inbox has ONE scale", () => {
     }
   });
 });
+
+describe("the Inbox has one type system, not just one type scale", () => {
+  /**
+   * "inbox font is not refined." Fixing the SIZES had left the page still reading as
+   * unfinished, which is the usual result of fixing sizes alone. Measured again, on
+   * the text nodes only:
+   *
+   *   SIX weights          400, 600, 650, 700, 750, 800 — 650 and 750 are arbitrary
+   *                        stops nobody chose
+   *   FIVE line-heights    at 11px alone, so two paragraphs of one size sat on
+   *                        different leading
+   *   FIVE letter-spacings including −0.07px across forty-eight elements of BODY
+   *                        text: negative tracking belongs to display sizes, and at
+   *                        10–11px it closes the counters and reads as smudged
+   *   ITALICS at 10px      a texture, not an emphasis
+   */
+  const css = readFileSync(resolve(__dirname, "../components/flow/theLine.css"), "utf8");
+  const inboxRules = css.split("\n").filter((l) => l.startsWith(".v3ib"));
+
+  it("uses three weights", () => {
+    // MUTATION: put a 650 or 750 back → RED.
+    for (const bad of ["font-weight:650", "font-weight:750", "font-weight:800"]) {
+      const offenders = inboxRules.filter((l) => l.includes(bad));
+      expect(offenders, `${bad} is back in: ${offenders[0] ?? ""}`).toHaveLength(0);
+    }
+  });
+
+  it("sets its leading once and lets it inherit", () => {
+    expect(css).toContain(".v3ib{line-height:1.5;font-variant-numeric:tabular-nums}");
+  });
+
+  it("tracks only the uppercase micro-labels", () => {
+    // Caps set solid are hard to read at 10px; everything else is set normal, which
+    // is what clears the −0.07px the body text was carrying.
+    expect(css).toContain(".v3ib,.v3ib *{letter-spacing:normal}");
+    expect(css).toMatch(/\.v3ib-qtype,\.v3ib \.v3ib-peek-tag[^\n]*letter-spacing:\.055em/);
+  });
+
+  it("does not use italic as emphasis", () => {
+    expect(css).toContain(".v3ib .v3ib-unit,.v3ib .v3ib-peek-src{font-style:normal}");
+  });
+
+  it("brings the shared claim chips onto the scale INSIDE the Inbox only", () => {
+    // Those chips carry the app's own weights and the appbar and hero are built on
+    // them — restyling every surface to settle one board would be the wrong trade.
+    expect(css).toContain(".v3ib .v3lc-src,.v3ib .v3lc-status,.v3ib .v3lc-own{font-weight:600}");
+  });
+});
