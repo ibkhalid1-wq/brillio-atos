@@ -41,7 +41,7 @@ import {
   derivedTypeProposals, derivedTypeClaims, derivedTypeSuggestions,
   type DerivedTypeProposal, type AttributeRoleLike,
 } from "./derivedTypes";
-import { lifecycleLoci } from "./lifecycle";
+import { lifecycleLoci, lifecycleQuestionOverlay } from "./lifecycle";
 import type { LedgerStore } from "./store";
 import { isLive, slotOf } from "./types";
 import {
@@ -302,14 +302,20 @@ export function useProgramLedger(program?: ProgramSummary): ProgramLedger {
     // prefix `el:proposed:`), attributed (who/which question/when), reversible
     // (`retract-mint`), and never minted over a concept the ontology already holds.
     const curation = proposalOverlay(actions, migrated.elements());
-    const withProposals = curation.claims.length ? [...migrated.claims(), ...curation.claims] : migrated.claims();
+    // A CONFIDENT LIFECYCLE'S STAGE QUESTION IS BORN IF IT DOES NOT EXIST. Five of
+    // Laila New's seven had no `#valueSet` claim at all, so the finding could never
+    // reach anyone: no card, no bucket, no question. Overlay only — the frozen store
+    // is untouched, exactly as the curation proposals above.
+    const lifecycleBorn = lifecycleQuestionOverlay(migrated);
+    const overlaid = [...curation.claims, ...lifecycleBorn];
+    const withProposals = overlaid.length ? [...migrated.claims(), ...overlaid] : migrated.claims();
     // ── in-flight PINNING: the BASELINE owner per open locus, read ONCE off the
     // pre-overlay claims — "who would own this if no link had gone out". It exists
     // solely to DETECT a disagreement; the overlay below still hands the locus to the
     // pinned recipient, and the disagreement goes to the operator as a decision.
     const baselineOwner = baselineOwnerLabels(withProposals, activeAssignments(actions));
     const pinConflicts = derivePinConflicts(fold, (about) => baselineOwner.get(about) ?? "", ownerRoleLabelForArea);
-    const store = fold.size || curation.elements.length
+    const store = fold.size || curation.elements.length || lifecycleBorn.length
       ? buildReadModel([...migrated.elements(), ...curation.elements], applyOwnership(withProposals, fold))
       : migrated;
     const assignments = [...activeAssignments(actions).values()];
