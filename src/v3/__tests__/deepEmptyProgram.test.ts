@@ -272,7 +272,10 @@ describe("[6c] F2 — every zero-count section is HIDDEN, not drawn empty", () =
       expect(host.querySelector(`#${id}`), `${id} rendered with a zero count`).toBeNull();
     }
     expect(host.querySelector(".v3ib-dict")).toBeNull();
-    expect(host.querySelector(".v3ib-top")).toBeNull();     // no chrome describing an empty thing
+    // No chrome describing an empty thing — and since the header strip is gone
+    // entirely (2026-08-13) this would pass vacuously, so it asserts what an empty
+    // board DOES show instead: which kind of empty it is.
+    expect(host.querySelector(".v3ib-top")).toBeNull();
     expect(host.querySelector(".v3ib-collapsed-row"), "the superseded three-way empty row is back").toBeNull();
   });
 
@@ -367,8 +370,11 @@ describe("[6e] a miss stays visible — the hide rule is ZERO, not 'small'", () 
     expect(ledger.unownedOpen).toBe(1);
     render(createElement(OperatorInbox, { ledger, candidates: [], by: "operator", onCommit: async () => {} }));
     expect(host.querySelector("#ib-assign"), "one unowned question was hidden").not.toBeNull();
-    const stat = [...host.querySelectorAll(".v3ib-countbtn")].find((b) => (b.textContent ?? "").includes("need an owner"));
-    expect(stat, "the assign stat did not render for a count of 1").toBeTruthy();
+    // The header strip that carried this stat was removed on 2026-08-13; the count it
+    // printed now lives on the section's own badge, which is the number the operator
+    // actually reads. Same guarantee, surviving element.
+    const stat = host.querySelector("#ib-assign .v3ib-n");
+    expect(stat, "the assign section printed no count for a count of 1").toBeTruthy();
     expect(stat!.textContent).toContain("1");
     assertNoBrokenNumbers(host.textContent ?? "", "OperatorInbox(one unowned)");
   });

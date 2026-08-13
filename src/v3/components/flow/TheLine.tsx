@@ -13,7 +13,7 @@
  * One write path, one view: nothing renders a second copy of these numbers, so
  * there is nothing left for a second surface to disagree with.
  */
-import { Fragment, Suspense, lazy, useEffect, useMemo, useState, type ComponentProps, useRef, useCallback } from "react";
+import { Fragment, Suspense, lazy, useEffect, useMemo, useState, type ComponentProps, useRef } from "react";
 import type { ProgramSummary } from "@/new/types";
 import { buildLineModel, LINE_GLYPHS, type LineBand, type LineStation } from "@/v3/lib/lineModel";
 import {
@@ -47,7 +47,6 @@ import { pinsForSend } from "@/v3/lib/ledger/operatorActions";
 import { HeardReadout, ProvisionalMark, ClaimStatus, SourceTag } from "@/v3/components/flow/studio/ledgerPrimitives";
 import DesignLoopZones from "@/v3/components/flow/DesignLoopZones";
 import { ownerLabelsForCast } from "@/v3/lib/ledger/ownerBinding";
-import { lifecycleEntities, lifecycleReason, lifecycleEvidence } from "@/v3/lib/ledger/lifecycle";
 import { dictionaryCoverage, isSpreadsheetName, mergeDictionaryCsv, parseDictionaryCsv, readDictionaryWorkbook } from "@/v3/lib/ledger/dictionary";
 import { currentDesignRound } from "@/v3/components/flow/flowDesignRound";
 import { renderQuestion } from "@/v3/lib/ledger/renderQuestion";
@@ -90,6 +89,13 @@ interface CastRow {
 
 interface TheLineProps {
   program: ProgramSummary;
+  /**
+   * THE ONE HANDOFF. Discover reads; the Inbox acts. Where Discover surfaces
+   * something that needs an operator MOVE, it states the fact and offers this —
+   * never the move itself. Absent (a read-only lens), the fact is still stated and
+   * nothing is offered, which is the honest degradation.
+   */
+  onOpenInbox?: () => void;
   /** Classic write handlers, passed through untouched. All optional — omitted
    * (e.g. a future sponsor lens) the Line renders fully read-only. */
   onSaveInputs?: SaveInputsFn;
@@ -389,7 +395,7 @@ function packFor(program: ProgramSummary, who: string, movementId: "frame" | "li
   return shown.find(linkIsOpen) ?? shown[shown.length - 1];
 }
 
-export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenameRole, onMintFollowUp, onMintReview, onCloseLink, onScheduleFollowUp, onRunAgent, onRecordGate, onReopenGate, onSendForApproval, onDesignRound }: TheLineProps) {
+export default function TheLine({ program, onOpenInbox, onSaveInputs, onRenamePerson, onRenameRole, onMintFollowUp, onMintReview, onCloseLink, onScheduleFollowUp, onRunAgent, onRecordGate, onReopenGate, onSendForApproval, onDesignRound }: TheLineProps) {
   const model = useMemo(() => buildLineModel(program), [program]);
   // The ONE in-browser ledger read every surface here shares (read-only migrate).
   const ledger = useProgramLedger(program);
@@ -865,14 +871,38 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
     }
   };
 
-  // Regeneration in flight, by artifact id. Cleared implicitly: when the
-  // regenerated document lands, the station stops being stale and the badge
-  // disappears; the flag only mutes double-clicks meanwhile.
-  const [regenBusy, setRegenBusy] = useState<Record<string, boolean>>({});
+  /**
+   * REGENERATION IN FLIGHT, by artifact id — and now actually cleared.
+   *
+   * This said it was "cleared implicitly: when the regenerated document lands, the
+   * station stops being stale". Nothing cleared it. `onRunAgent` is fire-and-forget,
+   * so the flag was a write-only latch: regenerate an artifact once and its entry
+   * stayed true for the life of the component. Open that artifact's document later
+   * and its header read "Generating…" for ever — which is how a regeneration of the
+   * Domain Ontology left the Current-State Atlas claiming to be generating.
+   *
+   * The flag now stores the document AS IT WAS at dispatch, and the effect below
+   * clears it when the document changes — which is the event the original comment
+   * described and the only one that means the run came back. A run that returns an
+   * identical document leaves the flag set until the next change; that is the honest
+   * failure mode, and it is quiet rather than wrong.
+   */
+  const [regenBusy, setRegenBusy] = useState<Record<string, string>>({});
+  useEffect(() => {
+    setRegenBusy((busy) => {
+      const ids = Object.keys(busy);
+      if (!ids.length) return busy;
+      const landed = ids.filter((id) => (artifactDocument(program, id) ?? "") !== busy[id]);
+      if (!landed.length) return busy;
+      const next = { ...busy };
+      for (const id of landed) delete next[id];
+      return next;
+    });
+  }, [program]);
   const regenerate = (card: ArtifactCardModel) => {
     if (!onRunAgent) return;
     onRunAgent(card.id, card.movementId);
-    setRegenBusy((s) => ({ ...s, [card.id]: true }));
+    setRegenBusy((s) => ({ ...s, [card.id]: artifactDocument(program, card.id) ?? "" }));
     setNote(`Regenerating ${card.title} from the record — the station refreshes when it lands.`);
     window.setTimeout(() => setNote(null), 6000);
   };
@@ -1038,28 +1068,8 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
     /** open questions on the entities this file NAMES — the honest denominator */
     inScope: number; entities: string[];
   } | null>(null);
-  const [capDictBusy, setCapDictBusy] = useState(false);
-  const [lcBusy, setLcBusy] = useState<string | null>(null);
   /** Read, never written from here — one definition, in lifecycle.ts. */
-  const lifecycles = useMemo(() => lifecycleEntities(ledger.store), [ledger.store]);
-  const shownLifecycles = useMemo(() => lifecycles.filter((l) => l.confident), [lifecycles]);
   /** Who the stage question is now ON — read from the queue, never re-derived here. */
-  const ownerOfLocus = useCallback((about: string) => {
-    const it = ledger.queue.items.find((i) => i.about === about);
-    return it && it.owner.kind === "role" ? it.ownerLabel : "";
-  }, [ledger.queue.items]);
-  const hasOpenStageQuestion = useCallback((about: string) =>
-    ledger.queue.items.some((i) => i.about === about), [ledger.queue.items]);
-  /**
-   * ANSWERED IS NOT MISSING. Opportunity.stage read "no stage question on the record"
-   * while the ledger held a live claim on it — the uploaded schema closed it with its
-   * picklist. That is a real answer and the row must say so, not report a gap. It is
-   * still worth a line: a dictionary gives the VALUES, and a lifecycle needs their
-   * order, which is why "not by a person" is the part that matters.
-   */
-  const stageQuestionAnswered = useCallback((about: string) =>
-    ledger.store.liveClaimsAbout(about).length > 0, [ledger.store]);
-  const maybeLifecycles = useMemo(() => lifecycles.filter((l) => !l.confident), [lifecycles]);
   const readAttachedDictionary = async (files: File[]) => {
     // SEQUENTIALLY, into one running CSV. A system's dictionary arrives as several
     // per-object workbooks, so the whole selection is one reading — and merging
@@ -1219,8 +1229,11 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
               onGenerate={onRunAgent ? generate : undefined}
               onMintReview={onMintReview}
               onDesignRound={onDesignRound}
-              onGoDiscover={() => setTab("discovery")}
-              regenBusy={regenBusy} genBusy={genBusy} />
+              /* The consumers only ask "is this one in flight", so they get booleans:
+                 the document snapshot is this component's own bookkeeping for knowing
+                 when the run came back, not something a child should have to know. */
+              regenBusy={Object.fromEntries(Object.keys(regenBusy).map((id) => [id, true]))}
+              genBusy={genBusy} />
           ) : (
           <div className={`v3ln-stns n${band.stations.length + (band.id === "frame" && onSaveInputs ? 1 : 0)}`}>
             {/* The Company Brief leads Frame: who the client IS comes before
@@ -1303,88 +1316,20 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
               the dictionary ask — is the Inbox's job. One "Inbox", one meaning. */}
           {/* Discover as an engagement dashboard: who needs attention and why, sorted by
               state. Ageing on in-flight is operator-tracked until the link is live. */}
-          {/* ENTITY LIFECYCLES ARE CONFIRMED IN LISTEN, by the people who live the
-              process — not exported from a schema and not drawn by hand in a design
-              studio later. Aura reads them off what the ledger already holds (see
-              lifecycle.ts for the four signals and why a name alone is not enough),
-              and this states them for confirmation.
+          {/* THE LIFECYCLE STRIP IS GONE FROM DISCOVER (2026-08-13).
+              It was built when a lifecycle's stage question reached nobody — the
+              strip WAS the finding's only appearance. Since those questions began
+              routing to their owners, every confident row said the same thing: "on
+              Sales Leaders's list", "on Legal's list" — pointing at the person cards
+              directly below it. Discover is organised by PERSON; a block organised by
+              ENTITY, restating what those cards already carry, is a second axis over
+              the same facts.
 
-              A confirmed stage list is written as a DICTIONARY ROW through
-              `commitDictionary` — the exact path an uploaded schema takes — so a
-              lifecycle a person confirmed and one a schema stated land in the same
-              place under the same precedence. No new write mechanism. */}
-          {shownLifecycles.length ? (
-            <div className="v3ln-lifecycle" role="note" aria-label="Entity lifecycles to confirm">
-              <span className="v3ln-lifecycle-l">
-                <b>{shownLifecycles.length}</b> entit{shownLifecycles.length === 1 ? "y" : "ies"}{" "}
-                {shownLifecycles.length === 1 ? "has" : "have"} a lifecycle
-              </span>
-              <span className="v3ln-lifecycle-m">
-                A thing the business moves through stages. Each one&rsquo;s stage question goes out on
-                its owner&rsquo;s link like any other — the ORDER of the stages is theirs to state, and
-                no dictionary carries it. A row with no owner yet is waiting on one, in the Inbox.
-              </span>
-              {shownLifecycles.map((lc) => (
-                <div key={lc.about} className="v3ln-lifecycle-row">
-                  <span className="v3ln-lifecycle-e">
-                    <b>{lc.entity}</b> <em className="v3ln-lifecycle-maybe">· {lc.attribute}</em>
-                  </span>
-                  <span className="v3ln-lifecycle-why" title={lifecycleReason(lc)}>{lifecycleEvidence(lc)}</span>
-                  {lc.stages.length ? (
-                    <span className="v3ln-lifecycle-stages">
-                      {lc.stages.map((stage, i) => (
-                        <span key={stage} className="v3ln-lifecycle-stage">
-                          {i ? <span aria-hidden="true">→ </span> : null}{stage}
-                        </span>
-                      ))}
-                      {commits.canWrite ? (
-                        <button type="button" className="v3ln-a" disabled={lcBusy === lc.about}
-                          aria-label={`Confirm the stages of ${lc.entity}`}
-                          onClick={() => {
-                            setLcBusy(lc.about);
-                            // entity,field,values — the same three columns a schema
-                            // export carries, so the merge cannot tell them apart.
-                            const cell = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
-                            const csv = `entity,field,values\n${[lc.entity, lc.attribute, lc.stages.join("; ")].map(cell).join(",")}`;
-                            void commits.commitDictionary(csv, null).finally(() => setLcBusy(null));
-                          }}>{lcBusy === lc.about ? "Confirming…" : "confirm these stages"}</button>
-                      ) : null}
-                    </span>
-                  ) : (
-                    <span className="v3ln-lifecycle-stages none">
-                      {/* THREE DIFFERENT TRUTHS, and they were one sentence.
-                          Measured on Laila New: of seven confident lifecycles, only
-                          TWO have an open stage question in the ledger at all. Saying
-                          "on nobody's list" for the other five implies a question is
-                          waiting for an owner when none exists — nothing will ever be
-                          asked about them, which is the more useful thing to know and
-                          the one this row now says. */}
-                      {ownerOfLocus(lc.about)
-                        ? <>on {ownerOfLocus(lc.about)}&rsquo;s list</>
-                        : hasOpenStageQuestion(lc.about)
-                          ? <>needs an owner</>
-                          : stageQuestionAnswered(lc.about)
-                            ? <>answered already — not by a person</>
-                            : <>no stage question on the record</>}
-                    </span>
-                  )}
-                </div>
-              ))}
-              {/* A MISS STAYS VISIBLE, BUT A SUGGESTION IS NOT A ROW. Thirteen rows
-                  went out in the first cut, seven of them "reads as a lifecycle from
-                  its name alone" — the same sentence seven times, for readings with
-                  one signal behind them. They are counted here instead: enough to
-                  know they exist, not enough to be mistaken for findings. */}
-              {maybeLifecycles.length ? (
-                <span className="v3ln-lifecycle-more">
-                  <b>{maybeLifecycles.length}</b> more read as a lifecycle from the field name alone
-                  {" "}({maybeLifecycles.slice(0, 4).map((l) => l.entity).join(", ")}
-                  {maybeLifecycles.length > 4 ? ` +${maybeLifecycles.length - 4}` : ""}) — one signal each,
-                  so Aura is not calling them lifecycles until something else agrees.
-                </span>
-              ) : null}
-            </div>
-          ) : null}
+              ONE THING IS NOT ON A CARD: the readings with a single signal behind
+              them, which have no question anywhere and so are now invisible. That is
+              a miss. It belongs on the Record — the surface for what was found and
+              when — rather than on the one for asking people things. Flagged in the
+              worklog, not silently dropped. */}
           <div className="v3ln-engbar" role="note" aria-label="Engagement — who needs attention">
             <span className="v3ln-engbar-l">Who to engage</span>
             <span className="v3ln-engpill is-ready"><b>{engSummary.ready}</b> ready</span>
@@ -1867,18 +1812,18 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                     questions as <i>code-derived · weak</i> — anyone can still deviate. It lands
                     programme-wide; the Inbox is where a dictionary is attached to one system of record.
                   </span>
-                  {/* The SAME channel this surface already writes assigns and pins
-                      on (`useOperatorCommits`) — a dictionary applied from here is
-                      indistinguishable from one applied in the Inbox, because it is
-                      the same call. `canWrite` is false when the shell passed no
-                      save handler, and then there is nothing to offer. */}
-                  {commits.canWrite && capDict.closes > 0 ? (
-                    <button type="button" className="v3ln-btn" disabled={capDictBusy}
-                      onClick={() => {
-                        setCapDictBusy(true);
-                        void commits.commitDictionary(capDict.csv, null)
-                          .finally(() => { setCapDictBusy(false); setCapDict(null); });
-                      }}>{capDictBusy ? "Applying…" : "apply as a data dictionary"}</button>
+                  {/* APPLYING IT MOVED TO THE INBOX. Attaching a file to the record is
+                      Discover's own act — it is how a stakeholder's evidence arrives.
+                      APPLYING it as a dictionary is an operator move: it answers open
+                      questions programme-wide at the strength a schema carries, and
+                      the Inbox is where a dictionary is keyed to its system of record.
+                      The reading is still stated here, in full, so the operator learns
+                      what the file contains at the moment they attach it. */}
+                  {onOpenInbox && capDict.closes > 0 ? (
+                    <button type="button" className="v3ln-handoff" onClick={onOpenInbox}
+                      aria-label="Open the Inbox to apply this file as a data dictionary">
+                      apply it in the Inbox<span aria-hidden="true"> →</span>
+                    </button>
                   ) : null}
                 </div>
               ) : null}

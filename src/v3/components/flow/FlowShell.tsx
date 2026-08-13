@@ -947,6 +947,7 @@ export default function FlowShell(props: FlowShellProps) {
             onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} />
         ) : view === "flow" ? (
           <TheLine program={program} onSaveInputs={props.onSaveInputs}
+            onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }}
             onRenamePerson={props.onRenamePerson} onRenameRole={props.onRenameRole}
             onMintFollowUp={props.onMintFollowUp} onMintReview={props.onMintReview}
             onCloseLink={props.onCloseLink} onScheduleFollowUp={props.onScheduleFollowUp}

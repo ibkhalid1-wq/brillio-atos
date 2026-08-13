@@ -100,7 +100,19 @@ export function unfrozenQueues(ledger: OperatorQueueReads): {
 export interface OperatorQueueCounts {
   /** unowned non-typing questions that need a human owner */
   assign: number;
-  /** JOINT QUESTIONS awaiting a date (not seams — see sessionQuestionCount) */
+  /**
+   * JOINT QUESTIONS, and they are no longer a term in the badge.
+   *
+   * A seam used to sit in this queue as "propose a session", and it was the ONLY
+   * route a jointly-owned question had: it reached neither owner until the operator
+   * booked a meeting. It now goes out on BOTH owners' links like any other question,
+   * so there is nothing here for an operator to decide — and a number that cannot be
+   * acted on does not belong in a count of things waiting on them.
+   *
+   * Kept as a READING, because the seam is still worth seeing (Discover states which
+   * pairs share questions) and because removing a term from a published shape would
+   * break every reader at once. It is simply not summed.
+   */
   sessionQuestions: number;
   /** loci frozen by two or more live contradicting claims — until adjudicated */
   adjudicate: number;
@@ -135,7 +147,10 @@ export function operatorQueueCounts(ledger: OperatorQueueReads): OperatorQueueCo
   const inFlight = ledger.assignments.length;
   const chase = asksNeedingChase(ledger.artifactAsks).length + (ledger.artifactAsks.unattributed.weight ? 1 : 0);
   const decided = ledger.decideFates.length;
-  const total = assign + sessionQuestions + adjudicate + pinned + inFlight + chase;
+  // `sessionQuestions` is deliberately NOT summed: see the field's own note. Both
+  // owners are asked directly, so a seam is a fact about the board, not a decision
+  // waiting on the operator.
+  const total = assign + adjudicate + pinned + inFlight + chase;
   return { assign, sessionQuestions, adjudicate, pinned, inFlight, chase, decided, total, rendered: total + decided };
 }
 

@@ -224,12 +224,20 @@ describe("the Inbox has ONE scale", () => {
    */
   const css = readFileSync(resolve(__dirname, "../components/flow/theLine.css"), "utf8");
 
-  it("declares four type sizes, three radii and one control height", () => {
+  it("declares four type sizes, three radii and one control height — for the PRODUCT", () => {
+    // The scale began as `--ib-*` while only the Inbox used it. Discover now reads the
+    // same values, so it is named for the product; the `--ib-*` names stay as aliases
+    // because forty Inbox rules already reference them and renaming those to prove a
+    // point would be churn, not consistency.
     // MUTATION: delete the :root block → RED.
-    for (const token of ["--ib-t-meta:10px", "--ib-t-body:11px", "--ib-t-title:12px",
-                         "--ib-t-verb:13px", "--ib-r-ctl:6px", "--ib-r-box:10px", "--ib-ctl-h:26px"]) {
+    for (const token of ["--aura-t-meta:10px", "--aura-t-body:11px", "--aura-t-title:12px",
+                         "--aura-t-head:13px", "--aura-r-ctl:6px", "--aura-r-box:10px",
+                         "--aura-ctl-h:26px"]) {
       expect(css, `the scale lost ${token}`).toContain(token);
     }
+    // …and the aliases still resolve, or every Inbox rule silently loses its size.
+    expect(css).toContain("--ib-t-meta:var(--aura-t-meta)");
+    expect(css).toContain("--ib-ctl-h:var(--aura-ctl-h)");
   });
 
   it("a button and a select set beside each other are the same height", () => {
@@ -303,5 +311,161 @@ describe("the Inbox has one type system, not just one type scale", () => {
     // Those chips carry the app's own weights and the appbar and hero are built on
     // them — restyling every surface to settle one board would be the wrong trade.
     expect(css).toContain(".v3ib .v3lc-src,.v3ib .v3lc-status,.v3ib .v3lc-own{font-weight:600}");
+  });
+});
+
+describe("Discover reads and the Inbox acts — one system, one boundary", () => {
+  /**
+   * Run under the inbox + Discover redesign briefs. The load-bearing rule in both:
+   * Discover is comprehension, the Inbox is action, and anything needing an operator
+   * MOVE is stated on Discover and routed — never performed there.
+   */
+  const line = SRC("TheLine.tsx");
+  const inbox = SRC("OperatorInbox.tsx");
+  const css = readFileSync(resolve(__dirname, "../components/flow/theLine.css"), "utf8");
+
+  it("no operator write is left on Discover", () => {
+    // The two that were: confirming a lifecycle's stages, and applying an attached
+    // file as a data dictionary. Both answer open questions programme-wide at the
+    // strength a schema carries.
+    // MUTATION: put either back → RED.
+    expect(line, "a dictionary write is back on Discover").not.toContain("commitDictionary(csv");
+    expect(line, "a dictionary write is back on Discover").not.toContain("commitDictionary(capDict");
+  });
+
+  it("each removed act is stated on Discover and routed to the Inbox", () => {
+    // A boundary enforced by deletion alone would just lose the operator the act.
+    // The lifecycle handoff went with the strip that carried it (2026-08-13): once
+    // stage questions routed to their owners, every row on that strip pointed at the
+    // person cards below it, so the strip was a second axis over the same facts.
+    expect(line).toContain("apply it in the Inbox");
+    expect(line, "the route needs somewhere to go").toContain("onOpenInbox");
+  });
+
+  it("and the Inbox actually carries the act it was handed", () => {
+    // The failure this whole session has been clearing: a route that points at
+    // nothing. Confirming stages did not exist on the Inbox until it was moved there.
+    // MUTATION: delete the stage card → RED, and the handoff becomes a dead end.
+    expect(inbox).toContain("confirm these stages");
+    expect(inbox, "same CSV, same merge — a person's answer and a schema's must not diverge")
+      .toContain("entity,field,values");
+  });
+
+  it("both surfaces reference ONE token set", () => {
+    expect(css).toContain("--aura-t-body:11px");
+    expect(css).toContain(".v3ln,.v3ln *{letter-spacing:normal}");
+    expect(css).toContain(".v3ib,.v3ib *{letter-spacing:normal}");
+    // one focus ring, one control height, both surfaces
+    expect(css).toContain(".v3ib :focus-visible,.v3ln :focus-visible");
+    expect(css).toContain(".v3ib select,.v3ln select{border-radius:var(--aura-r-ctl);height:var(--aura-ctl-h)}");
+  });
+
+  it("motion is one duration and honours reduced-motion", () => {
+    expect(css).toContain("--aura-motion:160ms");
+    expect(css).toMatch(/@media \(prefers-reduced-motion:reduce\)\{[\s\S]{0,80}--aura-motion:0ms/);
+  });
+
+  it("does NOT grow a second empty state — the shell already owns that one", () => {
+    // The redesign brief asks for a crafted zero state. One already exists, one level
+    // up: the shell draws "Nothing needs you right now", gated on the same `rendered`
+    // count, with a documented history of getting that predicate right. A card was
+    // added here anyway and two standing guards caught it inside a minute.
+    // MUTATION: add an empty state to the Inbox again → RED.
+    // The comment explaining WHY still names it, so the check is for the markup.
+    expect(inbox, "a second empty state for one condition").not.toContain('className="v3ib-clear"');
+    expect(inbox, "the Inbox draws nothing and lets the shell speak")
+      .toContain("if (queue.rendered === 0) return null;");
+  });
+});
+
+describe("a question list states its subject once", () => {
+  /**
+   * "repeating". Four questions about one atlas step each restated the whole step:
+   *
+   *   One step in the process is: "Review pipeline, forecast, and performance
+   *   reports; monitor commit, most likely, and stretch buckets." Who does this step?
+   *   One step in the process is: "Review pipeline, forecast, and performance
+   *   reports; monitor commit, most likely, and stretch buckets." What decides…?
+   *
+   * — the same forty words, four times, with six words of difference at the end.
+   */
+  const inbox = SRC("OperatorInbox.tsx");
+
+  it("groups the rows by the element they are about", () => {
+    // MUTATION: drop the grouping and map `abouts` flat → RED.
+    expect(inbox).toContain("const groups: Array<{ id: string; abouts: string[] }> = [];");
+    expect(inbox).toContain("const id = elementIdOf(about);");
+  });
+
+  it("derives the shared opening from the questions, not from how they were phrased", () => {
+    // It could have re-implemented renderQuestion's prefixes and drifted from them
+    // the first time one changed. Whatever the questions actually share is the
+    // subject, so this can shorten a row but never invent a heading.
+    expect(inbox).toContain("const sharedOpening = (questions: readonly string[]): string =>");
+    expect(inbox, "a group of one has nothing to share and keeps its question whole")
+      .toContain("if (questions.length < 2) return \"\";");
+  });
+
+  it("cuts the heading at a sentence end, never mid-clause", () => {
+    expect(inbox).toContain('common.lastIndexOf(". ")');
+    expect(inbox).toContain("cut > 20 ?");
+  });
+
+  it("and the row prints only what is left, when there is a shared opening", () => {
+    // MUTATION: always print `q.question` → RED, and the wall of repetition is back.
+    expect(inbox).toContain("q.question.slice(opening.length).trim()");
+  });
+});
+
+describe("a control that cannot act does not look like one", () => {
+  /**
+   * "clicking reassign not doing anything." It was disabled: the select beside it
+   * armed it, and until a name was chosen the button did nothing, said nothing, and
+   * looked no different from a live ghost control. A select whose only purpose is to
+   * arm the button next to it is two steps for one decision, and the disabled step is
+   * the one that fails silently.
+   */
+  const inbox = SRC("OperatorInbox.tsx");
+
+  it("picking a name IS the reassignment", () => {
+    // MUTATION: restore the separate `reassign` button → RED.
+    expect(inbox, "the dead-until-armed button is back")
+      .not.toMatch(/disabled=\{busy === a\.about \|\| !pickedOwner\(a\.about\)\}/);
+    expect(inbox).toContain("(owner) => void run(a.about, assignAction(a.about, owner))");
+  });
+
+  it("but 'Someone else…' still waits for the typed name", () => {
+    // Committing on that choice would assign an owner literally called OTHER.
+    // MUTATION: drop the `value !== OTHER` guard → RED.
+    expect(inbox).toContain("if (onPick && value && value !== OTHER) onPick(value);");
+  });
+
+  it("the visible placeholder is short, and the announced one carries the question", () => {
+    // Same split as the per-question assign: a name specific enough to tell eight
+    // selects apart truncates inside the closed control.
+    expect(inbox).toContain('cSelect(a.about, `re-${a.about}`, "Reassign to…", `Reassign to… — ${Q(a.about).question}`');
+  });
+});
+
+describe("a busy flag that nothing clears is a lie", () => {
+  /**
+   * "shows regenerating." Regenerating the Domain Ontology left the Current-State
+   * Atlas's header reading "Generating…". `regenBusy` was set true per artifact and
+   * never cleared — `onRunAgent` is fire-and-forget, so the flag was a write-only
+   * latch: regenerate an artifact once and its entry stayed true for the life of the
+   * component, so opening that document later showed a run that had long since
+   * landed.
+   */
+  const line = SRC("TheLine.tsx");
+
+  it("stores the document as it was, and clears when it changes", () => {
+    // MUTATION: revert to `Record<string, boolean>` with `true` → RED.
+    expect(line).toContain("const [regenBusy, setRegenBusy] = useState<Record<string, string>>({});");
+    expect(line).toContain("artifactDocument(program, card.id) ?? \"\"");
+    expect(line).toContain('(artifactDocument(program, id) ?? "") !== busy[id]');
+  });
+
+  it("children still receive booleans — the snapshot is bookkeeping, not their business", () => {
+    expect(line).toContain("Object.fromEntries(Object.keys(regenBusy).map((id) => [id, true]))");
   });
 });

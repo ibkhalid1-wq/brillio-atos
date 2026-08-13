@@ -117,19 +117,27 @@ describe("operatorQueueCounts — every rendered section is a term", () => {
     // The whole point of the rename: on Laila these are 49 and 11. The header stat is
     // rendered under a "· questions" unit suffix, so it has to be the 49.
     expect(sessionQuestions).toBeGreaterThan(sessionQueue.length);
+    // sessionQuestions is still READ — the seam is worth seeing — but it is no longer
+    // SUMMED (2026-08-13): a jointly-owned question goes out on both owners' links, so
+    // nothing about a seam is waiting on the operator, and a number they cannot act on
+    // does not belong in a count of things waiting on them.
     expect(counts.sessionQuestions).toBe(sessionQuestions);
     expect(counts.chase).toBe(chase);
-    expect(counts.total).toBe(sessionQuestions + chase);
+    // MUTATION: add sessionQuestions back into `total` → RED.
+    expect(counts.total, "a seam is back in the badge").toBe(chase);
   });
 
   it("every WAITING section is wired: one item in any one of them lifts the badge off 0", () => {
+    // `sessionQueue` is deliberately absent from the cases below. It is no longer a
+    // waiting section: a jointly-owned question goes out on BOTH owners' links, so a
+    // seam is a fact about the board rather than a decision waiting on the operator.
+    // Its own case — that it is read but never summed — is directly above.
     // One item per section, each the shape that section renders from. Laila's own
     // assign queue is empty (its open unknowns are owned or typing), so the assign
     // case borrows a real queue item rather than inventing one. `decideFates` is NOT
     // here — it is the decided TRACE, covered by its own test below.
     const cases: Array<[keyof OperatorQueueReads, OperatorQueueReads, keyof OperatorQueueCounts]> = [
       ["assignQueue", { ...NO_LEDGER_ITEMS, assignQueue: queue.items.slice(0, 1) }, "assign"],
-      ["sessionQueue", { ...NO_LEDGER_ITEMS, sessionQueue: sessionQueue.slice(0, 1) }, "sessionQuestions"],
       ["conflicts", { ...NO_LEDGER_ITEMS, conflicts: [{ about: "el:attr:case.status?dataType", slot: "dataType", count: 2 }] }, "adjudicate"],
       ["pinConflicts", { ...NO_LEDGER_ITEMS, pinConflicts: [{ about: "b", slot: "phase", pinned: "Ada", derived: "Ops", pin: { kind: "pin", about: "b", slot: "phase", owner: { label: "Ada", isRole: false }, sentAt: AT, by: "op", at: AT } }] }, "pinned"],
       ["assignments", { ...NO_LEDGER_ITEMS, assignments: [{ kind: "assign", about: "a", slot: "phase", owner: { label: "Ops", isRole: true }, by: "op", at: AT }] }, "inFlight"],
@@ -138,7 +146,7 @@ describe("operatorQueueCounts — every rendered section is a term", () => {
     for (const [section, reads, field] of cases) {
       const c = operatorQueueCounts(reads);
       expect(c[field], `${String(section)} does not reach the badge`).toBeGreaterThan(0);
-      expect(c.total).toBe(c.assign + c.sessionQuestions + c.adjudicate + c.pinned + c.inFlight + c.chase);
+      expect(c.total).toBe(c.assign + c.adjudicate + c.pinned + c.inFlight + c.chase);
       expect(c.rendered).toBe(c.total + c.decided);
       expect(inboxWaitingCount(bare, reads)).toBe(c.total);
     }

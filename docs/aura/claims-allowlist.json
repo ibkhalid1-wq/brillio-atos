@@ -1,6 +1,6 @@
 {
   "_doc": "Hash-based guard for docs/aura/claims-register.md, enforced by src/v3/__tests__/claimsRegister.test.ts. Regenerate with: npm run claims:regen. Each key is a claim-surface file; each value is the sha1-16 hashes of its claim-bearing lines, normalized by src/v3/lib/claimsGuard.ts (the ONE definition, shared with the test). The test fails when a claim line is added or reworded (new hash) or a new surface introduces claim vocabulary. registerHash pins the register content at generation time so regen cannot silently re-bless a claim the register has not re-statused. DO NOT hand-edit; run npm run claims:regen.",
-  "registerHash": "98493e0b1b5009b9d959c75d44b72794453a8ed2",
+  "registerHash": "3512f974bb5e300728182c2ee5fa5dccd8958086",
   "surfaces": {"componentsDir":"src/v3/components","componentsExt":".tsx","libFiles":["src/v3/lib/agentMeta.ts","src/v3/lib/methodology.ts","src/v3/lib/adamUserGuide.ts"],"edgeFunctionsDir":"supabase/functions"},
   "vocab": ["traceab","grounded","grounding","auditable","provenance","reproducib","evidence-based","end-to-end","governed","verifiab","single source of truth","source of truth"],
   "hashes": {
@@ -12,9 +12,10 @@
     "src/v3/components/flow/FlowGrounding.tsx": ["d932c91c2402f38d","131e5ba5ef63884a","5301e1ce5ddb93dd","e6e33d70c15d0f61","378b5f8714690e44","3cbaab3ed631a5d9","78b78c245b89ea41","c2b8c62193177638"],
     "src/v3/components/flow/FlowRespond.tsx": ["0db4704af787af29","2e8ad8d99af39b84","d531fe1bb6176db7","e63a5e14832a1b63"],
     "src/v3/components/flow/FlowShell.tsx": ["deafe33bf5f63645","83e5079d87b6ed9c","b8919eb837d196e2","df042d94302835e4","0e1ad772cf821333","c4424582fd95f96b","759da0a1726b95ed","5a4158b54836a73b","5ecf60b491052b72","1037e224231d2e0a","b3333bf7c2f6f65f","b89a464b0d05edd4","58aec86f9b0bc7a9","e1e1b37de1574735","afd23df1e7cc4101","3c7545aadf856127","ffeb85aa2b372390","ccd314ae1b2eaa6c","5df879e97c6fef3e"],
+    "src/v3/components/flow/OperatorInbox.tsx": ["1db9499f12de7bcd"],
     "src/v3/components/flow/TheLine.tsx": ["9458ea76a68070d7","a99dce5c98df0e1f","ef2cfd5da368f908"],
     "src/v3/components/flow/studio/DocumentView.tsx": ["80ec35d03791375b"],
-    "src/v3/components/flow/studio/ExperienceDesignStudio.tsx": ["cecc97693661ece6","b7f076cf4976efc2","6bfb295a97cfadf4"],
+    "src/v3/components/flow/studio/ExperienceDesignStudio.tsx": ["cecc97693661ece6","b7f076cf4976efc2"],
     "src/v3/components/flow/studio/FlowArtifactStudio.tsx": ["ce7ffea2a1149847","b08d5e3a226b22d2","3535ccc5f7e66e80","1484054b53dba843","d2a5ba2c51d270b7","8474ef488eab9ce2","9c687aa0fc581599","1ec5f023810be1df","d9f47fde02cb2927","2bfb0385f35dc61d","9dad8113d9c4e5af","e504b983639f8a4d","7b62b0cdeb0d7381","0f679baeaa2cb360","0027cf4547689603","7df66b6eaa971073","a2746781830edaf2"],
     "src/v3/components/flow/studio/JourneyGrid.tsx": ["da13c7aac2ca7e30"],
     "src/v3/components/flow/studio/OntologyStudio.tsx": ["9c85121f277cbb08","be276d5c03dfb26c"],

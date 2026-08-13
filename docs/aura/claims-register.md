@@ -263,3 +263,21 @@ Three mechanisms, most-mechanical first:
 
 *Last swept: 2026-08-10 — row 17 added: the stakeholder-facing prototype became the
 deterministic assembly, so the linked page can state its provenance for the first time.*
+
+### 19 · Operator inbox: "if they replied out of band, record it"
+- **Where:** `src/v3/components/flow/OperatorInbox.tsx` — the in-flight row's one remaining
+  exit, above the answer form.
+- **Added 2026-08-13.** The row used to offer three exits — answer, redirect, release.
+  Two were reassignment under other names: redirect recorded "they said ask X instead" and
+  had the operator confirm it into an assign, which the reassign select does in one step;
+  release wrote an unassign with `reason: "release"`, and the unassign button is in the same
+  row. Only ANSWER records something no routing control can — what the person said.
+- **What the claim says, and what it does NOT.** "Record it" is exactly what happens: the
+  answer is written as a `capture`, attributed to who said it, and the line under the form
+  states the limit in the same breath — **operator-entered, not counted as heard**. It does
+  not claim the stakeholder answered through the system, and it must never be reworded to
+  imply that: only a genuine stakeholder answer ticks the heard count, and this is the one
+  place an operator can put words in a stakeholder's mouth.
+- **Status:** **TRUE** — pinned by the heard-count boundary tests (a capture never moves
+  `heard`) and by the form note that ships beside the control.
+
