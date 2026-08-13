@@ -230,3 +230,37 @@ Guard: `regenerateIsOnTheSurface.test.ts` now covers both mounts and asserts nei
 keeps its own bookkeeping. Verified live: Library → Agentify (stale) shows
 "↻ Rebuild in full" and a band with no button; Library → Domain Ontology and Work →
 Current-State Atlas (both current) show "↻ Regenerate".
+
+## Owned & in-flight leaves the queue (2026-08-13)
+
+"still showing up in inbox", against eight rows that asked the operator for nothing.
+
+Every question in that section is with the person who holds it and is waiting on
+**them**. The section's own lead admitted it — "reassign if you routed wrong, or
+record the holder's exit" — and both of those are corrections the operator may choose
+to make, not decisions the board is holding for them. All eight were already on
+Discover under Sales Operations SME, with their link, in the "28 owned questions"
+list. Measured on the running board before changing anything.
+
+The precedent was already written in `operatorQueue.ts` for `sessionQuestions`, three
+days earlier, in almost the same words: *a number that cannot be acted on does not
+belong in a count of things waiting on them. Kept as a READING.* In-flight is the
+same case, so it got the same treatment — out of the badge, still drawn, opening
+collapsed like Sessions does.
+
+**Not removed from the Inbox.** Reassign and unassign are operator moves and Discover
+does not carry operator moves. One click in is the difference between a control that
+is quiet and a control that is gone.
+
+**Found on the way:** `rendered` did not include `sessionQuestions` while the Sessions
+section was still drawn — and `rendered === 0` is the page's own null-render. A
+programme holding nothing but seams would have rendered an empty Inbox with a live
+section in it. Fixed in the same sum.
+
+Live: the rail badge fell **13 → 5**; the section reads "8 questions — with their
+owners and waiting on them, nothing here needs you"; one click restores all eight rows
+and all eight reassign controls.
+
+Guards: `inboxBadgeCount` gained an in-flight case (drawn, never summed);
+`inboxBadgeIsThePage`'s DOM reader now opens every collapsed disclosure before
+counting, so it measures rows rather than which sections happen to default open.

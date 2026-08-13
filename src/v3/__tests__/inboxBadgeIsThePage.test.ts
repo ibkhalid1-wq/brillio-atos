@@ -210,6 +210,13 @@ const badge = (): number => Number(host.querySelector(".v3fs-dock-n")?.textConte
  * a count out of the ledger.
  */
 const page = () => {
+  // A COLLAPSED SECTION STILL HAS ITS ROWS — `IbSection` unmounts its body when shut,
+  // so a reader that counts rows has to open everything first or it measures which
+  // sections happen to default open. Sessions and Owned & in-flight are both readings
+  // and both start closed; their rows are still what the page is holding.
+  for (const disc of host.querySelectorAll<HTMLButtonElement>("button.v3ib-disc[aria-expanded=false]")) {
+    act(() => { disc.click(); });
+  }
   const record = n("section.v3fs-inbox article.v3fs-dec");   // decisions/portal/approvals/disputes/roles/coverage/exceptions
   const assign = n("#ib-assign li.v3ib-grp-q");              // per QUESTION, not per element group
   const adjudicate = n("#ib-adjudicate li.v3ib-row");
@@ -226,8 +233,13 @@ const page = () => {
     // SESSIONS IS NOT A TERM ANY MORE (2026-08-13). A jointly-owned question goes
     // out on BOTH owners' links, so the section that asked the operator to propose a
     // meeting is gone and a seam is no longer something waiting on them.
-    waiting: record + assign + adjudicate + pinned + inFlight + chase,
-    /** every row on the page, the trace included */
+    //
+    // NOR IS IN-FLIGHT (2026-08-13). Those questions are with the people who hold
+    // them and are waiting on THEM — reassigning is a correction the operator may
+    // choose to make, not one the board is holding for them. Drawn (collapsed), so
+    // it is in `rendered`; never in `waiting`.
+    waiting: record + assign + adjudicate + pinned + chase,
+    /** every row on the page — the in-flight reading and the trace included */
     rendered: record + assign + adjudicate + pinned + inFlight + chase + decided,
   };
 };
@@ -277,13 +289,15 @@ describe("the rail badge equals the rows the Inbox page renders", () => {
     expect(host.querySelector("section.v3fs-inbox .v3fs-ph span")?.textContent).toBe("3 items");
   });
 
-  it("(d) a ruled unknown: the decided trace is DRAWN and is NOT on the badge", () => {
+  it("(d) a ruled unknown: the trace and the in-flight reading are DRAWN, neither is on the badge", () => {
     mount(RULED);
     const p = page();
-    expect(p.inFlight).toBe(1);                              // the assignment is waiting…
+    expect(p.inFlight).toBe(1);                              // the assignment is with its owner…
     expect(p.decided).toBe(1);                               // …the ruling is history
     expect(badge()).toBe(p.waiting);                         // badge === waiting
-    expect(p.rendered).toBe(p.waiting + 1);                  // page === waiting + the trace
+    // TWO drawn-but-not-waiting things now: the in-flight question and the ruling.
+    // MUTATION: put `inFlight` back into `total` → the badge exceeds `waiting` here.
+    expect(p.rendered).toBe(p.waiting + 2);
     expect(badge()).toBeLessThan(p.rendered);                // the divergence, stated
   });
 

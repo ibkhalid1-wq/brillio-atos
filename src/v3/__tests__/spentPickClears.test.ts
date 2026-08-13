@@ -61,8 +61,18 @@ const mount = (onCommit: (a: unknown) => Promise<void>) => {
   });
 };
 
+/** Owned & in-flight is a READING, so it opens closed (2026-08-13) — nothing in it
+ *  is waiting on the operator. Reassigning is still an operator move and still lives
+ *  here; it is one click in. Every test below starts with that click, because that is
+ *  what the operator does before touching any of these controls. */
+const openInFlight = () => {
+  const disc = host.querySelector<HTMLButtonElement>("#ib-inflight button.v3ib-disc[aria-expanded=false]");
+  if (disc) act(() => { disc.click(); });
+};
+
 /** The reassign select on the one in-flight row. */
 const reassignSelect = (): HTMLSelectElement => {
+  openInFlight();
   const el = host.querySelector<HTMLSelectElement>("#ib-inflight .v3ib-reassign select");
   expect(el, "the in-flight row drew no reassign select — the fixture is wrong, not the code").not.toBeNull();
   return el!;
@@ -95,6 +105,7 @@ describe("the reassign control after a reassignment that SAVED", () => {
   it("says what the record now holds, with a tick", async () => {
     mount(async () => {});
     await pick("Sales SME");
+    openInFlight();
     const said = host.querySelector("#ib-inflight .v3ib-said");
     expect(said?.textContent).toContain("reassigned to Sales SME");
     expect(said?.className, "a saved write must not read as a failure").not.toContain("bad");
@@ -121,6 +132,7 @@ describe("the reassign control after a reassignment that DID NOT save", () => {
   it("says nothing was recorded, and does not draw a tick over it", async () => {
     mount(async () => { throw new Error("network"); });
     await pick("Sales SME");
+    openInFlight();
     const said = host.querySelector("#ib-inflight .v3ib-said");
     // MUTATION: remove the catch in `run` → null here, and an unhandled rejection.
     expect(said, "a failed write said nothing at all").not.toBeNull();
