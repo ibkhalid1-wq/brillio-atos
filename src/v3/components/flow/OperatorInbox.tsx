@@ -306,7 +306,13 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
   const [showOrphans, setShowOrphans] = useState(false);
   const [showStages, setShowStages] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
-  const [note, setNote] = useState<Record<string, string>>({});
+  /**
+   * What the record now holds, said on the row it happened to — and, when the write
+   * did NOT land, that it did not. `ok` is the difference: the ✓ was hard-coded into
+   * every render site, so a failed write could only ever have been announced with a
+   * tick over nothing.
+   */
+  const [note, setNote] = useState<Record<string, { text: string; ok: boolean }>>({});
   /** The one element the arrow keys can rely on: the board outlives every re-render. */
   const boardRef = useRef<HTMLDivElement>(null);
   /** Read through the ONE definition — lifecycle.ts — never re-derived here. */
@@ -470,25 +476,55 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
    * EVERY WRITE SAYS SO.
    *
    * Reported as "not able to reassign, not saving" — and it WAS saving. Picking an
-   * owner committed it and the record kept it across a reload. What the operator saw
-   * was a select that snapped back to "Reassign to…" (correct: it is a "reassign TO"
-   * control, and the pick is spent) beside an owner line that changed one small word.
-   * A write with no acknowledgement reads as a write that did not happen, and the
-   * honest reading of "nothing happened" is that nothing SAID anything.
+   * owner committed it and the record kept it across a reload. A write with no
+   * acknowledgement reads as a write that did not happen, and the honest reading of
+   * "nothing happened" is that nothing SAID anything.
    *
    * `note` is that acknowledgement: set on success, keyed by the same key the busy
    * flag uses, cleared after a few seconds. It reports what the record now holds — it
    * is never set optimistically, so it cannot claim a write that failed.
+   *
+   * THE PICK IS SPENT, so the control that took it is cleared.
+   *
+   * The comment here used to describe a select that "snapped back to Reassign to…"
+   * — it never did. `sel[key]` kept the chosen name, so once the ✓ timed out an
+   * in-flight row read "→ owner: Sales SME" beside a select captioned "Reassign
+   * to…" holding "Sales SME": the same fact stated twice, the second time by a
+   * control that looks like it is holding an UNCOMMITTED pick. Reported as "do not
+   * clear after reassigned". Clearing on success (never on failure — a failed write
+   * must keep the operator's typing) puts the current owner in exactly one place and
+   * leaves the routing control empty, which is what it means.
    */
+  const say = (key: string, text: string, ok: boolean, forMs: number) => {
+    setNote((n) => ({ ...n, [key]: { text, ok } }));
+    window.setTimeout(() => setNote((n) => { const next = { ...n }; delete next[key]; return next; }), forMs);
+  };
   const run = async (key: string, action: OperatorAction | OperatorAction[], said?: string) => {
     setBusy(key);
     try {
       await onCommit(action);
-      if (said) {
-        setNote((n) => ({ ...n, [key]: said }));
-        window.setTimeout(() => setNote((n) => { const next = { ...n }; delete next[key]; return next; }), 5000);
-      }
+      setSel((s) => { if (!(key in s)) return s; const next = { ...s }; delete next[key]; return next; });
+      setOther((s) => { if (!(key in s)) return s; const next = { ...s }; delete next[key]; return next; });
+      if (said) say(key, said, true, 5000);
+    } catch {
+      // A FAILED WRITE SAYS SO TOO. This used to escape as an unhandled rejection:
+      // the row went quiet, the pick stayed, and nothing on the page distinguished
+      // "saved" from "the save threw". The pick is deliberately NOT cleared here —
+      // it is the operator's unsaved work, and retrying is one click.
+      say(key, "that did not save — nothing was recorded. Your pick is still here; try again.", false, 12000);
     } finally { setBusy(null); }
+  };
+  /** The acknowledgement, in ONE place — three sites had drawn their own copy of it,
+   *  each with the tick baked into the markup. `block` is for the detail pane, where
+   *  it sits between two stacked blocks rather than inline in a row. */
+  const Said = ({ k, block }: { k: string; block?: boolean }) => {
+    const n = note[k];
+    if (!n) return null;
+    const body = <><span aria-hidden="true">{n.ok ? "✓ " : "⚠ "}</span>{n.text}</>;
+    const cls = `v3ib-said${n.ok ? "" : " bad"}`;
+    return block
+      ? <p className={cls} role="status">{body}</p>
+      : <span className={cls} role="status">{body}</span>;
   };
   const pickedOwner = (key: string) => (sel[key] === OTHER ? other[key] : sel[key])?.trim();
   const isRoleOwner = (label: string) => { const c = candidates.find((x) => x.label === label); return c ? c.label === c.role : true; };
@@ -715,7 +751,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
             ) : null}
             {assignable ? (
               <span className="v3ib-qrow-assign">
-                {note[about] ? <span className="v3ib-said" role="status"><span aria-hidden="true">✓ </span>{note[about]}</span> : null}
+                <Said k={about} />
                 {cSelect(about, `q-${about}`, "Assign to…", `Assign to… — ${q.question}`)}
                 <button type="button" className="v3ib-btn ghost sm"
                   disabled={busy === about || !pickedOwner(about)}
@@ -796,7 +832,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
         {/* THE ACTS, ANCHORED — the brief's own requirement, and the reason is the row:
             a question's controls were spread along it, so the same act sat in a
             different place on every row. Here they are always in the same place. */}
-        {note[about] ? <p className="v3ib-said" role="status"><span aria-hidden="true">✓ </span>{note[about]}</p> : null}
+        <Said k={about} block />
         <div className="v3ib-pane-acts">
           {cSelect(about, `pane-${about}`, "Assign to…", `Assign to… — ${q.question}`,
             (owner) => void run(about, assignAction(about, owner),
@@ -1418,9 +1454,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                         that fails silently. Choosing a name now commits it; the choice
                         is as reversible as it ever was. */}
                     {/* WHAT JUST HAPPENED, on the row it happened to. */}
-                    {note[a.about] ? (
-                      <span className="v3ib-said" role="status"><span aria-hidden="true">✓ </span>{note[a.about]}</span>
-                    ) : null}
+                    <Said k={a.about} />
                     <span className="v3ib-reassign">
                       {cSelect(a.about, `re-${a.about}`, "Reassign to…", `Reassign to… — ${Q(a.about).question}`,
                         (owner) => void run(a.about, assignAction(a.about, owner),
