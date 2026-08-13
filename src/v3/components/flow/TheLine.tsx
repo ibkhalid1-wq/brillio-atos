@@ -871,14 +871,38 @@ export default function TheLine({ program, onOpenInbox, onSaveInputs, onRenamePe
     }
   };
 
-  // Regeneration in flight, by artifact id. Cleared implicitly: when the
-  // regenerated document lands, the station stops being stale and the badge
-  // disappears; the flag only mutes double-clicks meanwhile.
-  const [regenBusy, setRegenBusy] = useState<Record<string, boolean>>({});
+  /**
+   * REGENERATION IN FLIGHT, by artifact id — and now actually cleared.
+   *
+   * This said it was "cleared implicitly: when the regenerated document lands, the
+   * station stops being stale". Nothing cleared it. `onRunAgent` is fire-and-forget,
+   * so the flag was a write-only latch: regenerate an artifact once and its entry
+   * stayed true for the life of the component. Open that artifact's document later
+   * and its header read "Generating…" for ever — which is how a regeneration of the
+   * Domain Ontology left the Current-State Atlas claiming to be generating.
+   *
+   * The flag now stores the document AS IT WAS at dispatch, and the effect below
+   * clears it when the document changes — which is the event the original comment
+   * described and the only one that means the run came back. A run that returns an
+   * identical document leaves the flag set until the next change; that is the honest
+   * failure mode, and it is quiet rather than wrong.
+   */
+  const [regenBusy, setRegenBusy] = useState<Record<string, string>>({});
+  useEffect(() => {
+    setRegenBusy((busy) => {
+      const ids = Object.keys(busy);
+      if (!ids.length) return busy;
+      const landed = ids.filter((id) => (artifactDocument(program, id) ?? "") !== busy[id]);
+      if (!landed.length) return busy;
+      const next = { ...busy };
+      for (const id of landed) delete next[id];
+      return next;
+    });
+  }, [program]);
   const regenerate = (card: ArtifactCardModel) => {
     if (!onRunAgent) return;
     onRunAgent(card.id, card.movementId);
-    setRegenBusy((s) => ({ ...s, [card.id]: true }));
+    setRegenBusy((s) => ({ ...s, [card.id]: artifactDocument(program, card.id) ?? "" }));
     setNote(`Regenerating ${card.title} from the record — the station refreshes when it lands.`);
     window.setTimeout(() => setNote(null), 6000);
   };
@@ -1206,7 +1230,11 @@ export default function TheLine({ program, onOpenInbox, onSaveInputs, onRenamePe
               onMintReview={onMintReview}
               onDesignRound={onDesignRound}
               onGoDiscover={() => setTab("discovery")}
-              regenBusy={regenBusy} genBusy={genBusy} />
+              /* The consumers only ask "is this one in flight", so they get booleans:
+                 the document snapshot is this component's own bookkeeping for knowing
+                 when the run came back, not something a child should have to know. */
+              regenBusy={Object.fromEntries(Object.keys(regenBusy).map((id) => [id, true]))}
+              genBusy={genBusy} />
           ) : (
           <div className={`v3ln-stns n${band.stations.length + (band.id === "frame" && onSaveInputs ? 1 : 0)}`}>
             {/* The Company Brief leads Frame: who the client IS comes before
