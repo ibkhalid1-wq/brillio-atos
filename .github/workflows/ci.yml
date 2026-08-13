@@ -1,5 +1,18 @@
-# ATOS Flow CI — typecheck, lint (zero warnings), the full suite, and the
-# client↔edge lockstep contracts (src/v3/__tests__/edgeLockstep.test.ts) on every push.
+# ATOS Flow CI.
+#
+# ONE STEP, AND IT IS THE PROJECT'S OWN COMMAND. This used to spell the gate out
+# by hand — typecheck, lint, `npx vitest run` — which is an APPROXIMATION of
+# `npm run validate`, and it drifted in two ways that mattered:
+#
+#   · `npm run validate` also runs the BUILD. CI did not, so a broken build was
+#     green here and only failed on someone's machine.
+#   · `npx vitest run` is not `npm test`. The same substitution hid a red lint
+#     gate for an entire working session: `npm run lint` carries
+#     `--report-unused-disable-directives --max-warnings 0` and a hand-rolled
+#     `npx eslint src` carries neither.
+#
+# If the gate should change, change `validate` in package.json — one definition,
+# and every machine runs the same one.
 name: ci
 on:
   push:
@@ -13,9 +26,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      - run: npm run typecheck
-      - run: npm run lint
-      - run: npx vitest run
+      - run: npm run validate

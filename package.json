@@ -3,6 +3,9 @@
   "private": true,
   "version": "1.0.0",
   "description": "Brillio ATOS™ — Agentic Transformation Operating System. AI-Native Transformation Platform.",
+  "engines": {
+    "node": ">=20"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",
