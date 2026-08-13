@@ -143,7 +143,7 @@ describe("the statement the detector actually emits", () => {
 
 describe("the card's words say what they do", () => {
   const SRC = (f: string) =>
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+     
     require("node:fs").readFileSync(require("node:path").resolve(__dirname, `../components/flow/${f}`), "utf8") as string;
 
   it("REGRESSION: the effect line reads as a sentence about its target", () => {

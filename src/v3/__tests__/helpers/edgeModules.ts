@@ -14,7 +14,7 @@
  * resolves in Node — same library the deployed function gets.)
  */
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
+ 
 const load = (name: string): Promise<any> => {
   const spec = ["@shared", name].join("/");
   return import(/* @vite-ignore */ spec);
