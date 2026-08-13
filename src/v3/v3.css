@@ -7518,7 +7518,10 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3lc-sub{font-weight:400;color:var(--v3-text-muted);font-size:11px}
 .v3lc-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
 /* claim status — glyph carries the state, not colour alone */
-.v3lc-status{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;border:1px solid var(--fs-line);border-radius:7px;padding:3px 9px;background:var(--v3-surface-2)}
+/* A status chip is a PILL — it was the only 7px corner on the board, which is the
+   kind of near-miss that reads as sloppy without ever being noticed as a number.
+   11.5px was the only half-pixel type size, too. */
+.v3lc-status{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;border:1px solid var(--fs-line);border-radius:999px;padding:3px 9px;background:var(--v3-surface-2)}
 .v3lc-status-g{font-size:13px;line-height:1}
 .v3lc-status.is-closed{color:var(--v3-positive);border-color:color-mix(in srgb,var(--v3-positive) 40%,var(--fs-line))}
 .v3lc-status.is-weak{color:var(--v3-amber);border-color:color-mix(in srgb,var(--v3-amber) 45%,var(--fs-line));border-style:dashed}

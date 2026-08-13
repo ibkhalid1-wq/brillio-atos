@@ -209,3 +209,51 @@ describe("a count you cannot open is not an answer", () => {
       .toContain("run(about, assignAction(about, pickedOwner(about)!))");
   });
 });
+
+describe("the Inbox has ONE scale", () => {
+  /**
+   * "refine and polish inbox for a premium consistent UX." Measured off the running
+   * page before touching anything: SEVEN button variants (the same small button at
+   * 10px/2px 8px in twelve places and 11px/4px 11px in two), TWO select sizes, SIX
+   * corner radii (4, 6, 7, 9, 11, 999) and type at 9, 10, 10.5, 11, 11.5, 12.5, 13.
+   *
+   * None of it wrong on its own — all of it arrived one component at a time, and the
+   * sum is what reads as unfinished. These assert the scale exists in the stylesheet
+   * rather than re-measuring a render, so a new component that reaches for its own
+   * size has something to be wrong against.
+   */
+  const css = readFileSync(resolve(__dirname, "../components/flow/theLine.css"), "utf8");
+
+  it("declares four type sizes, three radii and one control height", () => {
+    // MUTATION: delete the :root block → RED.
+    for (const token of ["--ib-t-meta:10px", "--ib-t-body:11px", "--ib-t-title:12px",
+                         "--ib-t-verb:13px", "--ib-r-ctl:6px", "--ib-r-box:10px", "--ib-ctl-h:26px"]) {
+      expect(css, `the scale lost ${token}`).toContain(token);
+    }
+  });
+
+  it("a button and a select set beside each other are the same height", () => {
+    // Padding alone left a button at 23.9px next to a select at 25px — a 1.1px step
+    // nobody can name and everybody sees, on a row where the two read as one control.
+    // MUTATION: drop the min-height rule → RED.
+    expect(css).toContain(".v3ib .v3ib-btn,.v3ib select{box-sizing:border-box;");
+    expect(css).toContain("min-height:var(--ib-ctl-h)");
+  });
+
+  it("no Inbox rule sets a half-pixel or one-off size", () => {
+    // The sizes that existed only once each: 9px, 10.5px, 11.5px, 12.5px.
+    const inboxRules = css.split("\n").filter((l) => l.startsWith(".v3ib"));
+    for (const bad of ["font-size:9px", "font-size:10.5px", "font-size:11.5px", "font-size:12.5px"]) {
+      const offenders = inboxRules.filter((l) => l.includes(bad));
+      expect(offenders, `${bad} is back in: ${offenders[0] ?? ""}`).toHaveLength(0);
+    }
+  });
+
+  it("no Inbox rule sets a radius outside the three", () => {
+    const inboxRules = css.split("\n").filter((l) => l.startsWith(".v3ib"));
+    for (const bad of ["border-radius:4px", "border-radius:7px", "border-radius:9px", "border-radius:11px"]) {
+      const offenders = inboxRules.filter((l) => l.includes(bad));
+      expect(offenders, `${bad} is back in: ${offenders[0] ?? ""}`).toHaveLength(0);
+    }
+  });
+});
