@@ -224,12 +224,20 @@ describe("the Inbox has ONE scale", () => {
    */
   const css = readFileSync(resolve(__dirname, "../components/flow/theLine.css"), "utf8");
 
-  it("declares four type sizes, three radii and one control height", () => {
+  it("declares four type sizes, three radii and one control height — for the PRODUCT", () => {
+    // The scale began as `--ib-*` while only the Inbox used it. Discover now reads the
+    // same values, so it is named for the product; the `--ib-*` names stay as aliases
+    // because forty Inbox rules already reference them and renaming those to prove a
+    // point would be churn, not consistency.
     // MUTATION: delete the :root block → RED.
-    for (const token of ["--ib-t-meta:10px", "--ib-t-body:11px", "--ib-t-title:12px",
-                         "--ib-t-verb:13px", "--ib-r-ctl:6px", "--ib-r-box:10px", "--ib-ctl-h:26px"]) {
+    for (const token of ["--aura-t-meta:10px", "--aura-t-body:11px", "--aura-t-title:12px",
+                         "--aura-t-head:13px", "--aura-r-ctl:6px", "--aura-r-box:10px",
+                         "--aura-ctl-h:26px"]) {
       expect(css, `the scale lost ${token}`).toContain(token);
     }
+    // …and the aliases still resolve, or every Inbox rule silently loses its size.
+    expect(css).toContain("--ib-t-meta:var(--aura-t-meta)");
+    expect(css).toContain("--ib-ctl-h:var(--aura-ctl-h)");
   });
 
   it("a button and a select set beside each other are the same height", () => {

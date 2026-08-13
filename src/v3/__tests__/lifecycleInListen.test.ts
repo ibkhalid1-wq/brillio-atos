@@ -136,14 +136,24 @@ describe("the reason is stated, not implied", () => {
 });
 
 describe("the confirmation writes through the path a schema writes through", () => {
-  it("Discover confirms stages as a dictionary row, not a new mechanism", () => {
-    // A lifecycle a person confirmed and one a schema stated must be
-    // indistinguishable to the merge — same columns, same call, same precedence.
-    const src = require("node:fs").readFileSync(
-      require("node:path").resolve(__dirname, "../components/flow/TheLine.tsx"), "utf8") as string;
-    expect(src).toContain("entity,field,values");
-    expect(src, "a bespoke write path would sit outside the ledger's precedence")
-      .toContain("commits.commitDictionary(csv, null)");
+  it("the confirmation is a dictionary row, and it lives on the surface that ACTS", () => {
+    // Boundary (2026-08-13): Discover reads, the Inbox acts. Confirming a stage list
+    // is an operator WRITE at dictionary strength, so it moved — but the CSV shape is
+    // unchanged, because a lifecycle a person confirmed and one a schema stated must
+    // stay indistinguishable to the merge.
+    const read = (f: string) => require("node:fs").readFileSync(
+      require("node:path").resolve(__dirname, `../components/flow/${f}`), "utf8") as string;
+    const inbox = read("OperatorInbox.tsx");
+    expect(inbox).toContain("entity,field,values");
+    expect(inbox, "a bespoke write path would sit outside the ledger's precedence")
+      .toContain("onDictionary(csv, null)");
+    // MUTATION: put the write back on Discover → RED. Discover states the finding
+    // and offers the route; it does not carry the move.
+    const discover = read("TheLine.tsx");
+    expect(discover, "an operator write is back on Discover")
+      .not.toContain("commits.commitDictionary(csv, null)");
+    expect(discover, "the finding must still be stated, and the act still reachable")
+      .toContain("confirm in the Inbox");
   });
 
   it("Experience Design no longer authors workflow machines", () => {

@@ -90,6 +90,13 @@ interface CastRow {
 
 interface TheLineProps {
   program: ProgramSummary;
+  /**
+   * THE ONE HANDOFF. Discover reads; the Inbox acts. Where Discover surfaces
+   * something that needs an operator MOVE, it states the fact and offers this —
+   * never the move itself. Absent (a read-only lens), the fact is still stated and
+   * nothing is offered, which is the honest degradation.
+   */
+  onOpenInbox?: () => void;
   /** Classic write handlers, passed through untouched. All optional — omitted
    * (e.g. a future sponsor lens) the Line renders fully read-only. */
   onSaveInputs?: SaveInputsFn;
@@ -389,7 +396,7 @@ function packFor(program: ProgramSummary, who: string, movementId: "frame" | "li
   return shown.find(linkIsOpen) ?? shown[shown.length - 1];
 }
 
-export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenameRole, onMintFollowUp, onMintReview, onCloseLink, onScheduleFollowUp, onRunAgent, onRecordGate, onReopenGate, onSendForApproval, onDesignRound }: TheLineProps) {
+export default function TheLine({ program, onOpenInbox, onSaveInputs, onRenamePerson, onRenameRole, onMintFollowUp, onMintReview, onCloseLink, onScheduleFollowUp, onRunAgent, onRecordGate, onReopenGate, onSendForApproval, onDesignRound }: TheLineProps) {
   const model = useMemo(() => buildLineModel(program), [program]);
   // The ONE in-browser ledger read every surface here shares (read-only migrate).
   const ledger = useProgramLedger(program);
@@ -1038,8 +1045,6 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
     /** open questions on the entities this file NAMES — the honest denominator */
     inScope: number; entities: string[];
   } | null>(null);
-  const [capDictBusy, setCapDictBusy] = useState(false);
-  const [lcBusy, setLcBusy] = useState<string | null>(null);
   /** Read, never written from here — one definition, in lifecycle.ts. */
   const lifecycles = useMemo(() => lifecycleEntities(ledger.store), [ledger.store]);
   const shownLifecycles = useMemo(() => lifecycles.filter((l) => l.confident), [lifecycles]);
@@ -1337,17 +1342,17 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                           {i ? <span aria-hidden="true">→ </span> : null}{stage}
                         </span>
                       ))}
-                      {commits.canWrite ? (
-                        <button type="button" className="v3ln-a" disabled={lcBusy === lc.about}
-                          aria-label={`Confirm the stages of ${lc.entity}`}
-                          onClick={() => {
-                            setLcBusy(lc.about);
-                            // entity,field,values — the same three columns a schema
-                            // export carries, so the merge cannot tell them apart.
-                            const cell = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
-                            const csv = `entity,field,values\n${[lc.entity, lc.attribute, lc.stages.join("; ")].map(cell).join(",")}`;
-                            void commits.commitDictionary(csv, null).finally(() => setLcBusy(null));
-                          }}>{lcBusy === lc.about ? "Confirming…" : "confirm these stages"}</button>
+                      {/* THE CONFIRM MOVED TO THE INBOX. Confirming a stage list is an
+                          operator WRITE — it records the stages as a dictionary row, at
+                          the same strength an uploaded schema carries — and Discover
+                          does not carry operator moves. The finding is still stated
+                          here, in full, with the stages it found; the act is one route
+                          away. (Boundary: Discover reads, Inbox acts.) */}
+                      {onOpenInbox ? (
+                        <button type="button" className="v3ln-handoff" onClick={onOpenInbox}
+                          aria-label={`Open the Inbox to confirm the stages of ${lc.entity}`}>
+                          confirm in the Inbox<span aria-hidden="true"> →</span>
+                        </button>
                       ) : null}
                     </span>
                   ) : (
@@ -1867,18 +1872,18 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                     questions as <i>code-derived · weak</i> — anyone can still deviate. It lands
                     programme-wide; the Inbox is where a dictionary is attached to one system of record.
                   </span>
-                  {/* The SAME channel this surface already writes assigns and pins
-                      on (`useOperatorCommits`) — a dictionary applied from here is
-                      indistinguishable from one applied in the Inbox, because it is
-                      the same call. `canWrite` is false when the shell passed no
-                      save handler, and then there is nothing to offer. */}
-                  {commits.canWrite && capDict.closes > 0 ? (
-                    <button type="button" className="v3ln-btn" disabled={capDictBusy}
-                      onClick={() => {
-                        setCapDictBusy(true);
-                        void commits.commitDictionary(capDict.csv, null)
-                          .finally(() => { setCapDictBusy(false); setCapDict(null); });
-                      }}>{capDictBusy ? "Applying…" : "apply as a data dictionary"}</button>
+                  {/* APPLYING IT MOVED TO THE INBOX. Attaching a file to the record is
+                      Discover's own act — it is how a stakeholder's evidence arrives.
+                      APPLYING it as a dictionary is an operator move: it answers open
+                      questions programme-wide at the strength a schema carries, and
+                      the Inbox is where a dictionary is keyed to its system of record.
+                      The reading is still stated here, in full, so the operator learns
+                      what the file contains at the moment they attach it. */}
+                  {onOpenInbox && capDict.closes > 0 ? (
+                    <button type="button" className="v3ln-handoff" onClick={onOpenInbox}
+                      aria-label="Open the Inbox to apply this file as a data dictionary">
+                      apply it in the Inbox<span aria-hidden="true"> →</span>
+                    </button>
                   ) : null}
                 </div>
               ) : null}
