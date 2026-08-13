@@ -195,3 +195,38 @@ Guards: `spentPickClears.test.ts` (DOM, both the saved and the failed path) and
 board: reassigned row 1 of Owned & in-flight to Sales SME, saw the owner line move,
 the select empty and the ✓ land, then reassigned it back — the ledger is append-only,
 so the end state is the owner it started with.
+
+## Regenerate on every artifact screen (2026-08-13)
+
+Surfacing the header button fixed the Work board and did **nothing** for the Library,
+because `FlowShell`'s mount of `FlowArtifactStudio` passed no `onRegenerate` at all.
+Opening a document there gave a header of ⋯ and Close — and a stale one drew the
+"the claims this rests on moved" band **with no button under it**. The only offer was
+a link sending the operator to the Flow page to do it somewhere else.
+
+The dispatch and its in-flight flag moved out of `TheLine` into `useArtifactRegen`,
+because the flag is the part that has been wrong before: `onRunAgent` is
+fire-and-forget, so a naive boolean is a write-only latch that reads "Generating…"
+for ever. It stores the document as it was at dispatch and clears when that document
+changes. Two copies of that would be two answers to "is it back yet".
+
+Three things the page taught that the source did not:
+
+- **Two names, one act.** A stale screen now showed the header's "↻ Regenerate"
+  beside the band's "↻ Rebuild in full" — the same call, two inches apart, under
+  different words. One control now, which takes the band's honest wording while the
+  document is stale (a full rebuild does *not* merge hand corrections, and that is
+  the word for it). The band keeps every line of the explanation; it is the only
+  place that states the cost.
+- **The glyph was in the accessible name.** `↻ Regenerate` read out whole. Nothing
+  caught it while the button only appeared on stale documents; drawing it on every
+  artifact screen made `a11yFlowNames` fail on three counts at once. Now decoration,
+  `aria-hidden`, with the word as the name.
+- **Two source guards were pinned to an address, not a property** — they asserted
+  `regenBusy` lives in `TheLine.tsx`. The behaviour was unchanged and they failed
+  anyway. Rewritten against `useArtifactRegen`, where the property actually lives.
+
+Guard: `regenerateIsOnTheSurface.test.ts` now covers both mounts and asserts neither
+keeps its own bookkeeping. Verified live: Library → Agentify (stale) shows
+"↻ Rebuild in full" and a band with no button; Library → Domain Ontology and Work →
+Current-State Atlas (both current) show "↻ Regenerate".

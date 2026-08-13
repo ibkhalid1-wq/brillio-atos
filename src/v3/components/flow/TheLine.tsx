@@ -25,6 +25,7 @@ import {
   approvalLinkFor, canSendForApproval, stakeholderApprovalItems, type StakeholderApprovalItem,
 } from "@/v3/components/flow/flowApprovals";
 import { displayPersonLabel, resolveMovementStakeholders, type MovementStakeholder } from "@/v3/components/flow/flowStakeholders";
+import { useArtifactRegen } from "@/v3/components/flow/useArtifactRegen";
 import { listInterviewPacks, linkIsOpen, visibleLinks, portalLinkFor } from "@/v3/components/flow/flowPortal";
 import { stakeholderCollection } from "@/v3/components/flow/CollectBoard";
 // The two roads from the world into the capture dialog, both of them the
@@ -877,40 +878,14 @@ export default function TheLine({ program, onOpenInbox, onSaveInputs, onRenamePe
   };
 
   /**
-   * REGENERATION IN FLIGHT, by artifact id — and now actually cleared.
-   *
-   * This said it was "cleared implicitly: when the regenerated document lands, the
-   * station stops being stale". Nothing cleared it. `onRunAgent` is fire-and-forget,
-   * so the flag was a write-only latch: regenerate an artifact once and its entry
-   * stayed true for the life of the component. Open that artifact's document later
-   * and its header read "Generating…" for ever — which is how a regeneration of the
-   * Domain Ontology left the Current-State Atlas claiming to be generating.
-   *
-   * The flag now stores the document AS IT WAS at dispatch, and the effect below
-   * clears it when the document changes — which is the event the original comment
-   * described and the only one that means the run came back. A run that returns an
-   * identical document leaves the flag set until the next change; that is the honest
-   * failure mode, and it is quiet rather than wrong.
+   * REGENERATION IN FLIGHT — the dispatch and the "is it back yet" both live in
+   * `useArtifactRegen` now, because the Library shows the same documents and could
+   * not offer the same act. The board keeps only what is its own: the toast.
    */
-  const [regenBusy, setRegenBusy] = useState<Record<string, string>>({});
-  useEffect(() => {
-    setRegenBusy((busy) => {
-      const ids = Object.keys(busy);
-      if (!ids.length) return busy;
-      const landed = ids.filter((id) => (artifactDocument(program, id) ?? "") !== busy[id]);
-      if (!landed.length) return busy;
-      const next = { ...busy };
-      for (const id of landed) delete next[id];
-      return next;
-    });
-  }, [program]);
-  const regenerate = (card: ArtifactCardModel) => {
-    if (!onRunAgent) return;
-    onRunAgent(card.id, card.movementId);
-    setRegenBusy((s) => ({ ...s, [card.id]: artifactDocument(program, card.id) ?? "" }));
-    setNote(`Regenerating ${card.title} from the record — the station refreshes when it lands.`);
+  const { regenerate, regenerating, regeneratingIds } = useArtifactRegen(program, onRunAgent, (message) => {
+    setNote(message);
     window.setTimeout(() => setNote(null), 6000);
-  };
+  });
 
   // First generation of an artifact whose upstream inputs are ready. Same
   // dispatch as regenerate; cleared implicitly when the document lands and the
@@ -1230,14 +1205,14 @@ export default function TheLine({ program, onOpenInbox, onSaveInputs, onRenamePe
             <DesignLoopZones band={band} program={program} ledger={ledger}
               roster={roundRoster}
               onOpen={openStation}
-              onRegen={onRunAgent ? regenerate : undefined}
+              onRegen={regenerate}
               onGenerate={onRunAgent ? generate : undefined}
               onMintReview={onMintReview}
               onDesignRound={onDesignRound}
               /* The consumers only ask "is this one in flight", so they get booleans:
                  the document snapshot is this component's own bookkeeping for knowing
                  when the run came back, not something a child should have to know. */
-              regenBusy={Object.fromEntries(Object.keys(regenBusy).map((id) => [id, true]))}
+              regenBusy={Object.fromEntries(regeneratingIds.map((id) => [id, true]))}
               genBusy={genBusy} />
           ) : (
           <div className={`v3ln-stns n${band.stations.length + (band.id === "frame" && onSaveInputs ? 1 : 0)}`}>
@@ -1256,9 +1231,9 @@ export default function TheLine({ program, onOpenInbox, onSaveInputs, onRenamePe
             ) : null}
             {band.stations.map((s) => (
               <Station key={s.id} station={s} onOpen={openStation}
-                onRegen={onRunAgent ? regenerate : undefined}
+                onRegen={regenerate}
                 onGenerate={onRunAgent ? generate : undefined}
-                regenerating={!!(s.card && regenBusy[s.card.id])}
+                regenerating={!!s.card && regenerating(s.card.id)}
                 generating={!!(s.card && genBusy[s.card.id])} />
             ))}
           </div>
@@ -1887,8 +1862,8 @@ export default function TheLine({ program, onOpenInbox, onSaveInputs, onRenamePe
         <Suspense fallback={null}>
           <FlowArtifactStudio program={program} artifact={docFor} initialSection={docSection}
             onClose={() => { setDocFor(null); setDocSection(undefined); }}
-            onRegenerate={onRunAgent ? () => regenerate(docFor) : undefined}
-            regenerating={!!regenBusy[docFor.id]}
+            onRegenerate={regenerate ? () => regenerate(docFor) : undefined}
+            regenerating={regenerating(docFor.id)}
             header={docFor.id === "discovery-kit"
               ? <DiscoveryKitAlign program={program} onSaveInputs={onSaveInputs}
                   onRenamePerson={onRenamePerson} onRenameRole={onRenameRole}
