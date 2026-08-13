@@ -48,3 +48,6 @@ video-laila/
 video/public/laila/
 
 .proof.cjs
+
+# Audit/session scratch — working notes from an investigation, not source.
+audit-scratch/

@@ -1,7 +1,12 @@
 # ATOS Flow — Engineering Handoff
 
-The single orientation document for anyone taking over this codebase. Everything here
-was true at handoff; verify against the code where it matters, the code wins.
+The single orientation document for anyone taking over this codebase — and there is
+now exactly one. A second (`docs/aura/HANDOVER.md`, written 2026-08-13) was folded in
+here and deleted, because two documents each claiming to be the handover means a new
+engineer reads whichever they find first and never learns what is in the other.
+
+Everything here was true at handoff; verify against the code where it matters, the
+code wins.
 
 ## What this is
 
@@ -24,13 +29,21 @@ it touches the record. The demo, not the document, is the gate.
 ```bash
 npm install
 npm run dev        # vite, http://localhost:5173
-npm run validate   # typecheck + lint + build + test — the handoff gate, all green
+npm run validate   # typecheck + lint + build + test — THE gate. Green at ff67fd1+.
 ```
+
+`npm run validate` is the gate, and it is the whole gate: CI runs that one command,
+so there is no second definition to drift from. If it is red, that is a regression,
+not a known state. Node 20 or newer (`.nvmrc` pins what CI uses).
+
+**You will need your own `.env.local`** — deliberately not in the repo. Copy
+`.env.local.example` and fill it in. Without it the app runs and every read fails.
 
 - **Supabase project**: `vudqrrqpipnkxzxslbim` (auth, Postgres, Realtime, Edge Functions).
 - Client env: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (a publishable `sb_…` key; safe in the client).
 - Deploy an edge function: `npx supabase functions deploy <name>` (add `--no-verify-jwt`
-  **only** for `flow-portal` — it is the public, token-gated face).
+  **only** for `flow-portal` — it is the public, token-gated face). Edge functions are
+  Deno and are **not** exercised by `npm test`; `run-agent` is at **v221** deployed.
 
 ## Architecture in five rules
 
@@ -92,6 +105,16 @@ src/v3/components/flow/
   studio/                       artifact studios: DocumentView (typeset projection),
                                 graph editors (ontology/workflow/blueprint/strategy/journeys),
                                 FlowArtifactStudio (frame: grounding, what-changed, editing)
+src/v3/lib/ledger/             THE claims ledger (see the next section)
+  store.ts types.ts             FROZEN CORE — a needed change here is a finding
+  precedence.ts projections.ts  FROZEN CORE
+  useProgramLedger.ts           the projection every surface reads
+  operatorActions.ts            the operator verbs, folded (last write wins)
+  operatorQueue.ts              THE definition of the Inbox's counts (badge vs page)
+src/v3/components/flow/
+  OperatorInbox.tsx             the Inbox surface — every block carries a control
+  useArtifactRegen.ts           regenerate dispatch + "is it back yet", shared by
+                                the Work board and the Library
 src/v3/lib/blobGuard.ts         zod advisory validation + BLOB_VERSION migrations
 src/v3/lib/blobSnapshots.ts     IndexedDB snapshot ring (10/programme) at the write chokepoint
 supabase/functions/
@@ -100,6 +123,52 @@ supabase/functions/
   flow-transcribe/index.ts      Whisper transcription; 501 when OPENAI_API_KEY unset
   _shared/claudeClient.ts       provider abstraction (Anthropic/OpenAI keys)
 ```
+
+## The claims ledger, and the surfaces over it
+
+Everything the operator works is claims about **loci** (`<elementId>#<slot>`), resolved
+by a precedence lattice — `code-derived · weak` loses to any human answer.
+`store.ts`, `types.ts`, `precedence.ts` and `projections.ts` under `src/v3/lib/ledger/`
+are the **frozen core**: treat a needed change there as a finding to raise, not an edit
+to make. Surfaces read PROJECTIONS (`useProgramLedger`), never the blob. Operator verbs
+are appended as actions and applied as a read overlay; no surface writes the store.
+
+Three surfaces, and the boundary between them is load-bearing:
+
+| surface | what it is | what it may do |
+|---|---|---|
+| **Work** | the board — bands, stations, gates | operator progress |
+| **Discover** | the people — links, capture, invites | READ + engage stakeholders. **No operator moves.** |
+| **Inbox** | what needs an operator DECISION | ACT. Every block carries a control. |
+| **Record** | who said what, when | read-only, including findings nobody acted on |
+
+Four rules that look like bugs if you do not know them:
+
+- **A question is asked of a PERSON or answered by a DICTIONARY, never both.** Typing
+  questions (`dataType` / `valueSet` / `optionality`) route to the data dictionary and
+  are absent from person cards — with two deliberate exceptions: a confident
+  **lifecycle**'s stages, and any **jointly-owned** question (a seam), which goes to
+  BOTH owners because a document cannot settle a disagreement between two functions.
+- **Only a genuine stakeholder answer ticks the heard count.** Assign, reassign,
+  release, operator-capture: none of them do.
+- **A zero-count section is hidden**, and **a miss stays visible** — never silently
+  drop a locus.
+- **The badge counts what is WAITING ON THE OPERATOR, not what is drawn.** Seams and
+  in-flight questions are drawn as readings and are deliberately not summed; the
+  decided trace is history. `operatorQueue.ts` is the only place either sum is written
+  (`total` = the badge, `rendered` = the page), and `inboxBadgeIsThePage.test.ts`
+  holds them to the DOM.
+
+## The design system
+
+One token set, declared at the top of `src/v3/components/flow/theLine.css`: four type
+sizes, three radii, one control height (26px), a 4px spacing scale, one motion
+duration with a reduced-motion override. Three font weights, one leading, tracking
+only on uppercase micro-labels. `--ib-*` names remain as aliases.
+
+**Guards enforce it** (`inboxPlainEnglish.test.ts`): a rule reaching for its own size,
+radius, half-pixel or extra weight fails the suite. The surface reached seven button
+variants and six radii by drift, one component at a time.
 
 ## The loops (what must never break)
 
@@ -139,14 +208,37 @@ supabase/functions/
 
 ## Testing & CI
 
-- `npx vitest run` — 927 tests / 53 files. The load-bearing suites:
+- `npm test` — **2719 tests / 176 files**. The load-bearing suites:
   - `flowLibs.test.ts` — gate verdicts pinned word-for-word, decision resolution, briefs, locateQuote
   - `coherence.test.ts` — cross-surface invariants (every decision family has a preview, checklist groups)
   - `edgeLockstep.test.ts` — client/edge parity by parsing both sources (fingerprints,
     vocabulary steering, conflict routing, studio docOrder vs agent JSON contracts)
-- `.github/workflows/ci.yml` runs typecheck + lint + test on push.
+- `.github/workflows/ci.yml` runs **`npm run validate`** and nothing else, on purpose —
+  see the comment in that file for the two ways a hand-spelled gate drifted from it.
 - Gate messages are PINNED. If you reword one, the test fails — that is the point;
   update both deliberately.
+- **Timeouts are hang detectors, not performance assertions** (`testTimeout: 30s`).
+  The a11y suites mount the whole FlowShell per case; at vitest's 5s default they
+  passed alone and timed out in the full run. If you meet an intermittent red,
+  fix its cause — intermittent red is what teaches a team to shrug at a real one.
+
+**Two guards that will stop you, and should:**
+
+- **The claims register** (`docs/aura/claims-register.md`). Every place the product
+  asserts something about itself is listed with what is actually true; add UI copy
+  that makes a claim and the suite fails until the claim is accounted for. It exists
+  because this product once said *"generated, traceable to evidence"* while nothing
+  computed grounding and a lineage walk achieved zero hops. When it flags you, account
+  for the claim or stop making it — do not reword around the detector.
+- **The badge-equals-page guard** (`inboxBadgeIsThePage.test.ts`). If it fails, a count
+  and a page have stopped agreeing and one of them is lying to an operator.
+
+**The habit that found most of the bugs in this codebase:** nearly every defect fixed
+in the last pass looked fine in the source and wrong on the page — a button disabled
+until armed, a busy flag nothing cleared, an empty state below a `return null`, a
+count that named the wrong population, a select still holding a pick it had spent.
+Tests were green throughout. **Open the page**, measure the thing you are about to
+assert on the running board, and put the number in the commit.
 
 ## Known debt (honest list)
 
@@ -164,6 +256,36 @@ supabase/functions/
    use compare-and-set on `updated_at` and append an attestation (see the trail for examples).
 4. **Realtime auth token** expires ~hourly; the client refreshes via Supabase auth,
    but long-idle tabs may need a reload to resubscribe.
+5. **`any` in app code: 111 occurrences**, almost all in three pre-v3 files —
+   `src/lib/adamDecisionUtils.ts` (56), `src/lib/adamCopilot.ts` (27),
+   `src/new/lib/parseDocumentToText.ts` (18). None in the v3 ledger. Worth typing if
+   those files are touched; not worth a sweep on their own.
+6. **Seven files exceed 1,500 lines** — `FlowShell.tsx` (3.5k), `AppShellV3.tsx` (3.1k),
+   `TheLine.tsx`, `FlowRespond.tsx`, `methodology.ts`, `PhaseInputsPanel.tsx`,
+   `OperatorInbox.tsx`. Cohesive rather than tangled, but the first place a new
+   engineer gets lost.
+7. **`QuestionList` and `DetailPane` are defined inside `OperatorInbox`**, so React
+   remounts that subtree on every render — which is why the detail pane's keyboard
+   focus lives on the BOARD rather than the row. Hoisting them to module scope fixes
+   the cause; it needs ~12 props threaded. Introduced knowingly, recorded here.
+8. **~65MB of demo video is tracked in git** (`video/public/*.mp4`, nine plates).
+   `video-laila/` is gitignored; `video/` never was. Every clone pays for it. Fixing
+   it properly means history rewriting or Git LFS — a decision with blast radius for
+   anyone who has already cloned, so it is flagged, not done.
+9. **Per-attribute evidence covers attributes only.** Atlas STEP questions still say
+   "no source on record"; the evidence work did not reach the atlas side.
+
+## What is NOT wired (do not mistake these for bugs)
+
+- **The stakeholder write path.** Stakeholders cannot answer through the system in the
+  browser today. Anything an operator records on their behalf is marked
+  operator-entered and never counts as heard; surfaces say "provisional" where it bites.
+- **Session scheduling.** A seam can have a session proposed; no date is booked and
+  nothing consumes the intent. The questions are NOT waiting on it — they go out on
+  both owners' links.
+- **Redirect.** The action and the referral row still render, but nothing creates one
+  any more: reassigning does the same thing in one step.
+- **`llmReplay`** is delivered and unwired.
 
 ## Operational notes
 
