@@ -322,7 +322,7 @@ export function useProgramLedger(program?: ProgramSummary): ProgramLedger {
     const store = fold.size || curation.elements.length || lifecycleBorn.length || sorBorn.length
       ? buildReadModel([...migrated.elements(), ...curation.elements], applyOwnership(withProposals, fold))
       : migrated;
-    const assignments = [...activeAssignments(actions).values()];
+    const assignedActions = [...activeAssignments(actions).values()];
     const pins = [...activePins(actions).values()];
     const decideFates = [...decidedFates(actions).values()];
 
@@ -333,6 +333,27 @@ export function useProgramLedger(program?: ProgramSummary): ProgramLedger {
 
     const kit = buildKitView(store);
     const queue = buildUnknownQueue(store);
+
+    /**
+     * AN ASSIGNMENT IS SPENT WHEN ITS QUESTION IS.
+     *
+     * `activeAssignments` folds the operator's OWN verbs — assign, unassign,
+     * decide-fate — and nothing else. So the only things that could ever end an
+     * in-flight row were the operator ending it by hand. The event that actually
+     * matters, the QUESTION BEING ANSWERED, was invisible to it: a claim landing on
+     * the locus closes it on the burn-down, removes it from Discover, and leaves the
+     * Inbox still saying "awaiting Sales Operations SME" for ever.
+     *
+     * Reported as "why not clearing". Every other route out of the queue has the
+     * same hole — a dictionary upload answering a typing question, an adjudication
+     * settling a frozen locus, a curation removing the element underneath it.
+     *
+     * The queue is the ONE definition of what is still open (open OR blocked live
+     * claims), so an assignment is in flight exactly while its locus is in it. Not a
+     * new rule: the same one the burn-down, Discover and the badge already use.
+     */
+    const openAbouts = new Set(queue.items.map((i) => i.about));
+    const assignments = assignedActions.filter((a) => openAbouts.has(a.about));
     // ONE ask per system of record, born at SoR identification (derivation) — the
     // preventive dictionary ask, projected to Frame readiness, Discover, and the inbox.
     // Identification happens on EITHER surface: the sponsor's Frame input names systems
