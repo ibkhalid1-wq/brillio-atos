@@ -305,6 +305,9 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
   const [showDerived, setShowDerived] = useState(false);
   const [showOrphans, setShowOrphans] = useState(false);
   const [showStages, setShowStages] = useState(false);
+  const [selected, setSelected] = useState<string | null>(null);
+  /** The one element the arrow keys can rely on: the board outlives every re-render. */
+  const boardRef = useRef<HTMLDivElement>(null);
   /** Read through the ONE definition — lifecycle.ts — never re-derived here. */
   const lifecyclesWithStages = useMemo(
     () => lifecycleEntities(ledger.store).filter((l) => l.confident && l.stages.length),
@@ -642,8 +645,24 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
         // interview and one about a field the model listed while summarising a
         // document read identically until this line existed.
         const src = attributeEvidence(ledger.store, elementIdOf(about));
+        // THE ROW IS NOT THE FOCUS TARGET. It was, briefly, and it could not hold
+        // focus for a single render: this list is a component defined INSIDE the
+        // Inbox, so React sees a new component type every render and remounts the
+        // whole subtree — the focused <li> is destroyed and recreated, and focus
+        // falls back to <body>. The BOARD takes focus instead (see `boardRef`); it is
+        // one stable element that survives every re-render, and the arrows work from
+        // wherever the operator clicked.
         return (
-          <li key={about} title={about}>
+          <li key={about} title={about} aria-selected={selected === about}
+            className={selected === about ? "is-selected" : undefined}
+            data-about={about}
+            onClick={(e) => {
+              // The row's own controls keep their clicks — selecting is what the ROW
+              // does, not what everything inside it does.
+              if ((e.target as HTMLElement).closest("button, select, input, textarea, a")) return;
+              boardRef.current?.focus();
+              setSelected((cur) => (cur === about ? null : about));
+            }}>
             <span className="v3ib-peek-tag">{q.typeTag}</span>
             <span className="v3ib-peek-q">
               {opening && q.question.startsWith(opening)
@@ -691,8 +710,118 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
     );
   };
 
+  /**
+   * THE DETAIL PANE — one question, everything the record holds about it.
+   *
+   * Both redesign briefs ask for it, and the reason it was deferred is worth stating:
+   * this Inbox is sections of CARDS, and every reveal was deliberately made to open
+   * IN PLACE after a modal-for-one-reveal, panel-for-another inconsistency was
+   * reported. A pane that replaced those reveals would undo that.
+   *
+   * So it does not replace them. The cards still expand where you asked them to; the
+   * pane answers the question the expanded rows cannot — "what do we actually know
+   * about THIS one?" — which is the brief's own list: the underlying unknown, where
+   * its field came from, who owns it and how it got to them, and the acts, anchored
+   * at the bottom in one place rather than scattered down the row.
+   *
+   * It is DERIVED, never a second source: every line is read from the same ledger the
+   * rows read, and every act is the same call the row would have made.
+   */
+  const DetailPane = ({ about, onClose }: { about: string; onClose: () => void }) => {
+    const q = Q(about);
+    const item = ledger.queue.items.find((i) => i.about === about);
+    const src = attributeEvidence(ledger.store, elementIdOf(about));
+    // The locus's own history, oldest first — the trail that explains its owner.
+    const trail = ledger.actions
+      .filter((a) => "about" in a && (a as { about?: string }).about === about)
+      .slice()
+      .sort((a, b) => String(a.at).localeCompare(String(b.at)));
+    const picked = pickedOwner(about);
+    return (
+      <aside className="v3ib-pane" aria-label={spoken(`Detail: ${q.question}`)}>
+        <header className="v3ib-pane-h">
+          <span className="v3ib-qtype">{q.typeTag}</span>
+          <button type="button" className="v3ib-btn ghost sm" onClick={onClose} aria-label="Close the detail pane">close</button>
+        </header>
+        <p className="v3ib-pane-q">{q.question}</p>
+        <dl className="v3ib-pane-facts">
+          <dt>Owner</dt>
+          <dd>{item?.owner.kind === "unowned" ? "nobody yet" : item?.ownerLabel ?? "—"}</dd>
+          <dt>State</dt>
+          <dd>{item ? item.status : "answered — no longer open"}</dd>
+          <dt>Where the field came from</dt>
+          {/* NO SOURCE is a finding, not a blank. It is the difference between a field
+              somebody named in an interview and one the model listed while summarising. */}
+          <dd className={src ? undefined : "none"}>{src || "no source on record"}</dd>
+        </dl>
+        {trail.length ? (
+          <div className="v3ib-pane-trail">
+            <span className="v3ib-pane-cap">How it got here</span>
+            <ol>
+              {trail.map((a, i) => (
+                <li key={`${a.kind}:${a.at}:${i}`}>
+                  <b>{a.kind}</b>{" "}
+                  {"owner" in a && a.owner ? `→ ${(a.owner as { label: string }).label} ` : ""}
+                  <span className="v3ib-pane-when">{String(a.at).slice(0, 10)}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        ) : (
+          <p className="v3ib-pane-trail none">Nothing has been done to this one yet.</p>
+        )}
+        {/* THE ACTS, ANCHORED — the brief's own requirement, and the reason is the row:
+            a question's controls were spread along it, so the same act sat in a
+            different place on every row. Here they are always in the same place. */}
+        <div className="v3ib-pane-acts">
+          {cSelect(about, `pane-${about}`, "Assign to…", `Assign to… — ${q.question}`,
+            (owner) => void run(about, assignAction(about, owner)))}
+          {item && item.owner.kind !== "unowned" ? (
+            <button type="button" className="v3ib-btn ghost sm" disabled={busy === about}
+              aria-label={spoken(`Unassign: ${q.question}`)}
+              onClick={() => void run(about, { kind: "unassign", about, reason: "operator", by, at: nowISO() })}>unassign</button>
+          ) : null}
+          {!src ? (
+            <button type="button" className="v3ib-btn ghost sm" disabled={busy === about}
+              aria-label={spoken(`This field should not exist: ${q.question}`)}
+              title="No source on record — record that the field itself is out of scope"
+              onClick={() => void run(about, {
+                kind: "decide-fate", about, slot: slotOf(about), decision: "out-of-scope",
+                reason: "no source on record — the field itself is not evidenced",
+                by, at: nowISO(),
+              })}>this field shouldn’t exist</button>
+          ) : null}
+        </div>
+      </aside>
+    );
+  };
+
   return (
-    <div className="v3ib" aria-label="Operator inbox">
+    <div ref={boardRef} tabIndex={-1} className={`v3ib${selected ? " has-pane" : ""}`} aria-label="Operator inbox"
+      /* KEYBOARD TRIAGE. ↑/↓ walk the question rows that are on screen, Escape closes
+         the pane. Deliberately NOT j/k: this board is sections of cards rather than a
+         flat list, the arrows already mean "move" everywhere else in it, and a second
+         keymap for the same motion is the kind of thing that reads as a power feature
+         and behaves as a trap. */
+      onKeyDown={(e) => {
+        if (e.key === "Escape" && selected) { setSelected(null); return; }
+        if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+        if ((e.target as HTMLElement).closest("input, textarea, select")) return;
+        const rows = [...(e.currentTarget.querySelectorAll("li[data-about]") as NodeListOf<HTMLElement>)]
+          .map((el) => el.dataset.about!).filter(Boolean);
+        if (!rows.length) return;
+        e.preventDefault();
+        const at = selected ? rows.indexOf(selected) : -1;
+        const next = e.key === "ArrowDown"
+          ? rows[Math.min(at + 1, rows.length - 1)]
+          : rows[Math.max(at - 1, 0)];
+        const target = next ?? rows[0];
+        setSelected(target);
+        // Keep the moving selection on screen. Focus stays on the board, so this is
+        // the only thing that has to follow it.
+        e.currentTarget.querySelector<HTMLElement>(`li[data-about="${CSS.escape(target)}"]`)
+          ?.scrollIntoView({ block: "nearest" });
+      }}>
       {/* THE HEADER STRIP IS GONE (on request, 2026-08-13). It printed the same
           counts the sections print two inches below, plus a sentence describing what
           the Inbox is to someone already looking at it. Every stat was a jump link to
@@ -700,6 +829,8 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
           own badge — so nothing was lost except a second place for the same number to
           be right or wrong in. The zero state stays: an empty board still has to say
           which kind of empty it is. */}
+
+      {selected ? <DetailPane about={selected} onClose={() => setSelected(null)} /> : null}
 
       {/* 0a · ROLES NOBODY ANSWERS FOR — an operator decision, so it lives here.
               Every number is `soloByOwner`'s own count for that label: no person is
