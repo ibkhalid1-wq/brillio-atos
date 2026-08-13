@@ -162,6 +162,19 @@ export function lifecycleLoci(store: LedgerStore): Set<string> {
   return new Set(lifecycleEntities(store).filter((l) => l.confident).map((l) => l.about));
 }
 
+/**
+ * The EVIDENCE alone, for a row that already names the entity and its attribute in
+ * its own column. `lifecycleReason` repeats both — right for a tooltip, redundant
+ * beside a cell that just said "Opportunity · stage".
+ */
+export function lifecycleEvidence(l: LifecycleEntity): string {
+  const parts: string[] = [];
+  if (l.signals.includes("values")) parts.push(`${l.stages.length} values on the record`);
+  if (l.signals.includes("span")) parts.push("has a start and an end date");
+  if (l.signals.includes("motion")) parts.push("a workflow step moves it");
+  return parts.join(" · ") || "read from the field name alone";
+}
+
 /** Why Aura thinks so, for the operator who is entitled to ask. */
 export function lifecycleReason(l: LifecycleEntity): string {
   const parts: string[] = [];

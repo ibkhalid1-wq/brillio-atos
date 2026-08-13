@@ -123,6 +123,37 @@ describe("a SEND pins its loci — and an agreeing derivation is not a disagreem
     expect(pinAgreesWith(salesPin, "Sales Ops", ownerRoleLabelForArea)).toBe(true);
     expect(pinAgreesWith(salesPin, "Sales Ops")).toBe(false);            // without the mapping it would look like a move
   });
+
+  /**
+   * THE SHAPE LAILA NEW ACTUALLY HOLDS — the 8 "pin conflicts" that were open on the
+   * live programme all afternoon, and are not conflicts at all.
+   *
+   * Sixteen questions went out on links to two recipients, and eight of them read as
+   * disagreements because the compound label "Sales Operations SME" resolved to the
+   * broader Sales function instead of Sales Ops. The ownership-binding work fixed the
+   * resolution; the eight cleared themselves. Verified afterwards by running the live
+   * blob through this exact pipeline: 16 pins, 16 baselines, ZERO conflicts, and no
+   * baseline empty — so the zero is agreement, not absence.
+   *
+   * Pinned here in the two label pairs the programme really carries, because a
+   * regression would be invisible: it does not break anything, it just asks the
+   * operator to adjudicate eight routings that were never in dispute.
+   */
+  it("REGRESSION: the two live Laila pairs agree, and 'Sales Ops' is not swallowed by 'Sales'", () => {
+    const salesSme = send([PHASE], "Sales SME", "Sales Process Expert")[0];
+    expect(pinAgreesWith(salesSme, "Sales Leaders", ownerRoleLabelForArea),
+      "a Sales SME stopped matching the Sales owner label").toBe(true);
+
+    const opsSme = send([PHASE], "Sales Operations SME", "Sales Operations Process Expert")[0];
+    // MUTATION: reorder FUNCTIONS so /sales/ precedes /sales ?op/ → RED, and the eight
+    // conflicts come straight back.
+    expect(pinAgreesWith(opsSme, "Sales Ops", ownerRoleLabelForArea),
+      "Sales Operations was swallowed by the broader Sales match again").toBe(true);
+    // …and the two are still TOLD APART: an ops pin must not silently satisfy a Sales
+    // derivation, or the guard would pass by matching everything.
+    expect(pinAgreesWith(opsSme, "Sales Leaders", ownerRoleLabelForArea),
+      "an ops recipient answered for the Sales owner — the check matches too much").toBe(false);
+  });
 });
 
 describe("a pinned locus SURVIVES a re-derivation that would have moved it", () => {
