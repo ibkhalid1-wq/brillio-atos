@@ -30,7 +30,7 @@
  * a schema land in the same place under the same precedence.
  */
 import type { LedgerStore } from "./store";
-import { aboutOf, elementIdOf, isLive } from "./types";
+import { aboutOf, elementIdOf, isLive, contentId, type Claim, type Owner } from "./types";
 
 /** Attribute names that MIGHT carry a lifecycle. A hint, never a finding alone. */
 const STAGE_NAME = /\b(status|stage|state|phase|disposition|lifecycle|step)\b/i;
@@ -191,3 +191,64 @@ export const isLifecycleAbout = (loci: ReadonlySet<string>, about: string): bool
 
 /** The element a lifecycle locus is about — for surfaces that hold only the locus. */
 export const lifecycleElementId = (about: string): string => elementIdOf(about);
+
+/**
+ * THE STAGE QUESTION, BORN.
+ *
+ * Measured on Laila New: of seven entities Aura confidently reads as having a
+ * lifecycle, FIVE had no `#valueSet` claim at all — zero, not closed. The locus was
+ * never minted, because the ontology only opens a value-set slot for an attribute it
+ * typed as a picklist. So the finding was inert by construction: Discover could say
+ * "Contract has a lifecycle" and there was no question anywhere for anyone to answer,
+ * on anybody's card, in any bucket.
+ *
+ * "A locus is born unknown, never omitted" is this ledger's own rule, and this is the
+ * case it was written for. Nothing is asserted about the world here — an open
+ * `?unknown` is the admission that the stages are NOT known, which is precisely true.
+ *
+ * OWNERSHIP is inherited, never invented: whoever already owns another open question
+ * on the same entity owns this one. Where the record names nobody, the question is
+ * born UNOWNED and surfaces in the assign queue, which is the honest state and an
+ * operator action of its own.
+ *
+ * Overlay only. The frozen store is untouched; these claims are appended to what
+ * `buildReadModel` is handed, exactly as the curation proposals are.
+ */
+export function lifecycleQuestionOverlay(store: LedgerStore): Claim[] {
+  const existing = new Set(store.claims().map((c) => c.about));
+  const byId = new Map(store.elements().map((e) => [e.id, e] as const));
+
+  // Who already owns something open on this entity — the inheritance source.
+  const ownerByEntity = new Map<string, Owner>();
+  for (const c of store.claims()) {
+    if (!isLive(c) || c.status !== "open") continue;
+    if (c.ownerWhileOpen.kind === "unowned") continue;
+    const el = byId.get(elementIdOf(c.about));
+    const entityId = el?.kind === "attribute" ? el.of : el?.id;
+    if (entityId && !ownerByEntity.has(entityId)) ownerByEntity.set(entityId, c.ownerWhileOpen);
+  }
+
+  const out: Claim[] = [];
+  for (const lc of lifecycleEntities(store)) {
+    if (!lc.confident || existing.has(lc.about)) continue;
+    out.push({
+      id: contentId("cl", lc.about, "as-is", LIFECYCLE_SOURCE, JSON.stringify({ kind: "unknown" })),
+      about: lc.about,
+      value: { kind: "unknown" },
+      world: "as-is",
+      layer: "domain",
+      source: LIFECYCLE_SOURCE,
+      status: "open",
+      ownerWhileOpen: ownerByEntity.get(lc.entityId) ?? { kind: "unowned" },
+      createdAt: LIFECYCLE_BORN_AT,
+    });
+  }
+  return out;
+}
+
+/** `generated` — the same band a migrated ontology question carries. It is a question
+ *  Aura opened, not a claim it made, and it loses to every human answer. */
+const LIFECYCLE_SOURCE = "generated" as const;
+/** Fixed, because a claim id is content-addressed: a wall-clock stamp would mint a new
+ *  id on every render and the same question would look like a fresh one each time. */
+const LIFECYCLE_BORN_AT = "2026-08-12T00:00:00.000Z";

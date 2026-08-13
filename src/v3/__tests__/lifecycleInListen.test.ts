@@ -13,7 +13,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { lifecycleEntities, lifecycleLoci, lifecycleReason } from "@/v3/lib/ledger/lifecycle";
+import { lifecycleEntities, lifecycleLoci, lifecycleReason, lifecycleQuestionOverlay } from "@/v3/lib/ledger/lifecycle";
 import { createLedgerStore } from "@/v3/lib/ledger/store";
 import { aboutOf } from "@/v3/lib/ledger/types";
 
@@ -208,5 +208,80 @@ describe("a lifecycle's stages are a person's question", () => {
     expect(render, "the question dropped the field name").toContain("${name} — what stages");
     expect(render, "the schema question must survive for everything that is NOT a lifecycle")
       .toContain("What values can ${name} take?");
+  });
+});
+
+describe("the stage question exists at all", () => {
+  /**
+   * The defect behind "what is the call to action here": five of Laila New's seven
+   * confident lifecycles had ZERO claims on their `#valueSet` locus — not closed,
+   * never born. The ontology only opens a value-set slot for an attribute it typed
+   * as a picklist, so a lifecycle it found any other way produced a finding nobody
+   * could act on: no card, no bucket, no question anywhere.
+   */
+  const claimsFor = (store: ReturnType<typeof createLedgerStore>, about: string) =>
+    lifecycleQuestionOverlay(store).filter((c) => c.about === about);
+
+  it("is born when the ontology never opened it", () => {
+    const { store, ids } = storeWith({
+      entity: "Claim", attributes: ["status", "opened date", "closed date"],
+    });
+    const about = aboutOf(ids["status"], "valueSet");
+    expect(store.claims().filter((c) => c.about === about), "the fixture already has one — nothing to prove").toHaveLength(0);
+    // MUTATION: return [] from lifecycleQuestionOverlay → RED, and the finding is
+    // inert again.
+    const born = claimsFor(store, about);
+    expect(born).toHaveLength(1);
+    expect(born[0].status).toBe("open");
+    expect(born[0].value, "a question must not assert anything about the world").toEqual({ kind: "unknown" });
+  });
+
+  it("is NOT born twice when the ontology already opened it", () => {
+    const { store, ids } = storeWith({
+      entity: "Claim",
+      attributes: ["status", "opened date", "closed date"],
+      values: { attribute: "status", text: "Open; Closed" },
+    });
+    // MUTATION: drop the `existing.has(lc.about)` guard → 1, and the locus carries
+    // two claims where the ledger allows one question.
+    expect(claimsFor(store, aboutOf(ids["status"], "valueSet"))).toHaveLength(0);
+  });
+
+  it("is not born for a one-signal guess", () => {
+    const { store, ids } = storeWith({ entity: "Ticket", attributes: ["stage"] });
+    expect(claimsFor(store, aboutOf(ids["stage"], "valueSet"))).toHaveLength(0);
+  });
+
+  it("inherits the owner the entity's other questions already have", () => {
+    // Ownership is inherited, never invented — the whole point of the owner-binding
+    // work. A question minted with a guessed owner would put it on a stranger's link.
+    const { store, ids } = storeWith({
+      entity: "Claim", attributes: ["status", "opened date", "closed date", "reserve amount"],
+    });
+    store.assert({
+      about: aboutOf(ids["reserve amount"], "dataType"), value: { kind: "unknown" },
+      world: "as-is", layer: "domain", source: "generated",
+      ownerWhileOpen: { kind: "role", role: "Claims Operations" },
+    });
+    const born = claimsFor(store, aboutOf(ids["status"], "valueSet"));
+    expect(born[0].ownerWhileOpen).toEqual({ kind: "role", role: "Claims Operations" });
+  });
+
+  it("is born UNOWNED when the record names nobody, rather than guessing", () => {
+    const { store, ids } = storeWith({
+      entity: "Claim", attributes: ["status", "opened date", "closed date"],
+    });
+    expect(claimsFor(store, aboutOf(ids["status"], "valueSet"))[0].ownerWhileOpen).toEqual({ kind: "unowned" });
+  });
+
+  it("keeps the same id across renders, so it is one question and not a new one each time", () => {
+    // Content-addressed: a wall-clock stamp would mint a fresh id every render, and
+    // the same question would read as newly born on every keystroke.
+    const { store, ids } = storeWith({
+      entity: "Claim", attributes: ["status", "opened date", "closed date"],
+    });
+    const about = aboutOf(ids["status"], "valueSet");
+    expect(claimsFor(store, about)[0].id).toBe(claimsFor(store, about)[0].id);
+    expect(lifecycleQuestionOverlay(store)[0].id).toBe(lifecycleQuestionOverlay(store)[0].id);
   });
 });

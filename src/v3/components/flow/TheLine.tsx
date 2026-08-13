@@ -1050,6 +1050,15 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
   }, [ledger.queue.items]);
   const hasOpenStageQuestion = useCallback((about: string) =>
     ledger.queue.items.some((i) => i.about === about), [ledger.queue.items]);
+  /**
+   * ANSWERED IS NOT MISSING. Opportunity.stage read "no stage question on the record"
+   * while the ledger held a live claim on it — the uploaded schema closed it with its
+   * picklist. That is a real answer and the row must say so, not report a gap. It is
+   * still worth a line: a dictionary gives the VALUES, and a lifecycle needs their
+   * order, which is why "not by a person" is the part that matters.
+   */
+  const stageQuestionAnswered = useCallback((about: string) =>
+    ledger.store.liveClaimsAbout(about).length > 0, [ledger.store]);
   const maybeLifecycles = useMemo(() => lifecycles.filter((l) => !l.confident), [lifecycles]);
   const readAttachedDictionary = async (files: File[]) => {
     // SEQUENTIALLY, into one running CSV. A system's dictionary arrives as several
@@ -1311,9 +1320,9 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                 {shownLifecycles.length === 1 ? "has" : "have"} a lifecycle
               </span>
               <span className="v3ln-lifecycle-m">
-                A thing the business moves through stages. Each one&rsquo;s stage question is now on
-                its owner&rsquo;s card below — it goes out on their link like any other question,
-                because the order of the stages is theirs to state and no dictionary carries it.
+                A thing the business moves through stages. Each one&rsquo;s stage question goes out on
+                its owner&rsquo;s link like any other — the ORDER of the stages is theirs to state, and
+                no dictionary carries it. A row with no owner yet is waiting on one, in the Inbox.
               </span>
               {shownLifecycles.map((lc) => (
                 <div key={lc.about} className="v3ln-lifecycle-row">
@@ -1354,7 +1363,9 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                         ? <>on {ownerOfLocus(lc.about)}&rsquo;s list</>
                         : hasOpenStageQuestion(lc.about)
                           ? <>needs an owner</>
-                          : <>no stage question on the record</>}
+                          : stageQuestionAnswered(lc.about)
+                            ? <>answered already — not by a person</>
+                            : <>no stage question on the record</>}
                     </span>
                   )}
                 </div>
