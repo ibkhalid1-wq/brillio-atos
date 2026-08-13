@@ -99,3 +99,11 @@ They were put back. `--mv` is already the token: it is declared once per movemen
 row, and the hex is its definition, which has to live somewhere. Naming it a second
 time bought a cleaner grep and cost a working accessibility guard. A guard that
 works beats a grep that passes.
+
+## Deferred — the one-signal lifecycle readings
+
+The lifecycle strip left Discover on 2026-08-13. Everything it stated is on the
+person cards now EXCEPT the readings with a single signal behind them: they have no
+question anywhere, so they are currently invisible. That is a miss. It belongs on the
+Record — the surface for what was found and when — and it is recorded here rather
+than dropped quietly.

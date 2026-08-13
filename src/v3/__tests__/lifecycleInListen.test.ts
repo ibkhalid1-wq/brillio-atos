@@ -147,13 +147,13 @@ describe("the confirmation writes through the path a schema writes through", () 
     expect(inbox).toContain("entity,field,values");
     expect(inbox, "a bespoke write path would sit outside the ledger's precedence")
       .toContain("onDictionary(csv, null)");
-    // MUTATION: put the write back on Discover → RED. Discover states the finding
-    // and offers the route; it does not carry the move.
+    // MUTATION: put the write back on Discover → RED. Discover does not carry the
+    // move — and since 2026-08-13 it does not carry the finding either: once stage
+    // questions routed to their owners, the strip stating them only pointed at the
+    // person cards below it.
     const discover = read("TheLine.tsx");
     expect(discover, "an operator write is back on Discover")
       .not.toContain("commits.commitDictionary(csv, null)");
-    expect(discover, "the finding must still be stated, and the act still reachable")
-      .toContain("confirm in the Inbox");
   });
 
   it("Experience Design no longer authors workflow machines", () => {

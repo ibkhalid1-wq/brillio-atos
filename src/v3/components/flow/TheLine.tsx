@@ -13,7 +13,7 @@
  * One write path, one view: nothing renders a second copy of these numbers, so
  * there is nothing left for a second surface to disagree with.
  */
-import { Fragment, Suspense, lazy, useEffect, useMemo, useState, type ComponentProps, useRef, useCallback } from "react";
+import { Fragment, Suspense, lazy, useEffect, useMemo, useState, type ComponentProps, useRef } from "react";
 import type { ProgramSummary } from "@/new/types";
 import { buildLineModel, LINE_GLYPHS, type LineBand, type LineStation } from "@/v3/lib/lineModel";
 import {
@@ -47,7 +47,6 @@ import { pinsForSend } from "@/v3/lib/ledger/operatorActions";
 import { HeardReadout, ProvisionalMark, ClaimStatus, SourceTag } from "@/v3/components/flow/studio/ledgerPrimitives";
 import DesignLoopZones from "@/v3/components/flow/DesignLoopZones";
 import { ownerLabelsForCast } from "@/v3/lib/ledger/ownerBinding";
-import { lifecycleEntities, lifecycleReason, lifecycleEvidence } from "@/v3/lib/ledger/lifecycle";
 import { dictionaryCoverage, isSpreadsheetName, mergeDictionaryCsv, parseDictionaryCsv, readDictionaryWorkbook } from "@/v3/lib/ledger/dictionary";
 import { currentDesignRound } from "@/v3/components/flow/flowDesignRound";
 import { renderQuestion } from "@/v3/lib/ledger/renderQuestion";
@@ -1046,25 +1045,7 @@ export default function TheLine({ program, onOpenInbox, onSaveInputs, onRenamePe
     inScope: number; entities: string[];
   } | null>(null);
   /** Read, never written from here — one definition, in lifecycle.ts. */
-  const lifecycles = useMemo(() => lifecycleEntities(ledger.store), [ledger.store]);
-  const shownLifecycles = useMemo(() => lifecycles.filter((l) => l.confident), [lifecycles]);
   /** Who the stage question is now ON — read from the queue, never re-derived here. */
-  const ownerOfLocus = useCallback((about: string) => {
-    const it = ledger.queue.items.find((i) => i.about === about);
-    return it && it.owner.kind === "role" ? it.ownerLabel : "";
-  }, [ledger.queue.items]);
-  const hasOpenStageQuestion = useCallback((about: string) =>
-    ledger.queue.items.some((i) => i.about === about), [ledger.queue.items]);
-  /**
-   * ANSWERED IS NOT MISSING. Opportunity.stage read "no stage question on the record"
-   * while the ledger held a live claim on it — the uploaded schema closed it with its
-   * picklist. That is a real answer and the row must say so, not report a gap. It is
-   * still worth a line: a dictionary gives the VALUES, and a lifecycle needs their
-   * order, which is why "not by a person" is the part that matters.
-   */
-  const stageQuestionAnswered = useCallback((about: string) =>
-    ledger.store.liveClaimsAbout(about).length > 0, [ledger.store]);
-  const maybeLifecycles = useMemo(() => lifecycles.filter((l) => !l.confident), [lifecycles]);
   const readAttachedDictionary = async (files: File[]) => {
     // SEQUENTIALLY, into one running CSV. A system's dictionary arrives as several
     // per-object workbooks, so the whole selection is one reading — and merging
@@ -1308,88 +1289,20 @@ export default function TheLine({ program, onOpenInbox, onSaveInputs, onRenamePe
               the dictionary ask — is the Inbox's job. One "Inbox", one meaning. */}
           {/* Discover as an engagement dashboard: who needs attention and why, sorted by
               state. Ageing on in-flight is operator-tracked until the link is live. */}
-          {/* ENTITY LIFECYCLES ARE CONFIRMED IN LISTEN, by the people who live the
-              process — not exported from a schema and not drawn by hand in a design
-              studio later. Aura reads them off what the ledger already holds (see
-              lifecycle.ts for the four signals and why a name alone is not enough),
-              and this states them for confirmation.
+          {/* THE LIFECYCLE STRIP IS GONE FROM DISCOVER (2026-08-13).
+              It was built when a lifecycle's stage question reached nobody — the
+              strip WAS the finding's only appearance. Since those questions began
+              routing to their owners, every confident row said the same thing: "on
+              Sales Leaders's list", "on Legal's list" — pointing at the person cards
+              directly below it. Discover is organised by PERSON; a block organised by
+              ENTITY, restating what those cards already carry, is a second axis over
+              the same facts.
 
-              A confirmed stage list is written as a DICTIONARY ROW through
-              `commitDictionary` — the exact path an uploaded schema takes — so a
-              lifecycle a person confirmed and one a schema stated land in the same
-              place under the same precedence. No new write mechanism. */}
-          {shownLifecycles.length ? (
-            <div className="v3ln-lifecycle" role="note" aria-label="Entity lifecycles to confirm">
-              <span className="v3ln-lifecycle-l">
-                <b>{shownLifecycles.length}</b> entit{shownLifecycles.length === 1 ? "y" : "ies"}{" "}
-                {shownLifecycles.length === 1 ? "has" : "have"} a lifecycle
-              </span>
-              <span className="v3ln-lifecycle-m">
-                A thing the business moves through stages. Each one&rsquo;s stage question goes out on
-                its owner&rsquo;s link like any other — the ORDER of the stages is theirs to state, and
-                no dictionary carries it. A row with no owner yet is waiting on one, in the Inbox.
-              </span>
-              {shownLifecycles.map((lc) => (
-                <div key={lc.about} className="v3ln-lifecycle-row">
-                  <span className="v3ln-lifecycle-e">
-                    <b>{lc.entity}</b> <em className="v3ln-lifecycle-maybe">· {lc.attribute}</em>
-                  </span>
-                  <span className="v3ln-lifecycle-why" title={lifecycleReason(lc)}>{lifecycleEvidence(lc)}</span>
-                  {lc.stages.length ? (
-                    <span className="v3ln-lifecycle-stages">
-                      {lc.stages.map((stage, i) => (
-                        <span key={stage} className="v3ln-lifecycle-stage">
-                          {i ? <span aria-hidden="true">→ </span> : null}{stage}
-                        </span>
-                      ))}
-                      {/* THE CONFIRM MOVED TO THE INBOX. Confirming a stage list is an
-                          operator WRITE — it records the stages as a dictionary row, at
-                          the same strength an uploaded schema carries — and Discover
-                          does not carry operator moves. The finding is still stated
-                          here, in full, with the stages it found; the act is one route
-                          away. (Boundary: Discover reads, Inbox acts.) */}
-                      {onOpenInbox ? (
-                        <button type="button" className="v3ln-handoff" onClick={onOpenInbox}
-                          aria-label={`Open the Inbox to confirm the stages of ${lc.entity}`}>
-                          confirm in the Inbox<span aria-hidden="true"> →</span>
-                        </button>
-                      ) : null}
-                    </span>
-                  ) : (
-                    <span className="v3ln-lifecycle-stages none">
-                      {/* THREE DIFFERENT TRUTHS, and they were one sentence.
-                          Measured on Laila New: of seven confident lifecycles, only
-                          TWO have an open stage question in the ledger at all. Saying
-                          "on nobody's list" for the other five implies a question is
-                          waiting for an owner when none exists — nothing will ever be
-                          asked about them, which is the more useful thing to know and
-                          the one this row now says. */}
-                      {ownerOfLocus(lc.about)
-                        ? <>on {ownerOfLocus(lc.about)}&rsquo;s list</>
-                        : hasOpenStageQuestion(lc.about)
-                          ? <>needs an owner</>
-                          : stageQuestionAnswered(lc.about)
-                            ? <>answered already — not by a person</>
-                            : <>no stage question on the record</>}
-                    </span>
-                  )}
-                </div>
-              ))}
-              {/* A MISS STAYS VISIBLE, BUT A SUGGESTION IS NOT A ROW. Thirteen rows
-                  went out in the first cut, seven of them "reads as a lifecycle from
-                  its name alone" — the same sentence seven times, for readings with
-                  one signal behind them. They are counted here instead: enough to
-                  know they exist, not enough to be mistaken for findings. */}
-              {maybeLifecycles.length ? (
-                <span className="v3ln-lifecycle-more">
-                  <b>{maybeLifecycles.length}</b> more read as a lifecycle from the field name alone
-                  {" "}({maybeLifecycles.slice(0, 4).map((l) => l.entity).join(", ")}
-                  {maybeLifecycles.length > 4 ? ` +${maybeLifecycles.length - 4}` : ""}) — one signal each,
-                  so Aura is not calling them lifecycles until something else agrees.
-                </span>
-              ) : null}
-            </div>
-          ) : null}
+              ONE THING IS NOT ON A CARD: the readings with a single signal behind
+              them, which have no question anywhere and so are now invisible. That is
+              a miss. It belongs on the Record — the surface for what was found and
+              when — rather than on the one for asking people things. Flagged in the
+              worklog, not silently dropped. */}
           <div className="v3ln-engbar" role="note" aria-label="Engagement — who needs attention">
             <span className="v3ln-engbar-l">Who to engage</span>
             <span className="v3ln-engpill is-ready"><b>{engSummary.ready}</b> ready</span>

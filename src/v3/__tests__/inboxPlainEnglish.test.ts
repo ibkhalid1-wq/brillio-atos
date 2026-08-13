@@ -335,7 +335,9 @@ describe("Discover reads and the Inbox acts — one system, one boundary", () =>
 
   it("each removed act is stated on Discover and routed to the Inbox", () => {
     // A boundary enforced by deletion alone would just lose the operator the act.
-    expect(line).toContain("confirm in the Inbox");
+    // The lifecycle handoff went with the strip that carried it (2026-08-13): once
+    // stage questions routed to their owners, every row on that strip pointed at the
+    // person cards below it, so the strip was a second axis over the same facts.
     expect(line).toContain("apply it in the Inbox");
     expect(line, "the route needs somewhere to go").toContain("onOpenInbox");
   });
