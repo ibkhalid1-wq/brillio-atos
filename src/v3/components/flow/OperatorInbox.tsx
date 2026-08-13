@@ -306,6 +306,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
   const [showOrphans, setShowOrphans] = useState(false);
   const [showStages, setShowStages] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
+  const [note, setNote] = useState<Record<string, string>>({});
   /** The one element the arrow keys can rely on: the board outlives every re-render. */
   const boardRef = useRef<HTMLDivElement>(null);
   /** Read through the ONE definition — lifecycle.ts — never re-derived here. */
@@ -465,8 +466,29 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
   // pair is needed downstream (planned or not), so the section takes the set, not the
   // actions: a row shows an intent was recorded, never a time it does not have.
 
-  const run = async (key: string, action: OperatorAction | OperatorAction[]) => {
-    setBusy(key); try { await onCommit(action); } finally { setBusy(null); }
+  /**
+   * EVERY WRITE SAYS SO.
+   *
+   * Reported as "not able to reassign, not saving" — and it WAS saving. Picking an
+   * owner committed it and the record kept it across a reload. What the operator saw
+   * was a select that snapped back to "Reassign to…" (correct: it is a "reassign TO"
+   * control, and the pick is spent) beside an owner line that changed one small word.
+   * A write with no acknowledgement reads as a write that did not happen, and the
+   * honest reading of "nothing happened" is that nothing SAID anything.
+   *
+   * `note` is that acknowledgement: set on success, keyed by the same key the busy
+   * flag uses, cleared after a few seconds. It reports what the record now holds — it
+   * is never set optimistically, so it cannot claim a write that failed.
+   */
+  const run = async (key: string, action: OperatorAction | OperatorAction[], said?: string) => {
+    setBusy(key);
+    try {
+      await onCommit(action);
+      if (said) {
+        setNote((n) => ({ ...n, [key]: said }));
+        window.setTimeout(() => setNote((n) => { const next = { ...n }; delete next[key]; return next; }), 5000);
+      }
+    } finally { setBusy(null); }
   };
   const pickedOwner = (key: string) => (sel[key] === OTHER ? other[key] : sel[key])?.trim();
   const isRoleOwner = (label: string) => { const c = candidates.find((x) => x.label === label); return c ? c.label === c.role : true; };
@@ -693,11 +715,13 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
             ) : null}
             {assignable ? (
               <span className="v3ib-qrow-assign">
+                {note[about] ? <span className="v3ib-said" role="status"><span aria-hidden="true">✓ </span>{note[about]}</span> : null}
                 {cSelect(about, `q-${about}`, "Assign to…", `Assign to… — ${q.question}`)}
                 <button type="button" className="v3ib-btn ghost sm"
                   disabled={busy === about || !pickedOwner(about)}
                   aria-label={spoken(`Assign to ${pickedOwner(about) || "the chosen person"}: ${q.question}`)}
-                  onClick={() => void run(about, assignAction(about, pickedOwner(about)!))}>
+                  onClick={() => void run(about, assignAction(about, pickedOwner(about)!),
+                    `assigned to ${displayPersonLabel(pickedOwner(about)!)}`)}>
                   {busy === about ? "Assigning…" : "assign"}
                 </button>
               </span>
@@ -772,9 +796,11 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
         {/* THE ACTS, ANCHORED — the brief's own requirement, and the reason is the row:
             a question's controls were spread along it, so the same act sat in a
             different place on every row. Here they are always in the same place. */}
+        {note[about] ? <p className="v3ib-said" role="status"><span aria-hidden="true">✓ </span>{note[about]}</p> : null}
         <div className="v3ib-pane-acts">
           {cSelect(about, `pane-${about}`, "Assign to…", `Assign to… — ${q.question}`,
-            (owner) => void run(about, assignAction(about, owner)))}
+            (owner) => void run(about, assignAction(about, owner),
+              `reassigned to ${displayPersonLabel(owner)}`))}
           {item && item.owner.kind !== "unowned" ? (
             <button type="button" className="v3ib-btn ghost sm" disabled={busy === about}
               aria-label={spoken(`Unassign: ${q.question}`)}
@@ -1391,10 +1417,15 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                         is two steps for one decision, and the disabled step is the one
                         that fails silently. Choosing a name now commits it; the choice
                         is as reversible as it ever was. */}
+                    {/* WHAT JUST HAPPENED, on the row it happened to. */}
+                    {note[a.about] ? (
+                      <span className="v3ib-said" role="status"><span aria-hidden="true">✓ </span>{note[a.about]}</span>
+                    ) : null}
                     <span className="v3ib-reassign">
                       {cSelect(a.about, `re-${a.about}`, "Reassign to…", `Reassign to… — ${Q(a.about).question}`,
-                        (owner) => void run(a.about, assignAction(a.about, owner)))}
-                      <button type="button" className="v3ib-btn ghost sm" disabled={busy === a.about} aria-label={spoken(`Unassign ${a.owner.label} from: ${Q(a.about).question}`)} onClick={() => void run(a.about, { kind: "unassign", about: a.about, reason: "operator", by, at: nowISO() })}>unassign</button>
+                        (owner) => void run(a.about, assignAction(a.about, owner),
+                          `reassigned to ${displayPersonLabel(owner)}`))}
+                      <button type="button" className="v3ib-btn ghost sm" disabled={busy === a.about} aria-label={spoken(`Unassign ${a.owner.label} from: ${Q(a.about).question}`)} onClick={() => void run(a.about, { kind: "unassign", about: a.about, reason: "operator", by, at: nowISO() }, "unassigned — back to the unowned queue")}>unassign</button>
                     </span>
                   </span>
                   {cap ? (
