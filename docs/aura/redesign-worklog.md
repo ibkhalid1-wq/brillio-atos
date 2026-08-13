@@ -158,3 +158,40 @@ and the pinned row names BOTH sides of the disagreement.
 when the lifecycle strip left Discover: no question exists for them, so nothing on the
 board accounted for them. Six on Laila New (Contact, Go-to-Market Initiative, Invoice,
 Lead, Order, Talent Pool), now stated on the Record as read-only traceability.
+
+## Two controls that lied about their own state (2026-08-13)
+
+**"do not clear after reassigned."** Picking a name in an in-flight row commits the
+reassignment and the owner line updates — but `sel[key]` kept the chosen name, so
+once the ✓ timed out the row read `→ owner: Sales SME` beside a select captioned
+"Reassign to…" holding "Sales SME". The same fact twice, the second time from a
+control that looks like it is holding an **uncommitted** pick.
+
+The comment above `run` had claimed for weeks that the select "snapped back to
+Reassign to… (correct: the pick is spent)". It never did. That is the second time
+this session a comment described an intent the code did not implement, and both
+times no guard existed because the comment read like one.
+
+The pick is now cleared on success and **kept on failure** — it is the operator's
+unsaved work. Which exposed the other half: a write that threw escaped as an
+unhandled rejection and the row said nothing at all. The ✓ was hard-coded into three
+hand-written copies of the acknowledgement markup, so a failed write could only ever
+have been announced with a tick over nothing. One `say` writes it, one `Said` draws
+it, and a failure gets ⚠, the danger ink, and 12s instead of 5 — a confirmation you
+miss costs nothing, a failure you miss is a decision you believe you made.
+
+**"currently regenerate is hidden under the menu."** The header button was gated on
+`!present || stale || regenerating`; the ⋯ menu carried the same verb gated on
+`!stale`. So the one case where an operator has to go looking for Regenerate — the
+document is fine by the fingerprint, but the prompt changed or the generation was
+poor — was the one case it was hidden in. The staleness flag tracks the inputs
+*fingerprint*; every reason to rebuild that a hash cannot see was unreachable from
+the surface. Regenerate is now always on the header when the document can be
+regenerated, and the menu no longer carries a second copy. The stale band's "↻
+Rebuild in full" stays: it is the one that explains what a full rebuild costs.
+
+Guards: `spentPickClears.test.ts` (DOM, both the saved and the failed path) and
+`regenerateIsOnTheSurface.test.ts`. Both mutation-checked. Verified on the running
+board: reassigned row 1 of Owned & in-flight to Sales SME, saw the owner line move,
+the select empty and the ✓ land, then reassigned it back — the ledger is append-only,
+so the end state is the owner it started with.

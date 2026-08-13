@@ -541,11 +541,19 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
             <h2>{artifact.title}</h2>
           </div>
           <div className="v3fs-docview-cta">
-            {/* Regenerate shows ONLY when the document is stale — new evidence
-                landed, or an upstream artifact was regenerated (both flip the
-                inputs fingerprint). A current document offers no button; an
-                ungenerated one offers Generate. */}
-            {onRegenerate && (!artifact.present || artifact.stale || regenerating) ? (
+            {/* REGENERATE IS ON THE SURFACE, not under the ⋯.
+                It used to show only when the document was stale, on the reasoning
+                that a current document needs no rebuild. Two things are wrong with
+                that. The staleness flag tracks the inputs FINGERPRINT, so every
+                reason to rebuild that the fingerprint cannot see — a prompt change,
+                a bad generation, an edit upstream of the hash — left the operator
+                with no visible way to act on it. And the fallback WAS there: the
+                same verb, spelled the same way, inside the ⋯ overflow. Reported as
+                "currently regenerate is hidden under the menu". A primary action for
+                a generated document belongs in the header at all times; it now
+                renders whenever the document can be regenerated, and the menu no
+                longer carries a second copy of it. */}
+            {onRegenerate ? (
               <button type="button" className="v3fs-btn v3fs-btn-regen" disabled={!!regenerating}
                 onClick={() => { guardedRegenerate(); if (!embedded) onClose(); }}
                 title={artifact.present ? "Resynthesize this document from the latest evidence" : "Generate this document from the evidence on record"}>
@@ -560,11 +568,8 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
                   <>
                     <div className="v3fs-dv-menu-backdrop" onClick={() => setMenuOpen(false)} aria-hidden="true" />
                     <div className="v3fs-dv-menu" role="menu">
-                      {onRegenerate && !artifact.stale ? (
-                        <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); guardedRegenerate(); onClose(); }}>
-                          Regenerate
-                        </button>
-                      ) : null}
+                      {/* Regenerate is in the header now, always — see the note
+                          there. The menu keeps only what has nowhere else to go. */}
                       <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); setPrinting(true); }}>
                         Export · print or PDF
                       </button>

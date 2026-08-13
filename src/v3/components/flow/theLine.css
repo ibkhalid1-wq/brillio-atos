@@ -902,6 +902,10 @@
    board full of things that matter more. */
 .v3ib-said{display:inline-flex;align-items:center;font-size:var(--aura-t-body);
   font-weight:600;color:var(--v3-accent-2);margin:0}
+/* The same slot, when the write did NOT land. It reads danger rather than accent
+   and stays on screen more than twice as long: a failure the operator misses is a
+   decision they believe they made. */
+.v3ib-said.bad{color:var(--v3-red)}
 
 /* ════ THE DETAIL PANE ═════════════════════════════════════════════════════════
    Two columns when a question is selected, one when nothing is. The pane is

@@ -530,10 +530,16 @@ describe("the detail pane", () => {
 describe("a write that says nothing reads as a write that did not happen", () => {
   /**
    * "not able to reassign. not saving." It WAS saving — picking an owner committed it
-   * and the record kept it across a full reload. What the operator saw was a select
-   * snapping back to "Reassign to…" (correct: it is a reassign-TO control and the pick
-   * is spent) beside an owner line that changed one small word. Nothing said anything,
-   * so nothing appeared to happen.
+   * and the record kept it across a full reload. What the operator saw was an owner
+   * line that changed one small word. Nothing said anything, so nothing appeared to
+   * happen.
+   *
+   * The acknowledgement now lives in TWO named places — `say` writes it, `Said` draws
+   * it — because three sites had each grown their own copy with the ✓ baked into the
+   * markup, which is why a FAILED write could only ever have been announced with a
+   * tick over nothing. What the write does to the operator's pick, and what a failure
+   * says, are proven on the DOM in `spentPickClears.test.ts`; these stay at the source
+   * level because they are about ORDER and DURATION, which the DOM cannot show.
    */
   const inbox = SRC("OperatorInbox.tsx");
 
@@ -541,14 +547,23 @@ describe("a write that says nothing reads as a write that did not happen", () =>
     // MUTATION: set the note before `await onCommit` → it would claim a write that
     // failed, which is worse than saying nothing at all.
     const at = inbox.indexOf("const run = async (key: string");
-    const body = inbox.slice(at, at + 900);
+    const body = inbox.slice(at, at + 1200);
     expect(body).toContain("await onCommit(action);");
     expect(body.indexOf("await onCommit(action);"), "the note is set before the write lands")
-      .toBeLessThan(body.indexOf("setNote((n) => ({ ...n, [key]: said }))"));
+      .toBeLessThan(body.indexOf("say(key, said, true"));
   });
 
   it("clears itself, so the board does not fill with old confirmations", () => {
-    expect(inbox).toContain("window.setTimeout(() => setNote((n) => { const next = { ...n }; delete next[key]; return next; }), 5000)");
+    expect(inbox).toContain("window.setTimeout(() => setNote((n) => { const next = { ...n }; delete next[key]; return next; }), forMs)");
+    expect(inbox, "the confirmation of a successful write outstays its welcome").toContain("say(key, said, true, 5000)");
+  });
+
+  it("leaves a failure on screen more than twice as long as a success", () => {
+    // A confirmation you miss costs nothing — the record shows what happened. A
+    // FAILURE you miss is a decision the operator believes they made.
+    const fail = inbox.match(/say\(key, "that did not save[^)]*?, false, (\d+)\)/);
+    expect(fail, "the failure path stopped announcing itself").not.toBeNull();
+    expect(Number(fail![1])).toBeGreaterThan(2 * 5000);
   });
 
   it("says what the record now holds, in the operator's words", () => {
@@ -557,7 +572,13 @@ describe("a write that says nothing reads as a write that did not happen", () =>
   });
 
   it("is announced, not just coloured", () => {
-    // A confirmation only a sighted user receives is not a confirmation.
-    expect(inbox).toMatch(/className="v3ib-said" role="status"/);
+    // A confirmation only a sighted user receives is not a confirmation. One
+    // component draws every one of them, so this is now a single assertion rather
+    // than a regex that had to match three hand-written copies.
+    const at = inbox.indexOf("const Said = ({ k, block }");
+    expect(at, "the acknowledgement component is gone").toBeGreaterThan(-1);
+    const body = inbox.slice(at, at + 700);
+    expect(body).toMatch(/className=\{cls\} role="status"/);
+    expect((body.match(/role="status"/g) ?? []).length, "one of the two forms is silent to a screen reader").toBe(2);
   });
 });
