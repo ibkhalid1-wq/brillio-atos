@@ -85,6 +85,54 @@ export function packAskKeys(pack: Record<string, unknown> | null | undefined): S
 /** Cap on the asks recorded per submission — the pack itself caps at 12 asks. */
 export const MAX_ANSWERED_KEYS = 24;
 
+/** Cap on a single per-locus answer. Generous for a paragraph, far below the
+ *  20k the whole free-text block allows — one answer to one question. */
+export const MAX_LOCUS_ANSWER_CHARS = 4_000;
+
+/** One stakeholder answer, bound to the locus it answers. */
+export interface LocusAnswer { about: string; answer: string }
+
+/**
+ * THE SECURITY BOUNDARY OF THE WRITE PATH.
+ *
+ * `flow-portal` is public and token-gated, and a per-locus answer is the first
+ * thing a respondent sends that can go on to CLOSE A CLAIM. So the locus is not
+ * taken on trust: it must be one the pack itself carries (`questionLoci`), or it
+ * is dropped. Without that, anyone holding one stakeholder's link could assert an
+ * answer against any locus in the programme.
+ *
+ * Everything else here is the same discipline the deferral and answered-key paths
+ * already use — cap the count, cap the length, drop the empties, keep the FIRST
+ * answer for a locus so a replayed submission cannot overwrite what was said.
+ *
+ * Lives in `_shared` on purpose: the edge enforces it and `npm test` covers it,
+ * so the rule has one definition rather than a client copy and an edge copy.
+ */
+export function sanitiseLocusAnswers(
+  claimed: unknown,
+  pack: Record<string, unknown> | null | undefined,
+): LocusAnswer[] {
+  const allowed = new Set<string>();
+  const p = isRecord(pack) ? pack : {};
+  for (const a of Array.isArray(p.questionLoci) ? p.questionLoci : []) {
+    const s = String(a).trim();
+    if (s) allowed.add(s);
+  }
+  const out: LocusAnswer[] = [];
+  const seen = new Set<string>();
+  for (const entry of Array.isArray(claimed) ? claimed : []) {
+    if (!isRecord(entry)) continue;
+    const about = String(entry.about ?? "").trim();
+    const answer = String(entry.answer ?? "").trim().slice(0, MAX_LOCUS_ANSWER_CHARS);
+    if (!about || !answer || seen.has(about)) continue;
+    if (!allowed.has(about)) continue;   // not on this pack — not theirs to answer
+    seen.add(about);
+    out.push({ about, answer });
+    if (out.length >= MAX_ANSWERED_KEYS) break;
+  }
+  return out;
+}
+
 /** Sanitise a client-claimed "I answered these" list against the pack's OWN asks.
  *  Nothing outside the pack survives — the same discipline the deferral path
  *  uses, so a respondent can never write an arbitrary string onto the record. */

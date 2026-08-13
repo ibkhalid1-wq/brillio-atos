@@ -29,7 +29,7 @@ import { pilotSliceFor, type PilotSlice } from "../_shared/prototypePilot.ts";
 // drift. A partial submit files the answers and leaves the link usable; only an
 // explicit "I'm done" (or an operator's `closedAt`) finishes it.
 import {
-  portalLinkState, acceptsSubmission, sanitiseAnsweredKeys,
+  portalLinkState, acceptsSubmission, sanitiseAnsweredKeys, sanitiseLocusAnswers,
 } from "../_shared/portalLinkState.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
@@ -1051,6 +1051,16 @@ Return ONLY JSON: {"topic":"design"|"other","answer":"..."}.`,
           // (nothing a respondent invents is stored), so a return visit can show
           // them as on-record instead of asking again.
           const answeredKeys = sanitiseAnsweredKeys(isRecord(body) ? body.answered : [], hit.pack);
+          // PER-LOCUS ANSWERS — the write path's transport. Each one is bound to the
+          // question it answers, so the operator's ingest can turn it into a claim
+          // attributed to this person instead of filing the whole reply as one block
+          // of prose that closes nothing. Validated against THIS pack's own loci (see
+          // sanitiseLocusAnswers): a public endpoint must never let a link-holder
+          // assert against a locus that was not sent to them.
+          //
+          // Still QUARANTINED, like everything else here. Nothing enters the record
+          // unreviewed; the operator promotes these on ingest.
+          const locusAnswers = sanitiseLocusAnswers(isRecord(body) ? body.locusAnswers : [], hit.pack);
           inbox.push({
             id: crypto.randomUUID(),
             kind: "interview",
@@ -1058,6 +1068,9 @@ Return ONLY JSON: {"topic":"design"|"other","answer":"..."}.`,
             role: String(hit.pack.role ?? ""),
             receivedAt: now,
             text: answers,
+            // Absent when the send carried none, so an older client's item keeps
+            // exactly the shape it always had.
+            ...(locusAnswers.length ? { locusAnswers } : {}),
             // THE VERDICT, when this send carried one. Only the `demo` branch
             // below used to store it, so a stakeholder approving a DESIGN ROUND
             // through their own link arrived with no verdict at all: the round

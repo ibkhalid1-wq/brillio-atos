@@ -292,3 +292,38 @@ That is not a rendering bug; it is the gated write path showing through. It is t
 strongest argument yet for what the section already became (a collapsed reading, out
 of the badge), and it is why the honest next move is the write path, not more polish
 on this list.
+
+## The stakeholder write path, finished (2026-08-13)
+
+The transport turned out to be mostly there. `FlowRespond` had collected answers
+**keyed by locus** all along — "the locus is the stable identity of an ask" — and then
+flattened them into one prose block at submit. The flattening was the whole defect: a
+reply not bound to the question it answers can never close it, which is why `heard`
+read 0 on every real programme and Owned & in-flight could only grow.
+
+Four links, each doing one thing:
+
+1. **Client** — `sendPayload` carries `locusAnswers` beside the prose. The prose still
+   goes: it is what the operator reads, and it holds the leftovers, the whys and the
+   "anything else". A DEFERRED locus is deliberately absent — "not me, ask X" is a
+   routing instruction, not an answer, and must not close anything.
+2. **Edge** — validated and quarantined. `sanitiseLocusAnswers` lives in `_shared`, so
+   the edge enforces it and `npm test` covers it: one definition, not two.
+3. **Ingest** — the operator's review promotes them to `listen._stakeholderAnswers`
+   with `via: portal:<itemId>`. Always the LISTEN bucket whatever movement the
+   transcript went to, because the ledger reads one field in one place.
+4. **Ledger** — already built and guarded the turn before.
+
+**The part that is security, not plumbing.** `flow-portal` is public and token-gated,
+and a per-locus answer is the first thing a respondent sends that goes on to CLOSE A
+CLAIM. So the locus is never taken on trust: it must be one the pack itself carries,
+or it is dropped. Without that check, anyone holding one stakeholder's link could
+assert against any locus in the programme. It is the first assertion in the transport
+guard and the first mutation checked.
+
+Also kept: the first answer per locus wins, so a replayed submission cannot overwrite
+what somebody said.
+
+**Not deployed.** The client sends a field today's deployed `flow-portal` ignores —
+additive, so nothing breaks in the meantime, and nothing works either until
+`npx supabase functions deploy flow-portal --no-verify-jwt`.

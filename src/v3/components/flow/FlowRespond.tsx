@@ -599,6 +599,19 @@ export default function FlowRespond({ token }: { token: string }) {
     answers: composed,
     final,
     answered: answeredAskKeys,
+    // THE WRITE PATH'S TRANSPORT. `locusAnswers` was already collected keyed by
+    // locus — the locus is the stable identity of an ask — and then flattened into
+    // `composed` for the operator to read as prose. Flattening was the whole
+    // problem: a reply that is not bound to the question it answers can never close
+    // it, which is why `heard` read 0 on every real programme. The prose block still
+    // goes (it is what the operator reads, and it carries the leftovers, the whys
+    // and the "anything else"); this rides beside it, bound.
+    //
+    // A deferred locus is deliberately absent: "not me — ask X" is a routing
+    // instruction, not an answer, and must not close anything.
+    locusAnswers: questionModel.rows
+      .filter((row) => !locusDeferrals[row.about] && (locusAnswers[row.about] ?? "").trim())
+      .map((row) => ({ about: row.about, answer: (locusAnswers[row.about] ?? "").trim() })),
     documents: Object.entries(attachments).flatMap(([key, list]) =>
       list.filter((doc) => doc.sourceKey).map((doc) => ({
         name: doc.name,
