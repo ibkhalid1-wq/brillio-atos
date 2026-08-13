@@ -16,7 +16,7 @@
 .v3ln-tabs button.on{background:var(--v3-accent-2);color:var(--v3-on-accent)}
 .v3ln-tabs button:focus-visible{outline:2px solid var(--v3-accent-2);outline-offset:-2px}
 .v3ln-tabs button{font-size:13px;font-weight:700}
-.v3ln-tabs button span{display:block;font-size:10px;font-weight:500;letter-spacing:.04em;opacity:.75;margin-top:1px}
+.v3ln-tabs button span{display:block;font-size:10px;font-weight:600;letter-spacing:.04em;opacity:.75;margin-top:1px}
 
 .v3ln-statbtn{font:inherit;text-align:left;background:none;border:0;padding:0;cursor:pointer}
 .v3ln-statbtn:hover .v3ln-sv{color:var(--v3-accent-2);text-decoration:underline;
@@ -25,16 +25,16 @@
 
 .v3ln-stats{display:flex;gap:26px;align-items:baseline;flex-wrap:wrap;padding:4px 2px 16px}
 .v3ln-sl{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--v3-text-muted);display:block;margin:0 0 3px}
-.v3ln-sv{font-size:14px;font-weight:700;color:var(--v3-text-primary)}
+.v3ln-sv{font-size:var(--aura-t-head);font-weight:700;color:var(--v3-text-primary)}
 .v3ln-sv.acc{color:var(--v3-accent-2)}
 .v3ln-sp,.v3ln-band-sp{flex:1}
-.v3ln-ro{font-size:10.5px;color:var(--v3-text-muted);border:1px dashed var(--fs-line);border-radius:4px;padding:3px 8px}
+.v3ln-ro{font-size:var(--aura-t-meta);color:var(--v3-text-muted);border:1px dashed var(--fs-line);border-radius:var(--aura-r-ctl);padding:3px 8px}
 
 .v3ln-band{position:relative;border:1px solid var(--fs-line);border-top:3px solid var(--mv);
   border-radius:10px;overflow:hidden;background:var(--fs-card);
   box-shadow:0 1px 2px rgba(23,21,31,.04),0 6px 18px -12px rgba(23,21,31,.20)}
 .v3ln-band-h{display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--fs-line);flex-wrap:wrap}
-.v3ln-band-n{font-weight:700;font-size:14px;color:var(--v3-text-primary)}
+.v3ln-band-n{font-weight:700;font-size:var(--aura-t-head);color:var(--v3-text-primary)}
 /* spine headers — the movements are the backbone of the board, so their signage
  * reads a register louder than everything inside the band */
 .v3ln-band-h.spine{padding:12px 16px;
@@ -112,7 +112,7 @@
 .v3ln-intake{display:flex;gap:10px;align-items:baseline;padding:8px 14px;border-bottom:1px solid var(--fs-line);
   font-size:11.5px;color:var(--v3-text-muted)}
 .v3ln-intake>span:first-child{font-size:10px;letter-spacing:.1em;text-transform:uppercase;flex:none}
-.v3ln-note{padding:7px 14px;border-top:1px dashed var(--fs-line);font-size:10.5px;line-height:1.5;color:var(--v3-text-muted)}
+.v3ln-note{padding:7px 14px;border-top:1px dashed var(--fs-line);font-size:var(--aura-t-meta);line-height:1.5;color:var(--v3-text-muted)}
 
 /* artifacts as tiles — a responsive card grid inside each movement, not a table */
 .v3ln-stns{display:grid;grid-template-columns:repeat(auto-fill,minmax(212px,1fr));
@@ -152,7 +152,7 @@
 .v3ln-rf.gen{border-color:var(--mv);color:var(--mv);
   background:color-mix(in srgb,var(--mv) 12%,transparent)}
 .v3ln-rf.gen.busy{opacity:.6}
-.v3ln-stn-sub{font-size:10.5px;color:var(--v3-text-muted);line-height:1.4}
+.v3ln-stn-sub{font-size:var(--aura-t-meta);color:var(--v3-text-muted);line-height:1.4}
 /* an artifact's own sections at a glance — visibility without opening it */
 .v3ln-stn-secs{display:flex;gap:5px;flex-wrap:wrap;margin-top:1px}
 .v3ln-stn-sec{font:600 9.5px/1.5 inherit;color:var(--v3-accent-2);
@@ -166,13 +166,13 @@
 
 /* many-area summary: one slim meter grouped by maturity + counts in words */
 .v3ln-seg-sum{display:flex;flex-direction:column;gap:5px}
-.v3ln-meter{display:flex;gap:1px;height:8px;border-radius:4px;overflow:hidden}
+.v3ln-meter{display:flex;gap:1px;height:8px;border-radius:var(--aura-r-ctl);overflow:hidden}
 .v3ln-mt{min-width:6px;background:var(--fs-line)}
 .v3ln-mt.m1{background:var(--ln-m1)}
 .v3ln-mt.m2{background:var(--ln-m2)}
 .v3ln-mt.m3{background:#2E93B5}
 .v3ln-mt.m4{background:var(--ln-m4)}
-.v3ln-seg-cap{font-size:10.5px;color:var(--v3-text-muted);line-height:1.4}
+.v3ln-seg-cap{font-size:var(--aura-t-meta);color:var(--v3-text-muted);line-height:1.4}
 
 .v3ln-seg{display:flex;gap:3px;align-items:center}
 .v3ln-sg{flex:1;height:15px;border-radius:3px;background:var(--fs-line);min-width:20px;
@@ -215,9 +215,9 @@
 .v3ln-rec-row:hover{background:color-mix(in srgb,var(--v3-accent-2) 4%,var(--fs-card))}
 .v3ln-rec-row:focus-visible{outline:2px solid var(--v3-accent-2);outline-offset:-2px}
 .v3ln-rec-top{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}
-.v3ln-rec-top b{font-size:12.5px;font-weight:600;color:var(--v3-text-primary)}
+.v3ln-rec-top b{font-size:var(--aura-t-title);font-weight:600;color:var(--v3-text-primary)}
 .v3ln-rec-fl{font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--v3-text-muted)}
-.v3ln-rec-when{margin-left:auto;font-size:10.5px;color:var(--v3-text-muted);
+.v3ln-rec-when{margin-left:auto;font-size:var(--aura-t-meta);color:var(--v3-text-muted);
   font-variant-numeric:tabular-nums;white-space:nowrap}
 .v3ln-rec-ex{font-size:11.5px;line-height:1.5;color:var(--v3-text-muted);
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
@@ -225,8 +225,9 @@
 /* ── the cast ── */
 .v3ln-toast{margin:0 0 12px;padding:9px 13px;border:1px solid #BFDDD0;background:#E6F2EC;
   border-radius:5px;font-size:12px;color:var(--ln-m4)}
-.v3ln-a{font:inherit;font-weight:600;font-size:11px;line-height:1.4;color:var(--v3-accent-2);background:none;border:1px solid var(--fs-line);
-  border-radius:4px;padding:3px 9px;cursor:pointer;white-space:nowrap}
+.v3ln-a{font:inherit;font-weight:600;font-size:var(--aura-t-body);line-height:1.35;color:var(--v3-accent-2);background:none;border:1px solid var(--fs-line);
+  border-radius:var(--aura-r-ctl);padding:3px 9px;cursor:pointer;white-space:nowrap;
+  transition:border-color var(--aura-motion),background var(--aura-motion)}
 .v3ln-a:hover{border-color:var(--v3-accent-2)}
 .v3ln-intake .v3ln-a{margin-left:auto}
 .v3ln-cast{display:flex;flex-direction:column}
@@ -263,8 +264,8 @@
 .v3ln-dot.w{background:var(--ln-m1-fill)}
 .v3ln-dot.t{background:var(--fs-line);border:1px solid var(--v3-text-muted)}
 .v3ln-cr-who{display:flex;flex-direction:column;min-width:0;flex:1}
-.v3ln-cr-who b{font-size:12.5px;font-weight:600;color:var(--v3-text-primary)}
-.v3ln-cr-who span{font-size:10.5px;color:var(--v3-text-muted)}
+.v3ln-cr-who b{font-size:var(--aura-t-title);font-weight:600;color:var(--v3-text-primary)}
+.v3ln-cr-who span{font-size:var(--aura-t-meta);color:var(--v3-text-muted)}
 .v3ln-cr-area{font:inherit;font-weight:600;font-size:11px;line-height:1.5;color:var(--v3-accent-2);
   background:color-mix(in srgb,var(--v3-accent-2) 8%,transparent);border:0;border-radius:999px;
   padding:3px 10px;white-space:nowrap;cursor:pointer}
@@ -281,8 +282,10 @@
 /* the expand/collapse is a control, so it dresses like one — same button
  * language as link/capture/invite */
 .v3ln-cr-qbtn{cursor:pointer;white-space:nowrap;display:inline-block;
-  font:inherit;font-weight:600;font-size:11px;line-height:1.4;color:var(--v3-accent-2);
-  background:none;border:1px solid var(--fs-line);border-radius:4px;padding:3px 9px}
+  font:inherit;font-weight:600;font-size:var(--aura-t-body);line-height:1.35;color:var(--v3-accent-2);
+  background:none;border:1px solid var(--fs-line);border-radius:var(--aura-r-ctl);padding:3px 9px;
+  box-sizing:border-box;min-height:var(--aura-ctl-h);
+  transition:border-color var(--aura-motion),background var(--aura-motion)}
 .v3ln-cr-qbtn:hover{border-color:var(--v3-accent-2)}
 .v3ln-cr-qbtn:focus-visible{outline:2px solid var(--v3-accent-2);outline-offset:1px}
 .v3ln-cr-qbtn[aria-expanded="true"]{border-color:var(--v3-accent-2);
@@ -304,12 +307,12 @@
 .v3ln-cap{padding:12px 18px 16px;display:flex;flex-direction:column;gap:12px}
 .v3ln-cap-f{display:flex;flex-direction:column;gap:5px;font-size:11px;color:var(--v3-text-muted)}
 .v3ln-cap-f span{letter-spacing:.05em;text-transform:uppercase;font-size:10px}
-.v3ln-cap-f select,.v3ln-cap-f textarea{font:inherit;font-size:12.5px;color:var(--v3-text-primary);
+.v3ln-cap-f select,.v3ln-cap-f textarea{font:inherit;font-size:var(--aura-t-title);color:var(--v3-text-primary);
   border:1px solid var(--fs-line);border-radius:4px;padding:7px 9px;background:var(--fs-card)}
 .v3ln-cap-f textarea{resize:vertical;line-height:1.5}
 .v3ln-cap-f select:focus-visible,.v3ln-cap-f textarea:focus-visible{outline:2px solid var(--v3-accent-2);outline-offset:-1px}
 .v3ln-cap-bar{display:flex;gap:12px;align-items:center}
-.v3ln-cap-bar span{font-size:10.5px;line-height:1.5;color:var(--v3-text-muted)}
+.v3ln-cap-bar span{font-size:var(--aura-t-meta);line-height:1.5;color:var(--v3-text-muted)}
 /* The two ingest controls (attach a file · transcribe a recording). WRAPPING IS
    LOAD-BEARING: each control renders its own failure note beside itself, and
    a nowrap row inside a dialog squeezes that note to nothing — which is the
@@ -322,7 +325,7 @@
 .v3ln-cap-doc-h{display:flex;align-items:center;gap:10px;justify-content:space-between}
 .v3ln-cap-doc .v3ln-cap-doc-n{text-transform:none;letter-spacing:0;font-size:11.5px;
   font-weight:600;color:var(--v3-text-primary);overflow-wrap:anywhere;min-width:0}
-.v3ln-btn{background:var(--v3-accent-2);color:#fff;border:0;border-radius:4px;padding:8px 16px;
+.v3ln-btn{background:var(--v3-accent-2);color:#fff;border:0;border-radius:var(--aura-r-ctl);padding:8px 16px;
   font:inherit;font-weight:600;font-size:12.5px;line-height:1.4;cursor:pointer;flex:none}
 .v3ln-btn:disabled{opacity:.5;cursor:default}
 
@@ -344,9 +347,9 @@
   font-size:10px;font-weight:700;margin-top:1px}
 .v3ln-tick.d{background:#E6F2EC;color:var(--ln-m4)}
 .v3ln-tick.o{background:#FBF0DC;color:var(--ln-m1)}
-.v3ln-crit-b em{display:block;font-style:normal;font-size:10.5px;color:var(--v3-text-muted);margin-top:1px}
-.v3ln-gate-empty{padding:14px 18px;font-size:12.5px;color:var(--v3-text-muted)}
-.v3ln-gate-f{padding:10px 18px;margin:0;font-size:10.5px;line-height:1.5;color:var(--v3-text-muted);
+.v3ln-crit-b em{display:block;font-style:normal;font-size:var(--aura-t-meta);color:var(--v3-text-muted);margin-top:1px}
+.v3ln-gate-empty{padding:14px 18px;font-size:var(--aura-t-title);color:var(--v3-text-muted)}
+.v3ln-gate-f{padding:10px 18px;margin:0;font-size:var(--aura-t-meta);line-height:1.5;color:var(--v3-text-muted);
   border-top:1px dashed var(--fs-line)}
 
 /* inline invite bar — visible date picker (showPicker is iframe-hostile) */
@@ -356,7 +359,7 @@
 .v3ln-cr-invite input[type="date"]:focus-visible{outline:2px solid var(--v3-accent-2);outline-offset:-1px}
 
 /* ── sign-offs on Discover rows ── */
-.v3ln-appr{font:inherit;font-weight:600;font-size:10.5px;border-radius:999px;padding:2px 9px;white-space:nowrap}
+.v3ln-appr{font:inherit;font-weight:600;font-size:var(--aura-t-meta);border-radius:999px;padding:2px 9px;white-space:nowrap}
 .v3ln-appr.ok{background:#E6F2EC;color:var(--ln-m4)}
 .v3ln-appr.wait{background:#FBF0DC;color:var(--ln-m1)}
 .v3ln-cr-appr{display:flex;flex-direction:column;gap:6px;border-top:1px dashed var(--fs-line);padding-top:8px}
@@ -368,7 +371,7 @@
 .v3ln-appr-dot.in-review{background:var(--ln-m1-fill)}
 .v3ln-appr-dot.changes{background:#B4552D}
 .v3ln-cr-appr-n{font-size:11.5px;font-weight:600;color:var(--v3-text-primary)}
-.v3ln-cr-appr-s{font-size:10.5px;color:var(--v3-text-muted)}
+.v3ln-cr-appr-s{font-size:var(--aura-t-meta);color:var(--v3-text-muted)}
 .v3ln-cr-appr-row .v3ln-a{margin-left:auto}
 
 /* ── persona journey strip: Listen → Design Loop, at a glance ── */
@@ -384,7 +387,7 @@
 .v3ln-jseg.open .v3ln-jdot{background:var(--v3-accent-2)}
 
 /* ── stats header, ledger-honest ──────────────────────────────────────────── */
-.v3ln-sl-note{display:block;font-size:9px;letter-spacing:.04em;text-transform:none;color:var(--v3-text-muted);font-weight:500;margin-top:1px}
+.v3ln-sl-note{display:block;font-size:var(--aura-t-meta);letter-spacing:.04em;text-transform:none;color:var(--v3-text-muted);font-weight:600;margin-top:1px}
 .v3ln-stats.ledger{gap:34px;align-items:flex-start}
 .v3ln-stat-wide,.v3ln-statbtn.wide{display:flex;flex-direction:column;gap:5px}
 
@@ -560,7 +563,7 @@
 .v3ln-rec-attr{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--v3-text-secondary)}
 .v3ln-rec-attr b{color:var(--v3-text-primary);font-variant-numeric:tabular-nums}
 /* the goal headline — one denominator, the burn-down, above the inbox */
-.v3ln-goal{display:flex;flex-direction:column;gap:8px;margin:0 0 12px;padding:12px 15px;border:1px solid var(--fs-line);border-radius:12px;background:linear-gradient(color-mix(in srgb,var(--v3-accent-2) 5%,var(--fs-card)),var(--fs-card))}
+.v3ln-goal{display:flex;flex-direction:column;gap:8px;margin:0 0 12px;padding:12px 15px;border:1px solid var(--fs-line);border-radius:var(--aura-r-box);background:linear-gradient(color-mix(in srgb,var(--v3-accent-2) 5%,var(--fs-card)),var(--fs-card))}
 .v3ln-goal-lead{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--v3-text-muted)}
 .v3ln-goal-stats{font-size:13px;color:var(--v3-text-secondary)}
 .v3ln-goal-stats b{font-size:17px;color:var(--v3-text-primary);font-variant-numeric:tabular-nums;margin:0 1px}
@@ -569,11 +572,41 @@
 .v3ln-engbar{display:flex;flex-wrap:wrap;align-items:center;gap:7px 12px;margin:0 0 10px;padding:8px 12px;border:1px solid var(--fs-line);border-radius:10px;background:var(--v3-surface-2)}
 .v3ln-engbar-l{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--v3-text-muted)}
 .v3ln-engpill{font-size:11px;color:var(--v3-text-secondary);display:inline-flex;align-items:center;gap:4px}
-.v3ln-engpill b{font-size:14px;color:var(--v3-text-primary);font-variant-numeric:tabular-nums}
+.v3ln-engpill b{font-size:var(--aura-t-head);color:var(--v3-text-primary);font-variant-numeric:tabular-nums}
 .v3ln-engpill.is-ready b{color:var(--v3-accent-2)}
 .v3ln-engpill.is-in-flight b{color:var(--v3-amber)}
 .v3ln-engpill.is-blocked b{color:#5a4fa0}
 .v3ln-engbar-note{font-size:10px;color:var(--v3-text-muted);font-style:italic;flex-basis:100%}
+/* ════ DISCOVER, ON THE SAME SYSTEM ════════════════════════════════════════════
+   Measured before touching it, exactly as the Inbox was: SIX weights (400, 500,
+   600, 650, 700, 800), SEVEN type sizes (10, 10.5, 11, 12, 12.5, 14, 17), FIVE
+   radii (4, 5, 6, 10, 50%), EIGHT letter-spacings including the same −0.07px on
+   body text, and THREE control heights. Worse than the Inbox, and for the same
+   reason: it grew a component at a time.
+
+   The two surfaces are siblings now — same three weights, same leading, same
+   tracking rule, same control height. 50% survives because a circle is a circle. */
+.v3ln,.v3ln *{letter-spacing:normal}
+.v3ln{line-height:1.5;font-variant-numeric:tabular-nums}
+.v3ln b,.v3ln strong{font-weight:600}
+.v3ln .v3ln-btn,.v3ln .v3ln-a,.v3ln select{font-weight:600;line-height:1.35}
+.v3ln .v3ln-btn,.v3ln .v3ln-a,.v3ln select,.v3ln .v3ln-handoff{box-sizing:border-box;
+  min-height:var(--aura-ctl-h);display:inline-flex;align-items:center}
+/* Uppercase micro-labels are the one place tracking earns its keep. */
+.v3ln .v3ln-band-n,.v3ln .v3ln-sl,.v3ln .v3ln-eng-hdr,.v3ln .v3ln-engbar-l,
+.v3ln .v3ln-scope,.v3ln .v3ln-cr-role{letter-spacing:.055em}
+
+/* A bare <select> keeps the browser's own 4px corner and its own height unless it is
+   told otherwise, which is why one filter sat 0.5px off every control beside it. The
+   view TABS are deliberately exempt: they are two-line and belong to the shell, not
+   to either surface's control set. */
+.v3ib select,.v3ln select{border-radius:var(--aura-r-ctl);height:var(--aura-ctl-h)}
+
+/* ONE FOCUS RING, both surfaces. Keyboard operability is only real if you can see
+   where you are, and the ring was previously whatever each control happened to
+   inherit from the browser. */
+.v3ib :focus-visible,.v3ln :focus-visible{outline:2px solid var(--v3-accent-2);outline-offset:2px;border-radius:var(--aura-r-ctl)}
+
 /* ════ THE ONE HANDOFF ═════════════════════════════════════════════════════════
    Discover reads; the Inbox acts. Where Discover finds something that needs an
    operator MOVE it states the finding and offers this, and this is the ONLY control
@@ -598,7 +631,7 @@
    the business moves…") and each row's reason ran into its stages. Grid, not flow. */
 .v3ln-lifecycle{margin:0 0 10px;padding:9px 12px;border:1px solid var(--fs-line);border-radius:10px;background:var(--v3-surface-2)}
 .v3ln-lifecycle-l{display:block;font-size:11px;color:var(--v3-text-secondary)}
-.v3ln-lifecycle-l b{font-size:14px;color:var(--v3-text-primary);font-variant-numeric:tabular-nums}
+.v3ln-lifecycle-l b{font-size:var(--aura-t-head);color:var(--v3-text-primary);font-variant-numeric:tabular-nums}
 .v3ln-lifecycle-m{display:block;margin:2px 0 8px;font-size:10px;color:var(--v3-text-muted);font-style:italic}
 .v3ln-lifecycle-row{display:grid;grid-template-columns:minmax(120px,max-content) minmax(0,1fr) max-content;
   align-items:baseline;gap:4px 10px;padding:5px 0;border-top:1px solid var(--fs-line)}
@@ -623,7 +656,7 @@
 .v3ln-engrow > .v3ln-eng-why{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* the reserved role line — blank for people who have none, so the column lines up */
 .v3ln-cr-role{min-height:16px}
-.v3ln-eng{font-size:9.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;border-radius:5px;padding:1px 7px;border:1px solid var(--fs-line);color:var(--v3-text-muted)}
+.v3ln-eng{font-size:var(--aura-t-meta);font-weight:700;letter-spacing:.04em;text-transform:uppercase;border-radius:var(--aura-r-ctl);padding:1px 7px;border:1px solid var(--fs-line);color:var(--v3-text-muted)}
 .v3ln-eng.is-ready{color:var(--v3-accent-2);border-color:color-mix(in srgb,var(--v3-accent-2) 40%,var(--fs-line));background:color-mix(in srgb,var(--v3-accent-2) 7%,transparent)}
 .v3ln-eng.is-in-flight{color:var(--v3-amber);border-color:color-mix(in srgb,var(--v3-amber) 40%,var(--fs-line))}
 .v3ln-eng.is-blocked{color:#5a4fa0;border-color:color-mix(in srgb,#6C5FAE 40%,var(--fs-line));background:color-mix(in srgb,#6C5FAE 6%,transparent)}
@@ -632,7 +665,7 @@
 /* inline ageing — to-do escalation, never alarm; intensifies with age */
 .v3ln-age{font-size:10px;font-weight:600;color:var(--v3-text-muted);display:inline-flex;align-items:center;gap:3px}
 .v3ln-age.warm{color:var(--v3-amber);font-weight:700}
-.v3ln-age.hot{color:var(--v3-amber);font-weight:700;background:color-mix(in srgb,var(--v3-amber) 12%,transparent);border-radius:5px;padding:1px 6px}
+.v3ln-age.hot{color:var(--v3-amber);font-weight:700;background:color-mix(in srgb,var(--v3-amber) 12%,transparent);border-radius:var(--aura-r-ctl);padding:1px 6px}
 
 /* ══ Operator inbox — assign / decide-fate / schedule / adjudicate + exits ══ */
 .v3ib{display:flex;flex-direction:column;gap:11px;margin:0 0 16px}
@@ -819,6 +852,14 @@
 .v3ln-unit{color:var(--v3-text-muted);font-weight:400;font-style:italic;font-size:.92em}
 /* data-dictionary reroute ask (the typing wall → one upload to the system owner) */
 .v3ib-dict{border-left:3px solid var(--v3-accent-2);background:color-mix(in srgb,var(--v3-accent-2) 4%,var(--fs-card))}
+/* INBOX CLEAR — the zero state. Restrained on purpose: an empty inbox is the
+   ordinary good state, not an achievement to be congratulated for, and a page that
+   celebrates gets tiring by the third time you see it. */
+.v3ib-clear{display:flex;flex-direction:column;gap:var(--aura-s1);padding:var(--aura-s5) var(--aura-s4);
+  border:1px dashed var(--fs-line);border-radius:var(--aura-r-box);background:var(--fs-card);text-align:center}
+.v3ib-clear-t{font-size:var(--aura-t-head);font-weight:700;color:var(--v3-text-primary)}
+.v3ib-clear-m{font-size:var(--aura-t-body);color:var(--v3-text-secondary);max-width:52ch;margin:0 auto;line-height:1.5}
+
 /* ════ THE CARD every block inside a section is drawn as ════════════════════════
    Four blocks had grown four containers — one dashed accent border, one tinted
    fill, one plain, one with its own title class — so a column that holds four
@@ -952,7 +993,7 @@
   padding:9px 12px;border:1px solid color-mix(in srgb,var(--v3-accent-2) 35%,var(--fs-line));
   border-radius:9px;background:color-mix(in srgb,var(--v3-accent-2) 5%,var(--fs-card))}
 .v3ln-cap-dict-t{font-size:12px;line-height:1.5;color:var(--v3-text-primary)}
-.v3ln-cap-dict-m{font-size:10.5px;line-height:1.5;color:var(--v3-text-muted);max-width:60ch}
+.v3ln-cap-dict-m{font-size:var(--aura-t-meta);line-height:1.5;color:var(--v3-text-muted);max-width:60ch}
 .v3ib-marked{font-size:11px;color:var(--v3-positive);font-weight:600}
 .v3ib-nodate{color:var(--v3-amber);font-weight:700}
 /* Sessions summary — the whole header is ONE disclosure button (⋈ Sessions · N seams,
@@ -985,7 +1026,7 @@
 .v3ib-prop{font-size:10px;font-weight:700;letter-spacing:.02em;text-transform:uppercase;color:var(--v3-seam-ink);border:1px dashed color-mix(in srgb,#6C5FAE 55%,transparent);border-radius:var(--ib-r-ctl);padding:0 4px;margin-left:4px}
 /* owned-question list in the roster expansion */
 .v3ln-cr-qs.owned li{display:flex;gap:6px;align-items:baseline}
-.v3ln-cr-qtype{font-size:9px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--v3-accent-2);flex-shrink:0}
+.v3ln-cr-qtype{font-size:var(--aura-t-meta);font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--v3-accent-2);flex-shrink:0}
 /* Seam note — now a paragraph under the sections, not a row inside one. Was a
    theme-blind #5a4fa0; the token carries a light and a dark value. */
 .v3ln-cr-seamnote{margin:8px 0 0;padding-left:2px;max-width:560px;font-size:11px;line-height:1.45;color:var(--v3-seam-ink);font-style:italic}
@@ -1007,7 +1048,7 @@
 .v3ln-cr-qgroup.dictionary{--g:var(--v3-seam-ink)}
 
 /* the whole heading row is the disclosure control */
-.v3ln-cr-qgroup-h{display:flex;align-items:baseline;gap:7px;margin:0;cursor:pointer;list-style:none;padding:2px 0;border-radius:4px}
+.v3ln-cr-qgroup-h{display:flex;align-items:baseline;gap:7px;margin:0;cursor:pointer;list-style:none;padding:2px 0;border-radius:var(--aura-r-ctl)}
 .v3ln-cr-qgroup-h::-webkit-details-marker{display:none}
 .v3ln-cr-qgroup-h:hover .v3ln-cr-qgroup-t{text-decoration:underline}
 .v3ln-cr-qgroup-h:focus-visible{outline:2px solid var(--g);outline-offset:2px}
@@ -1015,10 +1056,10 @@
 .v3ln-cr-qgroup-h::before{content:"";flex-shrink:0;width:0;height:0;border-left:4px solid var(--g);border-top:3.5px solid transparent;border-bottom:3.5px solid transparent;transform:translateY(-1px);transition:transform .15s ease}
 .v3ln-cr-qgroup[open]>.v3ln-cr-qgroup-h::before{transform:translateY(-1px) rotate(90deg)}
 @media (prefers-reduced-motion:reduce){.v3ln-cr-qgroup-h::before{transition:none}}
-.v3ln-cr-qgroup-t{font-size:9.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--g)}
+.v3ln-cr-qgroup-t{font-size:var(--aura-t-meta);font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--g)}
 /* tabular so the counts line up down a card with several sections */
-.v3ln-cr-qgroup-n{font-size:9.5px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.6;color:var(--g);background:color-mix(in srgb,var(--g) 13%,transparent);border-radius:999px;padding:0 6px}
-.v3ln-cr-qgroup-note{font-size:10.5px;line-height:1.45;color:var(--v3-text-muted)}
+.v3ln-cr-qgroup-n{font-size:var(--aura-t-meta);font-weight:700;font-variant-numeric:tabular-nums;line-height:1.6;color:var(--g);background:color-mix(in srgb,var(--g) 13%,transparent);border-radius:999px;padding:0 6px}
+.v3ln-cr-qgroup-note{font-size:var(--aura-t-meta);line-height:1.45;color:var(--v3-text-muted)}
 .v3ln-cr-qgroup>.v3ln-cr-qs{margin-top:6px}
 /* the rule already carries the grouping — bullets and their indent would say it twice */
 .v3ln-cr-qgroup .v3ln-cr-qs{padding-left:0;list-style:none}

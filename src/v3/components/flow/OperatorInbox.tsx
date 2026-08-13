@@ -642,7 +642,21 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
             the reader cannot see. What the Inbox is, in its own terms, instead. */}
         <span className="v3ib-of">everything waiting on you, grouped by what kind of decision it needs.</span>
       </header>
-      ) : null}
+      ) : (
+        /* INBOX CLEAR. The zero state was nothing at all — the header hid itself and
+           the page ended, so "I have finished" and "this failed to load" looked the
+           same. It says which it is, and it says what an empty inbox does NOT mean:
+           the burn-down is not zero, the questions are with the people who owe them,
+           and that is the state you want rather than a warning. */
+        <div className="v3ib-clear" role="status">
+          <span className="v3ib-clear-t">Inbox clear</span>
+          <span className="v3ib-clear-m">
+            Nothing is waiting on a decision from you. Open questions are still open —
+            they are with the people who owe them, and they come back here only if
+            something needs YOUR move.
+          </span>
+        </div>
+      )}
 
       {/* 0a · ROLES NOBODY ANSWERS FOR — an operator decision, so it lives here.
               Every number is `soloByOwner`'s own count for that label: no person is

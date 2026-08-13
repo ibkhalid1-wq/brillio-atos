@@ -7570,7 +7570,7 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3lc-empty{color:var(--v3-text-muted);font-style:italic;margin:0}
 /* ── Shared cross-surface vocabulary (build once, use everywhere) ──────────── */
 /* provisional mark — the honest interim; shape (◇) + text, never colour alone */
-.v3lc-prov{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:650;color:var(--v3-text-muted);border:1px dashed var(--fs-line);border-radius:5px;padding:1px 6px;letter-spacing:.02em}
+.v3lc-prov{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:600;color:var(--v3-text-muted);border:1px dashed var(--fs-line);border-radius:var(--aura-r-ctl);padding:1px 6px;letter-spacing:.02em}
 /* ownership by source class — operator / stakeholder / joint / draft */
 .v3lc-own{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:650;border:1px solid var(--fs-line);border-radius:6px;padding:2px 8px;background:var(--v3-surface-2);color:var(--v3-text-secondary)}
 .v3lc-own-n{font-weight:800;color:var(--v3-text-primary);margin-left:1px}
@@ -7580,7 +7580,7 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3lc-own.is-draft{color:var(--v3-text-muted);border-style:dashed}
 /* the ONE heard readout */
 .v3lc-heard{display:inline-flex;align-items:baseline;gap:5px;flex-wrap:wrap}
-.v3lc-heard-n{font-size:17px;font-weight:800;color:var(--v3-text-primary);font-variant-numeric:tabular-nums}
+.v3lc-heard-n{font-size:17px;font-weight:700;color:var(--v3-text-primary);font-variant-numeric:tabular-nums}
 .v3lc-heard-l{font-size:11px;color:var(--v3-text-muted)}
 /* the ONE convergence readout */
 .v3lc-conv{display:inline-flex;align-items:center;gap:9px;flex-wrap:wrap}
