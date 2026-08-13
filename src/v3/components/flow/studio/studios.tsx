@@ -20,6 +20,7 @@ import {
   EmptyState, asArray, asRecord, asText, asStrings, useStudioLocked, type StudioProps,
 } from "./StudioKit";
 import { FORMAL_ARTIFACT_FIELD_KEYS } from "@/v3/lib/formalArtifacts";
+import { projectFutureState } from "@/v3/components/flow/flowFutureState";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
 import { listenCoverageAreas, listenAreaCoverage, canonicalFrameArea } from "@/v3/components/flow/listenCoverage";
 import { stakeholderPrimaryArea, workflowArea } from "@/v3/components/flow/flowAreas";
@@ -585,7 +586,8 @@ function AgentifyStudio({ doc, onChange, program, gapRoutes, onRouteGap }: Studi
     () => (atlasWorkflows.length ? atlasWorkflows : asArray(doc.workflows)).map(asRecord),
     [atlasWorkflows, doc.workflows],
   );
-  const decisions = React.useMemo(() => readDecisions(doc, atlasDoc), [doc, atlasDoc]);
+  const edDoc = (program ? readArtifactDoc(program, "experienceDesign") : null) as Record<string, unknown> | null;
+  const decisions = React.useMemo(() => readDecisions(doc, atlasDoc, edDoc), [doc, atlasDoc, edDoc]);
   // THE ONE DOOR to this document. Every control on every row routes through it, and
   // it is shut when the artifact is locked or derived — belt to the braces of the
   // `disabled` on each control, so a locked Agentify cannot be written however the
@@ -862,11 +864,22 @@ function BlueprintStudio({ doc, onChange, program }: StudioProps) {
   // delivery team marked ⚡ Agentify there are the demand the Blueprint must
   // deliver. Surface them so the two artifacts read as one decision — and so a
   // marked step with no agent shows as a gap to close.
+  // THE AGENTIC DIRECTION COMES FROM AGENTIFY, which is where the call is made.
+  //
+  // This read `experienceDesign.agentifyMarks` — the ⚡ toggle on that studio's
+  // "Workflows to agentify" card. That card was a SECOND decision surface over the
+  // same Atlas steps, keyed by text where Agentify keys by element id, and the
+  // Blueprint read only it while the future-state projection read only Agentify. A
+  // team that made its calls in Listen got an empty direction here, and vice versa.
+  //
+  // `projectFutureState` is the one read: it takes the Atlas's workflows and
+  // Agentify's decisions (and, as legacy, the old marks), so both histories arrive
+  // and neither surface can disagree with the other again.
   const agentified = React.useMemo(() => {
-    const ed = program ? readArtifactDoc(program, "experienceDesign") : null;
-    const marks = ed ? asRecord(ed.agentifyMarks) : {};
-    return Object.values(marks).map(asRecord)
-      .map((m) => ({ flow: asText(m.workflow) || asText(m.area) || "Workflow", action: asText(m.action) }))
+    if (!program) return [];
+    return projectFutureState(program).workflows.flatMap((wf) =>
+      wf.steps.filter((s) => s.mode === "agentify")
+        .map((s) => ({ flow: wf.name || wf.area || "Workflow", action: s.action })))
       .filter((m) => m.action);
   }, [program]);
   const agentNames = agents.items.map((a) => asText(a.name).toLowerCase()).filter(Boolean);
