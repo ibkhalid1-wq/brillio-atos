@@ -370,14 +370,32 @@ export function useProgramLedger(program?: ProgramSummary): ProgramLedger {
      * one-signal guess must not put a question on a person's link.
      */
     const lifecycleAsks = lifecycleLoci(store);
-    const typingLoci = dictionaryBucket(queue).filter((i) => !lifecycleAsks.has(i.about));
+    const typingLoci = dictionaryBucket(queue)
+      .filter((i) => !lifecycleAsks.has(i.about))
+      // …and never a seam. A question counted in both buckets is the same question
+      // waiting on two different answers, which is how a burn-down starts lying.
+      .filter((i) => i.owner.kind !== "joint");
     const soloByOwner = new Map<string, QueueItem[]>();
     const sessionMap = new Map<string, QueueItem[]>();
     for (const it of queue.items) {
+      // A SEAM OUTRANKS THE TYPING ROUTE, and this order is the whole of it.
+      //
+      // Measured on Laila New: ALL ELEVEN of its jointly-owned questions are
+      // `#optionality` on a relation — "does every Account need a Territory, or is
+      // that optional?" — and `optionality` is a typing slot, so every one was
+      // skipped to the dictionary on the line below before this check ever ran. The
+      // Sessions section had nothing to draw, on a programme with four live seams.
+      //
+      // A dictionary can tell you a column is nullable. It cannot tell you whether
+      // the business REQUIRES a Territory on every Account, and it certainly cannot
+      // settle that when Sales Leaders and Sales Ops own the answer jointly — that is
+      // a disagreement between two functions, which is exactly what a seam is and
+      // exactly what a joint session is for. Joint ownership therefore wins: the
+      // question goes to the people who have to agree, not to a document.
+      if (it.owner.kind === "joint") { (sessionMap.get(it.ownerLabel) ?? sessionMap.set(it.ownerLabel, []).get(it.ownerLabel)!).push(it); continue; }
       // typing → dictionary bucket, EXCEPT a lifecycle's stages, which are a person's
       // to state and fall through to their card below.
       if (it.status === "open" && TYPING_SLOTS.has(it.slot) && !lifecycleAsks.has(it.about)) continue;
-      if (it.owner.kind === "joint") { (sessionMap.get(it.ownerLabel) ?? sessionMap.set(it.ownerLabel, []).get(it.ownerLabel)!).push(it); continue; }
       if (it.owner.kind !== "role" || it.status !== "open") continue;    // unowned → assignQueue; blocked → needs unsticking
       (soloByOwner.get(it.ownerLabel) ?? soloByOwner.set(it.ownerLabel, []).get(it.ownerLabel)!).push(it);
     }

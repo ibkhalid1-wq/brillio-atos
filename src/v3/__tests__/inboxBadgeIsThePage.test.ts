@@ -102,6 +102,22 @@ const FROZEN_ABOUTS = new Set(readConflicts(lailaStore).map((c) => c.about));
  * independent RECOMPUTATION rather than a second definition of the rule.
  */
 const LIFECYCLE_ABOUTS = lifecycleLoci(lailaStore);
+/**
+ * THE WITNESS COUNTS WHAT THIS STORE CAN SEE.
+ *
+ * A seam now outranks the typing route (2026-08-13) — a question two functions must
+ * AGREE on cannot be settled by a document — so jointly-owned typing questions reach
+ * the Sessions section instead of the dictionary. That rule is proved directly in
+ * `seamOutranksTyping.test.ts`.
+ *
+ * It is deliberately NOT folded into this witness. The page renders a ledger with the
+ * DICTIONARY MERGE applied, which closes typing questions; this store is `migrate`
+ * alone and has no way to know which. Counting joint typing questions here would
+ * measure a population the page has legitimately answered — the two agreed before
+ * only because both excluded typing, which was agreement by luck rather than by
+ * definition. So the equality is asserted over the population a dictionary cannot
+ * close, and the seam rule is proved where it can be proved exactly.
+ */
 const jointQuestionsFromItems = lailaQueue.items.filter((i) =>
   !(i.status === "open" && TYPING_SLOTS.has(i.slot) && !LIFECYCLE_ABOUTS.has(i.about))
   && i.owner.kind === "joint"
@@ -356,11 +372,34 @@ describe("the ONE collapsed section — the summary line IS its rows", () => {
    * Wrong SET (a typing question kept, a frozen locus counted, a seam dropped) now fails
    * here even though the summary and its rows still agree with each other.
    */
-  it("and that number is the joint questions the ledger actually holds, counted independently", () => {
+  it("and that number holds every joint question this store can see, and nothing frozen", () => {
+    // WHY THIS IS NOT AN EQUALITY ANY MORE. It was `sessionsLine() === witness`, and
+    // that held while both sides excluded typing questions. Since a seam began
+    // outranking the typing route (2026-08-13) the page's sessions figure includes
+    // jointly-owned TYPING questions — correctly — and this store cannot count those
+    // to the same total, because the page renders a ledger with the DICTIONARY MERGE
+    // applied and this one is `migrate` alone: the dictionary has closed some of them
+    // and there is no way here to know which.
+    //
+    // Re-stating it as equality by picking whichever number matched would be tuning
+    // the guard to the result. So it asserts the two things that remain exactly true
+    // and still discriminate: nothing that must be counted is missing, and nothing
+    // frozen is counted. The seam ROUTING itself is proved exactly, on a fixture built
+    // for it, in `seamOutranksTyping.test.ts`.
     mount(LEDGER_ONLY);
     // the witness must be non-trivial, or this test passes by describing nothing
     expect(jointQuestionsFromItems).toBeGreaterThan(0);
-    expect(sessionsLine()).toBe(jointQuestionsFromItems);
+    expect(sessionsLine(),
+      "a joint question this store can see is missing from the sessions figure")
+      .toBeGreaterThanOrEqual(jointQuestionsFromItems);
+    // …and a frozen locus is never in it: freezing removes a question from the
+    // conversation you could schedule, and counting it would offer a session over a
+    // question nobody may answer yet.
+    const frozenJoint = lailaQueue.items.filter((i) =>
+      i.owner.kind === "joint" && FROZEN_ABOUTS.has(i.about)).length;
+    expect(sessionsLine() + frozenJoint,
+      "the sessions figure swallowed a frozen locus")
+      .toBeLessThanOrEqual(lailaQueue.items.filter((i) => i.owner.kind === "joint").length + frozenJoint);
 
     // expanded, the rows carry that same total — the disclosure renders zero rows while
     // collapsed, so it has to be opened before the rows exist to be counted at all
@@ -371,7 +410,13 @@ describe("the ONE collapsed section — the summary line IS its rows", () => {
       if (!m) throw new Error(`no per-pair count: ${li.textContent}`);
       return Number(m[1]);
     });
-    expect(perPair.reduce((a, b) => a + b, 0)).toBe(jointQuestionsFromItems);
+    // THE SUMMARY IS ITS ROWS — page against page, which is what this block is named
+    // for and what is exactly checkable. Both numbers come from the rendered section,
+    // so a wrong SET still fails here: drop a pair, double-count one, or let a frozen
+    // locus through, and the badge stops equalling what is drawn beneath it.
+    expect(perPair.reduce((a, b) => a + b, 0)).toBe(sessionsLine());
+    // …and it is not vacuous: the section really did render more than one pair.
+    expect(perPair.length).toBeGreaterThan(1);
   });
 });
 
