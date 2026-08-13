@@ -160,6 +160,47 @@ export const contradictionKey = (statement: string): string =>
   statement.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
 /**
+ * THE TWO SIDES OF A DISPUTE, IN ENGLISH.
+ *
+ * `between` is minted for the record — "Brillio_Opportunity_Clean_Schema -
+ * Opportunity Object (1) vs Transformation Charter (businessObjective)" — and was
+ * printed straight onto the card in small caps. Three things there are not English:
+ * a filename with its underscores and its "(1)" download suffix, the bare "vs", and
+ * a camelCase field key in brackets.
+ *
+ * Nothing is invented and nothing is dropped: the same two sides, said the way a
+ * person says them. A side this cannot improve is passed through unchanged, because
+ * a half-translated sentence is worse than an untranslated one.
+ */
+export function plainDisputeSides(between: string | null | undefined): string {
+  const raw = String(between ?? "").trim();
+  if (!raw) return "two sources disagree";
+  const parts = raw.split(/\s+vs\.?\s+/i);
+  if (parts.length !== 2) return raw;
+  return `${plainDisputeSide(parts[0])} and ${plainDisputeSide(parts[1])} disagree`;
+}
+
+/** One side: a file the programme was given, or a document it wrote. */
+function plainDisputeSide(side: string): string {
+  const s = side.trim();
+  // "Transformation Charter (businessObjective)" → "the charter's business objective"
+  const doc = /^(.*?)\s*\(([A-Za-z][A-Za-z0-9]*)\)$/.exec(s);
+  if (doc) {
+    const field = doc[2].replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase();
+    return `the ${doc[1].trim().toLowerCase()}’s ${field}`;
+  }
+  // A filename: strip the "(1)" a second download adds, the extension, and the
+  // separators that only ever existed because file systems dislike spaces.
+  if (/[_.]|\(\d+\)$/.test(s)) {
+    const name = s.replace(/\s*\(\d+\)$/, "").replace(/\.(csv|tsv|xlsx?|txt|pdf|docx?)$/i, "")
+      .replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+    return name ? `the file you uploaded, ${name}` : s;
+  }
+  return s;
+}
+
+
+/**
  * ONE CARD PER CONTRADICTION, whatever queued it.
  *
  * Two watchers propose contradictions — the deterministic negated-claim detector
