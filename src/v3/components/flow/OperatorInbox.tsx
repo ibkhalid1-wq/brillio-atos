@@ -467,11 +467,20 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
    * label now carries the placeholder — which names WHICH element or question this
    * control routes — so the twentieth select is distinguishable from the first.
    */
-  const cSelect = (key: string, rawId: string, placeholder = "Assign an owner…") => {
+  /**
+   * `srLabel` is what a SCREEN READER hears; `placeholder` is what everyone sees.
+   *
+   * They were one string, so making the accessible name specific enough to tell
+   * seven pickers apart ("Assign to… — Which phase of the process does …") also put
+   * that whole sentence in the closed select, where it truncated to
+   * "Assign to… — Which phase of the proces". The visible text stays short; the
+   * distinguishing detail goes where it is needed and nowhere else.
+   */
+  const cSelect = (key: string, rawId: string, placeholder = "Assign an owner…", srLabel?: string) => {
     const id = domId(rawId);
     return (
       <>
-        <label className="v3ib-sr" htmlFor={id}>{spoken(placeholder)}</label>
+        <label className="v3ib-sr" htmlFor={id}>{spoken(srLabel ?? placeholder)}</label>
         <select id={id} value={sel[key] ?? ""} onChange={(e) => setSel((s) => ({ ...s, [key]: e.target.value }))}>
           <option value="">{placeholder}</option>
           {candidates.map((c) => <option key={c.label} value={c.label}>{displayPersonLabel(c.label)}{c.role && c.role !== c.label ? ` — ${c.role}` : ""}</option>)}
@@ -546,7 +555,15 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
    * "review the 18" beside it expanded in place. Lifted here, the same rows render
    * wherever the questions are asked for.
    */
-  const QuestionList = ({ abouts, orphan }: { abouts: readonly string[]; orphan?: boolean }) => (
+  const QuestionList = ({ abouts, orphan, assignable }: {
+    abouts: readonly string[];
+    orphan?: boolean;
+    /** Each row gets its own owner picker. "Hand over all 7" is the common case and
+     *  stays, but seven questions about two different workflows are not always one
+     *  person's — the bulk act was the ONLY act, so routing them separately meant
+     *  handing them all to somebody and reassigning six afterwards. */
+    assignable?: boolean;
+  }) => (
     <ul className="v3ib-qlist">
       {abouts.map((about) => {
         const q = Q(about);
@@ -579,6 +596,17 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                   reason: "no source on record and no system of record — the field itself is not evidenced",
                   by, at: nowISO(),
                 })}>{busy === about ? "Recording…" : "this field shouldn’t exist"}</button>
+            ) : null}
+            {assignable ? (
+              <span className="v3ib-qrow-assign">
+                {cSelect(about, `q-${about}`, "Assign to…", `Assign to… — ${q.question}`)}
+                <button type="button" className="v3ib-btn ghost sm"
+                  disabled={busy === about || !pickedOwner(about)}
+                  aria-label={spoken(`Assign to ${pickedOwner(about) || "the chosen person"}: ${q.question}`)}
+                  onClick={() => void run(about, assignAction(about, pickedOwner(about)!))}>
+                  {busy === about ? "Assigning…" : "assign"}
+                </button>
+              </span>
             ) : null}
           </li>
         );
@@ -643,8 +671,10 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                 title={<><b>{owner.label}</b> — {owner.open} open question{owner.open === 1 ? "" : "s"}, and nobody on the roster answers for that role</>}
                 reveal={{ label: `show the ${owner.open}`, open: !!shownUnbound[owner.label],
                   onToggle: () => setShownUnbound((m) => ({ ...m, [owner.label]: !m[owner.label] })) }}
+                note={<>Hand the whole set to one person below, or open them and route each to
+                  whoever actually answers it — they are often two different people.</>}
                 writes={<>
-                  {cSelect(key, key, `Hand ${owner.open} ${owner.label} question${owner.open === 1 ? "" : "s"} to…`)}
+                  {cSelect(key, key, `Hand all ${owner.open} ${owner.label} question${owner.open === 1 ? "" : "s"} to…`)}
                   <button type="button" className="v3ib-btn sm"
                     disabled={busy === key || !picked}
                     aria-label={spoken(`Hand all ${owner.open} ${owner.label} questions to ${picked || "the chosen person"}`)}
@@ -652,7 +682,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                     {busy === key ? "Handing over…" : `hand over all ${owner.open}`}
                   </button>
                 </>}>
-                <QuestionList abouts={owner.abouts} />
+                <QuestionList abouts={owner.abouts} assignable />
               </IbCard>
             );
           })}
