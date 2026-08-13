@@ -47,7 +47,7 @@ import { pinsForSend } from "@/v3/lib/ledger/operatorActions";
 import { HeardReadout, ProvisionalMark, ClaimStatus, SourceTag } from "@/v3/components/flow/studio/ledgerPrimitives";
 import DesignLoopZones from "@/v3/components/flow/DesignLoopZones";
 import { ownerLabelsForCast } from "@/v3/lib/ledger/ownerBinding";
-import { lifecycleEntities, lifecycleReason } from "@/v3/lib/ledger/lifecycle";
+import { lifecycleEntities, lifecycleReason, lifecycleEvidence } from "@/v3/lib/ledger/lifecycle";
 import { dictionaryCoverage, isSpreadsheetName, mergeDictionaryCsv, parseDictionaryCsv, readDictionaryWorkbook } from "@/v3/lib/ledger/dictionary";
 import { currentDesignRound } from "@/v3/components/flow/flowDesignRound";
 import { renderQuestion } from "@/v3/lib/ledger/renderQuestion";
@@ -1042,6 +1042,8 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
   const [lcBusy, setLcBusy] = useState<string | null>(null);
   /** Read, never written from here — one definition, in lifecycle.ts. */
   const lifecycles = useMemo(() => lifecycleEntities(ledger.store), [ledger.store]);
+  const shownLifecycles = useMemo(() => lifecycles.filter((l) => l.confident), [lifecycles]);
+  const maybeLifecycles = useMemo(() => lifecycles.filter((l) => !l.confident), [lifecycles]);
   const readAttachedDictionary = async (files: File[]) => {
     // SEQUENTIALLY, into one running CSV. A system's dictionary arrives as several
     // per-object workbooks, so the whole selection is one reading — and merging
@@ -1295,21 +1297,22 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
               `commitDictionary` — the exact path an uploaded schema takes — so a
               lifecycle a person confirmed and one a schema stated land in the same
               place under the same precedence. No new write mechanism. */}
-          {lifecycles.length ? (
+          {shownLifecycles.length ? (
             <div className="v3ln-lifecycle" role="note" aria-label="Entity lifecycles to confirm">
               <span className="v3ln-lifecycle-l">
-                <b>{lifecycles.length}</b> entit{lifecycles.length === 1 ? "y" : "ies"} look{lifecycles.length === 1 ? "s" : ""} to have a lifecycle
+                <b>{shownLifecycles.length}</b> entit{shownLifecycles.length === 1 ? "y" : "ies"}{" "}
+                {shownLifecycles.length === 1 ? "has" : "have"} a lifecycle
               </span>
               <span className="v3ln-lifecycle-m">
                 A thing the business moves through stages. Confirm the stages with the people who
                 move it — the stage list is theirs to state, not the schema&rsquo;s.
               </span>
-              {lifecycles.map((lc) => (
+              {shownLifecycles.map((lc) => (
                 <div key={lc.about} className="v3ln-lifecycle-row">
                   <span className="v3ln-lifecycle-e">
-                    <b>{lc.entity}</b>{lc.confident ? null : <em className="v3ln-lifecycle-maybe"> · unconfirmed reading</em>}
+                    <b>{lc.entity}</b> <em className="v3ln-lifecycle-maybe">· {lc.attribute}</em>
                   </span>
-                  <span className="v3ln-lifecycle-why" title={lifecycleReason(lc)}>{lifecycleReason(lc)}</span>
+                  <span className="v3ln-lifecycle-why" title={lifecycleReason(lc)}>{lifecycleEvidence(lc)}</span>
                   {lc.stages.length ? (
                     <span className="v3ln-lifecycle-stages">
                       {lc.stages.map((stage, i) => (
@@ -1332,11 +1335,24 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
                     </span>
                   ) : (
                     <span className="v3ln-lifecycle-stages none">
-                      no stages on the record yet — ask {lc.entity}&rsquo;s owner what they are
+                      stages not stated yet
                     </span>
                   )}
                 </div>
               ))}
+              {/* A MISS STAYS VISIBLE, BUT A SUGGESTION IS NOT A ROW. Thirteen rows
+                  went out in the first cut, seven of them "reads as a lifecycle from
+                  its name alone" — the same sentence seven times, for readings with
+                  one signal behind them. They are counted here instead: enough to
+                  know they exist, not enough to be mistaken for findings. */}
+              {maybeLifecycles.length ? (
+                <span className="v3ln-lifecycle-more">
+                  <b>{maybeLifecycles.length}</b> more read as a lifecycle from the field name alone
+                  {" "}({maybeLifecycles.slice(0, 4).map((l) => l.entity).join(", ")}
+                  {maybeLifecycles.length > 4 ? ` +${maybeLifecycles.length - 4}` : ""}) — one signal each,
+                  so Aura is not calling them lifecycles until something else agrees.
+                </span>
+              ) : null}
             </div>
           ) : null}
           <div className="v3ln-engbar" role="note" aria-label="Engagement — who needs attention">
