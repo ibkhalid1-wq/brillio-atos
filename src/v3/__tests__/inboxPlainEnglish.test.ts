@@ -363,12 +363,15 @@ describe("Discover reads and the Inbox acts — one system, one boundary", () =>
     expect(css).toMatch(/@media \(prefers-reduced-motion:reduce\)\{[\s\S]{0,80}--aura-motion:0ms/);
   });
 
-  it("an empty Inbox says so, rather than rendering nothing", () => {
-    // The zero state was the header hiding itself and the page ending, so "finished"
-    // and "failed to load" looked identical.
-    // MUTATION: drop the else branch → RED.
-    expect(inbox).toContain("Inbox clear");
-    expect(inbox, "and it must not imply the burn-down is empty")
-      .toContain("Open questions are still open");
+  it("does NOT grow a second empty state — the shell already owns that one", () => {
+    // The redesign brief asks for a crafted zero state. One already exists, one level
+    // up: the shell draws "Nothing needs you right now", gated on the same `rendered`
+    // count, with a documented history of getting that predicate right. A card was
+    // added here anyway and two standing guards caught it inside a minute.
+    // MUTATION: add an empty state to the Inbox again → RED.
+    // The comment explaining WHY still names it, so the check is for the markup.
+    expect(inbox, "a second empty state for one condition").not.toContain('className="v3ib-clear"');
+    expect(inbox, "the Inbox draws nothing and lets the shell speak")
+      .toContain("if (queue.rendered === 0) return null;");
   });
 });

@@ -893,14 +893,6 @@
 .v3ib-src.is-schedule::before{background:var(--v3-amber)}
 .v3ib-src.is-adjudicate::before{background:var(--aura-kind-adjudicate)}
 
-/* INBOX CLEAR — the zero state. Restrained on purpose: an empty inbox is the
-   ordinary good state, not an achievement to be congratulated for, and a page that
-   celebrates gets tiring by the third time you see it. */
-.v3ib-clear{display:flex;flex-direction:column;gap:var(--aura-s1);padding:var(--aura-s5) var(--aura-s4);
-  border:1px dashed var(--fs-line);border-radius:var(--aura-r-box);background:var(--fs-card);text-align:center}
-.v3ib-clear-t{font-size:var(--aura-t-head);font-weight:700;color:var(--v3-text-primary)}
-.v3ib-clear-m{font-size:var(--aura-t-body);color:var(--v3-text-secondary);max-width:52ch;margin:0 auto;line-height:1.5}
-
 /* ════ THE CARD every block inside a section is drawn as ════════════════════════
    Four blocks had grown four containers — one dashed accent border, one tinted
    fill, one plain, one with its own title class — so a column that holds four

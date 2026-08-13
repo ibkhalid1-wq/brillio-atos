@@ -541,6 +541,14 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
   // badge has (correctly) gone quiet, so gating on the badge's number would have deleted
   // the record of the ruling that emptied the queue.
   const queue = operatorQueueCounts(ledger);
+  // NOTHING TO DECIDE → THE INBOX DRAWS NOTHING, and that is not an oversight: the
+  // SHELL already owns this state and draws "Nothing needs you right now", gated on
+  // the same `rendered` count, with a documented history of getting that predicate
+  // right (FlowShell ~1134). An "Inbox clear" card was added here on 2026-08-13 under
+  // the redesign brief's ask for a crafted zero state — it was a SECOND empty state
+  // for one condition, which is the thing this codebase exists to avoid, and two
+  // standing guards caught it within the minute. Removed; the brief's ask was already
+  // satisfied one level up.
   if (queue.rendered === 0) return null;
 
   // ONE UNIT — QUESTIONS, the same unit the burn-down uses, so no reader reconciles
@@ -630,41 +638,13 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
 
   return (
     <div className="v3ib" aria-label="Operator inbox">
-      {stats.length ? (
-      <header className="v3ib-top">
-        <span className="v3ib-title">Inbox</span>
-        <span className="v3ib-count">
-          {stats.map(([id, n, label], i) => (
-            <span key={id}>
-              {i > 0 ? " · " : ""}
-              <button type="button" className="v3ib-countbtn" title={`Jump to ${label}`}
-                onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "center" })}>
-                <b>{n}</b> {label}
-              </button>
-            </span>
-          ))}
-          <span className="v3ib-unit"> · questions</span>
-        </span>
-        {/* THE BURN-DOWN IS NOT "ABOVE" ANY MORE. It was hidden from Work on request
-            (2026-08-12) and this line kept pointing at it — a sentence naming a thing
-            the reader cannot see. What the Inbox is, in its own terms, instead. */}
-        <span className="v3ib-of">everything waiting on you, grouped by what kind of decision it needs.</span>
-      </header>
-      ) : (
-        /* INBOX CLEAR. The zero state was nothing at all — the header hid itself and
-           the page ended, so "I have finished" and "this failed to load" looked the
-           same. It says which it is, and it says what an empty inbox does NOT mean:
-           the burn-down is not zero, the questions are with the people who owe them,
-           and that is the state you want rather than a warning. */
-        <div className="v3ib-clear" role="status">
-          <span className="v3ib-clear-t">Inbox clear</span>
-          <span className="v3ib-clear-m">
-            Nothing is waiting on a decision from you. Open questions are still open —
-            they are with the people who owe them, and they come back here only if
-            something needs YOUR move.
-          </span>
-        </div>
-      )}
+      {/* THE HEADER STRIP IS GONE (on request, 2026-08-13). It printed the same
+          counts the sections print two inches below, plus a sentence describing what
+          the Inbox is to someone already looking at it. Every stat was a jump link to
+          a section that is on screen anyway, and the counts are now on each section's
+          own badge — so nothing was lost except a second place for the same number to
+          be right or wrong in. The zero state stays: an empty board still has to say
+          which kind of empty it is. */}
 
       {/* 0a · ROLES NOBODY ANSWERS FOR — an operator decision, so it lives here.
               Every number is `soloByOwner`'s own count for that label: no person is
