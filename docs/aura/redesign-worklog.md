@@ -264,3 +264,31 @@ and all eight reassign controls.
 Guards: `inboxBadgeCount` gained an in-flight case (drawn, never summed);
 `inboxBadgeIsThePage`'s DOM reader now opens every collapsed disclosure before
 counting, so it measures rows rather than which sections happen to default open.
+
+## "why not clearing" — two answers, only one of them a bug (2026-08-13)
+
+**The bug.** `activeAssignments` folds the operator's own verbs and nothing else, so
+the only events that could ever end an in-flight row were the operator ending it by
+hand. The event that actually ends a question — it being ANSWERED — was invisible to
+it. A claim landing on a locus closes it on the burn-down, drops it off Discover, and
+left the Inbox saying "awaiting Sales Operations SME" for ever. Every route out of the
+queue had the same hole: a dictionary upload answering a typing question, an
+adjudication settling a frozen locus, a curation removing the element underneath.
+An assignment is now in flight exactly while its locus is in the open queue — the same
+definition the burn-down, Discover and the badge already use.
+
+**Measured before claiming anything, and it matters: this changes nothing on Laila
+New.** The section still reads 8. All eight really are open. So the fix is the
+mechanism by which a row CAN clear — not the reason those eight have not.
+
+**The real answer to the question.** Nothing can clear them on this deployment. The
+three routes out are: the stakeholder answers (**the write path is gated — not
+wired**), the operator unassigns, or the operator rules the question out of scope.
+The `answer` button on each row records a CAPTURE, which is deliberately kept beside
+the ledger and never becomes a claim — so it does not close the locus either.
+
+Which means Owned & in-flight, on today's build, is a section that can only ever grow.
+That is not a rendering bug; it is the gated write path showing through. It is the
+strongest argument yet for what the section already became (a collapsed reading, out
+of the badge), and it is why the honest next move is the write path, not more polish
+on this list.
