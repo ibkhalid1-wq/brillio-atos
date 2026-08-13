@@ -537,13 +537,28 @@ describe("[§4] convergence and heard are stated once, in the surface that owns 
    * computed and still consumed — the gate reads convergence. Only their display on
    * this board is gone, which is why the assertions below are about the SCREEN.
    */
-  it("neither is drawn on the board any more", () => {
+  it("neither is drawn on the WORK board any more", () => {
+    // Scoped to Work, which is what this mounts. Heard has since come BACK on
+    // DISCOVER (see the case below) — it is the roster's own progress and Discover
+    // is the roster. What must not return is either of them as a headline HERE,
+    // above the work, which is what was hidden.
     mountShell(laila());
     const board = (host.querySelector(".v3ln") ?? host).textContent ?? "";
     // MUTATION: restore the `.v3ln-stats.ledger` strip → both are RED.
-    expect(board.match(/Convergence/g) ?? [], "the convergence readout is back on the board").toHaveLength(0);
-    expect(board.match(/attributed closures/g) ?? [], "the heard readout is back on the board").toHaveLength(0);
+    expect(board.match(/Convergence/g) ?? [], "the convergence readout is back on Work").toHaveLength(0);
+    expect(board.match(/attributed closures/g) ?? [], "the heard readout is back on Work").toHaveLength(0);
     expect(host.querySelector(".v3ln-stats.ledger"), "the strip itself is back").toBeNull();
+  });
+
+  it("Heard lives on Discover instead — it was not simply deleted", () => {
+    // The honest half of the removal. Hiding the Work strip took the LAST rendering
+    // of HeardReadout with it, which the guard here caught at the time. It is drawn
+    // again, as one more state of the people on the Discover board.
+    // MUTATION: remove the engagement-bar pill → RED.
+    const src = readFileSync(resolve(__dirname, "../components/flow/TheLine.tsx"), "utf8");
+    expect(src).toContain('v3ln-engpill is-heard');
+    expect(src, "the readout itself must be the one rendered, not a re-derived number")
+      .toContain("<HeardReadout heard={ledger.heard} />");
   });
 
   it("the burn-down headline went with them", () => {

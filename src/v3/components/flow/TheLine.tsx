@@ -44,7 +44,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useProgramLedger } from "@/v3/lib/ledger/useProgramLedger";
 import { useOperatorCommits } from "@/v3/lib/ledger/useOperatorCommits";
 import { pinsForSend } from "@/v3/lib/ledger/operatorActions";
-import { ProvisionalMark, ClaimStatus, SourceTag } from "@/v3/components/flow/studio/ledgerPrimitives";
+import { HeardReadout, ProvisionalMark, ClaimStatus, SourceTag } from "@/v3/components/flow/studio/ledgerPrimitives";
 import DesignLoopZones from "@/v3/components/flow/DesignLoopZones";
 import { ownerLabelsForCast } from "@/v3/lib/ledger/ownerBinding";
 import { lifecycleEntities, lifecycleReason } from "@/v3/lib/ledger/lifecycle";
@@ -1345,6 +1345,13 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
             <span className="v3ln-engpill is-in-flight"><b>{engSummary["in-flight"]}</b> in flight{engSummary.oldest > 0 ? ` · oldest ${ageStr(engSummary.oldest)}` : ""}</span>
             <span className="v3ln-engpill is-blocked"><b>{engSummary.blocked}</b> blocked</span>
             <span className="v3ln-engpill is-done"><b>{engSummary.done}</b> done for now</span>
+            {/* HEARD, BACK — and on the surface it is about. Hiding the Work strip
+                (2026-08-12) took the last rendering of it with it, which was a real
+                loss: heard is the roster's own progress, and Discover IS the roster.
+                It reads here as one more state of the people on this board, beside
+                ready / in flight / blocked, rather than as a programme headline
+                above the work. */}
+            <span className="v3ln-engpill is-heard"><HeardReadout heard={ledger.heard} /></span>
             <span className="v3ln-engbar-note">ageing is operator-tracked (the chase), not a system-tracked reply — until the link is live</span>
           </div>
           {/* "NOBODY TO ASK" MOVED TO THE INBOX (2026-08-12). Its own note told

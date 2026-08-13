@@ -14,7 +14,12 @@
  * agentified steps in the projection, and a workflow rename broke the text-keyed half
  * without saying anything.
  *
- * The marks were real decisions people made, so the fix is a fold, not a delete.
+ * The card is gone and every reader now comes here. NO migration was kept for the
+ * marks: measured across all 125 programme blobs, deleted included, `agentifyMarks`
+ * held ZERO entries, and it can never gain one now that the only surface writing it
+ * is deleted. A reader for a provably extinct input is a test passing over an empty
+ * set. The legacy `workflows` copy is a different matter and is exercised below —
+ * 55 live calls on two programmes still arrive that way.
  */
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
@@ -32,62 +37,39 @@ const ATLAS = {
 };
 const stepId = (i: number) => decisionStepId(ATLAS.workflows[0], ATLAS.workflows[0].steps[i]);
 
-describe("a call made on the retired surface survives", () => {
-  it("an Experience Design mark reads as an agentify decision", () => {
-    // MUTATION: drop the marks fold from readDecisions → RED, and every call the
-    // delivery team made on that card is silently gone.
-    const decisions = readDecisions({}, ATLAS, {
-      agentifyMarks: { "Quote to cash::Approve the discount": { workflow: "Quote to cash", action: "Approve the discount" } },
-    });
-    expect(decisions[stepId(1)]).toEqual({ mode: "agentify", rationale: "" });
+describe("the register outranks the legacy copy", () => {
+  /**
+   * The legacy shape that is REAL: Agentify's own copy of the workflows with a
+   * `mode` per step. Measured across every blob, 55 live calls on two programmes
+   * still arrive this way — unlike `agentifyMarks`, which held zero and whose
+   * writing surface no longer exists, so no fold was kept for it.
+   */
+  const legacyCopy = {
+    workflows: [{
+      name: "Quote to cash",
+      steps: [
+        { actor: "Rep", action: "Draft the quote" },
+        { actor: "Manager", action: "Approve the discount", mode: "agentify" },
+      ],
+    }],
+  };
+
+  it("reads a call made in the legacy copy", () => {
+    expect(readDecisions(legacyCopy, ATLAS)[stepId(1)]?.mode).toBe("agentify");
   });
 
-  it("it lands under the ELEMENT ID, so a rename cannot orphan it", () => {
-    // The whole reason the register exists. The mark's own key is the workflow's
-    // words; what it resolves to is not.
-    const decisions = readDecisions({}, ATLAS, {
-      agentifyMarks: { "Quote to cash::Draft the quote": {} },
-    });
-    const id = Object.keys(decisions)[0];
-    expect(id).toBe(stepId(0));
-    expect(id, "the text key was carried through as the identity").not.toContain("::");
+  it("a withdrawal in the register is not resurrected by the legacy copy", () => {
+    // The ordering failure that would be hardest to notice and worst to live with:
+    // the operator takes a call back, and the old copy puts it straight back.
+    // MUTATION: read the legacy copy AFTER the register → RED.
+    const withdrawn = writeDecision(legacyCopy, ATLAS, stepId(1), { mode: "" });
+    expect(readDecisions(withdrawn, ATLAS)[stepId(1)],
+      "a withdrawn call came back from the legacy copy").toBeUndefined();
   });
 
-  it("a mark for a step the Atlas does not have is not invented", () => {
-    // Resolution is through the Atlas. A mark left over from a step somebody deleted
-    // resolves to nothing, and nothing is exactly what it should become.
-    const decisions = readDecisions({}, ATLAS, {
-      agentifyMarks: { "Quote to cash::A step that was removed": {} },
-    });
-    expect(decisions).toEqual({});
-  });
-
-  it("marks do not touch a programme that has none", () => {
-    expect(readDecisions({}, ATLAS, {})).toEqual({});
-    expect(readDecisions({}, ATLAS, null)).toEqual({});
-    expect(readDecisions({}, ATLAS)).toEqual({});
-  });
-});
-
-describe("the register outranks both legacy sources", () => {
-  it("a withdrawal in Agentify is not resurrected by an old mark", () => {
-    // The failure this ordering prevents: the operator takes a call back in Agentify,
-    // and the retired card's mark puts it straight back on every read.
-    // MUTATION: fold the marks AFTER the decisions register → RED.
-    const withdrawn = writeDecision({}, ATLAS, stepId(1), { mode: "" });
-    const decisions = readDecisions(withdrawn, ATLAS, {
-      agentifyMarks: { "Quote to cash::Approve the discount": {} },
-    });
-    expect(decisions[stepId(1)], "a withdrawn call came back from the retired surface").toBeUndefined();
-  });
-
-  it("an explicit call in Agentify wins over the mark's implied one", () => {
-    // A mark only ever meant "agentify"; Agentify can say "assist" or "keep".
-    const kept = writeDecision({}, ATLAS, stepId(1), { mode: "keep" });
-    const decisions = readDecisions(kept, ATLAS, {
-      agentifyMarks: { "Quote to cash::Approve the discount": {} },
-    });
-    expect(decisions[stepId(1)].mode).toBe("keep");
+  it("an explicit call outranks the legacy one", () => {
+    const kept = writeDecision(legacyCopy, ATLAS, stepId(1), { mode: "keep" });
+    expect(readDecisions(kept, ATLAS)[stepId(1)].mode).toBe("keep");
   });
 });
 
@@ -108,10 +90,13 @@ describe("there is one decision surface, and one reader", () => {
     expect(studios).toContain("projectFutureState(program).workflows");
   });
 
-  it("every reader passes the Experience Design doc, or the fold is dead code", () => {
-    // A fold no caller reaches is the same as no fold: the guard against fixing this
-    // in the library and forgetting the call sites.
-    expect(SRC("flowFutureState.ts")).toContain("readDecisions(agentify, atlas, design)");
-    expect(SRC("studio/studios.tsx")).toContain("readDecisions(doc, atlasDoc, edDoc)");
+  it("no reader is left holding the extinct store", () => {
+    // The fold that once read `agentifyMarks` is gone with the surface that wrote it
+    // (zero entries across all 125 blobs, and no writer left to make one). This is
+    // the guard against it creeping back in as "compatibility".
+    expect(SRC("flowFutureState.ts")).toContain("readDecisions(agentify, atlas)");
+    expect(SRC("studio/studios.tsx")).toContain("readDecisions(doc, atlasDoc)");
+    const module = readFileSync(resolve(__dirname, "../lib/ledger/agentifyDecisions.ts"), "utf8");
+    expect(module, "the extinct store is being read again").not.toContain("agentifyMarks)");
   });
 });

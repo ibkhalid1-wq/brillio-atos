@@ -1117,6 +1117,29 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                     {src
                       ? <span className="v3ib-peek-src" title={src}>from: {src}</span>
                       : <span className="v3ib-peek-src none">no source on record</span>}
+                    {/* THE FOURTH ANSWER: the field should not exist.
+                        For a field with NO source and NO system of record, the three
+                        routes on offer were chase a dictionary (from a system nobody
+                        named), ask a stakeholder (Discover excludes these, rightly),
+                        or confirm a type by hand. All three assume the field is real.
+                        Laila New held "Does every Account need a ANOTHER, or is that
+                        optional?" — an attribute Aura invented while summarising, with
+                        no source, now generating a question about a thing that does not
+                        exist. Nobody could answer it because there is nothing to answer.
+                        `decide-fate: out-of-scope` is the ledger's own way to say so and
+                        already existed; it was simply not offered where it is the only
+                        correct move. It records WHY, so a field ruled out stays ruled
+                        out with its reason on the record rather than vanishing. */}
+                    {!src && peek.orphan ? (
+                      <button type="button" className="v3ib-peek-drop" disabled={busy === about}
+                        aria-label={spoken(`This field should not exist: ${q.question}`)}
+                        title="No source, no system — record that the field itself is out of scope"
+                        onClick={() => void run(about, {
+                          kind: "decide-fate", about, slot: slotOf(about), decision: "out-of-scope",
+                          reason: "no source on record and no system of record — the field itself is not evidenced",
+                          by, at: nowISO(),
+                        })}>{busy === about ? "Recording…" : "this field shouldn’t exist"}</button>
+                    ) : null}
                   </li>
                 );
               })}
