@@ -12,7 +12,7 @@
  *                     a signed-in human ingests it in the app. Attested.
  * Unknown or stale tokens 404 without confirming whether the programme exists.
  */
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.8";
+import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.49.8";
 import { stripUnnamedSuffix } from "../_shared/unnamedSuffix.ts";
 import { extractDocumentText, extractRelevant } from "../_shared/extractText.ts";
 import { completeClaudeText } from "../_shared/claudeClient.ts";
@@ -123,9 +123,14 @@ function citedEvidence(answer: string, evidence: PortalEvidence[]): PortalEviden
   const re = /\[(E\d+)\]/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(answer)) !== null) {
-    if (seen.has(m[1])) continue;
-    const hit = evidence.find((e) => e.id === m[1]);
-    if (hit) { seen.add(m[1]); cited.push(hit); }
+    // Bound to a const per iteration: `m` is a mutable `let`, so TS cannot prove it
+    // is still non-null inside the callback below and reports TS18047. Runtime was
+    // always safe (the callback runs synchronously in this iteration) — this is the
+    // narrowing written down, not a behaviour change.
+    const tag = m[1];
+    if (seen.has(tag)) continue;
+    const hit = evidence.find((e) => e.id === tag);
+    if (hit) { seen.add(tag); cited.push(hit); }
   }
   return cited;
 }
@@ -172,7 +177,11 @@ const NO_LINK = "This link isn't recognised for this programme — it may have b
 const EXPIRED = "This link has expired. Ask for a fresh one.";
 
 async function loadPack(token: string): Promise<{ reason: string } | {
-  admin: ReturnType<typeof createClient>; programId: string; programName: string;
+  // `ReturnType<typeof createClient>` resolves the generics to their UNINFERRED
+  // defaults (`unknown, never, …`), while the actual call infers `any, "public", any`
+  // — so the field could never accept the client built five lines below it (TS2322).
+  // The client's own exported type is what this is.
+  admin: SupabaseClient; programId: string; programName: string;
   raw: Record<string, unknown>; inner: Record<string, unknown>; nested: boolean;
   kind: "interview" | "demo" | "approval"; pack: Record<string, unknown>; updatedAt: string | null;
 }> {
