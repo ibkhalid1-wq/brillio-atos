@@ -112,10 +112,30 @@ function rosterProjection(store: LedgerStore): { solo: Map<string, QueueItem[]>;
   return { solo, sessions };
 }
 
+/**
+ * BEST OF THREE, not one sample.
+ *
+ * These ratios are the file's findings, and they were measured once each — which
+ * made the whole suite flaky: under vitest's parallel pool a single sample picks up
+ * whatever else the machine was doing, and the 1x case (small, fast) is hurt
+ * proportionally more than the 10x case, so the ratio collapses and a REAL property
+ * reads as a failure. It failed in a full run and passed in isolation, repeatedly —
+ * the classic signature.
+ *
+ * The minimum of a few runs is the standard answer: scheduler noise only ever ADDS
+ * time, so the fastest observed run is the one closest to the true cost. Three is
+ * enough to shake off a single unlucky slice without turning a test suite into a
+ * benchmark suite.
+ */
 const time = <T>(fn: () => T): { ms: number; value: T } => {
-  const t0 = performance.now();
-  const value = fn();
-  return { ms: performance.now() - t0, value };
+  let best = Infinity;
+  let value!: T;
+  for (let i = 0; i < 3; i += 1) {
+    const t0 = performance.now();
+    value = fn();
+    best = Math.min(best, performance.now() - t0);
+  }
+  return { ms: best, value };
 };
 
 interface Run {
@@ -184,7 +204,7 @@ describe("[5a] the measurement — what 10x actually is", () => {
     const ratio = X10.open.length / X1.open.length;
     expect(ratio).toBeGreaterThan(9.5);
     expect(ratio).toBeLessThan(10.5);
-    // eslint-disable-next-line no-console
+     
     console.log(`[5a] Laila open=${REAL_OPEN} · synthetic 1x open=${X1.open.length} · 10x open=${X10.open.length} (x${ratio.toFixed(2)}) · 10x elements=${X10.store.elements().length} claims=${X10.store.claims().length}`);
   });
 });
@@ -310,7 +330,7 @@ describe("[5b] FINDING F-5.2 — one seam, one owner label (FIXED in pass 2)", (
     expect(labels.has("Finance ⋈ Sales")).toBe(false);
     const merged = q.filter((i) => i.ownerLabel === "Practices ⋈ Sales Leaders").length;
     expect(merged).toBeGreaterThan(0);
-    // eslint-disable-next-line no-console
+     
     console.log(`[F-5.2 fixed] Laila: "Practices ⋈ Sales Leaders"=${merged} questions in ONE band (was 5 + 10 across two)`);
   });
 
@@ -346,9 +366,9 @@ describe("[5c] timings and growth shape", () => {
 
   it("records the timings for both scales", () => {
     const row = (r: Run) => `${r.label}: migrate ${r.t.migrate.toFixed(1)}ms · conservation ${r.t.conservation.toFixed(1)}ms · renderAll(${r.open.length}) ${r.t.renderAll.toFixed(1)}ms · roster ${r.t.roster.toFixed(1)}ms`;
-    // eslint-disable-next-line no-console
+     
     console.log(`[5c] ${row(X1)}\n[5c] ${row(X10)}`);
-    // eslint-disable-next-line no-console
+     
     console.log(`[5c] ratios (10x/1x): conservation x${ratio(X1.t.conservation, X10.t.conservation).toFixed(1)} · renderAll x${ratio(X1.t.renderAll, X10.t.renderAll).toFixed(1)} · roster x${ratio(X1.t.roster, X10.t.roster).toFixed(1)}`);
     expect(X10.t.renderAll).toBeGreaterThan(0);
   });
@@ -363,7 +383,7 @@ describe("[5c] timings and growth shape", () => {
   it("MIGRATION growth is recorded (frozen-core O(C^2) insert path)", () => {
     const total = ratio(X1.t.migrate, X10.t.migrate);
     const perClaim = ratio(X1.t.migrate / X1.store.claims().length, X10.t.migrate / X10.store.claims().length);
-    // eslint-disable-next-line no-console
+     
     console.log(`[F-5.3] migrate growth for 10x data: total x${total.toFixed(1)} · PER-CLAIM x${perClaim.toFixed(1)} (linear = 1)`);
     expect(perClaim).toBeGreaterThan(1.8);   // super-linear — the finding
     expect(perClaim).toBeLessThan(40);       // …and no worse than quadratic-with-slack
@@ -385,7 +405,7 @@ describe("[5c] timings and growth shape", () => {
     // totals on a shared machine are noisy, so the assertion is on this ratio with a
     // wide band — it still separates "linear" from "grows with programme size".
     const perLocus = ratio(X1.t.renderAll / X1.open.length, X10.t.renderAll / X10.open.length);
-    // eslint-disable-next-line no-console
+     
     console.log(`[5c] renderAll growth for 10x data: total x${total.toFixed(1)} · PER-LOCUS x${perLocus.toFixed(1)} (linear = 1, quadratic ≈ 10)`);
     expect(perLocus).toBeGreaterThan(1.8);   // it IS super-linear — the finding, asserted
     expect(perLocus).toBeLessThan(40);       // …and no worse than quadratic-with-slack

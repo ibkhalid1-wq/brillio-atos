@@ -28,10 +28,10 @@ import { loadExtractText, loadClaudeClient } from "./helpers/edgeModules";
  * exist). Nothing here reaches a network or a provider key; every Deno.env read
  * in `claudeClient` sits inside the function bodies the spy replaces.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 type AnyRec = Record<string, any>;
 const calls: AnyRec[] = [];
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 let extractDocumentText: (b: Uint8Array, s: string, m: string, f: string, n: number) => Promise<any>;
 let modelReply = "MODEL TRANSCRIPT\nrow one\nrow two";
 
@@ -825,6 +825,6 @@ afterAll(() => {
   lines.push(`${RESULTS.length} cases · ${RESULTS.filter((r) => r.outcome === "extracted").length} extracted · ` +
     `${RESULTS.filter((r) => r.outcome === "failed-visibly").length} failed visibly · ` +
     `${RESULTS.filter((r) => r.outcome === "WRONG CONTENT").length} wrong content · ${silent.length} SILENTLY EMPTY`, "");
-  // eslint-disable-next-line no-console
+   
   console.log(lines.join("\n"));
 });

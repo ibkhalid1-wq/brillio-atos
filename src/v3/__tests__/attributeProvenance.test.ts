@@ -90,7 +90,7 @@ describe("recording a source asks nothing", () => {
 
 describe("the surfaces say when nothing is on record", () => {
   const src = (f: string) =>
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+     
     require("node:fs").readFileSync(
       require("node:path").resolve(__dirname, `../components/flow/${f}`), "utf8") as string;
 
@@ -107,7 +107,7 @@ describe("the surfaces say when nothing is on record", () => {
   });
 
   it("the generator is asked for it, and told why a bare string is not enough", () => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+     
     const agent = require("node:fs").readFileSync(
       require("node:path").resolve(__dirname, "../../../supabase/functions/run-agent/index.ts"), "utf8") as string;
     expect(agent).toContain('"evidence": "verbatim quote or the document that names it');

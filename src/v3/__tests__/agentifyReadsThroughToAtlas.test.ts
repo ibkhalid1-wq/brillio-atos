@@ -422,7 +422,6 @@ describe("the list collapses and filters — presentation only", () => {
 
   it("'only undecided' hides decided work without changing it", () => {
     const atlas = atlasDoc();
-    const wf = atlas.workflows[0] as Record<string, unknown>;
     const decided = { [DECISIONS_FIELD]: [{ _stepId: RE_KEY_ID, mode: "agentify" }] };
     const el = mount("agentify", decided, programWith(atlas));
     expect(activityRows(el)).toHaveLength(2);
