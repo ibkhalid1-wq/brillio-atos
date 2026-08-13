@@ -104,6 +104,21 @@ const rowOf = (id: string, workflow: string, step: string, d: StepDecision): Rec
 export function readDecisions(
   agentifyDoc: Record<string, unknown> | null | undefined,
   atlasDoc: Record<string, unknown> | null | undefined,
+  /**
+   * The Experience Design document, when the caller has it.
+   *
+   * A SECOND decision surface existed there — "Workflows to agentify", a ⚡ toggle
+   * over the same Atlas steps, writing `agentifyMarks` keyed by "workflow::action"
+   * TEXT while this register is keyed by element id. Two stores, two key schemes,
+   * one question. The Blueprint read only the marks and the future-state projection
+   * read only this register, so a team that did the work on one surface got nothing
+   * on the other, and a rename broke the text-keyed half silently.
+   *
+   * The marks were real decisions people made, so they are read here as a legacy
+   * source — resolved through the Atlas, exactly as the older legacy shape is — and
+   * never written back. There is one decision surface now, and it is Agentify.
+   */
+  experienceDesignDoc?: Record<string, unknown> | null,
 ): DecisionMap {
   const doc = asRecord(agentifyDoc);
   const out: DecisionMap = {};
@@ -120,7 +135,25 @@ export function readDecisions(
     }
   }
 
+  // ── legacy: Experience Design's ⚡ marks. Text-keyed, so they resolve by matching
+  // the Atlas's own workflow/step words — the same match-once-then-file-by-id trick,
+  // at the one moment it is legitimate. A mark only ever meant "agentify"; the
+  // studio offered no other call.
+  const marks = asRecord(asRecord(experienceDesignDoc).agentifyMarks);
+  if (Object.keys(marks).length) {
+    for (const wf of asArray(asRecord(atlasDoc).workflows).map(asRecord)) {
+      for (const step of asArray(wf.steps).map(asRecord)) {
+        const key = `${str(wf.name)}::${str(step.action)}`;
+        if (!Object.prototype.hasOwnProperty.call(marks, key)) continue;
+        out[decisionStepId(wf, step)] = { mode: "agentify", rationale: "" };
+      }
+    }
+  }
+
   // ── the decisions register. Present-and-empty is a decision to un-decide.
+  // LAST, so an explicit call on this surface — including a withdrawal — outranks
+  // both legacy sources. A decision the operator later took back must not be
+  // resurrected by the copy it was made on.
   for (const raw of asArray(doc[DECISIONS_FIELD])) {
     const row = asRecord(raw);
     const id = str(row[DECISION_STEP_ID]).trim();
