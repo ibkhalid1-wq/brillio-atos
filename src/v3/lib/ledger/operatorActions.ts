@@ -71,7 +71,11 @@ export interface DecideFateAction {
   kind: "decide-fate";
   about: string;
   slot: string;
-  decision: "out-of-scope" | "escalate";
+  /** `reopen` UNDOES a ruling. An operator who rules a question out of scope by
+   *  mistake had no way back: the Decided trace listed it and offered nothing, so
+   *  the only recovery was editing the blob. A ruling is a decision, and every
+   *  decision on this surface is reversible by the person who made it. */
+  decision: "out-of-scope" | "escalate" | "reopen";
   reason: string;
   by: string;
   at: string;
@@ -202,7 +206,14 @@ export function foldOwnership(actions: OperatorAction[]): Map<string, LocusOwner
       // unassign (operator correction OR a stakeholder "not mine") ENDS the in-flight:
       // the link's claim on the question is over, so the pin goes with it.
       case "unassign": { const s = get(a.about); s.owner = undefined; s.fate = undefined; s.pin = undefined; s.ackAgainst = undefined; break; }
-      case "decide-fate": { const s = get(a.about); s.owner = undefined; s.fate = a; s.pin = undefined; s.ackAgainst = undefined; break; }
+      case "decide-fate": {
+        const s = get(a.about);
+        // REOPEN clears the ruling and leaves everything else alone — the locus goes
+        // back to whatever the derivation says, exactly as if it had never been ruled.
+        if (a.decision === "reopen") { s.fate = undefined; break; }
+        s.owner = undefined; s.fate = a; s.pin = undefined; s.ackAgainst = undefined;
+        break;
+      }
       case "pin": { const s = get(a.about); s.pin = a; s.ackAgainst = undefined; s.fate = undefined; break; }
       case "pin-resolve": {
         const s = get(a.about);

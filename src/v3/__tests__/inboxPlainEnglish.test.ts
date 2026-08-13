@@ -118,7 +118,7 @@ describe("the grid tells the truth about which population it is showing", () => 
     // action (answering them again) instead of the right one (accept or overrule).
     // MUTATION: drop the `given ?` branch → RED.
     expect(grid).toContain('{given ? "Aura typed from their names" : "still need a type"}');
-    expect(grid).toContain("code-derived · weak");
+    expect(grid).toContain("the weakest thing on it");
   });
 });
 

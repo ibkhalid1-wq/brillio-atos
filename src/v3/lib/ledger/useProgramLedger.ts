@@ -33,7 +33,7 @@ import {
 } from "./projections";
 import { buildReadModel } from "./readModel";
 import { projectKitQuestions, type KitQuestion } from "./kitProjection";
-import { deriveArtifactAsks, parseDeclaredSors, type ArtifactAskMark, type ArtifactAskView } from "./artifactAsks";
+import { deriveArtifactAsks, parseDeclaredSors, type ArtifactAskMark, type ArtifactAskView, systemOfRecordQuestionOverlay } from "./artifactAsks";
 import { reconcile } from "./merge";
 import { readDictionarySources, dictionaryToClaims, TYPING_SLOTS } from "./dictionary";
 import { deriveRoles } from "@shared/semanticRoles.ts";
@@ -307,7 +307,11 @@ export function useProgramLedger(program?: ProgramSummary): ProgramLedger {
     // reach anyone: no card, no bucket, no question. Overlay only — the frozen store
     // is untouched, exactly as the curation proposals above.
     const lifecycleBorn = lifecycleQuestionOverlay(migrated);
-    const overlaid = [...curation.claims, ...lifecycleBorn];
+    // "WHICH SYSTEM HOLDS THIS?" — same gap, same fix. 37 typing questions sat on
+    // entities with no system of record and not one of those entities had the
+    // question anywhere, so the block reporting them could only describe them.
+    const sorBorn = systemOfRecordQuestionOverlay(migrated);
+    const overlaid = [...curation.claims, ...lifecycleBorn, ...sorBorn];
     const withProposals = overlaid.length ? [...migrated.claims(), ...overlaid] : migrated.claims();
     // ── in-flight PINNING: the BASELINE owner per open locus, read ONCE off the
     // pre-overlay claims — "who would own this if no link had gone out". It exists
@@ -315,7 +319,7 @@ export function useProgramLedger(program?: ProgramSummary): ProgramLedger {
     // pinned recipient, and the disagreement goes to the operator as a decision.
     const baselineOwner = baselineOwnerLabels(withProposals, activeAssignments(actions));
     const pinConflicts = derivePinConflicts(fold, (about) => baselineOwner.get(about) ?? "", ownerRoleLabelForArea);
-    const store = fold.size || curation.elements.length || lifecycleBorn.length
+    const store = fold.size || curation.elements.length || lifecycleBorn.length || sorBorn.length
       ? buildReadModel([...migrated.elements(), ...curation.elements], applyOwnership(withProposals, fold))
       : migrated;
     const assignments = [...activeAssignments(actions).values()];

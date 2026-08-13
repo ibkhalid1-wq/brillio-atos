@@ -602,7 +602,10 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
           ))}
           <span className="v3ib-unit"> · questions</span>
         </span>
-        <span className="v3ib-of">the operator-decision queue — four sources, each a section below. The burn-down above is the goal.</span>
+        {/* THE BURN-DOWN IS NOT "ABOVE" ANY MORE. It was hidden from Work on request
+            (2026-08-12) and this line kept pointing at it — a sentence naming a thing
+            the reader cannot see. What the Inbox is, in its own terms, instead. */}
+        <span className="v3ib-of">everything waiting on you, grouped by what kind of decision it needs.</span>
       </header>
       ) : null}
 
@@ -744,8 +747,8 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
             unitPlural="systems of record"
             tag={<SourceTag source="code-derived" />}
             lead={<>With an unprovided dictionary — <b>one upload each</b> closes the typing wall, not
-              form fields to the domain expert. Dictionary claims land <b>code-derived · weak</b> —
-              any owner can still deviate.</>}>
+              form fields to the domain expert. What a dictionary states is
+              <b> the weakest thing on the record</b> — any owner can still say otherwise.</>}>
             {/* A BURN-DOWN THAT SHRANK BECAUSE THE MACHINE GUESSED MUST SAY SO.
                 These left the wall without anybody answering them, so the count is
                 stated here rather than quietly absorbed. They are the weakest claim
@@ -756,8 +759,8 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                 title={<><b>{derived.length}</b> type{derived.length === 1 ? " was" : "s were"} read from the field names, not answered by anyone</>}
                 note={<>{derived.slice(0, 3).map((d) => `${d.entity}.${d.attribute} → ${d.dataType}`).join(" · ")}
                   {derived.length > 3 ? ` · +${derived.length - 3} more` : ""}
-                  {" "}— <b>code-derived · weak</b>, the weakest claim on the record: a dictionary or an
-                  owner overrules any of them. A real dictionary is still the better answer.</>}
+                  {" "}— Aura&rsquo;s own reading, and <b>the weakest thing on the record</b>: a dictionary
+                  or an owner overrules any of them. A real dictionary is still the better answer.</>}
                 reveal={onDictionary ? {
                   label: `review the ${derived.length}`, open: showDerived,
                   onToggle: () => setShowDerived((v) => !v),
@@ -909,10 +912,19 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                    on: no dictionary can be requested for a system nobody has named, so
                    this bucket is deliberately NOT an ask — it waits on the Frame answer
                    that turns it into one. */
+                /* WHAT ACTUALLY ATTACHES THEM. This said "name the system on the Frame —
+                   in systems of record — and these attach to its ask", which is FALSE:
+                   attachment runs through `sorOfElement`, which reads the ENTITY's own
+                   system of record. A Frame declaration mints a new ask and attaches
+                   nothing. The real question — "which system holds Product?" — did not
+                   exist for a single one of these entities until it was born
+                   (`systemOfRecordQuestionOverlay`), so it is now on somebody's list
+                   and this card says whose. */
                 note={<>Nothing to chase yet: a dictionary is requested from a system, and these
                   {" "}{orphanEntities.length === 1 ? "entity holds" : "entities hold"} no system name.
-                  {" "}Name the system on the Frame — in <b>systems of record</b> — and these
-                  {" "}{unattributed.weight} attach to its ask. They stay open and counted meanwhile.</>}
+                  {" "}Each one now carries its own <b>&ldquo;which system holds this?&rdquo;</b> question — answer
+                  that and its typing questions join that system&rsquo;s dictionary ask. They stay open
+                  and counted meanwhile.</>}
                 /* IN THE CARD, NOT A MODAL. This one reveal opened a dialog while the two
                    above expanded in place — the same act, three interactions. Every
                    reveal in this Inbox now opens where it was asked for. */
@@ -1178,7 +1190,18 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
           <ul className="v3ib-list">
             {ledger.decideFates.map((d) => (
               <li key={d.about} className="v3ib-row is-decided">
-                <span className="v3ib-row-h"><SourceTag source="dispositioned" /><QLine about={d.about} tail={<><span className={`v3ib-fate-tag ${d.decision === "escalate" ? "esc" : "oos"}`}>{d.decision === "escalate" ? <><span aria-hidden="true">↥ </span>escalated</> : <><span aria-hidden="true">⊘ </span>out-of-scope</>}</span><span className="v3ib-fate-reason">{d.reason}</span></>} /></span>
+                <span className="v3ib-row-h"><SourceTag source="dispositioned" /><QLine about={d.about} tail={<><span className={`v3ib-fate-tag ${d.decision === "escalate" ? "esc" : "oos"}`}>{d.decision === "escalate" ? <><span aria-hidden="true">↥ </span>escalated</> : <><span aria-hidden="true">⊘ </span>out-of-scope</>}</span><span className="v3ib-fate-reason">{d.reason}</span></>} />
+                  {/* THE ONE ACT A RULING OWES. This trace listed what the operator had
+                      ruled on and offered nothing — the only way back from a mistaken
+                      "out-of-scope" was editing the blob. Reopening is a WRITE, so it is
+                      drawn as one. */}
+                  <button type="button" className="v3ib-btn sm" disabled={busy === d.about}
+                    aria-label={spoken(`Reopen: ${Q(d.about).question}`)}
+                    onClick={() => void run(d.about, {
+                      kind: "decide-fate", about: d.about, slot: slotOf(d.about),
+                      decision: "reopen", reason: "reopened by the operator", by, at: nowISO(),
+                    })}>{busy === d.about ? "Reopening…" : "reopen"}</button>
+                </span>
               </li>
             ))}
           </ul>

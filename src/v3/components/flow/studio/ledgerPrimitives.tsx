@@ -31,15 +31,24 @@ export function ClaimStatus({ state, showLabel = true }: { state: SlotState; sho
 }
 
 // ── source class — legible; external-standard & as-is-export read as strong-default-awaiting-confirmation ──
+/**
+ * THE LABEL A PERSON READS, not the ledger's own word for it.
+ *
+ * These chips print beside every claim on every surface, and four of them were
+ * ledger vocabulary: "dispositioned" for a ruling the operator made, "export" for a
+ * reading taken off a schema, "asserted" for something a person said, "generated"
+ * for something Aura wrote. An operator asked what each was; nobody should have to.
+ * The ledger keys are untouched — only the words on screen change.
+ */
 const SOURCE_META: Record<string, { icon: string; label: string; provisional: boolean }> = {
   regulation: { icon: "§", label: "regulation", provisional: false },
-  asserted: { icon: "✍", label: "asserted", provisional: false },
-  dispositioned: { icon: "▧", label: "dispositioned", provisional: false },
+  asserted: { icon: "✍", label: "someone said", provisional: false },
+  dispositioned: { icon: "▧", label: "your ruling", provisional: false },
   document: { icon: "▤", label: "document", provisional: false },
   "external-standard": { icon: "⌘", label: "std", provisional: true },
-  "code-derived": { icon: "⎘", label: "export", provisional: true },
+  "code-derived": { icon: "⎘", label: "from a schema", provisional: true },
   precedent: { icon: "⟲", label: "precedent", provisional: false },
-  generated: { icon: "✧", label: "generated", provisional: true },
+  generated: { icon: "✧", label: "Aura wrote it", provisional: true },
 };
 
 export function SourceTag({ source }: { source: string }) {
