@@ -457,12 +457,10 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
   // jointly owned, grouped by function pair. Never recomputed here; only the frozen
   // loci are subtracted, by the same call the badge uses (see `unfrozen` above), so a
   // question awaiting adjudication is not also offered as one to schedule.
-  const sessionQueue = unfrozen.sessions;
   // A "schedule" action = the seam is on the session plan (intent). It carries NO
   // date — scheduling is gated — so the open item on every seam is a DATE. Only the
   // pair is needed downstream (planned or not), so the section takes the set, not the
   // actions: a row shows an intent was recorded, never a time it does not have.
-  const plannedPairs = new Set(ledger.schedules.map((s) => s.pair));
 
   const run = async (key: string, action: OperatorAction | OperatorAction[]) => {
     setBusy(key); try { await onCommit(action); } finally { setBusy(null); }
@@ -1153,12 +1151,12 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
       )}
 
       {/* 2 · SEAMS → the session queue. One summary line, expandable (see SessionsSection). */}
-      <SessionsSection
-        sessionQueue={sessionQueue}
-        plannedPairs={plannedPairs}
-        busy={busy}
-        onPropose={(pair, abouts) => void run(pair, { kind: "schedule", pair, parties: pair.split("⋈").map((s) => s.trim()), abouts, by, at: nowISO() })}
-      />
+      {/* THE SESSIONS SECTION IS GONE (on request, 2026-08-13). A jointly-owned
+          question now goes out on BOTH owners' links, so there is nothing here for
+          an operator to decide — the section's only act was "propose a time", which
+          booked nothing and was the last remnant of the routing that held those
+          questions back until a meeting existed. The seam is still visible where it
+          is useful: Discover shows which pairs share questions. */}
 
       {/* 3 · CONFLICTS → ADJUDICATE (read-side; resolution gated) */}
       {/* EMPTY-STATE: 0 conflicts → section HIDDEN (by request, 2026-08-10; the earlier

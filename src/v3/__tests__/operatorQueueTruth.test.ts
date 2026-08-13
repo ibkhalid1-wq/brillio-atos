@@ -218,24 +218,12 @@ describe("L2 — the header stat and the Sessions section print the SAME number"
     expect(sessionQuestionCount(sessionQueue)).toBeGreaterThan(sessionQueue.length);
   });
 
-  it("the badge and the rows print the SAME number, in the same unit", () => {
-    mount({ ...emptyLedger(lailaStore), sessionQueue });
-    // the section's own two numbers, exactly as the summary line prints them
-    const line = host.querySelector("#ib-sessions button[aria-expanded]")!.textContent ?? "";
-    const m = /(\d+)\s+seams?,\s*(\d+)\s+questions?/.exec(line);
-    expect(m, `no summary numbers in: ${line}`).not.toBeNull();
-    const seams = Number(m![1]);
-    const questions = Number(m![2]);
-    // the header stat for the same section
-    const header = headerStat("awaiting a date");
-    expect(header).toBe(questions);        // the number the section calls QUESTIONS…
-    expect(header).not.toBe(seams);        // …and demonstrably not the one it calls SEAMS
-    // The UNIT is what makes the number a claim about questions rather than seams. It
-    // used to be a suffix on the removed header strip; it is now inside the section's
-    // own badge, beside the figure it qualifies — which is the better place for it,
-    // since the number and its unit can no longer be separated by a layout change.
-    expect(host.querySelector("#ib-sessions .v3ib-n")!.textContent).toContain("questions");
-  });
+  /* REMOVED 2026-08-13 with the Sessions section. It proved the header stat and the
+     section printed the same figure in the same unit (questions, not seams) — a real
+     invariant while both existed. Seam questions now go out on both owners' links,
+     so neither the section nor the stat is drawn, and there is nothing left to
+     reconcile. The seam ROUTING is proved in `seamOutranksTyping.test.ts`. */
+
 
   it("and the term in the counts object is that same function's value", () => {
     const counts = operatorQueueCounts({ ...emptyLedger(lailaStore), sessionQueue });
