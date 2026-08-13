@@ -392,7 +392,30 @@ export function useProgramLedger(program?: ProgramSummary): ProgramLedger {
       // a disagreement between two functions, which is exactly what a seam is and
       // exactly what a joint session is for. Joint ownership therefore wins: the
       // question goes to the people who have to agree, not to a document.
-      if (it.owner.kind === "joint") { (sessionMap.get(it.ownerLabel) ?? sessionMap.set(it.ownerLabel, []).get(it.ownerLabel)!).push(it); continue; }
+      if (it.owner.kind === "joint") {
+        (sessionMap.get(it.ownerLabel) ?? sessionMap.set(it.ownerLabel, []).get(it.ownerLabel)!).push(it);
+        // …AND IT GOES TO BOTH OWNERS, like every other question.
+        //
+        // It used to `continue` here, so a jointly-owned question reached NOBODY on
+        // Discover: it existed only as a seam waiting for the operator to book a
+        // meeting, and until that meeting happened nobody was ever asked. That makes
+        // the operator the bottleneck on the one class of question they cannot answer.
+        //
+        // Both owners owe it, so it goes on both lists and rides out on both links
+        // like anything else. If they answer the same, it is settled without a room.
+        // If they answer differently, that is a CONTRADICTION — which this ledger
+        // already detects, logs and routes to adjudication. The seam view below stays
+        // as the operator's sight of a cross-area dependency, and a joint session
+        // becomes something they may CHOOSE rather than the only path through.
+        //
+        // A blocked one still does not go out: it is held for a named authority.
+        if (it.status === "open") {
+          for (const party of it.owner.parties) {
+            (soloByOwner.get(party) ?? soloByOwner.set(party, []).get(party)!).push(it);
+          }
+        }
+        continue;
+      }
       // typing → dictionary bucket, EXCEPT a lifecycle's stages, which are a person's
       // to state and fall through to their card below.
       if (it.status === "open" && TYPING_SLOTS.has(it.slot) && !lifecycleAsks.has(it.about)) continue;

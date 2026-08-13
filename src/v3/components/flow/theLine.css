@@ -920,6 +920,13 @@
 .v3ib-qlist > li{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px;padding:4px 0;
   border-bottom:1px solid color-mix(in srgb,var(--fs-line) 55%,transparent)}
 .v3ib-qlist > li:last-child{border-bottom:0}
+/* THE SUBJECT LINE. Four questions about one atlas step each restated the whole
+   step — forty words, four times, with six words of difference at the end. It is
+   stated once, here, and the rows below carry only what they are asking. */
+.v3ib-qsubject{display:block;font-size:var(--aura-t-body);color:var(--v3-text-primary);
+  font-weight:600;padding:7px 0 3px;border-bottom:0}
+.v3ib-qsubject + li{border-top:0}
+.v3ib-qlist > .v3ib-qsubject ~ li{padding-left:12px}
 /* THE PER-QUESTION ROUTE. It sits on its own line so the question stays readable at
    any width — the bulk control one card up already showed what three inline controls
    do to a row that has to hold a sentence as well. */
