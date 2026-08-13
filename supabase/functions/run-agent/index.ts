@@ -7995,14 +7995,39 @@ function movementInputsFingerprint(programData: ProgramState, phaseId: string): 
   return hash.toString(16);
 }
 
-/** Stamp the movement-inputs fingerprint on an artifact's ledger stub. */
+/**
+ * Stamp the movement-inputs fingerprint on an artifact's ledger stub — AND clear the
+ * stale flag that this rebuild has just answered.
+ *
+ * The client marks an artifact stale on EITHER of two signals: the inputs fingerprint
+ * no longer matches, or the stub carries `status: "stale"` (written by the cascade
+ * when an upstream deliverable is regenerated and confirmed). This function updated
+ * the fingerprint and spread the rest of the stub through untouched, so the second
+ * signal survived its own cure: regenerating the Domain Ontology rewrote the
+ * document, refreshed the fingerprint, and left `status: "stale"` exactly where it
+ * was. The badge said "evidence moved" for ever, and no amount of regenerating could
+ * clear it — reported as exactly that.
+ *
+ * Regenerating IS the answer to "your inputs moved", so the flag it set is spent.
+ * Only that value is cleared: a stub that was `approved` or `draft` keeps its status,
+ * because this run says nothing about either.
+ */
 function stampFlowArtifactFingerprint(programData: ProgramState, phaseId: string, artifactId: string): ProgramState {
   const fingerprint = movementInputsFingerprint(programData, phaseId);
   return updateInnerProgramData(programData, (inner) => {
     const phaseArtifacts = isRecord(inner.phaseArtifacts) ? { ...(inner.phaseArtifacts as Record<string, JsonValue>) } : {};
     const bucket = isRecord(phaseArtifacts[phaseId]) ? { ...(phaseArtifacts[phaseId] as Record<string, JsonValue>) } : {};
     const stub = isRecord(bucket[artifactId]) ? { ...(bucket[artifactId] as Record<string, JsonValue>) } : {};
-    bucket[artifactId] = { ...stub, inputsFingerprint: fingerprint } as JsonValue;
+    const next: Record<string, JsonValue> = { ...stub, inputsFingerprint: fingerprint };
+    if (next.status === "stale") {
+      next.status = "draft";
+      // The reason and timestamp are the record of WHY it went stale. They belong to
+      // a flag that no longer holds, and leaving them would have a fresh document
+      // carrying an explanation for a state it is not in.
+      delete next.staleReason;
+      delete next.staleAt;
+    }
+    bucket[artifactId] = next as JsonValue;
     phaseArtifacts[phaseId] = bucket as JsonValue;
     return { ...inner, phaseArtifacts: phaseArtifacts as JsonValue };
   });
