@@ -527,25 +527,41 @@ describe("[§4] convergence and heard are stated once, in the surface that owns 
     expect(bandText()).not.toMatch(/attributed closures/i);
   });
 
-  it("the Work strip still carries BOTH, and Heard is still the way through to Discovery", () => {
+  /**
+   * BOTH ARE OFF THE BOARD NOW (operator direction, 2026-08-12: "hide", on the
+   * Round/Heard/Convergence strip). This case used to require the Work strip to
+   * survive as their one home. It no longer exists — so the rule it enforces
+   * changes from "exactly once" to "not at all, and not sneaking back".
+   *
+   * What did NOT change: the numbers. `ledger.heard` and `kit.burnDown` are still
+   * computed and still consumed — the gate reads convergence. Only their display on
+   * this board is gone, which is why the assertions below are about the SCREEN.
+   */
+  it("neither is drawn on the board any more", () => {
     mountShell(laila());
-    const strip = host.querySelector(".v3ln-stats.ledger") as HTMLElement | null;
-    expect(strip, "the surviving home vanished — the numbers are now nowhere").toBeTruthy();
-    expect(strip!.textContent).toMatch(/Convergence/);
-    expect(strip!.textContent).toMatch(/Heard/);
-    // the capability that made this the home worth keeping
-    const heardBtn = [...strip!.querySelectorAll("button")]
-      .find((x) => (x.textContent ?? "").includes("Heard"));
-    expect(heardBtn, "Heard stopped being the jump to Discovery").toBeTruthy();
+    const board = (host.querySelector(".v3ln") ?? host).textContent ?? "";
+    // MUTATION: restore the `.v3ln-stats.ledger` strip → both are RED.
+    expect(board.match(/Convergence/g) ?? [], "the convergence readout is back on the board").toHaveLength(0);
+    expect(board.match(/attributed closures/g) ?? [], "the heard readout is back on the board").toHaveLength(0);
+    expect(host.querySelector(".v3ln-stats.ledger"), "the strip itself is back").toBeNull();
   });
 
-  it("the pair is drawn exactly ONCE on the board", () => {
+  it("the burn-down headline went with them", () => {
+    // The same direction, one strip earlier: "206 open · 0 answered · 0 need an
+    // owner · 106 → dictionary · 4 seams" was five programme-wide numbers and no act.
     mountShell(laila());
-    // Counted in the board's TEXT, not by element: the surviving label wraps a
-    // sub-note span, so an element-shaped query silently matched nothing and the
-    // case passed over an absent subject.
     const board = (host.querySelector(".v3ln") ?? host).textContent ?? "";
-    expect(board.match(/Convergence/g) ?? []).toHaveLength(1);
-    expect(board.match(/attributed closures/g) ?? []).toHaveLength(1);
+    expect(board).not.toMatch(/close the burn-down/i);
+  });
+
+  it("but the ledger still HOLDS what the board stopped showing", () => {
+    // The guard against hiding turning into losing: a removal from the screen must
+    // not quietly become a removal from the record. If this ever goes red, the
+    // numbers stopped being computed and the two cases above are hiding a hole.
+    const program = laila();
+    mountShell(program);
+    const seen = (host.querySelector(".v3ln") ?? host).textContent ?? "";
+    expect(seen.length, "the board did not mount — these cases would pass vacuously").toBeGreaterThan(200);
+    expect(band(), "the board's own band went with the strips").toBeTruthy();
   });
 });

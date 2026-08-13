@@ -404,15 +404,9 @@ export function ScreenCard({ screen, active, onClick }: { screen: Record<string,
 }
 
 /** The seven governed theme tokens, editable as live colour wells. */
-const THEME_SWATCHES: Array<[string, string]> = [
-  ["brandHue", "Brand"], ["accent", "Accent"], ["neutral", "Neutral"], ["surface", "Surface"],
-  ["good", "Good"], ["warn", "Warn"], ["critical", "Critical"],
-];
 
 export default function ExperienceDesignStudio({ doc, onChange, program }: StudioProps) {
   const locked = useStudioLocked();
-  const intent = asRecord(doc.designIntent);
-  const theme = asRecord(doc.theme);
   const screens = useMemo(() => asArray(doc.screens).map(asRecord), [doc.screens]);
   const flows = useMemo(() => asArray(doc.flows).map(asRecord), [doc.flows]);
   const machines = asArray(doc.workflowMachines).map(asRecord);
@@ -468,82 +462,18 @@ export default function ExperienceDesignStudio({ doc, onChange, program }: Studi
     setEditScreen(null);
   };
   const removeScreen = (index: number) => patch({ screens: screens.filter((_, i) => i !== index) });
-  const setTheme = (key: string, value: string) => patch({ theme: { ...theme, [key]: value } });
-  const setIntent = (key: string, value: string) => patch({ designIntent: { ...intent, [key]: value } });
   const setMachines = (next: Record<string, unknown>[]) => patch({ workflowMachines: next });
   const setMachine = (index: number, changes: Record<string, unknown>) =>
     setMachines(machines.map((m, i) => (i === index ? { ...m, ...changes } : m)));
-  const str = (v: unknown) => (typeof v === "number" ? String(v) : asText(v));
-  const hexOf = (v: unknown) => { const s = asText(v).trim(); return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(s) ? s : "#6455b8"; };
 
   return (
     <>
-      {(asText(intent.personality) || asText(intent.vocabulary) || asText(intent.density) || !locked) ? (
-        <EdCard label="Design intent" hint="how the product should feel — grounded in the client's world">
-          {locked ? (
-            <div className="v3fs-wf-intent">
-              {asText(intent.personality) ? <p>{asText(intent.personality)}</p> : null}
-              <div className="v3fs-wf-meta">
-                {asText(intent.density) ? <span className="v3fs-wf-chip">{asText(intent.density)}</span> : null}
-                {asText(intent.vocabulary) ? <span className="v3fs-wf-chip ent" title="the stakeholders' own terms the UI must use">{asText(intent.vocabulary).slice(0, 80)}</span> : null}
-              </div>
-            </div>
-          ) : (
-            <div className="v3fs-wf-intent-edit">
-              <TextArea label="Personality — how it should feel" rows={2} value={asText(intent.personality)}
-                placeholder="e.g. trustworthy and calm; sharp and precise" onChange={(v) => setIntent("personality", v)} />
-              <TextArea label="Vocabulary — the stakeholders' own terms the UI must use" rows={2} value={asText(intent.vocabulary)}
-                placeholder="their words, comma-separated" onChange={(v) => setIntent("vocabulary", v)} />
-              <div className="v3fs-wf-tokens">
-                <TextField label="Density" value={asText(intent.density)} placeholder="comfortable / compact" onChange={(v) => setIntent("density", v)} />
-              </div>
-            </div>
-          )}
-        </EdCard>
-      ) : null}
-
-      {THEME_SWATCHES.some(([k]) => asText(theme[k])) || !locked ? (
-        <EdCard label="Theme" hint={asText(theme.personalityNote) || "the design system every prototype builds from — tune it here"}>
-          <div className="v3fs-wf-theme">
-            <div className="v3fs-wf-swatches editable">
-              {THEME_SWATCHES.map(([k, l]) => (
-                <label key={k} className="v3fs-wf-swatch">
-                  {locked
-                    ? <span className="sw" style={{ background: asText(theme[k]) || "transparent" }} />
-                    : <input className="sw" type="color" value={hexOf(theme[k])} aria-label={`${l} colour`}
-                        onChange={(e) => setTheme(k, e.target.value)} />}
-                  <b>{l}</b>
-                  {locked
-                    ? <em>{asText(theme[k]) || "—"}</em>
-                    : <input className="v3fs-wf-hex" value={asText(theme[k])} placeholder="#hex"
-                        onChange={(e) => setTheme(k, e.target.value)} aria-label={`${l} hex`} />}
-                </label>
-              ))}
-            </div>
-            <div className="v3fs-wf-tokens">
-              {locked ? (
-                <div className="v3fs-wf-meta">
-                  {asText(theme.fontStack) ? <span className="v3fs-wf-chip">font · {asText(theme.fontStack).split(",")[0].replace(/["']/g, "")}</span> : null}
-                  {str(theme.radius) ? <span className="v3fs-wf-chip">radius {str(theme.radius)}px</span> : null}
-                  {str(theme.spacingBase) ? <span className="v3fs-wf-chip">spacing {str(theme.spacingBase)}px</span> : null}
-                  {asText(theme.density) ? <span className="v3fs-wf-chip">{asText(theme.density)}</span> : null}
-                </div>
-              ) : (
-                <>
-                  <label className="v3fs-wf-token"><span>Font stack</span>
-                    <input value={asText(theme.fontStack)} placeholder="'Inter', sans-serif" onChange={(e) => setTheme("fontStack", e.target.value)} /></label>
-                  <label className="v3fs-wf-token sm"><span>Radius</span>
-                    <input inputMode="numeric" value={str(theme.radius)} onChange={(e) => setTheme("radius", e.target.value.replace(/[^0-9.]/g, ""))} /></label>
-                  <label className="v3fs-wf-token sm"><span>Spacing</span>
-                    <input inputMode="numeric" value={str(theme.spacingBase)} onChange={(e) => setTheme("spacingBase", e.target.value.replace(/[^0-9.]/g, ""))} /></label>
-                  <label className="v3fs-wf-token"><span>Density</span>
-                    <input value={asText(theme.density)} placeholder="comfortable" onChange={(e) => setTheme("density", e.target.value)} /></label>
-                </>
-              )}
-            </div>
-          </div>
-        </EdCard>
-      ) : null}
+      {/* DESIGN INTENT AND THEME REMOVED (on request, 2026-08-12).
+          The studio is where the delivery team designs the SCREENS and the
+          behaviour behind them. The intent prose and the colour/radius/spacing
+          tokens are still on the document — nothing was deleted from the record,
+          and the prototype still builds from them — they are simply no longer
+          edited here, where they sat above the work and were tuned once. */}
 
       <EdCard label="Screens" badge={shownScreens.length} hint="click a screen to open the designer; ＋ adds one">
         <div className="v3fs-wf-screenbar">

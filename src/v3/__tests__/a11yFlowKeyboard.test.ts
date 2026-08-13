@@ -403,11 +403,12 @@ describe("structure", () => {
 
   it("live regions are reserved for genuine updates, and are not stacked", async () => {
     // role="status" is announced every time its content changes. Two failure modes:
-    // too many (the page natters) and nesting (one change announced twice). The dock's
-    // NEXT cue and the doc-router banner are the legitimate ones on this fixture.
+    // too many (the page natters) and nesting (one change announced twice).
     const live: string[] = [];
+    let viewsSwept = 0;
     for (const view of ["Inbox", "Flow", "Library", "People", "Pulse", "Control", "Portfolio"]) {
       await enter(view);
+      viewsSwept += host.querySelectorAll("*").length > 50 ? 1 : 0;
       for (const r of host.querySelectorAll('[role="status"],[role="alert"],[aria-live]')) {
         live.push(`${view}:${r.getAttribute("class") ?? r.getAttribute("role")}`);
         // A live region inside another live region announces its change twice.
@@ -419,8 +420,14 @@ describe("structure", () => {
       const perView = live.filter((x) => x.startsWith(`${view}:`)).length;
       expect(perView, `${view} draws ${perView} live regions at once`).toBeLessThanOrEqual(3);
     }
-    // …and at least one, or the "NEXT · N waiting" cue is not being announced at all.
-    expect(live.length).toBeGreaterThan(0);
+    // THE FLOOR IS ON THE SWEEP, NOT ON THE COUNT. It used to be "at least one live
+    // region, or the NEXT cue is not being announced at all" — and that cue was
+    // removed from the rail on 2026-08-12, so the floor became an assertion that a
+    // deliberately-deleted element still exists. Zero live regions is now a correct
+    // state; a sweep that mounted nothing is not, and that is the vacuum this case
+    // actually needs to be guarded against.
+    expect(viewsSwept, "no view mounted — every rule above passed over an empty page")
+      .toBe(7);
   });
 
   it("the rail's NEXT cue is a status region that names itself in words", async () => {
