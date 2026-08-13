@@ -313,3 +313,62 @@ describe("the Inbox has one type system, not just one type scale", () => {
     expect(css).toContain(".v3ib .v3lc-src,.v3ib .v3lc-status,.v3ib .v3lc-own{font-weight:600}");
   });
 });
+
+describe("Discover reads and the Inbox acts — one system, one boundary", () => {
+  /**
+   * Run under the inbox + Discover redesign briefs. The load-bearing rule in both:
+   * Discover is comprehension, the Inbox is action, and anything needing an operator
+   * MOVE is stated on Discover and routed — never performed there.
+   */
+  const line = SRC("TheLine.tsx");
+  const inbox = SRC("OperatorInbox.tsx");
+  const css = readFileSync(resolve(__dirname, "../components/flow/theLine.css"), "utf8");
+
+  it("no operator write is left on Discover", () => {
+    // The two that were: confirming a lifecycle's stages, and applying an attached
+    // file as a data dictionary. Both answer open questions programme-wide at the
+    // strength a schema carries.
+    // MUTATION: put either back → RED.
+    expect(line, "a dictionary write is back on Discover").not.toContain("commitDictionary(csv");
+    expect(line, "a dictionary write is back on Discover").not.toContain("commitDictionary(capDict");
+  });
+
+  it("each removed act is stated on Discover and routed to the Inbox", () => {
+    // A boundary enforced by deletion alone would just lose the operator the act.
+    expect(line).toContain("confirm in the Inbox");
+    expect(line).toContain("apply it in the Inbox");
+    expect(line, "the route needs somewhere to go").toContain("onOpenInbox");
+  });
+
+  it("and the Inbox actually carries the act it was handed", () => {
+    // The failure this whole session has been clearing: a route that points at
+    // nothing. Confirming stages did not exist on the Inbox until it was moved there.
+    // MUTATION: delete the stage card → RED, and the handoff becomes a dead end.
+    expect(inbox).toContain("confirm these stages");
+    expect(inbox, "same CSV, same merge — a person's answer and a schema's must not diverge")
+      .toContain("entity,field,values");
+  });
+
+  it("both surfaces reference ONE token set", () => {
+    expect(css).toContain("--aura-t-body:11px");
+    expect(css).toContain(".v3ln,.v3ln *{letter-spacing:normal}");
+    expect(css).toContain(".v3ib,.v3ib *{letter-spacing:normal}");
+    // one focus ring, one control height, both surfaces
+    expect(css).toContain(".v3ib :focus-visible,.v3ln :focus-visible");
+    expect(css).toContain(".v3ib select,.v3ln select{border-radius:var(--aura-r-ctl);height:var(--aura-ctl-h)}");
+  });
+
+  it("motion is one duration and honours reduced-motion", () => {
+    expect(css).toContain("--aura-motion:160ms");
+    expect(css).toMatch(/@media \(prefers-reduced-motion:reduce\)\{[\s\S]{0,80}--aura-motion:0ms/);
+  });
+
+  it("an empty Inbox says so, rather than rendering nothing", () => {
+    // The zero state was the header hiding itself and the page ending, so "finished"
+    // and "failed to load" looked identical.
+    // MUTATION: drop the else branch → RED.
+    expect(inbox).toContain("Inbox clear");
+    expect(inbox, "and it must not imply the burn-down is empty")
+      .toContain("Open questions are still open");
+  });
+});
