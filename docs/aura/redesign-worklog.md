@@ -327,3 +327,32 @@ what somebody said.
 **Not deployed.** The client sends a field today's deployed `flow-portal` ignores —
 additive, so nothing breaks in the meantime, and nothing works either until
 `npx supabase functions deploy flow-portal --no-verify-jwt`.
+
+## The write path, exercised on the live system (2026-08-13)
+
+Deployed `flow-portal`, then drove a real link end to end on Laila New — Sales
+Operations SME's durable link, one question, answer text prefixed
+`[TEST SUBMISSION — write-path verification…]` so nobody reading the record later
+mistakes it for something a person said.
+
+What the board did, in order:
+
+| step | observed |
+|---|---|
+| POST to the deployed edge | `200 {"ok":true}` |
+| quarantine | rail badge **5 → 6**, item on the Inbox with its text, Ingest / Dismiss |
+| operator ingest | badge **6 → 5**, item gone |
+| the Record | transcript under Sales Operations SME, dated, attributed |
+| **Discover** | **28 → 27 owned questions** — the locus closed |
+| Listen band | roster reached **1 of 1 → 2 of 2** |
+
+That 28 → 27 is the whole point: the burn-down moving because a stakeholder answered,
+which nothing in this product could do this morning.
+
+**And the thing the test found that the tests could not.** There is no way to take it
+back. `_stakeholderAnswers` is append-only, no surface removes an entry, and
+`decide-fate: reopen` clears an operator ruling rather than a stakeholder closure — so
+a mis-sent link, a wrong recipient, or this test submission can only be undone by hand
+editing the blob. Every other operator verb on this surface is reversible by design.
+The one verb that can put words in a named person's mouth is not. HANDOFF §12; it is
+the next thing to build, and it is why the test answer is still sitting on Laila New.

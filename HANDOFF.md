@@ -293,9 +293,18 @@ assert on the running board, and put the number in the commit.
     `asserted · closed` claim attributed to the person. Locus closes, `heard` ticks,
     the in-flight row clears. Guarded in `stakeholderWritePath.test.ts` (the ledger)
     and `writePathTransport.test.ts` (the pipe + the security boundary).
-    **`flow-portal` must be deployed** for any of it to run against a real link:
-    `npx supabase functions deploy flow-portal --no-verify-jwt`. Until then the
-    client sends a field the deployed edge ignores — additive, so nothing breaks.
+    **Deployed and proven live on Laila New (2026-08-13):** a submission through a
+    real link quarantined (badge 5→6), the operator ingested it, the transcript
+    landed attributed, and Discover's owned count for that person went **28 → 27** —
+    the burn-down moving on a stakeholder's answer for the first time.
+12. **THE WRITE PATH HAS NO UNDO — found by using it.** An answer that lands wrong
+    (a mis-sent link, the wrong person, a test submission) cannot be retracted
+    through the product: `_stakeholderAnswers` is append-only, no surface removes an
+    entry, and `decide-fate: reopen` clears an operator RULING, not a stakeholder
+    closure. The only way back is a hand-edit of the blob. Every other operator verb
+    here is reversible by design (`reopen`, `unassign`, `pin-resolve`); this one is
+    not, and it is the one that can put words in a named person's mouth. **The next
+    thing to build**, and the reason the live test below is still on the record.
 
 ## What is NOT wired (do not mistake these for bugs)
 
