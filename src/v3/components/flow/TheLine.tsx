@@ -47,6 +47,7 @@ import { pinsForSend } from "@/v3/lib/ledger/operatorActions";
 import { HeardReadout, ProvisionalMark, ClaimStatus, SourceTag } from "@/v3/components/flow/studio/ledgerPrimitives";
 import DesignLoopZones from "@/v3/components/flow/DesignLoopZones";
 import { ownerLabelsForCast } from "@/v3/lib/ledger/ownerBinding";
+import { lifecycleEntities } from "@/v3/lib/ledger/lifecycle";
 import { dictionaryCoverage, isSpreadsheetName, mergeDictionaryCsv, parseDictionaryCsv, readDictionaryWorkbook } from "@/v3/lib/ledger/dictionary";
 import { currentDesignRound } from "@/v3/components/flow/flowDesignRound";
 import { renderQuestion } from "@/v3/lib/ledger/renderQuestion";
@@ -407,6 +408,10 @@ export default function TheLine({ program, onOpenInbox, onSaveInputs, onRenamePe
   const [docFor, setDocFor] = useState<ArtifactCardModel | null>(null);
   // A section chip on the board deep-links into the studio at that section.
   const [docSection, setDocSection] = useState<string | undefined>(undefined);
+  /** One-signal lifecycle readings — no question exists for them, so the Record is
+   *  the only place they are accounted for. Read through lifecycle.ts, as ever. */
+  const maybeLifecycles = useMemo(
+    () => lifecycleEntities(ledger.store).filter((l) => !l.confident), [ledger.store]);
   const openStation = (card: ArtifactCardModel, section?: string) => { setDocSection(section); setDocFor(card); };
   // Two projections of the one record: the WORK board (where the programme
   // is) and DISCOVERY (who it runs through — links, capture, invites). The
@@ -1697,6 +1702,21 @@ export default function TheLine({ program, onOpenInbox, onSaveInputs, onRenamePe
             <span className="v3ln-rec-attr"><SourceTag source="dispositioned" /> <b>{ledger.stats.closedWithoutVerbatim}</b> operator touches (weak, no verbatim)</span>
             <ProvisionalMark what="per-area attribution needs the stakeholder write path; all closures read into one band today" />
           </div>
+          {/* READINGS THAT NEVER BECAME A QUESTION. Aura reads an entity as having a
+              lifecycle from four signals; one signal alone is a suggestion, not a
+              finding, so no question is minted and nobody is asked. That is the right
+              call — a name alone must not put a question on somebody's link — but it
+              leaves a reading nothing on the board accounts for. The Record is where
+              what was found and not acted on belongs. Read-only, like the rest of
+              this surface. */}
+          {maybeLifecycles.length ? (
+            <p className="v3ln-rec-note">
+              <b>{maybeLifecycles.length}</b> entit{maybeLifecycles.length === 1 ? "y" : "ies"} read as having a
+              lifecycle from the field name alone — {maybeLifecycles.map((l) => l.entity).join(", ")}.
+              One signal each, so Aura did not call them lifecycles and no question was asked.
+              Noted here so a reading nobody acted on is still on the record.
+            </p>
+          ) : null}
           {recordGroups.length === 0 ? (
             <div className="v3ln-note">Nothing on the record yet{areaFilter ? ` for ${areaFilter}` : ""} — capture a conversation or share a link from Discover.</div>
           ) : recordGroups.map((group) => (

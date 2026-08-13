@@ -736,7 +736,6 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
       .filter((a) => "about" in a && (a as { about?: string }).about === about)
       .slice()
       .sort((a, b) => String(a.at).localeCompare(String(b.at)));
-    const picked = pickedOwner(about);
     return (
       <aside className="v3ib-pane" aria-label={spoken(`Detail: ${q.question}`)}>
         <header className="v3ib-pane-h">

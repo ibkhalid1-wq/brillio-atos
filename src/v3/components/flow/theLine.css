@@ -607,6 +607,10 @@
    inherit from the browser. */
 .v3ib :focus-visible,.v3ln :focus-visible{outline:2px solid var(--v3-accent-2);outline-offset:2px;border-radius:var(--aura-r-ctl)}
 
+.v3ln-rec-note{margin:0 0 var(--aura-s2);padding:var(--aura-s2) var(--aura-s3);
+  border:1px dashed var(--fs-line);border-radius:var(--aura-r-box);
+  font-size:var(--aura-t-body);color:var(--v3-text-secondary);line-height:1.5}
+
 /* ════ THE ONE HANDOFF ═════════════════════════════════════════════════════════
    Discover reads; the Inbox acts. Where Discover finds something that needs an
    operator MOVE it states the finding and offers this, and this is the ONLY control
