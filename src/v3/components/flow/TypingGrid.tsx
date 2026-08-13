@@ -154,7 +154,7 @@ export default function TypingGrid({ ledger, onDictionary, onDone, onClose, rows
         ) : null}
         <span className="v3tg-m">
           {given ? (
-            <>These are already on the record as <b>code-derived · weak</b> — Aura&rsquo;s reading of
+            <>These are already on the record as <b>the weakest thing on it</b> — Aura&rsquo;s reading of
             the field name, nobody&rsquo;s answer. Confirming makes each one <b>yours</b>, which any
             stakeholder can still deviate from; changing one overrules it outright.</>
           ) : (

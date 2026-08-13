@@ -18,6 +18,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { buildUnknownQueue, isDictionaryQuestion } from "@/v3/lib/ledger/projections";
+import { systemOfRecordQuestionOverlay } from "@/v3/lib/ledger/artifactAsks";
 import { createLedgerStore } from "@/v3/lib/ledger/store";
 import { aboutOf } from "@/v3/lib/ledger/types";
 
@@ -144,5 +145,72 @@ describe("every Inbox block carries a control", () => {
     expect((inbox.match(/const QuestionList = /g) ?? []).length).toBe(1);
     expect(inbox).toContain("<QuestionList abouts={peek.abouts}");
     expect(inbox).toContain("<QuestionList abouts={unattributed.abouts}");
+  });
+});
+
+describe("the question a residue block points at actually exists", () => {
+  /**
+   * "what is the call to action?" on the 37-question block. There wasn't one, and the
+   * instruction it gave was false: "name the system on the Frame — in systems of
+   * record — and these attach to its ask". Attachment runs through `sorOfElement`,
+   * which reads the ENTITY's own system of record; a Frame declaration mints a new
+   * ask and attaches nothing.
+   *
+   * Underneath that: NOT ONE of the 26 orphan entities had a `#systemOfRecord`
+   * question anywhere in the ledger. The ontology opens that slot only for an entity
+   * it already typed with a system — exactly the entity that does not need asking.
+   */
+  const storeWithOrphan = () => {
+    const store = createLedgerStore();
+    store.addElement({ id: "el:ent:product", kind: "entity", name: "Product" });
+    store.addElement({ id: "el:attr:product.sku", kind: "attribute", name: "SKU", of: "el:ent:product" });
+    store.addElement({ id: "el:rel:acct-terr", kind: "relation", name: "Account→Territory" });
+    store.addElement({ id: "el:attr:rel.note", kind: "attribute", name: "note", of: "el:rel:acct-terr" });
+    for (const about of ["el:attr:product.sku#dataType", "el:attr:rel.note#dataType"]) {
+      store.assert({
+        about, value: { kind: "unknown" }, world: "as-is", layer: "domain",
+        source: "generated", ownerWhileOpen: { kind: "role", role: "Sales Ops" },
+      });
+    }
+    return store;
+  };
+
+  it("mints 'which system holds this?' for an entity that has none", () => {
+    // MUTATION: return [] from systemOfRecordQuestionOverlay → RED, and the block is
+    // back to describing a gap with no question behind it.
+    const born = systemOfRecordQuestionOverlay(storeWithOrphan());
+    expect(born.map((c) => c.about)).toContain("el:ent:product#systemOfRecord");
+    expect(born[0].value, "a question must not assert anything").toEqual({ kind: "unknown" });
+  });
+
+  it("does NOT ask which system holds a relation", () => {
+    // 14 of Laila New's 26 orphans were relations. "Account→Territory" has no system
+    // of record — its endpoints do — so asking is a category error, not a gap.
+    // MUTATION: drop the `entity.kind !== "entity"` guard → RED.
+    expect(systemOfRecordQuestionOverlay(storeWithOrphan()).map((c) => c.about))
+      .not.toContain("el:rel:acct-terr#systemOfRecord");
+  });
+
+  it("inherits the owner rather than inventing one", () => {
+    expect(systemOfRecordQuestionOverlay(storeWithOrphan())[0].ownerWhileOpen)
+      .toEqual({ kind: "role", role: "Sales Ops" });
+  });
+
+  it("the block no longer promises that a Frame entry attaches them", () => {
+    // MUTATION: restore the old sentence → RED.
+    expect(SRC("OperatorInbox.tsx")).not.toMatch(/Name the system on the Frame — in <b>systems of record<\/b> — and these/);
+    expect(SRC("OperatorInbox.tsx")).toContain("which system holds this?");
+  });
+});
+
+describe("a ruling can be taken back", () => {
+  it("the Decided trace offers the one act it owes", () => {
+    // It listed what the operator had ruled on and offered nothing, so the only way
+    // back from a mistaken "out-of-scope" was editing the blob.
+    // MUTATION: delete the button → RED.
+    const inbox = SRC("OperatorInbox.tsx");
+    expect(inbox).toContain('decision: "reopen"');
+    expect(inbox, "reopening changes the record, so it is drawn as a write")
+      .toMatch(/className="v3ib-btn sm"[\s\S]{0,400}Reopening…/);
   });
 });

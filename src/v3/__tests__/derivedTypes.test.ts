@@ -195,8 +195,14 @@ describe("the shrink is never silent", () => {
     expect(INBOX).toContain("!settled.length && !derived.length");
   });
 
-  it("the copy says it is the weakest claim, and that a dictionary beats it", () => {
-    expect(INBOX).toContain("code-derived · weak");
+  it("the copy says it is the weakest thing on the record, and that a dictionary beats it", () => {
+    // The FACT must survive; the ledger's word for it need not. "code-derived · weak"
+    // was the band's own name, printed at an operator who has no reason to know it
+    // (2026-08-13). What matters is that the reader is told these are the weakest
+    // thing on the record and that a real dictionary overrules them — so that is what
+    // this asserts, rather than the vocabulary it happened to be said in.
+    // MUTATION: drop the strength sentence entirely → RED.
+    expect(INBOX).toContain("the weakest thing on the record");
     expect(INBOX).toContain("A real dictionary is still the better answer");
   });
 });

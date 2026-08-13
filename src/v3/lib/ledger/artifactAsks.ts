@@ -39,7 +39,7 @@
  * field pattern as the data dictionary itself.
  */
 import type { LedgerStore } from "./store";
-import { elementIdOf, isLive } from "./types";
+import { elementIdOf, isLive, aboutOf, contentId, type Claim, type Owner } from "./types";
 import { buildUnknownQueue, dictionaryBucket } from "./projections";
 
 export type ArtifactAskState =
@@ -331,3 +331,67 @@ export function frameSorReadiness(
     : named.filter((sor) => !marked.has(sor.trim().toLowerCase()) && !provided.has(sor.trim().toLowerCase()));
   return { named, unhandled, complete: unhandled.length === 0, fromFrame, fromOntology };
 }
+
+
+/**
+ * "WHICH SYSTEM HOLDS THIS?" — BORN, so the residue has somewhere to go.
+ *
+ * Measured on Laila New: 37 typing questions sat on entities with no system of
+ * record, and NOT ONE of those entities had a `#systemOfRecord` question anywhere in
+ * the ledger. Never minted — the ontology opens that slot only for an entity it
+ * already typed with a system, which is exactly the entity that does not need asking.
+ *
+ * So the card that reported them could only describe them, and the instruction it
+ * gave was worse than useless: "name the system on the Frame and these attach to its
+ * ask" is FALSE. Attachment runs through `sorOfElement`, which reads the ENTITY's own
+ * system of record; a Frame declaration mints a new ask and attaches nothing.
+ *
+ * RELATIONS ARE EXCLUDED. "Account→Territory" is not a thing with a system of record —
+ * its endpoints are — and 14 of the 26 orphans were relations. Asking a person which
+ * system holds a relation is asking them to answer a category error.
+ *
+ * Overlay only, ownership inherited, id content-addressed: the same three rules as the
+ * lifecycle question, for the same reasons.
+ */
+export function systemOfRecordQuestionOverlay(store: LedgerStore): Claim[] {
+  const view = deriveArtifactAsks(store, {});
+  if (!view.unattributed.abouts.length) return [];
+
+  const byId = new Map(store.elements().map((e) => [e.id, e] as const));
+  const existing = new Set(store.claims().map((c) => c.about));
+
+  const ownerByEntity = new Map<string, Owner>();
+  for (const c of store.claims()) {
+    if (!isLive(c) || c.status !== "open" || c.ownerWhileOpen.kind === "unowned") continue;
+    const el = byId.get(elementIdOf(c.about));
+    const entityId = el?.kind === "attribute" ? el.of : el?.id;
+    if (entityId && !ownerByEntity.has(entityId)) ownerByEntity.set(entityId, c.ownerWhileOpen);
+  }
+
+  const out: Claim[] = [];
+  const seen = new Set<string>();
+  for (const about of view.unattributed.abouts) {
+    const el = byId.get(elementIdOf(about));
+    const entity = el?.kind === "attribute" && el.of ? byId.get(el.of) : el;
+    if (!entity || entity.kind !== "entity") continue;      // a relation has no SoR
+    const locus = aboutOf(entity.id, "systemOfRecord");
+    if (existing.has(locus) || seen.has(locus)) continue;
+    seen.add(locus);
+    out.push({
+      id: contentId("cl", locus, "as-is", "generated", JSON.stringify({ kind: "unknown" })),
+      about: locus,
+      value: { kind: "unknown" },
+      world: "as-is",
+      layer: "domain",
+      source: "generated",
+      status: "open",
+      ownerWhileOpen: ownerByEntity.get(entity.id) ?? { kind: "unowned" },
+      createdAt: SOR_BORN_AT,
+    });
+  }
+  return out;
+}
+
+/** Fixed: a claim id is content-addressed, so a wall-clock stamp would mint a new id
+ *  every render and one question would look freshly born on every keystroke. */
+const SOR_BORN_AT = "2026-08-13T00:00:00.000Z";
