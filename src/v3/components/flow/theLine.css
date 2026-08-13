@@ -103,10 +103,10 @@
 .v3ln-chip:hover{border-color:var(--v3-accent-2);color:var(--v3-accent-2)}
 .v3ln-chev{margin-left:5px;opacity:.55}
 .v3ln-chip:hover .v3ln-chev{opacity:1}
-.v3ln-chip.green{background:#E6F2EC;border-color:transparent;color:var(--ln-m4)}
-.v3ln-chip.green:hover{background:#D8EBDF;color:var(--ln-m4)}
-.v3ln-chip.amber{background:#FBF0DC;border-color:transparent;color:var(--ln-m1)}
-.v3ln-chip.amber:hover{background:#F6E7C8;color:var(--ln-m1)}
+.v3ln-chip.green{background:var(--aura-tint-green);border-color:transparent;color:var(--ln-m4)}
+.v3ln-chip.green:hover{background:var(--aura-tint-green-hi);color:var(--ln-m4)}
+.v3ln-chip.amber{background:var(--aura-tint-amber);border-color:transparent;color:var(--ln-m1)}
+.v3ln-chip.amber:hover{background:var(--aura-tint-amber-hi);color:var(--ln-m1)}
 .v3ln-chip.accent{background:color-mix(in srgb,var(--v3-accent-2) 9%,transparent);border-color:transparent;color:var(--v3-accent-2)}
 .v3ln-chip.accent:hover{background:color-mix(in srgb,var(--v3-accent-2) 16%,transparent);color:var(--v3-accent-2)}
 .v3ln-intake{display:flex;gap:10px;align-items:baseline;padding:8px 14px;border-bottom:1px solid var(--fs-line);
@@ -223,7 +223,7 @@
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 
 /* ── the cast ── */
-.v3ln-toast{margin:0 0 12px;padding:9px 13px;border:1px solid #BFDDD0;background:#E6F2EC;
+.v3ln-toast{margin:0 0 12px;padding:9px 13px;border:1px solid var(--aura-tint-green-line);background:var(--aura-tint-green);
   border-radius:5px;font-size:12px;color:var(--ln-m4)}
 .v3ln-a{font:inherit;font-weight:600;font-size:var(--aura-t-body);line-height:1.35;color:var(--v3-accent-2);background:none;border:1px solid var(--fs-line);
   border-radius:var(--aura-r-ctl);padding:3px 9px;cursor:pointer;white-space:nowrap;
@@ -345,8 +345,8 @@
 .v3ln-crit li.adv{opacity:.75}
 .v3ln-tick{flex:none;width:17px;height:17px;border-radius:50%;display:grid;place-items:center;
   font-size:10px;font-weight:700;margin-top:1px}
-.v3ln-tick.d{background:#E6F2EC;color:var(--ln-m4)}
-.v3ln-tick.o{background:#FBF0DC;color:var(--ln-m1)}
+.v3ln-tick.d{background:var(--aura-tint-green);color:var(--ln-m4)}
+.v3ln-tick.o{background:var(--aura-tint-amber);color:var(--ln-m1)}
 .v3ln-crit-b em{display:block;font-style:normal;font-size:var(--aura-t-meta);color:var(--v3-text-muted);margin-top:1px}
 .v3ln-gate-empty{padding:14px 18px;font-size:var(--aura-t-title);color:var(--v3-text-muted)}
 .v3ln-gate-f{padding:10px 18px;margin:0;font-size:var(--aura-t-meta);line-height:1.5;color:var(--v3-text-muted);
@@ -360,8 +360,8 @@
 
 /* ── sign-offs on Discover rows ── */
 .v3ln-appr{font:inherit;font-weight:600;font-size:var(--aura-t-meta);border-radius:999px;padding:2px 9px;white-space:nowrap}
-.v3ln-appr.ok{background:#E6F2EC;color:var(--ln-m4)}
-.v3ln-appr.wait{background:#FBF0DC;color:var(--ln-m1)}
+.v3ln-appr.ok{background:var(--aura-tint-green);color:var(--ln-m4)}
+.v3ln-appr.wait{background:var(--aura-tint-amber);color:var(--ln-m1)}
 .v3ln-cr-appr{display:flex;flex-direction:column;gap:6px;border-top:1px dashed var(--fs-line);padding-top:8px}
 .v3ln-cr-appr-t{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--v3-text-muted)}
 .v3ln-cr-appr-row{display:flex;align-items:center;gap:8px;max-width:560px}
@@ -380,9 +380,9 @@
   letter-spacing:.03em;text-transform:uppercase;color:var(--v3-text-muted);
   border:1px solid var(--fs-line);border-radius:999px;padding:2px 8px;white-space:nowrap}
 .v3ln-jdot{width:7px;height:7px;border-radius:50%;background:var(--fs-line);flex:none}
-.v3ln-jseg.approved{color:var(--ln-m4);border-color:transparent;background:#E6F2EC}
+.v3ln-jseg.approved{color:var(--ln-m4);border-color:transparent;background:var(--aura-tint-green)}
 .v3ln-jseg.approved .v3ln-jdot{background:var(--ln-m4-fill)}
-.v3ln-jseg.pending{color:var(--ln-m1);border-color:transparent;background:#FBF0DC}
+.v3ln-jseg.pending{color:var(--ln-m1);border-color:transparent;background:var(--aura-tint-amber)}
 .v3ln-jseg.pending .v3ln-jdot{background:var(--ln-m1-fill)}
 .v3ln-jseg.open .v3ln-jdot{background:var(--v3-accent-2)}
 
@@ -575,7 +575,7 @@
 .v3ln-engpill b{font-size:var(--aura-t-head);color:var(--v3-text-primary);font-variant-numeric:tabular-nums}
 .v3ln-engpill.is-ready b{color:var(--v3-accent-2)}
 .v3ln-engpill.is-in-flight b{color:var(--v3-amber)}
-.v3ln-engpill.is-blocked b{color:#5a4fa0}
+.v3ln-engpill.is-blocked b{color:var(--aura-kind-adjudicate)}
 .v3ln-engbar-note{font-size:10px;color:var(--v3-text-muted);font-style:italic;flex-basis:100%}
 /* ════ DISCOVER, ON THE SAME SYSTEM ════════════════════════════════════════════
    Measured before touching it, exactly as the Inbox was: SIX weights (400, 500,
@@ -645,7 +645,7 @@
 .v3ln-eng-hdr{margin:10px 0 4px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--v3-text-muted);border-bottom:1px solid var(--fs-line);padding-bottom:4px}
 .v3ln-eng-hdr.is-ready{color:var(--v3-accent-2)}
 .v3ln-eng-hdr.is-in-flight{color:var(--v3-amber)}
-.v3ln-eng-hdr.is-blocked{color:#5a4fa0}
+.v3ln-eng-hdr.is-blocked{color:var(--aura-kind-adjudicate)}
 /* ONE LINE. The status chip, any ageing chip and the reconciliation sentence used
    to wrap to two lines on the people who had most to say, which is exactly the
    population whose rows you compare. The sentence truncates instead — it is
@@ -659,7 +659,7 @@
 .v3ln-eng{font-size:var(--aura-t-meta);font-weight:700;letter-spacing:.04em;text-transform:uppercase;border-radius:var(--aura-r-ctl);padding:1px 7px;border:1px solid var(--fs-line);color:var(--v3-text-muted)}
 .v3ln-eng.is-ready{color:var(--v3-accent-2);border-color:color-mix(in srgb,var(--v3-accent-2) 40%,var(--fs-line));background:color-mix(in srgb,var(--v3-accent-2) 7%,transparent)}
 .v3ln-eng.is-in-flight{color:var(--v3-amber);border-color:color-mix(in srgb,var(--v3-amber) 40%,var(--fs-line))}
-.v3ln-eng.is-blocked{color:#5a4fa0;border-color:color-mix(in srgb,#6C5FAE 40%,var(--fs-line));background:color-mix(in srgb,#6C5FAE 6%,transparent)}
+.v3ln-eng.is-blocked{color:var(--aura-kind-adjudicate);border-color:color-mix(in srgb,#6C5FAE 40%,var(--fs-line));background:color-mix(in srgb,#6C5FAE 6%,transparent)}
 .v3ln-eng.is-done{color:var(--v3-text-muted)}
 .v3ln-eng-why{font-size:10px;color:var(--v3-text-muted)}
 /* inline ageing — to-do escalation, never alarm; intensifies with age */
@@ -669,6 +669,24 @@
 
 /* ══ Operator inbox — assign / decide-fate / schedule / adjudicate + exits ══ */
 .v3ib{display:flex;flex-direction:column;gap:11px;margin:0 0 16px}
+/* THE CHIP TINTS, named.
+   The consistency sweep asked for no hard-coded colour, and these five tints were
+   literals repeated across rules. The MOVEMENT inks are deliberately NOT here: each
+   is already declared once as `--mv` on its own row — `--mv` IS the token, and the
+   hex is its definition, which has to live somewhere. Naming them a second time
+   added a level of indirection that bought nothing and cost something real: the
+   contrast guard reads those values to prove each movement ink is AA in both themes,
+   and it cannot follow a var() to do it. A guard that works beats a grep that
+   passes. */
+:root{
+  --aura-kind-adjudicate:#5a4fa0;
+  --aura-tint-green:#E6F2EC;
+  --aura-tint-green-hi:#D8EBDF;
+  --aura-tint-green-line:#BFDDD0;
+  --aura-tint-amber:#FBF0DC;
+  --aura-tint-amber-hi:#F6E7C8;
+}
+
 /* ════ THE INBOX'S SCALE ════════════════════════════════════════════════════════
    Measured off the running page before this existed: SEVEN button variants (the
    "same" small button at 10px/2px 8px in twelve places and 11px/4px 11px in two),
@@ -769,9 +787,18 @@
 .v3ib-of{font-size:11px;color:var(--v3-text-muted);flex:1;min-width:220px}
 .v3ib-src{border:1px solid var(--fs-line);border-radius:var(--ib-r-box);background:var(--fs-card);padding:10px 13px 12px;display:flex;flex-direction:column;gap:7px}
 .v3ib-src.is-gated{border-style:dashed;background:var(--v3-surface-2)}
-.v3ib-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.v3ib-h{display:flex;align-items:center;gap:var(--aura-s2);flex-wrap:wrap}
+/* NARROW: the lead stops competing with the title for a column and takes its own
+   line. At a split-view width the two were squeezing each other — the badge wrapped
+   under the verb and the sentence broke every four words, which is the shape a
+   header takes when it is fighting rather than laying out. */
+@media (max-width:960px){
+  .v3ib-h{align-items:flex-start}
+  .v3ib-lead{flex-basis:100%;min-width:0}
+  .v3ib-disc{flex:0 1 auto}
+}
 .v3ib-verb{font-size:var(--ib-t-verb);font-weight:700;color:var(--v3-text-primary)}
-.v3ib-lead{font-size:11px;color:var(--v3-text-secondary);flex:1;min-width:200px}
+.v3ib-lead{font-size:var(--aura-t-body);color:var(--v3-text-secondary);flex:1;min-width:200px}
 .v3ib-lead b{color:var(--v3-text-primary);font-variant-numeric:tabular-nums}
 .v3ib-empty{margin:2px 0 0;font-size:11px;color:var(--v3-text-muted);font-style:italic}
 .v3ib-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
@@ -852,6 +879,20 @@
 .v3ln-unit{color:var(--v3-text-muted);font-weight:400;font-style:italic;font-size:.92em}
 /* data-dictionary reroute ask (the typing wall → one upload to the system owner) */
 .v3ib-dict{border-left:3px solid var(--v3-accent-2);background:color-mix(in srgb,var(--v3-accent-2) 4%,var(--fs-card))}
+/* THE KIND OF DECISION, as a hairline down the left edge. An operator triaging a
+   long board sorts by kind before reading, and colour is the only channel that does
+   that without costing a word. Hairline, not a bar: it is a sort key, not a status
+   alarm, and the semantic reds and ambers stay reserved for things that are wrong. */
+.v3ib-src{position:relative}
+.v3ib-src.is-assign,.v3ib-src.is-decide,.v3ib-src.is-schedule,.v3ib-src.is-adjudicate{padding-left:16px}
+.v3ib-src.is-assign::before,.v3ib-src.is-decide::before,
+.v3ib-src.is-schedule::before,.v3ib-src.is-adjudicate::before{
+  content:"";position:absolute;left:0;top:10px;bottom:10px;width:3px;border-radius:0 3px 3px 0}
+.v3ib-src.is-assign::before{background:var(--v3-accent-2)}
+.v3ib-src.is-decide::before{background:color-mix(in srgb,var(--v3-accent-2) 45%,transparent)}
+.v3ib-src.is-schedule::before{background:var(--v3-amber)}
+.v3ib-src.is-adjudicate::before{background:var(--aura-kind-adjudicate)}
+
 /* INBOX CLEAR — the zero state. Restrained on purpose: an empty inbox is the
    ordinary good state, not an achievement to be congratulated for, and a page that
    celebrates gets tiring by the third time you see it. */

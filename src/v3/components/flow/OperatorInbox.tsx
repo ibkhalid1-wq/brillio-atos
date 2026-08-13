@@ -108,7 +108,7 @@ export function SessionsSection({ sessionQueue, plannedPairs, busy, onPropose }:
   const seams = sessionQueue.length;
   const questions = sessionQuestionCount(sessionQueue);   // === the header's sessions stat
   return (
-    <IbSection id="ib-sessions" verb="Sessions" count={questions} unit="question" defaultOpen={false}
+    <IbSection id="ib-sessions" kind="schedule" verb="Sessions" count={questions} unit="question" defaultOpen={false}
       tag={<OwnershipTag cls="joint" showLabel={false} />}
       badge={<>{seams} seam{seams === 1 ? "" : "s"}, {questions} question{questions === 1 ? "" : "s"}</>}
       lead={<>They need a joint conversation; scheduling gated.</>}
@@ -210,8 +210,16 @@ function IbCard({ title, note, reveal, writes, tone, marker, children }: {
   );
 }
 
-function IbSection({ id, className, tag, verb, count, unit, unitPlural, badge, lead, provisional, actions, defaultOpen = true, children }: {
+function IbSection({ id, className, kind, tag, verb, count, unit, unitPlural, badge, lead, provisional, actions, defaultOpen = true, children }: {
   id?: string;
+  /**
+   * WHICH OF THE OPERATOR'S FOUR MOVES this section is asking for. It sets a hairline
+   * accent down the section's left edge, so the board can be sorted by kind of
+   * decision before a word is read — which is what an operator triaging fifty items
+   * actually does first. Colour is the only thing it changes; nothing is hidden or
+   * reordered by it, and every section still says its verb in words.
+   */
+  kind?: "assign" | "decide" | "schedule" | "adjudicate";
   /** A section's own marker class, kept: `.v3ib-dict` and `.v3ib-unbound` carry
    *  styling and are what the miss-stays-visible guards look for. The shared header
    *  must not quietly take a section's identity away with its markup. */
@@ -239,7 +247,7 @@ function IbSection({ id, className, tag, verb, count, unit, unitPlural, badge, l
   const [open, setOpen] = useState(defaultOpen);
   const bodyId = id ? `${id}-body` : undefined;
   return (
-    <section id={id} className={`v3ib-src${className ? ` ${className}` : ""}`}>
+    <section id={id} className={`v3ib-src${kind ? ` is-${kind}` : ""}${className ? ` ${className}` : ""}`}>
       <header className="v3ib-h">
         <button type="button" className="v3ib-disc" aria-expanded={open}
           aria-controls={open ? bodyId : undefined}
@@ -662,7 +670,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
               Every number is `soloByOwner`'s own count for that label: no person is
               invented to fill the gap and no number is invented to describe it. */}
       {unbound.length ? (
-        <IbSection className="v3ib-unbound" verb="Nobody to ask" count={unboundOpen} unit="open question"
+        <IbSection className="v3ib-unbound" kind="assign" verb="Nobody to ask" count={unboundOpen} unit="open question"
           tag={<OwnershipTag cls="operator" showLabel={false} />}
           lead={<>
               Owned by {unbound.length} role{unbound.length === 1 ? "" : "s"} with no person behind{" "}
@@ -801,7 +809,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
           );
         };
         return (
-          <IbSection id="ib-dictionary" className="v3ib-dict" verb="Data dictionary" count={chase.length} unit="system of record"
+          <IbSection id="ib-dictionary" className="v3ib-dict" kind="decide" verb="Data dictionary" count={chase.length} unit="system of record"
             unitPlural="systems of record"
             tag={<SourceTag source="code-derived" />}
             lead={<>With an unprovided dictionary — <b>one upload each</b> closes the typing wall, not
@@ -1064,7 +1072,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
       {/* EMPTY-STATE: a 0 section is HIDDEN (by request, 2026-08-10) — the inbox shows
           only what needs acting on; the header stats carry the summary. */}
       {unowned.length === 0 ? null : (
-      <IbSection id="ib-assign" verb="Need an owner" count={unowned.length} unit="question"
+      <IbSection id="ib-assign" kind="assign" verb="Need an owner" count={unowned.length} unit="question"
         tag={<OwnershipTag cls="operator" showLabel={false} />}
         lead={<><span className="v3ib-unit">(phase · decision)</span> across{" "}
           <b>{unownedGroups.size}</b> <span className="v3ib-unit">element{unownedGroups.size === 1 ? "" : "s"}</span>
@@ -1131,7 +1139,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
       {/* EMPTY-STATE: 0 conflicts → section HIDDEN (by request, 2026-08-10; the earlier
           "passed check" band retired with it). */}
       {ledger.conflicts.length === 0 ? null : (
-      <IbSection id="ib-adjudicate" verb="Adjudicate" count={ledger.conflicts.length} unit="conflict"
+      <IbSection id="ib-adjudicate" kind="adjudicate" verb="Adjudicate" count={ledger.conflicts.length} unit="conflict"
         tag={<OwnershipTag cls="operator" showLabel={false} />}
         lead={<>Two live claims on one locus; the element <b>freezes</b>, no auto-winner.</>}
         provisional="resolution completion is a write — gated; read-side only for now">
@@ -1155,7 +1163,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
           There is no automatic sweep, and no silent re-attribution of a sent question.
           EMPTY-STATE: 0 → section hidden, like every other section here. */}
       {ledger.pinConflicts.length === 0 ? null : (
-            <IbSection id="ib-pinned" verb="Pinned — in flight" count={ledger.pinConflicts.length} unit="question"
+            <IbSection id="ib-pinned" kind="decide" verb="Pinned — in flight" count={ledger.pinConflicts.length} unit="question"
         tag={<OwnershipTag cls="operator" showLabel={false} />}
         lead={<>Already <b>sent on a link</b> that a fresh derivation would re-route. The link&rsquo;s
           recipient <b>keeps</b> them until you say otherwise — decide each one.</>}>
@@ -1189,7 +1197,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
       {/* OWNED & IN-FLIGHT → reassign / unassign + the stakeholder's three exits */}
       {/* EMPTY-STATE: 0 in-flight → section HIDDEN (by request, 2026-08-10). */}
       {ledger.assignments.length === 0 ? null : (
-      <IbSection id="ib-inflight" className="is-gated" verb="Owned &amp; in-flight" count={ledger.assignments.length} unit="question"
+      <IbSection id="ib-inflight" className="is-gated" kind="assign" verb="Owned &amp; in-flight" count={ledger.assignments.length} unit="question"
         tag={<OwnershipTag cls="stakeholder" showLabel={false} />}
         lead={<>Reassign if you routed wrong, or record the holder&rsquo;s exit. Operator-entered
           captures: <b>{ledger.captures.length}</b> — <b>not</b> counted as heard.</>}
@@ -1274,7 +1282,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
 
       {/* DECIDED trace */}
       {ledger.decideFates.length ? (
-        <IbSection id="ib-decided" verb="Decided" count={ledger.decideFates.length} unit="unknown"
+        <IbSection id="ib-decided" kind="decide" verb="Decided" count={ledger.decideFates.length} unit="unknown"
           tag={<SourceTag source="dispositioned" />}
           lead={<>Questions the operator ruled on rather than answered — an honest trace, kept
             because a thing ruled out of scope must not read as a thing nobody got to.</>}>
