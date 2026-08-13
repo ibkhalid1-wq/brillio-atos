@@ -24,6 +24,7 @@ import type { LedgerStore } from "./store";
 import type { LedgerElement } from "./types";
 import { elementIdOf, slotOf, isLive } from "./types";
 import { READING_SLOT_PREFIX } from "./migrate";
+import { lifecycleLoci } from "./lifecycle";
 
 export type Audience = "stakeholder" | "operator";
 
@@ -157,6 +158,29 @@ export interface RenderCache {
 export const createRenderCache = (): RenderCache => ({});
 
 /** The element index, built once per pass when a cache is supplied. */
+/**
+ * The confident lifecycle loci, memoised per store.
+ *
+ * `lifecycleEntities` walks every element, and renderQuestion is called once per
+ * question on a board that can hold hundreds — so it is computed once per store and
+ * held weakly, which is the same trick `elementIndex` below already plays.
+ */
+const LIFECYCLE_CACHE = new WeakMap<LedgerStore, Set<string>>();
+const lifecycleAbouts = (store: LedgerStore): Set<string> => {
+  const hit = LIFECYCLE_CACHE.get(store);
+  if (hit) return hit;
+  const set = lifecycleLoci(store);
+  LIFECYCLE_CACHE.set(store, set);
+  return set;
+};
+
+/** The entity a locus belongs to, by name — an attribute's parent, or the element. */
+const entityOf = (store: LedgerStore, elementId: string, byId: Map<string, LedgerElement>): string => {
+  const el = byId.get(elementId);
+  if (!el) return "";
+  return (el.kind === "attribute" && el.of ? byId.get(el.of)?.name : el.name) ?? "";
+};
+
 const elementIndex = (store: LedgerStore, cache?: RenderCache): Map<string, LedgerElement> => {
   if (cache?.byId) return cache.byId;
   const built = new Map(store.elements().map((e) => [e.id, e] as const));
@@ -202,7 +226,21 @@ export function renderQuestion(store: LedgerStore, about: string, audience: Audi
     const name = nameFor(store, el, elementId, byId);
     question =
       kind === "phase" ? `Which phase of ${your} process does "${name}" belong to?`
-        : kind === "valueSet" ? `What values can ${name} take?`
+        // A LIFECYCLE IS NOT A PICKLIST. "What values can Opportunity.stage take?"
+        // is a schema question, asked of whoever exports the schema. The same locus,
+        // put to the person who moves the thing, is "what stages does it go
+        // through, in order" — and the ORDER is the part a dictionary never carries
+        // and only they can give.
+        // A LIFECYCLE IS NOT A PICKLIST, and it is not the ENTITY either. Naming only
+        // the entity — "What stages does Opportunity go through?" — sent the SAME
+        // sentence three times on Laila New, where Opportunity carries `stage`,
+        // `forecast status` and `MSA status`, with nothing to tell the recipient which
+        // field each was about. The full name leads, exactly as every other question
+        // here carries it; the entity follows because "what stages does an Opportunity
+        // move through" is the sentence a person actually answers.
+        : kind === "valueSet" ? (lifecycleAbouts(store).has(about)
+          ? `${name} — what stages does ${entityOf(store, elementId, byId) || "it"} move through, in order?`
+          : `What values can ${name} take?`)
           : kind === "dataType" ? `What type of value is ${name}?`
             : kind === "optionality" ? `Is ${name} required or optional?`
               : kind === "semantics" ? meaningQuestion(name, conflictingReadings(store, elementId, cache))

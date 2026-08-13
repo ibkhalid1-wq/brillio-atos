@@ -91,9 +91,19 @@ const lailaQueue = buildUnknownQueue(lailaStore);
  * question. Frozen loci are subtracted last, because a locus awaiting adjudication is not
  * a conversation anyone can schedule (see `unfrozenQueues`).
  */
+import { lifecycleLoci } from "@/v3/lib/ledger/lifecycle";
+
 const FROZEN_ABOUTS = new Set(readConflicts(lailaStore).map((c) => c.about));
+/**
+ * The one EXCEPTION to "typing leaves for the dictionary": a confident lifecycle's
+ * stage question stays, because its stages — and their ORDER — are stated by the
+ * people who move the thing, not exported from a schema (2026-08-12). Read from
+ * `lifecycleLoci`, the same function the hook routes on, so this stays an
+ * independent RECOMPUTATION rather than a second definition of the rule.
+ */
+const LIFECYCLE_ABOUTS = lifecycleLoci(lailaStore);
 const jointQuestionsFromItems = lailaQueue.items.filter((i) =>
-  !(i.status === "open" && TYPING_SLOTS.has(i.slot))
+  !(i.status === "open" && TYPING_SLOTS.has(i.slot) && !LIFECYCLE_ABOUTS.has(i.about))
   && i.owner.kind === "joint"
   && !FROZEN_ABOUTS.has(i.about)).length;
 
