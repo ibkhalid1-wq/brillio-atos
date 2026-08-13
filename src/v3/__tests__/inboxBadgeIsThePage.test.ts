@@ -54,8 +54,6 @@ import { createRoot, type Root } from "react-dom/client";
 import type { ProgramSummary } from "@/new/types";
 import { migrate, type Snapshot } from "@/v3/lib/ledger/migrate";
 import { buildUnknownQueue } from "@/v3/lib/ledger/projections";
-import { TYPING_SLOTS } from "@/v3/lib/ledger/dictionary";
-import { readConflicts } from "@/v3/lib/ledger/useProgramLedger";
 import FlowShell from "@/v3/components/flow/FlowShell";
 import { codeOnly } from "./helpers/sourceGuards";
 
@@ -93,9 +91,7 @@ const lailaQueue = buildUnknownQueue(lailaStore);
  * question. Frozen loci are subtracted last, because a locus awaiting adjudication is not
  * a conversation anyone can schedule (see `unfrozenQueues`).
  */
-import { lifecycleLoci } from "@/v3/lib/ledger/lifecycle";
 
-const FROZEN_ABOUTS = new Set(readConflicts(lailaStore).map((c) => c.about));
 /**
  * The one EXCEPTION to "typing leaves for the dictionary": a confident lifecycle's
  * stage question stays, because its stages — and their ORDER — are stated by the
@@ -103,27 +99,10 @@ const FROZEN_ABOUTS = new Set(readConflicts(lailaStore).map((c) => c.about));
  * `lifecycleLoci`, the same function the hook routes on, so this stays an
  * independent RECOMPUTATION rather than a second definition of the rule.
  */
-const LIFECYCLE_ABOUTS = lifecycleLoci(lailaStore);
-/**
- * THE WITNESS COUNTS WHAT THIS STORE CAN SEE.
- *
- * A seam now outranks the typing route (2026-08-13) — a question two functions must
- * AGREE on cannot be settled by a document — so jointly-owned typing questions reach
- * the Sessions section instead of the dictionary. That rule is proved directly in
- * `seamOutranksTyping.test.ts`.
- *
- * It is deliberately NOT folded into this witness. The page renders a ledger with the
- * DICTIONARY MERGE applied, which closes typing questions; this store is `migrate`
- * alone and has no way to know which. Counting joint typing questions here would
- * measure a population the page has legitimately answered — the two agreed before
- * only because both excluded typing, which was agreement by luck rather than by
- * definition. So the equality is asserted over the population a dictionary cannot
- * close, and the seam rule is proved where it can be proved exactly.
- */
-const jointQuestionsFromItems = lailaQueue.items.filter((i) =>
-  !(i.status === "open" && TYPING_SLOTS.has(i.slot) && !LIFECYCLE_ABOUTS.has(i.about))
-  && i.owner.kind === "joint"
-  && !FROZEN_ABOUTS.has(i.about)).length;
+/* The joint-question witness went with the Sessions section (2026-08-13): seam
+   questions go out on both owners' links, so nothing about a seam is drawn on this
+   page or counted in the badge, and there is no figure left for it to check. The seam
+   ROUTING is proved in `seamOutranksTyping.test.ts`. */
 
 const AT = "2026-08-01T00:00:00Z";
 type Props = Parameters<typeof FlowShell>[0];
