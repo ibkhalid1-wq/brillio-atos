@@ -172,23 +172,51 @@ export const contradictionKey = (statement: string): string =>
  * Cards with no contradiction payload pass through untouched — this is not a
  * general decision deduper, and a genuinely different dispute still gets its own
  * card.
+ *
+ * THE SURVIVOR IS THE RICHEST CARD, NOT THE FIRST. Measured on Laila New, the four
+ * duplicates were four GENERATIONS of the same finding — the oldest carried the
+ * bare glued statement as its summary and no `claim` at all, the newest carried
+ * "Evidence: … — the charter still says …" and the claim it contradicts. Keeping
+ * the first arrival kept the worst card and threw away the only one that says what
+ * the conflict IS. A stored decision renders the strings it was minted with, so
+ * this is the only place that choice can be made.
  */
-export function dedupeContradictionDecisions<T extends { payload?: Record<string, unknown> | null }>(
-  decisions: readonly T[],
-): T[] {
-  const seen = new Set<string>();
+export function dedupeContradictionDecisions<
+  T extends { payload?: Record<string, unknown> | null; summary?: unknown },
+>(decisions: readonly T[]): T[] {
+  const entriesOf = (d: T): unknown[] | null => {
+    const e = d.payload && Array.isArray(d.payload.contradictionEntries)
+      ? (d.payload.contradictionEntries as unknown[]) : null;
+    return e && e.length ? e : null;
+  };
+  const keyOf = (entries: unknown[]): string => entries
+    .map((e) => contradictionKey(String((e as { statement?: unknown })?.statement ?? "")))
+    .filter(Boolean).sort().join("|");
+
+  /** How much a card actually TELLS the operator. Higher wins a tie. */
+  const richness = (d: T, entries: unknown[]): number => {
+    const withClaim = entries.filter((e) =>
+      String((e as { claim?: unknown })?.claim ?? "").trim().length > 0).length;
+    const withSides = entries.filter((e) =>
+      String((e as { between?: unknown })?.between ?? "").trim().length > 0).length;
+    // The claim is what the evidence contradicts — a card without it states one
+    // side of a dispute and calls it a dispute. Weighted above everything else.
+    return withClaim * 1000 + withSides * 100 + Math.min(String(d.summary ?? "").length, 99);
+  };
+
+  const bestAt = new Map<string, number>();   // key → index in `out`
   const out: T[] = [];
   for (const d of decisions) {
-    const entries = d.payload && Array.isArray(d.payload.contradictionEntries)
-      ? (d.payload.contradictionEntries as unknown[]) : null;
-    if (!entries || !entries.length) { out.push(d); continue; }
-    const key = entries
-      .map((e) => contradictionKey(String((e as { statement?: unknown })?.statement ?? "")))
-      .filter(Boolean).sort().join("|");
+    const entries = entriesOf(d);
+    if (!entries) { out.push(d); continue; }
+    const key = keyOf(entries);
     if (!key) { out.push(d); continue; }
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(d);
+    const at = bestAt.get(key);
+    if (at === undefined) { bestAt.set(key, out.length); out.push(d); continue; }
+    // Same finding: keep whichever card says more, in the FIRST card's position so
+    // the board does not reorder itself as generations arrive.
+    const incumbent = out[at];
+    if (richness(d, entries) > richness(incumbent, entriesOf(incumbent) ?? [])) out[at] = d;
   }
   return out;
 }
