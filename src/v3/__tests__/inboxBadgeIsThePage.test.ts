@@ -232,7 +232,10 @@ const page = () => {
   const adjudicate = n("#ib-adjudicate li.v3ib-row");
   const pinned = n("#ib-pinned li.v3ib-row");
   const inFlight = n("#ib-inflight li.v3ib-row");
-  const chase = n(".v3ib-dict-ask");                         // one per SoR ask + one for the unattributed residue
+  // One per SoR ask, plus one for the unattributed residue — which is now drawn as a
+  // card like every other block in that section (2026-08-13) and keeps
+  // `.v3ib-dict-residue` as its semantic marker precisely so this stays countable.
+  const chase = n(".v3ib-dict-ask, .v3ib-dict-residue");
   const decided = n("li.v3ib-row.is-decided");               // HISTORY — drawn, never waiting
   return {
     record, assign, sessions, adjudicate, pinned, inFlight, chase, decided,

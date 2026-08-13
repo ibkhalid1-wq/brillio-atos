@@ -704,6 +704,34 @@
 .v3ln-unit{color:var(--v3-text-muted);font-weight:400;font-style:italic;font-size:.92em}
 /* data-dictionary reroute ask (the typing wall → one upload to the system owner) */
 .v3ib-dict{border-left:3px solid var(--v3-accent-2);background:color-mix(in srgb,var(--v3-accent-2) 4%,var(--fs-card))}
+/* ════ THE CARD every block inside a section is drawn as ════════════════════════
+   Four blocks had grown four containers — one dashed accent border, one tinted
+   fill, one plain, one with its own title class — so a column that holds four
+   equally important things read as four unrelated notices. One surface, one
+   rhythm, one place the eye lands.
+
+   The dashed/tinted variants survive as TONES, because they were carrying meaning
+   worth keeping: `is-muted` for a block waiting on something the operator cannot
+   do here, `is-settled` for one that is finished. */
+.v3ib-card{display:flex;flex-direction:column;gap:5px;margin-top:8px;padding:11px 13px;
+  border:1px solid var(--fs-line);border-radius:11px;background:var(--fs-card);
+  box-shadow:0 1px 2px rgba(16,15,40,.04)}
+.v3ib-card:first-of-type{margin-top:6px}
+.v3ib-card.is-muted{border-style:dashed;background:transparent;box-shadow:none}
+.v3ib-card.is-settled{background:var(--v3-surface-2);box-shadow:none}
+.v3ib-card-t{font-size:12px;color:var(--v3-text-primary);line-height:1.45}
+.v3ib-card-t b{font-variant-numeric:tabular-nums}
+.v3ib-card-m{font-size:11px;color:var(--v3-text-secondary);line-height:1.5}
+.v3ib-card-a{display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin-top:2px}
+/* The revealed detail belongs to its card and is set apart from the note above it,
+   so an expanded card still reads as one thing rather than two stacked. */
+.v3ib-card-body{margin-top:7px;padding-top:9px;border-top:1px solid var(--fs-line)}
+.v3ib-qlist{display:flex;flex-direction:column;gap:4px;margin:0;padding:0;list-style:none;
+  max-height:340px;overflow-y:auto}
+.v3ib-qlist > li{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px;padding:4px 0;
+  border-bottom:1px solid color-mix(in srgb,var(--fs-line) 55%,transparent)}
+.v3ib-qlist > li:last-child{border-bottom:0}
+
 .v3ib-dict-ask{display:flex;flex-direction:column;gap:3px;margin-top:6px;padding:7px 11px;border:1px dashed color-mix(in srgb,var(--v3-accent-2) 40%,var(--fs-line));border-radius:8px;background:var(--fs-card)}
 .v3ib-dict-to{font-size:12px;color:var(--v3-text-primary)}
 .v3ib-dict-msg{font-size:11px;color:var(--v3-text-muted)}

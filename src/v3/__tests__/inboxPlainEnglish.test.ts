@@ -89,8 +89,24 @@ describe("no strip describes an act it does not offer", () => {
     expect(inbox).toContain("setShowGrid((v) => !v)");
   });
 
-  it("the no-system bucket opens its questions", () => {
-    expect(inbox).toContain("show the {unattributed.weight}");
+  it("the no-system bucket opens its questions — in the card, not a dialog", () => {
+    // It opened a MODAL while the two cards beside it expanded in place: the same
+    // act, three interactions. Every reveal in this Inbox now opens where it was
+    // asked for.
+    // MUTATION: point the reveal back at `setPeek` → RED.
+    expect(inbox).toContain("label: `show the ${unattributed.weight}`");
+    expect(inbox).toContain("onToggle: () => setShowOrphans((v) => !v)");
+  });
+
+  it("every reveal in the dictionary section is the card's own reveal", () => {
+    // The rule the four controls broke: "review 18, confirm the types here, chase
+    // crm again, and show 37 all behave differently". Three of them are REVEALS and
+    // now share one implementation; the fourth is a WRITE and is drawn as one.
+    const reveals = inbox.match(/reveal=\{/g) ?? [];
+    expect(reveals.length, "a reveal is being hand-rolled outside IbCard").toBeGreaterThanOrEqual(3);
+    // MUTATION: give the chase button `ghost` again → RED. A write must not wear a
+    // reveal's clothes; it is the only one of the four that changes the record.
+    expect(inbox).toContain('className="v3ib-btn sm"');
   });
 });
 

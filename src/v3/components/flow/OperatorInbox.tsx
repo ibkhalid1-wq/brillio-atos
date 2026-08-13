@@ -153,6 +153,62 @@ export function SessionsSection({ sessionQueue, plannedPairs, busy, onPropose }:
  * mark, and a disclosure that collapses the body. A section that wants extra controls
  * passes them; it cannot skip the parts every section owes the reader.
  */
+/**
+ * ONE CARD FOR EVERY BLOCK INSIDE A SECTION, AND TWO KINDS OF BUTTON.
+ *
+ * Reported: "review 18, confirm the types here, chase crm again, and show 37 all
+ * behave differently." They did. All four were `.v3ib-btn ghost sm` — the same
+ * control, to look at — while one toggled a grid open, one toggled a different grid,
+ * one WROTE to the record on a single click, and one opened a modal. Four verbs
+ * wearing one costume, in four containers (`-derivedtypes`, `-ask`, `-answerhere`,
+ * `-settled`) that had drifted into four shapes.
+ *
+ * So a block is a CARD — title, count, note, actions, and an optional body that the
+ * card itself expands — and the actions divide into exactly two kinds:
+ *
+ *   REVEAL   shows more of what is already on the record. Ghost button, `aria-expanded`,
+ *            label flips to "hide", and the detail opens INSIDE this card. Never a
+ *            modal: a modal for one reveal and an inline panel for the next is the
+ *            inconsistency this exists to end.
+ *   WRITE    changes the record. Filled button, stated in the imperative, and it is
+ *            the only kind that can surprise you — so it never looks like a reveal.
+ */
+function IbCard({ title, note, reveal, writes, tone, marker, children }: {
+  title: ReactNode;
+  /** A semantic marker class the card keeps beyond its styling — the badge-equals-page
+   *  guard counts the no-SoR residue as one waiting item, and it must stay findable
+   *  when the block's presentation changes. */
+  marker?: string;
+  note?: ReactNode;
+  /** The one reveal this card offers, if any: its label, its state, its toggle. */
+  reveal?: { label: string; open: boolean; onToggle: () => void; hideLabel?: string };
+  /** Buttons that CHANGE the record. Rendered filled, after the reveal. */
+  writes?: ReactNode;
+  /** `settled` for a finished block, `muted` for one that is waiting on something else. */
+  tone?: "settled" | "muted";
+  /** The revealed detail — rendered only while `reveal.open`. */
+  children?: ReactNode;
+}) {
+  return (
+    <div className={`v3ib-card${tone ? ` is-${tone}` : ""}${marker ? ` ${marker}` : ""}`}>
+      <span className="v3ib-card-t">{title}</span>
+      {note ? <span className="v3ib-card-m">{note}</span> : null}
+      {reveal || writes ? (
+        <span className="v3ib-card-a">
+          {reveal ? (
+            <button type="button" className="v3ib-btn ghost sm" aria-expanded={reveal.open}
+              onClick={reveal.onToggle}>
+              {reveal.open ? (reveal.hideLabel ?? "hide") : reveal.label}
+            </button>
+          ) : null}
+          {writes}
+        </span>
+      ) : null}
+      {reveal?.open ? <div className="v3ib-card-body">{children}</div> : null}
+    </div>
+  );
+}
+
 function IbSection({ id, className, tag, verb, count, unit, unitPlural, badge, lead, provisional, actions, defaultOpen = true, children }: {
   id?: string;
   /** A section's own marker class, kept: `.v3ib-dict` and `.v3ib-unbound` carry
@@ -231,6 +287,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
   /** The questions behind a count, opened from the count itself. */
   const [peek, setPeek] = useState<{ sor: string; abouts: string[]; orphan?: boolean } | null>(null);
   const [showDerived, setShowDerived] = useState(false);
+  const [showOrphans, setShowOrphans] = useState(false);
 
   /** The already-written readings, in the grid's own row shape. Source comes from
    *  the same `attributeEvidence` read the open wall uses — one definition. */
@@ -480,6 +537,54 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
     ["ib-inflight", queue.inFlight, "in flight"],
   ] as const).filter(([, n]) => n > 0);
 
+  /**
+   * THE QUESTION ROWS, one definition.
+   *
+   * They were written inside the peek modal, so the only way to show a set of
+   * questions was to open a dialog — which is why "show the 37" was a modal while
+   * "review the 18" beside it expanded in place. Lifted here, the same rows render
+   * wherever the questions are asked for.
+   */
+  const QuestionList = ({ abouts, orphan }: { abouts: readonly string[]; orphan?: boolean }) => (
+    <ul className="v3ib-qlist">
+      {abouts.map((about) => {
+        const q = Q(about);
+        // WHERE THE FIELD CAME FROM. A question about a field somebody named in an
+        // interview and one about a field the model listed while summarising a
+        // document read identically until this line existed.
+        const src = attributeEvidence(ledger.store, elementIdOf(about));
+        return (
+          <li key={about} title={about}>
+            <span className="v3ib-peek-tag">{q.typeTag}</span>
+            <span className="v3ib-peek-q">{q.question}</span>
+            {src
+              ? <span className="v3ib-peek-src" title={src}>from: {src}</span>
+              : <span className="v3ib-peek-src none">no source on record</span>}
+            {/* THE FOURTH ANSWER: the field should not exist. For a field with NO
+                source and NO system of record, the three routes on offer were chase a
+                dictionary (from a system nobody named), ask a stakeholder (Discover
+                excludes these, rightly), or confirm a type by hand — all three assume
+                the field is real. Laila New held "Does every Account need a ANOTHER,
+                or is that optional?", an attribute Aura invented while summarising.
+                `decide-fate: out-of-scope` is the ledger's own way to say so; it was
+                simply not offered where it is the only correct move, and it records
+                WHY, so a field ruled out stays ruled out with its reason. */}
+            {!src && orphan ? (
+              <button type="button" className="v3ib-peek-drop" disabled={busy === about}
+                aria-label={spoken(`This field should not exist: ${q.question}`)}
+                title="No source, no system — record that the field itself is out of scope"
+                onClick={() => void run(about, {
+                  kind: "decide-fate", about, slot: slotOf(about), decision: "out-of-scope",
+                  reason: "no source on record and no system of record — the field itself is not evidenced",
+                  by, at: nowISO(),
+                })}>{busy === about ? "Recording…" : "this field shouldn’t exist"}</button>
+            ) : null}
+          </li>
+        );
+      })}
+    </ul>
+  );
+
   return (
     <div className="v3ib" aria-label="Operator inbox">
       {stats.length ? (
@@ -647,40 +752,21 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                 the ledger holds and lose to any human answer — but an operator who
                 is not told will read them as settled. */}
             {derived.length ? (
-              <div className="v3ib-dict-derivedtypes">
-                <span className="v3ib-dict-to">
-                  <b>{derived.length}</b> type{derived.length === 1 ? " was" : "s were"} read from the field names, not answered by anyone
-                </span>
-                <span className="v3ib-dict-msg">
-                  {derived.slice(0, 3).map((d) => `${d.entity}.${d.attribute} → ${d.dataType}`).join(" · ")}
+              <IbCard
+                title={<><b>{derived.length}</b> type{derived.length === 1 ? " was" : "s were"} read from the field names, not answered by anyone</>}
+                note={<>{derived.slice(0, 3).map((d) => `${d.entity}.${d.attribute} → ${d.dataType}`).join(" · ")}
                   {derived.length > 3 ? ` · +${derived.length - 3} more` : ""}
-                  {" "}— <b>code-derived · weak</b>, the weakest claim on the record: a dictionary or an owner
-                  overrules any of them. A real dictionary is still the better answer.
-                </span>
-                {/* THE ACT. This strip reported {derived.length} readings and offered
-                    nothing — informational text on the surface for operator decisions.
-                    The decision it was hiding is a real one: accept Aura's reading as
-                    YOUR answer (a claim a stakeholder can deviate from) or change it.
-                    The grid already does exactly that; it just had no way to be handed
-                    a set of rows that are not the open wall. */}
+                  {" "}— <b>code-derived · weak</b>, the weakest claim on the record: a dictionary or an
+                  owner overrules any of them. A real dictionary is still the better answer.</>}
+                reveal={onDictionary ? {
+                  label: `review the ${derived.length}`, open: showDerived,
+                  onToggle: () => setShowDerived((v) => !v),
+                } : undefined}>
                 {onDictionary ? (
-                  <span className="v3ib-dict-actions">
-                    {/* A TOGGLE, NOT A ONE-WAY SWITCH. It opened the grid and there was
-                        no way back: the only thing that closed it was committing a
-                        confirmation, so an operator who opened it to LOOK had to
-                        either answer something or reload the page. */}
-                    <button type="button" className="v3ib-btn ghost sm"
-                      aria-expanded={showDerived}
-                      onClick={() => setShowDerived((v) => !v)}>
-                      {showDerived ? "hide these" : `review the ${derived.length}`}
-                    </button>
-                  </span>
+                  <TypingGrid ledger={ledger} onDictionary={onDictionary} rows={derivedRows}
+                    onDone={() => setShowDerived(false)} onClose={() => setShowDerived(false)} />
                 ) : null}
-              </div>
-            ) : null}
-            {onDictionary && showDerived ? (
-              <TypingGrid ledger={ledger} onDictionary={onDictionary} rows={derivedRows}
-                onDone={() => setShowDerived(false)} onClose={() => setShowDerived(false)} />
+              </IbCard>
             ) : null}
             {chase.map((ask) => {
               // owner: the derivation's, else the shared detection over the roster, else TBC — never fabricated
@@ -781,80 +867,59 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                 one pass. It sits under the asks because a real dictionary still
                 beats it — and it is only offered when there is something to
                 confirm. */}
-            {onDictionary && showGrid ? (
-              <TypingGrid ledger={ledger} onDictionary={onDictionary} onDone={() => setShowGrid(false)}
-                onClose={() => setShowGrid(false)} />
-            ) : onDictionary && ledger.typingLoci.length ? (
-              // NOT `.v3ib-dict-ask`: that class IS the chase row, counted one per
-              // SoR by the badge-equals-page guard. This is a door into a pass of
-              // work, not another thing being chased, and counting it as one would
-              // have made the rail badge disagree with the page by exactly one.
-              <div className="v3ib-dict-answerhere">
-                <span className="v3ib-dict-to">
-                  <b>{ledger.typingLoci.length}</b> typing question{ledger.typingLoci.length === 1 ? "" : "s"} are still open
-                </span>
-                <span className="v3ib-dict-msg">
-                  A dictionary is the better answer. If one is not coming, answer them here — Aura has
-                  read most of them from the field names already and sets them as the answer, so it is a
-                  pass of confirmations rather than {ledger.typingLoci.length} questions.
-                </span>
-                <span className="v3ib-dict-actions">
-                  <button type="button" className="v3ib-btn ghost sm"
-                    aria-expanded={showGrid}
-                    onClick={() => setShowGrid((v) => !v)}>
-                    {showGrid ? "hide the grid" : "confirm the types here"}
-                  </button>
-                </span>
-              </div>
+            {onDictionary && ledger.typingLoci.length ? (
+              // NOT `.v3ib-dict-ask`: that class IS the chase row, counted one per SoR
+              // by the badge-equals-page guard. This is a door into a pass of work, not
+              // another thing being chased, and counting it as one would have made the
+              // rail badge disagree with the page by exactly one.
+              <IbCard
+                title={<><b>{ledger.typingLoci.length}</b> typing question{ledger.typingLoci.length === 1 ? "" : "s"} are still open</>}
+                note={<>A dictionary is the better answer. If one is not coming, answer them here — Aura
+                  has read most of them from the field names already and sets them as the answer, so it
+                  is a pass of confirmations rather than {ledger.typingLoci.length} questions.</>}
+                reveal={{ label: "confirm the types here", open: showGrid, onToggle: () => setShowGrid((v) => !v) }}>
+                <TypingGrid ledger={ledger} onDictionary={onDictionary}
+                  onDone={() => setShowGrid(false)} onClose={() => setShowGrid(false)} />
+              </IbCard>
             ) : null}
             {settled.length ? (
-              <div className="v3ib-dict-settled">
-                <span className="v3ib-dict-settled-t">
-                  <b>{settled.length}</b> settled by you —{" "}
-                  {settled.map((a) => `${a.sor} (${a.state === "complete" ? "whole dictionary on file" : "has none"})`).join(" · ")}
-                </span>
-                {onAskMark ? (
-                  <span className="v3ib-dict-actions">
-                    {settled.map((a) => (
-                      <button key={a.sor} type="button" className="v3ib-btn ghost sm"
-                        aria-label={spoken(`Chase the ${a.sor} dictionary again`)}
-                        onClick={() => onAskMark({ sor: a.sor, mark: "requested", by, at: nowISO() })}>chase {a.sor} again</button>
-                    ))}
-                  </span>
-                ) : null}
-              </div>
+              <IbCard tone="settled"
+                title={<><b>{settled.length}</b> settled by you</>}
+                note={settled.map((a) => `${a.sor} (${a.state === "complete" ? "whole dictionary on file" : "has none"})`).join(" · ")}
+                writes={onAskMark ? settled.map((a) => (
+                  <button key={a.sor} type="button" className="v3ib-btn sm"
+                    aria-label={spoken(`Chase the ${a.sor} dictionary again`)}
+                    onClick={() => onAskMark({ sor: a.sor, mark: "requested", by, at: nowISO() })}>
+                    chase {a.sor} again
+                  </button>
+                )) : undefined} />
             ) : null}
             {unattributed.weight ? (
-              <div className="v3ib-dict-ask">
-                <span className="v3ib-dict-to">
-                  <b>{unattributed.weight}</b> typing question{unattributed.weight === 1 ? "" : "s"} on{" "}
+              <IbCard tone="muted" marker="v3ib-dict-residue"
+                title={<><b>{unattributed.weight}</b> typing question{unattributed.weight === 1 ? "" : "s"} on{" "}
                   {orphanEntities.length ? (
                     <>
                       <b>{orphanEntities.slice(0, 3).map(([n]) => n).join(", ")}</b>
                       {orphanEntities.length > 3 ? <> and {orphanEntities.length - 3} more</> : null}
                       {" "}— <b>no system of record named</b>
                     </>
-                  ) : <>entities with <b>no system of record named</b></>}
-                </span>
-                {/* WHAT IT IS AND WHAT CLEARS IT. "a Frame gap, not an ask" is the
-                    ledger's own vocabulary and told the operator nothing they could
-                    act on: no dictionary can be requested for a system nobody has
-                    named, so this bucket is deliberately NOT an ask — it is waiting
-                    on the Frame answer that turns it into one. */}
-                <span className="v3ib-dict-msg">
-                  Nothing to chase yet: a dictionary is requested from a system, and these
+                  ) : <>entities with <b>no system of record named</b></>}</>}
+                /* WHAT IT IS AND WHAT CLEARS IT. "a Frame gap, not an ask" is the
+                   ledger's own vocabulary and told the operator nothing they could act
+                   on: no dictionary can be requested for a system nobody has named, so
+                   this bucket is deliberately NOT an ask — it waits on the Frame answer
+                   that turns it into one. */
+                note={<>Nothing to chase yet: a dictionary is requested from a system, and these
                   {" "}{orphanEntities.length === 1 ? "entity holds" : "entities hold"} no system name.
                   {" "}Name the system on the Frame — in <b>systems of record</b> — and these
-                  {" "}{unattributed.weight} attach to its ask. They stay open and counted meanwhile.
-                </span>
-                <span className="v3ib-dict-acts">
-                  <button type="button" className="v3ib-btn ghost sm"
-                    aria-label={spoken(`Show the ${unattributed.weight} questions with no system of record named`)}
-                    onClick={() => setPeek({ sor: "", abouts: [...unattributed.abouts], orphan: true })}>
-                    show the {unattributed.weight}
-                  </button>
-                </span>
-              </div>
+                  {" "}{unattributed.weight} attach to its ask. They stay open and counted meanwhile.</>}
+                /* IN THE CARD, NOT A MODAL. This one reveal opened a dialog while the two
+                   above expanded in place — the same act, three interactions. Every
+                   reveal in this Inbox now opens where it was asked for. */
+                reveal={{ label: `show the ${unattributed.weight}`, open: showOrphans,
+                  onToggle: () => setShowOrphans((v) => !v) }}>
+                <QuestionList abouts={unattributed.abouts} orphan />
+              </IbCard>
             ) : null}
             {/* THE UPLOAD — the write half of the ask. Parsed first so the operator
                 sees what this file actually closes before committing it. Per-SoR
@@ -1149,47 +1214,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
               named the field without saying who or what named it, which is worth knowing before
               anyone is asked about it.
             </span>
-            <ul className="v3ib-peek-rows">
-              {peek.abouts.map((about) => {
-                const q = Q(about);
-                // WHERE THE FIELD CAME FROM. A question about a field somebody named
-                // in an interview and one about a field the model listed while
-                // summarising a document read identically until this line existed.
-                const src = attributeEvidence(ledger.store, elementIdOf(about));
-                return (
-                  <li key={about} title={about}>
-                    <span className="v3ib-peek-tag">{q.typeTag}</span>
-                    <span className="v3ib-peek-q">{q.question}</span>
-                    {src
-                      ? <span className="v3ib-peek-src" title={src}>from: {src}</span>
-                      : <span className="v3ib-peek-src none">no source on record</span>}
-                    {/* THE FOURTH ANSWER: the field should not exist.
-                        For a field with NO source and NO system of record, the three
-                        routes on offer were chase a dictionary (from a system nobody
-                        named), ask a stakeholder (Discover excludes these, rightly),
-                        or confirm a type by hand. All three assume the field is real.
-                        Laila New held "Does every Account need a ANOTHER, or is that
-                        optional?" — an attribute Aura invented while summarising, with
-                        no source, now generating a question about a thing that does not
-                        exist. Nobody could answer it because there is nothing to answer.
-                        `decide-fate: out-of-scope` is the ledger's own way to say so and
-                        already existed; it was simply not offered where it is the only
-                        correct move. It records WHY, so a field ruled out stays ruled
-                        out with its reason on the record rather than vanishing. */}
-                    {!src && peek.orphan ? (
-                      <button type="button" className="v3ib-peek-drop" disabled={busy === about}
-                        aria-label={spoken(`This field should not exist: ${q.question}`)}
-                        title="No source, no system — record that the field itself is out of scope"
-                        onClick={() => void run(about, {
-                          kind: "decide-fate", about, slot: slotOf(about), decision: "out-of-scope",
-                          reason: "no source on record and no system of record — the field itself is not evidenced",
-                          by, at: nowISO(),
-                        })}>{busy === about ? "Recording…" : "this field shouldn’t exist"}</button>
-                    ) : null}
-                  </li>
-                );
-              })}
-            </ul>
+            <QuestionList abouts={peek.abouts} orphan={peek.orphan} />
           </div>
         </>
       ) : null}
