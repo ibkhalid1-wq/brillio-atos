@@ -17,6 +17,8 @@ import { describe, it, expect } from "vitest";
 import {
   contradictionKey,
   dedupeContradictionDecisions,
+  withdrawNonClaimContradictions,
+  isTableRowStatement,
   resolveFlowDecision,
 } from "@/v3/components/flow/flowDecisions";
 
@@ -164,5 +166,51 @@ describe("the survivor is the card that says what the conflict is", () => {
     const other = { id: "other", summary: "", payload: { demoInvites: ["ana"] } };
     expect(dedupeContradictionDecisions([oldest, other, newest]).map((d) => d.id))
       .toEqual(["newest", "other"]);
+  });
+});
+
+describe("a card that would file a non-statement is withdrawn", () => {
+  /**
+   * The detector stopped mining table rows on 2026-08-12, but a decision already on
+   * file keeps the statement it was minted with — so the board still offered "File 1
+   * contradiction to the log" over one row of an uploaded gap sheet. Confirming it
+   * writes that into the contradiction log, where Listen's gate re-asks it until
+   * somebody resolves a dispute that was never had.
+   */
+  const ROW = "Audit/previous-value fields dropped\t9\tUse proper change-history tracking";
+  const RENDERED_ROW = "Audit/previous-value fields dropped · 9 · Use proper change-history tracking";
+  const CLAIM = "Renewals are owned by Sales but Ops states renewals are owned by Ops";
+  const card = (id: string, statements: string[]) => ({
+    id, payload: { contradictionEntries: statements.map((statement) => ({ statement })) },
+  });
+
+  it("recognises a row whether it kept its tabs or was rendered with separators", () => {
+    // MUTATION: drop " · " from COLUMN_SPLIT → the rendered form survives, which is
+    // the form every stored card on Laila New actually carries.
+    expect(isTableRowStatement(ROW)).toBe(true);
+    expect(isTableRowStatement(RENDERED_ROW)).toBe(true);
+  });
+
+  it("does not call a sentence a row", () => {
+    // The guard against withdrawing real disputes: prose with one aside in it is
+    // still prose.
+    expect(isTableRowStatement(CLAIM)).toBe(false);
+    expect(isTableRowStatement("Renewals are owned by Sales · but Ops disagrees")).toBe(false);
+  });
+
+  it("withdraws the card whose contradictions are ALL rows", () => {
+    // MUTATION: return `decisions` unchanged → the bogus card is back on the board.
+    expect(withdrawNonClaimContradictions([card("row", [RENDERED_ROW])])).toHaveLength(0);
+  });
+
+  it("keeps a card holding one real dispute among rows", () => {
+    // Withdrawing on "any row present" would take a genuine dispute down with it.
+    expect(withdrawNonClaimContradictions([card("mixed", [RENDERED_ROW, CLAIM])]).map((d) => d.id))
+      .toEqual(["mixed"]);
+  });
+
+  it("never touches a decision that is not about contradictions", () => {
+    const plain = [{ id: "x", payload: { demoInvites: ["ana"] } }, { id: "y", payload: null }];
+    expect(withdrawNonClaimContradictions(plain).map((d) => d.id)).toEqual(["x", "y"]);
   });
 });
