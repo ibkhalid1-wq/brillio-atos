@@ -6,9 +6,9 @@
  * flow's steps inline, and marks which steps should be AGENTIFIED — the signal
  * the Agentic Blueprint is built to deliver.
  */
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ProgramSummary } from "@/new/types";
-import { asArray, asRecord, asText, asStrings, useStudioLocked, TextField, TextArea, StringListEditor, ChipsField, TableEditor, CollapsibleCard as EdCard, type StudioProps } from "./StudioKit";
+import { asArray, asRecord, asText, asStrings, useStudioLocked, TextField, TextArea, StringListEditor, ChipsField, CollapsibleCard as EdCard, type StudioProps } from "./StudioKit";
 import { projectFutureState, type FutureWorkflow } from "@/v3/components/flow/flowFutureState";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
 
@@ -409,7 +409,6 @@ export default function ExperienceDesignStudio({ doc, onChange, program }: Studi
   const locked = useStudioLocked();
   const screens = useMemo(() => asArray(doc.screens).map(asRecord), [doc.screens]);
   const flows = useMemo(() => asArray(doc.flows).map(asRecord), [doc.flows]);
-  const machines = asArray(doc.workflowMachines).map(asRecord);
   // The screen designer modal: an index into `screens`, "new" for a fresh
   // screen, or null when closed.
   const [editScreen, setEditScreen] = useState<number | "new" | null>(null);
@@ -462,9 +461,6 @@ export default function ExperienceDesignStudio({ doc, onChange, program }: Studi
     setEditScreen(null);
   };
   const removeScreen = (index: number) => patch({ screens: screens.filter((_, i) => i !== index) });
-  const setMachines = (next: Record<string, unknown>[]) => patch({ workflowMachines: next });
-  const setMachine = (index: number, changes: Record<string, unknown>) =>
-    setMachines(machines.map((m, i) => (i === index ? { ...m, ...changes } : m)));
 
   return (
     <>
@@ -571,53 +567,13 @@ export default function ExperienceDesignStudio({ doc, onChange, program }: Studi
         )}
       </EdCard>
 
-      {machines.length || !locked ? (
-        <EdCard label="Workflow machines" badge={machines.length || undefined} hint="the behaviour the prototype runs — HITL points are explicit states" defaultOpen={false}>
-          {locked ? (
-            <div className="v3fs-wf-machines">
-              {machines.map((machine, index) => (
-                <div key={index} className="v3fs-wf-machine">
-                  <b>{asText(machine.name) || `Machine ${index + 1}`}</b>
-                  <div className="v3fs-wf-statesrow">
-                    {asStrings(machine.states).map((state, i, all) => (
-                      <React.Fragment key={i}>
-                        <span className="v3fs-wf-chip">{state}</span>
-                        {i < all.length - 1 ? <em aria-hidden="true">→</em> : null}
-                      </React.Fragment>
-                    ))}
-                  </div>
-                  <div className="v3fs-wf-trans">
-                    {asArray(machine.transitions).map(asRecord).slice(0, 8).map((t, i) => (
-                      <div key={i}><b>{asText(t.from)}</b> → <b>{asText(t.to)}</b> on <span>{asText(t.on)}</span>{asText(t.actor) ? <em> · {asText(t.actor)}</em> : null}</div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="v3fs-wf-machines-edit">
-              {machines.map((machine, index) => (
-                <div key={index} className="v3fs-wf-machine-edit">
-                  <div className="v3fs-wf-machine-edit-h">
-                    <TextField label="Machine" value={asText(machine.name)} placeholder="e.g. Quote lifecycle"
-                      onChange={(v) => setMachine(index, { name: v })} />
-                    <button type="button" className="v3fs-stu-x" aria-label="Remove machine"
-                      onClick={() => setMachines(machines.filter((_, i) => i !== index))}>×</button>
-                  </div>
-                  <StringListEditor label="States (in order)" values={asStrings(machine.states)}
-                    onChange={(next) => setMachine(index, { states: next })} addLabel="state" placeholder="state name" />
-                  <TableEditor
-                    columns={[{ key: "from", label: "From" }, { key: "to", label: "To" }, { key: "on", label: "On (trigger)" }, { key: "actor", label: "Actor", grow: 0.8 }]}
-                    rows={asArray(machine.transitions).map(asRecord)}
-                    onChange={(next) => setMachine(index, { transitions: next })}
-                    addLabel="transition" emptyHint="No transitions yet — add the state changes and what triggers them." />
-                </div>
-              ))}
-              <button type="button" className="v3fs-a" onClick={() => setMachines([...machines, { name: "", states: [], transitions: [] }])}>＋ Add machine</button>
-            </div>
-          )}
-        </EdCard>
-      ) : null}
+      {/* WORKFLOW MACHINES REMOVED (on request, 2026-08-12). A state machine per
+          workflow was the delivery team re-drawing, by hand and in a design studio,
+          behaviour the programme already knows: the Atlas holds the workflow and its
+          steps, Agentify holds the call on each step, and an entity's own stages are
+          confirmed in LISTEN by the people who live them. `workflowMachines` stays on
+          the document — nothing was deleted from any programme — it is simply no
+          longer authored here. */}
 
       {editScreen !== null ? (
         <ScreenDesigner
