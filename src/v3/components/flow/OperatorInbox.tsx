@@ -495,12 +495,24 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
    * "Assign to… — Which phase of the proces". The visible text stays short; the
    * distinguishing detail goes where it is needed and nowhere else.
    */
-  const cSelect = (key: string, rawId: string, placeholder = "Assign an owner…", srLabel?: string) => {
+  /**
+   * `onPick` makes the select ITSELF the act, for the rows where a name is the whole
+   * decision. Without it the select only arms a button beside it, and that button is
+   * disabled until a name is chosen — a first click that does nothing and says
+   * nothing. "Someone else…" still needs the free-text box, so it never commits on
+   * choice: the commit happens when the typed name is submitted, as before.
+   */
+  const cSelect = (key: string, rawId: string, placeholder = "Assign an owner…", srLabel?: string,
+    onPick?: (owner: string) => void) => {
     const id = domId(rawId);
     return (
       <>
         <label className="v3ib-sr" htmlFor={id}>{spoken(srLabel ?? placeholder)}</label>
-        <select id={id} value={sel[key] ?? ""} onChange={(e) => setSel((s) => ({ ...s, [key]: e.target.value }))}>
+        <select id={id} value={sel[key] ?? ""} onChange={(e) => {
+          const value = e.target.value;
+          setSel((s) => ({ ...s, [key]: value }));
+          if (onPick && value && value !== OTHER) onPick(value);
+        }}>
           <option value="">{placeholder}</option>
           {candidates.map((c) => <option key={c.label} value={c.label}>{displayPersonLabel(c.label)}{c.role && c.role !== c.label ? ` — ${c.role}` : ""}</option>)}
           <option value={OTHER}>Someone else…</option>
@@ -1241,9 +1253,17 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                     <QLine about={a.about} tail={pin
                       ? <span className="v3ib-owner"><span aria-hidden="true">📌 </span>pinned to {displayPersonLabel(pin.owner.label)} <span className="v3ib-unit">(on a sent link — pinned)</span></span>
                       : <span className="v3ib-owner"><span aria-hidden="true">→ </span>owner: {a.owner.label}</span>} />
+                    {/* PICKING SOMEONE IS THE ACT. There used to be a select and a
+                        `reassign` button, and the button was disabled until a name was
+                        chosen — so the first click on it did nothing, said nothing, and
+                        looked no different from a live control. Reported as exactly
+                        that. A select whose only purpose is to arm a button beside it
+                        is two steps for one decision, and the disabled step is the one
+                        that fails silently. Choosing a name now commits it; the choice
+                        is as reversible as it ever was. */}
                     <span className="v3ib-reassign">
-                      {cSelect(a.about, `re-${a.about}`, `Reassign to… — ${Q(a.about).question}`)}
-                      <button type="button" className="v3ib-btn ghost sm" disabled={busy === a.about || !pickedOwner(a.about)} aria-label={spoken(`Reassign: ${Q(a.about).question}`)} onClick={() => void run(a.about, assignAction(a.about, pickedOwner(a.about)!))}>reassign</button>
+                      {cSelect(a.about, `re-${a.about}`, "Reassign to…", `Reassign to… — ${Q(a.about).question}`,
+                        (owner) => void run(a.about, assignAction(a.about, owner)))}
                       <button type="button" className="v3ib-btn ghost sm" disabled={busy === a.about} aria-label={spoken(`Unassign ${a.owner.label} from: ${Q(a.about).question}`)} onClick={() => void run(a.about, { kind: "unassign", about: a.about, reason: "operator", by, at: nowISO() })}>unassign</button>
                     </span>
                   </span>

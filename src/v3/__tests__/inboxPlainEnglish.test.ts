@@ -416,3 +416,56 @@ describe("a question list states its subject once", () => {
     expect(inbox).toContain("q.question.slice(opening.length).trim()");
   });
 });
+
+describe("a control that cannot act does not look like one", () => {
+  /**
+   * "clicking reassign not doing anything." It was disabled: the select beside it
+   * armed it, and until a name was chosen the button did nothing, said nothing, and
+   * looked no different from a live ghost control. A select whose only purpose is to
+   * arm the button next to it is two steps for one decision, and the disabled step is
+   * the one that fails silently.
+   */
+  const inbox = SRC("OperatorInbox.tsx");
+
+  it("picking a name IS the reassignment", () => {
+    // MUTATION: restore the separate `reassign` button → RED.
+    expect(inbox, "the dead-until-armed button is back")
+      .not.toMatch(/disabled=\{busy === a\.about \|\| !pickedOwner\(a\.about\)\}/);
+    expect(inbox).toContain("(owner) => void run(a.about, assignAction(a.about, owner))");
+  });
+
+  it("but 'Someone else…' still waits for the typed name", () => {
+    // Committing on that choice would assign an owner literally called OTHER.
+    // MUTATION: drop the `value !== OTHER` guard → RED.
+    expect(inbox).toContain("if (onPick && value && value !== OTHER) onPick(value);");
+  });
+
+  it("the visible placeholder is short, and the announced one carries the question", () => {
+    // Same split as the per-question assign: a name specific enough to tell eight
+    // selects apart truncates inside the closed control.
+    expect(inbox).toContain('cSelect(a.about, `re-${a.about}`, "Reassign to…", `Reassign to… — ${Q(a.about).question}`');
+  });
+});
+
+describe("a busy flag that nothing clears is a lie", () => {
+  /**
+   * "shows regenerating." Regenerating the Domain Ontology left the Current-State
+   * Atlas's header reading "Generating…". `regenBusy` was set true per artifact and
+   * never cleared — `onRunAgent` is fire-and-forget, so the flag was a write-only
+   * latch: regenerate an artifact once and its entry stayed true for the life of the
+   * component, so opening that document later showed a run that had long since
+   * landed.
+   */
+  const line = SRC("TheLine.tsx");
+
+  it("stores the document as it was, and clears when it changes", () => {
+    // MUTATION: revert to `Record<string, boolean>` with `true` → RED.
+    expect(line).toContain("const [regenBusy, setRegenBusy] = useState<Record<string, string>>({});");
+    expect(line).toContain("artifactDocument(program, card.id) ?? \"\"");
+    expect(line).toContain('(artifactDocument(program, id) ?? "") !== busy[id]');
+  });
+
+  it("children still receive booleans — the snapshot is bookkeeping, not their business", () => {
+    expect(line).toContain("Object.fromEntries(Object.keys(regenBusy).map((id) => [id, true]))");
+  });
+});
