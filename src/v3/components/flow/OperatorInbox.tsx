@@ -288,6 +288,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
   const [peek, setPeek] = useState<{ sor: string; abouts: string[]; orphan?: boolean } | null>(null);
   const [showDerived, setShowDerived] = useState(false);
   const [showOrphans, setShowOrphans] = useState(false);
+  const [shownUnbound, setShownUnbound] = useState<Record<string, boolean>>({});
 
   /** The already-written readings, in the grid's own row shape. Source comes from
    *  the same `attributeEvidence` read the open wall uses — one definition. */
@@ -629,25 +630,32 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
               `unboundOwners` returned counts without the loci they counted.
               One commit per ROLE, because that is the grain of the decision: all seven
               Executive Sponsor questions go to one person, or none of them do. */}
-          <div className="v3ib-unbound-rows">
-            {unbound.map((owner) => {
-              const key = `unbound:${owner.label}`;
-              const picked = pickedOwner(key);
-              return (
-                <span key={owner.label} className="v3ib-unbound-row"
-                  title={`${owner.label} owns ${owner.open} open question${owner.open === 1 ? "" : "s"} and no one on the roster answers for that role.`}>
-                  <span className="v3ib-unbound-who">{owner.label} · <b>{owner.open}</b></span>
+          {/* EACH ROLE IS A CARD, like every other block on this surface. It was a
+              one-line strip whose only content was a COUNT — "Executive Sponsor · 7"
+              — with no way to see which seven, while every card beside it could be
+              opened. The picker also sat on top of the chip at this width, because a
+              row of three inline controls has nowhere to go. */}
+          {unbound.map((owner) => {
+            const key = `unbound:${owner.label}`;
+            const picked = pickedOwner(key);
+            return (
+              <IbCard key={owner.label}
+                title={<><b>{owner.label}</b> — {owner.open} open question{owner.open === 1 ? "" : "s"}, and nobody on the roster answers for that role</>}
+                reveal={{ label: `show the ${owner.open}`, open: !!shownUnbound[owner.label],
+                  onToggle: () => setShownUnbound((m) => ({ ...m, [owner.label]: !m[owner.label] })) }}
+                writes={<>
                   {cSelect(key, key, `Hand ${owner.open} ${owner.label} question${owner.open === 1 ? "" : "s"} to…`)}
-                  <button type="button" className="v3ib-btn ghost sm"
+                  <button type="button" className="v3ib-btn sm"
                     disabled={busy === key || !picked}
                     aria-label={spoken(`Hand all ${owner.open} ${owner.label} questions to ${picked || "the chosen person"}`)}
                     onClick={() => void run(key, owner.abouts.map((about) => assignAction(about, picked!)))}>
                     {busy === key ? "Handing over…" : `hand over all ${owner.open}`}
                   </button>
-                </span>
-              );
-            })}
-          </div>
+                </>}>
+                <QuestionList abouts={owner.abouts} />
+              </IbCard>
+            );
+          })}
         </IbSection>
       ) : null}
 

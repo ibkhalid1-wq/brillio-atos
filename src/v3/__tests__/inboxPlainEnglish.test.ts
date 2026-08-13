@@ -177,3 +177,25 @@ describe("every section of the Inbox looks and acts the same", () => {
       .toContain('unitPlural="systems of record"');
   });
 });
+
+describe("a count you cannot open is not an answer", () => {
+  /**
+   * "what questions?" — asked of "Executive Sponsor · 7". The row printed a COUNT and
+   * a hand-over control and nothing else, while every card beside it could be opened,
+   * so the one thing an operator needs before handing seven questions to a colleague
+   * — WHICH seven — was the one thing the surface would not say.
+   */
+  const inbox = SRC("OperatorInbox.tsx");
+
+  it("each unbound role is a card that opens its own questions", () => {
+    // MUTATION: revert to the one-line strip → RED.
+    expect(inbox, "the role strip is back to a bare count").not.toContain('className="v3ib-unbound-row"');
+    expect(inbox).toContain("label: `show the ${owner.open}`");
+    expect(inbox, "it must list the role's OWN loci, not a re-derived set")
+      .toContain("<QuestionList abouts={owner.abouts} />");
+  });
+
+  it("the hand-over is still a write, and still commits every one of them", () => {
+    expect(inbox).toContain("owner.abouts.map((about) => assignAction(about, picked!))");
+  });
+});
