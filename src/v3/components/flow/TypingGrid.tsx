@@ -80,12 +80,24 @@ export function confirmedCsv(rows: readonly TypingRow[], chosen: Readonly<Record
   return lines.length > 1 ? lines.join("\n") : "";
 }
 
-export default function TypingGrid({ ledger, onDictionary, onDone }: {
+export default function TypingGrid({ ledger, onDictionary, onDone, rows: given }: {
   ledger: ProgramLedger;
   onDictionary: (csv: string, sor: string | null) => void | Promise<void>;
   onDone?: () => void;
+  /**
+   * The rows to work, when they are NOT the open typing wall.
+   *
+   * The derived-types strip reports readings Aura already WROTE (weak claims, not
+   * open questions), so its loci are absent from `typingRows`. It reported them and
+   * offered nothing — informational text on the operator's decision surface. Passing
+   * its rows here gives that strip the grid's own act: confirm the reading as yours,
+   * or change it. Both write through `onDictionary`, exactly as an upload does, so a
+   * derived reading is overruled by the same mechanism that would have answered it.
+   */
+  rows?: TypingRow[];
 }) {
-  const rows = useMemo(() => typingRows(ledger), [ledger]);
+  const wall = useMemo(() => typingRows(ledger), [ledger]);
+  const rows = given ?? wall;
   const [chosen, setChosen] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
   // Memoised so the grouping below can depend on IT rather than on `chosen`
@@ -119,12 +131,25 @@ export default function TypingGrid({ ledger, onDictionary, onDone }: {
   return (
     <section className="v3tg" aria-label="Confirm field types">
       <header className="v3tg-h">
-        <span className="v3tg-t"><b>{rows.length}</b> field{rows.length === 1 ? "" : "s"} still need a type</span>
+        {/* TWO POPULATIONS, TWO TRUTHFUL HEADINGS. The wall is fields with NO answer
+            yet; the review is fields Aura already answered weakly on its own. Saying
+            "still need a type" over the second would be false — they have one, it is
+            just the weakest claim the ledger holds. */}
+        <span className="v3tg-t">
+          <b>{rows.length}</b> field{rows.length === 1 ? "" : "s"}{" "}
+          {given ? "Aura typed from their names" : "still need a type"}
+        </span>
         <span className="v3tg-m">
-          Aura read {answerable.length} of them from the field names — too weak to record on its own,
-          so they are set as the answer here rather than asked as a question. Change any, then confirm.
-          {" "}Confirming records them as <b>your</b> statement, exactly as an uploaded dictionary would;
-          a real dictionary still corrects them row for row.
+          {given ? (
+            <>These are already on the record as <b>code-derived · weak</b> — Aura&rsquo;s reading of
+            the field name, nobody&rsquo;s answer. Confirming makes each one <b>yours</b>, which any
+            stakeholder can still deviate from; changing one overrules it outright.</>
+          ) : (
+            <>Aura read {answerable.length} of them from the field names — too weak to record on its own,
+            so they are set as the answer here rather than asked as a question. Change any, then confirm.
+            {" "}Confirming records them as <b>your</b> statement, exactly as an uploaded dictionary would;
+            a real dictionary still corrects them row for row.</>
+          )}
         </span>
       </header>
 

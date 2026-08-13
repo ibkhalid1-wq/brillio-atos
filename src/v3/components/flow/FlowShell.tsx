@@ -39,7 +39,7 @@ import {
 } from "@/v3/components/flow/flowShellData";
 import {
   listOpenFlowDecisions, listFlowAttestations, describeDecisionChanges,
-  type FlowDecision, dedupeContradictionDecisions } from "@/v3/components/flow/flowDecisions";
+  type FlowDecision, dedupeContradictionDecisions, plainDisputeSides } from "@/v3/components/flow/flowDecisions";
 import {
   listFlowTracks, trackAcceptance, trackPace,
 } from "@/v3/components/flow/flowTracks";
@@ -605,6 +605,10 @@ function FlowDrillWizard({ program, onCreate, onClose }: {
  * what people said, indigo = what AURA made, green = what was demonstrated.
  * Theme-aware — follows the app's data-theme like every other surface.
  */
+/** The verdict this button records, in one place: the label a person reads and the
+ *  sentence written to the record are the same sentence. */
+const SETTLED_VERDICT = "the newer source is right";
+
 export default function FlowShell(props: FlowShellProps) {
   const { program } = props;
   // The ledger is built HERE, once, and handed to the Inbox view: the rail badge
@@ -1154,7 +1158,14 @@ function FlowToday({ program, ledger, programs, onSelectProgram, onResolveDecisi
     // variants too — closing it removes them all.
     const next = contradictionLogWithout(program, statement);
     const existing = typeof bucket.interviewTranscripts === "string" ? bucket.interviewTranscripts : "";
-    const note = `— Operator resolution, ${new Date().toISOString().slice(0, 10)} —\nDispute (${row.between}): "${statement}"\nSettled: the newer account stands. Recorded as evidence; the dispute is closed.`;
+    // THE RECORD SAYS WHAT WAS DECIDED, in the same words as the button that decided
+    // it. This note is written as EVIDENCE and read back by anyone auditing the
+    // programme, and it said "the newer account stands" on every dispute — including
+    // one between an uploaded schema file and the charter, where there is no account
+    // and nothing stands. A false sentence on the record is worse than a vague one.
+    const note = `— Settled by the operator, ${new Date().toISOString().slice(0, 10)} —\n`
+      + `${plainDisputeSides(row.between)}, over: "${statement}"\n`
+      + `${SETTLED_VERDICT}. Recorded as evidence; the dispute is closed.`;
     setDisputeBusy(statement);
     try {
       await onSaveInputs("listen", {
@@ -1526,22 +1537,32 @@ function FlowToday({ program, ledger, programs, onSelectProgram, onResolveDecisi
           {disputes.map((row, i) => (
             <article key={`disp-${i}`} className="v3fs-dec">
               <div className="v3fs-dec-top">
-                <span className="v3fs-vc pen">Dispute</span>
-                <span className="v3fs-dec-mv">{row.between || "two accounts disagree"}</span>
-                {row.routedTo ? <span className="v3fs-tag ev">routed to {row.routedTo}</span> : null}
+                <span className="v3fs-vc pen">Two sources disagree</span>
+                {/* PLAIN ENGLISH, NOT THE LEDGER'S OWN NOTATION. This line printed
+                    "BRILLIO_OPPORTUNITY_CLEAN_SCHEMA - OPPORTUNITY OBJECT (1) VS
+                    TRANSFORMATION CHARTER (BUSINESSOBJECTIVE)" in small caps — an
+                    upload's filename, the word VS, and a camelCase field key, none
+                    of which are things a person says. `plainDisputeSides` turns the
+                    same two sides into the sentence they mean. */}
+                <span className="v3fs-dec-mv">{plainDisputeSides(row.between)}</span>
+                {row.routedTo ? <span className="v3fs-tag ev">{row.routedTo} was asked to settle it</span> : null}
               </div>
               <p className="v3fs-dec-s">“{row.statement.trim().slice(0, 200)}{row.statement.trim().length > 200 ? "…" : ""}”</p>
-              <div className="v3fs-dec-rec-b">resolve writes the resolution to the record as evidence and closes the dispute — or route it to whoever can settle it (it lands on their follow-up script)</div>
+              <div className="v3fs-dec-rec-b">Settling it writes your decision to the record as evidence and closes the dispute. Or send it to whoever can settle it — it lands on their follow-up questions.</div>
               <div className="v3fs-dec-cta">
                 {onSaveInputs ? (
                   <button type="button" className="v3fs-btn pri" disabled={disputeBusy === row.statement.trim()}
                     onClick={() => void resolveDisputeHere(row)}>
-                    {disputeBusy === row.statement.trim() ? "Resolving…" : <><span aria-hidden="true">✓ </span>Resolve — the newer account stands</>}
+                    {/* The old label named one PARTICULAR verdict about accounts, printed
+                        on every dispute whatever it was about — including disputes with no
+                        account anywhere in them. `SETTLED_VERDICT` is the one wording, so
+                        the button and the note it writes to the record cannot drift. */}
+                    {disputeBusy === row.statement.trim() ? "Settling…" : <><span aria-hidden="true">✓ </span>Settle it — {SETTLED_VERDICT}</>}
                   </button>
                 ) : null}
                 {onSaveInputs && people.length ? (
                   <label className="v3fs-dec-route">
-                    route to
+                    or ask someone to settle it
                     <select value={row.routedTo ?? ""} aria-label="Route this dispute to a person"
                       disabled={disputeBusy === row.statement.trim()}
                       onChange={(event) => { if (event.target.value) void routeDispute(row.statement, event.target.value); }}>

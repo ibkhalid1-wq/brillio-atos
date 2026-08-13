@@ -295,7 +295,13 @@ export const assertOwnedLoad = (load: OwnedLoad): boolean =>
  * covered. The count comes straight out of `soloByOwner` — no person is invented to
  * fill the gap and no number is invented to describe it; the miss stays visible.
  */
-export interface UnboundOwner { label: string; open: number }
+export interface UnboundOwner {
+  label: string;
+  open: number;
+  /** The loci themselves — so the surface can ACT on them, not just count them.
+   *  A strip that says "reassign them" and carries no loci is a dead end. */
+  abouts: string[];
+}
 
 export function unboundOwners(
   ledger: Pick<ProgramLedger, "soloByOwner">,
@@ -305,7 +311,7 @@ export function unboundOwners(
   const out: UnboundOwner[] = [];
   for (const [label, items] of ledger.soloByOwner) {
     if (!items.length || bound.has(label.trim().toLowerCase())) continue;
-    out.push({ label, open: items.length });
+    out.push({ label, open: items.length, abouts: items.map((i) => i.about) });
   }
   return out.sort((a, b) => b.open - a.open || a.label.localeCompare(b.label));
 }

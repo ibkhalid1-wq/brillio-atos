@@ -27,7 +27,7 @@ import { ClaimStatus, OwnershipTag, ProvisionalMark, SourceTag } from "@/v3/comp
 import { asksNeedingChase, isSystemOwner, type ArtifactAskMark } from "@/v3/lib/ledger/artifactAsks";
 import { operatorQueueCounts, sessionQuestionCount, unfrozenQueues } from "@/v3/lib/ledger/operatorQueue";
 import { parseDictionaryCsv, isSpreadsheetName, readDictionaryWorkbook, mergeDictionaryCsv, dictionaryCoverage, SPREADSHEET_EXTENSIONS } from "@/v3/lib/ledger/dictionary";
-import TypingGrid from "@/v3/components/flow/TypingGrid";
+import TypingGrid, { type TypingRow } from "@/v3/components/flow/TypingGrid";
 import { ownerLabelsForCast } from "@/v3/lib/ledger/ownerBinding";
 import { unboundOwners, unboundOpenTotal } from "@/v3/lib/ledger/ownedLoad";
 import { retractProposal } from "@/v3/lib/ledger/curation";
@@ -177,6 +177,15 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
   const [showGrid, setShowGrid] = useState(false);
   /** The questions behind a count, opened from the count itself. */
   const [peek, setPeek] = useState<{ sor: string; abouts: string[]; orphan?: boolean } | null>(null);
+  const [showDerived, setShowDerived] = useState(false);
+
+  /** The already-written readings, in the grid's own row shape. Source comes from
+   *  the same `attributeEvidence` read the open wall uses — one definition. */
+  const derivedRows: TypingRow[] = useMemo(() => (ledger.derivedTypes ?? []).map((d) => ({
+    about: d.about, entity: d.entity, attribute: d.attribute,
+    suggested: d.dataType, confidence: d.confidence,
+    source: attributeEvidence(ledger.store, elementIdOf(d.about)),
+  })), [ledger.derivedTypes, ledger.store]);
 
   /**
    * WHICH ENTITIES HAVE NO SYSTEM NAMED — the strip used to say only "41 typing
@@ -450,18 +459,36 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
               <b>{unboundOpen}</b> open question{unboundOpen === 1 ? "" : "s"} are owned by{" "}
               {unbound.length} role{unbound.length === 1 ? "" : "s"} with no person behind{" "}
               {unbound.length === 1 ? "it" : "them"} — owned in the ledger, unreachable in practice.
-              {" "}Reassign them below, or add someone to the Discovery Kit whose role is spelt
-              EXACTLY as it appears here — the binding is an exact match on the role, so
+              {" "}Hand them to someone here, or add a person to the Discovery Kit whose role is
+              spelt EXACTLY as it appears below — the binding is an exact match on the role, so
               &ldquo;Exec Sponsor&rdquo; does not answer for &ldquo;Executive Sponsor&rdquo;.
             </span>
           </header>
+          {/* THE ACT, not a description of one. This strip said "reassign them below"
+              and then drew a COUNT — the operator was told to do something and given
+              nothing to do it with. The reassignment machinery already existed for
+              in-flight questions; the only reason it was not here is that
+              `unboundOwners` returned counts without the loci they counted.
+              One commit per ROLE, because that is the grain of the decision: all seven
+              Executive Sponsor questions go to one person, or none of them do. */}
           <div className="v3ib-unbound-rows">
-            {unbound.map((owner: { label: string; open: number }) => (
-              <span key={owner.label} className="v3ib-unbound-row"
-                title={`${owner.label} owns ${owner.open} open question${owner.open === 1 ? "" : "s"} and no one on the roster answers for that role.`}>
-                {owner.label} · <b>{owner.open}</b>
-              </span>
-            ))}
+            {unbound.map((owner) => {
+              const key = `unbound:${owner.label}`;
+              const picked = pickedOwner(key);
+              return (
+                <span key={owner.label} className="v3ib-unbound-row"
+                  title={`${owner.label} owns ${owner.open} open question${owner.open === 1 ? "" : "s"} and no one on the roster answers for that role.`}>
+                  <span className="v3ib-unbound-who">{owner.label} · <b>{owner.open}</b></span>
+                  {cSelect(key, key, `Hand ${owner.open} ${owner.label} question${owner.open === 1 ? "" : "s"} to…`)}
+                  <button type="button" className="v3ib-btn ghost sm"
+                    disabled={busy === key || !picked}
+                    aria-label={spoken(`Hand all ${owner.open} ${owner.label} questions to ${picked || "the chosen person"}`)}
+                    onClick={() => void run(key, owner.abouts.map((about) => assignAction(about, picked!)))}>
+                    {busy === key ? "Handing over…" : `hand over all ${owner.open}`}
+                  </button>
+                </span>
+              );
+            })}
           </div>
         </section>
       ) : null}
@@ -580,7 +607,24 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                   {" "}— <b>code-derived · weak</b>, the weakest claim on the record: a dictionary or an owner
                   overrules any of them. A real dictionary is still the better answer.
                 </span>
+                {/* THE ACT. This strip reported {derived.length} readings and offered
+                    nothing — informational text on the surface for operator decisions.
+                    The decision it was hiding is a real one: accept Aura's reading as
+                    YOUR answer (a claim a stakeholder can deviate from) or change it.
+                    The grid already does exactly that; it just had no way to be handed
+                    a set of rows that are not the open wall. */}
+                {onDictionary ? (
+                  <span className="v3ib-dict-actions">
+                    <button type="button" className="v3ib-btn ghost sm" onClick={() => setShowDerived(true)}>
+                      review the {derived.length}
+                    </button>
+                  </span>
+                ) : null}
               </div>
+            ) : null}
+            {onDictionary && showDerived ? (
+              <TypingGrid ledger={ledger} onDictionary={onDictionary} rows={derivedRows}
+                onDone={() => setShowDerived(false)} />
             ) : null}
             {chase.map((ask) => {
               // owner: the derivation's, else the shared detection over the roster, else TBC — never fabricated
