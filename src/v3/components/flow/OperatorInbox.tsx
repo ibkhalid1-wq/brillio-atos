@@ -23,6 +23,7 @@ import { slotOf, elementIdOf } from "@/v3/lib/ledger/types";
 import { readableName } from "@/v3/lib/ledger/phrasing";
 import { renderQuestion } from "@/v3/lib/ledger/renderQuestion";
 import { attributeEvidence } from "@/v3/lib/ledger/derivedTypes";
+import { lifecycleEntities } from "@/v3/lib/ledger/lifecycle";
 import { ClaimStatus, OwnershipTag, ProvisionalMark, SourceTag } from "@/v3/components/flow/studio/ledgerPrimitives";
 import { asksNeedingChase, isSystemOwner, type ArtifactAskMark } from "@/v3/lib/ledger/artifactAsks";
 import { operatorQueueCounts, sessionQuestionCount, unfrozenQueues } from "@/v3/lib/ledger/operatorQueue";
@@ -288,6 +289,11 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
   const [peek, setPeek] = useState<{ sor: string; abouts: string[]; orphan?: boolean } | null>(null);
   const [showDerived, setShowDerived] = useState(false);
   const [showOrphans, setShowOrphans] = useState(false);
+  const [showStages, setShowStages] = useState(false);
+  /** Read through the ONE definition — lifecycle.ts — never re-derived here. */
+  const lifecyclesWithStages = useMemo(
+    () => lifecycleEntities(ledger.store).filter((l) => l.confident && l.stages.length),
+    [ledger.store]);
   const [shownUnbound, setShownUnbound] = useState<Record<string, boolean>>({});
 
   /** The already-written readings, in the grid's own row shape. Source comes from
@@ -792,6 +798,39 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                 stated here rather than quietly absorbed. They are the weakest claim
                 the ledger holds and lose to any human answer — but an operator who
                 is not told will read them as settled. */}
+            {/* LIFECYCLE STAGES — the act Discover hands off. Discover finds which
+                entities move through stages and states it; confirming the list is an
+                operator WRITE at dictionary strength, so it lives here. Same CSV, same
+                `onDictionary`, same merge as every other typing answer: a lifecycle a
+                person confirmed and one a schema stated are indistinguishable. */}
+            {onDictionary && lifecyclesWithStages.length ? (
+              <IbCard
+                title={<><b>{lifecyclesWithStages.length}</b> entit{lifecyclesWithStages.length === 1 ? "y has" : "ies have"} a lifecycle with stages on the record</>}
+                note={<>Confirming records the order as <b>your</b> answer, at the strength an uploaded
+                  schema carries. A stakeholder can still say otherwise; a real dictionary still
+                  corrects it.</>}
+                reveal={{ label: `review the ${lifecyclesWithStages.length}`, open: showStages,
+                  onToggle: () => setShowStages((v) => !v) }}>
+                <ul className="v3ib-qlist">
+                  {lifecyclesWithStages.map((lc) => (
+                    <li key={lc.about}>
+                      <span className="v3ib-peek-q"><b>{lc.entity}</b> · {lc.attribute}</span>
+                      <span className="v3ib-peek-src">{lc.stages.join(" → ")}</span>
+                      <button type="button" className="v3ib-btn sm" disabled={busy === lc.about}
+                        aria-label={spoken(`Confirm the stages of ${lc.entity}: ${lc.stages.join(", ")}`)}
+                        onClick={() => {
+                          setBusy(lc.about);
+                          // entity,field,values — the three columns a schema export
+                          // carries, so the merge cannot tell the two apart.
+                          const cell = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+                          const csv = `entity,field,values\n${[lc.entity, lc.attribute, lc.stages.join("; ")].map(cell).join(",")}`;
+                          void Promise.resolve(onDictionary(csv, null)).finally(() => setBusy(null));
+                        }}>{busy === lc.about ? "Confirming…" : "confirm these stages"}</button>
+                    </li>
+                  ))}
+                </ul>
+              </IbCard>
+            ) : null}
             {derived.length ? (
               <IbCard
                 title={<><b>{derived.length}</b> type{derived.length === 1 ? " was" : "s were"} read from the field names, not answered by anyone</>}

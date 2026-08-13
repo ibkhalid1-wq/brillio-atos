@@ -574,6 +574,24 @@
 .v3ln-engpill.is-in-flight b{color:var(--v3-amber)}
 .v3ln-engpill.is-blocked b{color:#5a4fa0}
 .v3ln-engbar-note{font-size:10px;color:var(--v3-text-muted);font-style:italic;flex-basis:100%}
+/* ════ THE ONE HANDOFF ═════════════════════════════════════════════════════════
+   Discover reads; the Inbox acts. Where Discover finds something that needs an
+   operator MOVE it states the finding and offers this, and this is the ONLY control
+   on the page that leads anywhere but deeper into the record — so it is the only
+   place the gold accent is spent. Everything else on Discover is ink on paper.
+
+   It is deliberately not a filled button: a filled control on a read surface reads
+   as "this does the thing", and this one does not do the thing — it takes you to
+   where the thing is done. */
+.v3ln-handoff{font:inherit;font-size:var(--aura-t-body);font-weight:600;
+  color:var(--v3-amber);background:none;border:1px solid color-mix(in srgb,var(--v3-amber) 45%,transparent);
+  border-radius:var(--aura-r-ctl);padding:3px 9px;min-height:var(--aura-ctl-h);
+  display:inline-flex;align-items:center;gap:2px;cursor:pointer;
+  transition:background var(--aura-motion),border-color var(--aura-motion)}
+.v3ln-handoff:hover{background:color-mix(in srgb,var(--v3-amber) 10%,transparent);
+  border-color:var(--v3-amber)}
+.v3ln-handoff:focus-visible{outline:2px solid var(--v3-amber);outline-offset:2px}
+
 /* ENTITY LIFECYCLES — one row per entity, and each row is a ROW.
    Shipped first without any of this: every element was an inline <span>, so the
    heading ran straight into the note ("13 entities look to have a lifecycleA thing
@@ -677,8 +695,33 @@
 .v3ib .v3lc-src,.v3ib .v3lc-status,.v3ib .v3lc-own{font-weight:600}
 .v3ib .v3lc-status-g{font-size:var(--ib-t-body);line-height:1.35}
 
-:root{--ib-t-meta:10px;--ib-t-body:11px;--ib-t-title:12px;--ib-t-verb:13px;
-  --ib-r-ctl:6px;--ib-r-box:10px;--ib-ctl-h:26px}
+/* ONE SET, TWO SURFACES. These began as `--ib-*` while only the Inbox used them.
+   Discover now reads the same values, so they are named for the product rather than
+   for the board that happened to need them first. The `--ib-*` names are kept as
+   aliases: every Inbox rule already references them, and renaming 40 call sites to
+   prove a point would be churn, not consistency. */
+:root{
+  /* type */
+  --aura-t-meta:10px;--aura-t-body:11px;--aura-t-title:12px;--aura-t-head:13px;
+  /* shape */
+  --aura-r-ctl:6px;--aura-r-box:10px;--aura-r-pill:999px;
+  /* one control height, so a button and a select set side by side agree */
+  --aura-ctl-h:26px;
+  /* spacing, on a 4px base */
+  --aura-s1:4px;--aura-s2:8px;--aura-s3:12px;--aura-s4:16px;--aura-s5:24px;
+  /* elevation: one resting card, one raised surface. Nothing else lifts. */
+  --aura-e-card:0 1px 2px rgba(16,15,40,.04);
+  --aura-e-raised:0 6px 20px rgba(16,15,40,.10);
+  /* motion: one duration, one curve, and a reduced-motion escape below */
+  --aura-motion:160ms cubic-bezier(.2,.7,.3,1);
+
+  --ib-t-meta:var(--aura-t-meta);--ib-t-body:var(--aura-t-body);
+  --ib-t-title:var(--aura-t-title);--ib-t-verb:var(--aura-t-head);
+  --ib-r-ctl:var(--aura-r-ctl);--ib-r-box:var(--aura-r-box);--ib-ctl-h:var(--aura-ctl-h)}
+
+@media (prefers-reduced-motion:reduce){
+  :root{--aura-motion:0ms linear}
+}
 
 /* ONE HEIGHT for everything you click. Padding alone got a button to 23.9px and a
    select beside it to 25px — a 1.1px step nobody can name and everybody sees, on a
