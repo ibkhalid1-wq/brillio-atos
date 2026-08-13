@@ -192,10 +192,20 @@ describe("a count you cannot open is not an answer", () => {
     expect(inbox, "the role strip is back to a bare count").not.toContain('className="v3ib-unbound-row"');
     expect(inbox).toContain("label: `show the ${owner.open}`");
     expect(inbox, "it must list the role's OWN loci, not a re-derived set")
-      .toContain("<QuestionList abouts={owner.abouts} />");
+      .toContain("<QuestionList abouts={owner.abouts} assignable />");
   });
 
   it("the hand-over is still a write, and still commits every one of them", () => {
     expect(inbox).toContain("owner.abouts.map((about) => assignAction(about, picked!))");
+  });
+
+  it("and each question can go to a different person", () => {
+    // Seven questions about two different workflows are not always one person's, and
+    // the bulk act was the ONLY act — so routing them separately meant handing all
+    // seven to somebody and reassigning six afterwards.
+    // MUTATION: drop the `assignable` branch → RED.
+    expect(inbox).toContain('className="v3ib-qrow-assign"');
+    expect(inbox, "the per-row act must write through the same assign the bulk one uses")
+      .toContain("run(about, assignAction(about, pickedOwner(about)!))");
   });
 });
