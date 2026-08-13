@@ -297,7 +297,13 @@ assert on the running board, and put the number in the commit.
     real link quarantined (badge 5→6), the operator ingested it, the transcript
     landed attributed, and Discover's owned count for that person went **28 → 27** —
     the burn-down moving on a stakeholder's answer for the first time.
-12. **THE WRITE PATH HAS NO UNDO — found by using it.** An answer that lands wrong
+12. **`supabase` is `null as any` when the env is unconfigured** — 50 call sites
+    across 20 files, and an unguarded one throws `Cannot read properties of null`.
+    A developer machine has a `.env.local` and can NEVER see it; a CI runner and a
+    first clone always can. One was found and fixed (`TranscribeButton`) the first
+    time CI ran the real gate. The rest are unaudited. If you add a call site,
+    guard it — `isSupabaseConfigured` is the existing predicate.
+13. **THE WRITE PATH HAS NO UNDO — found by using it.** An answer that lands wrong
     (a mis-sent link, the wrong person, a test submission) cannot be retracted
     through the product: `_stakeholderAnswers` is append-only, no surface removes an
     entry, and `decide-fate: reopen` clears an operator RULING, not a stakeholder

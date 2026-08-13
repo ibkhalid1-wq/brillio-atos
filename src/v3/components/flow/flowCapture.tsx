@@ -158,6 +158,16 @@ export function TranscribeButton({ onText }: { onText: (transcript: string) => v
   // validation when the key is missing, so the button never advertises a
   // feature the project can't deliver.
   useEffect(() => {
+    // NO CLIENT, NO FEATURE — and no crash. `supabase` is `null as any` when the
+    // env is unconfigured (see integrations/supabase/client.ts), so this probe threw
+    // `Cannot read properties of null (reading 'functions')` for anyone without a
+    // `.env.local` — which is every CI runner, and every engineer on their first
+    // clone. It was invisible locally because a configured env is exactly what makes
+    // it not happen. Caught by the first CI run that executed the real gate.
+    //
+    // "Unavailable" is already this component's answer to "the project can't deliver
+    // this" — an unconfigured client is that, one step earlier than a 501.
+    if (!supabase) { transcribeAvailable = false; setState("unavailable"); return; }
     if (transcribeAvailable !== null) {
       if (!transcribeAvailable) setState("unavailable");
       return;

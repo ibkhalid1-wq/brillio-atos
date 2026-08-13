@@ -29,6 +29,10 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      # NO `.env.local` HERE, AND THAT IS THE POINT. `supabase` is `null as any`
+      # when the env is unconfigured, so any unguarded call site crashes for a
+      # runner — and for an engineer on their first clone. A developer machine has
+      # the env and can never see it. The first run of this gate found one.
       - run: npm run validate
       # THE EDGE FUNCTIONS ARE DENO AND `npm test` DOES NOT SEE THEM. They were never
       # type-checked at all until 2026-08-13, and the first check found real errors in
