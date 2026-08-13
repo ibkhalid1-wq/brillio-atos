@@ -124,3 +124,37 @@ The band's foot was removed on request (2026-08-13). Two blocks lived there:
 the same, which is to say they do not read at all. The distinction still holds in the
 ledger and on the surfaces that act on it. Three guards that proved the distinction
 were retired with this note rather than weakened.
+
+## The remaining calls, made
+
+Asked to "pick the best option for the rest" (2026-08-13):
+
+**Detail pane — BUILT.** Not as a replacement for the inline reveals (that would undo
+the fix the operator asked for), but as the thing an expanded row cannot be: what the
+record holds about ONE question, with the acts anchored in one place. Two things only
+the browser could teach: the row cannot hold focus (QuestionList is defined inside the
+Inbox, so React remounts the subtree every render and focus falls to `<body>`) — the
+BOARD takes focus instead; and the keys are ↑/↓ + Escape, not j/k, because this is
+sections of cards and the arrows already mean "move" everywhere in it.
+
+**Density toggle — NOT built.** The tokens support it. It is a preference control the
+operator would have to discover, added to a surface they have spent a day making
+quieter, for a problem nobody reported. If triaging at scale starts to hurt, the fix
+is a `--aura-ctl-h` and a spacing step, not a switch.
+
+**Optimistic updates with undo — NOT built, and I would argue against it.** Every
+write here is already reversible in the ledger: `reopen`, `unassign`, `pin-resolve`,
+reassign. An optimistic layer adds a SECOND account of what has happened, which is the
+one thing this ledger exists to prevent. The honest version of "undo" is the verb that
+already exists.
+
+**Adjudicate and Pinned — now proven by DOM, not by source.** Both were only ever
+checked by source-level guards because Laila New has no conflicts and no pin
+conflicts. `adjudicateAndPinnedRender.test.ts` mounts each population and reads the
+page: the section renders, carries tag/verb/count/disclosure, takes its kind accent,
+and the pinned row names BOTH sides of the disagreement.
+
+**One-signal lifecycle readings — moved to the Record.** They were the one thing lost
+when the lifecycle strip left Discover: no question exists for them, so nothing on the
+board accounted for them. Six on Laila New (Contact, Go-to-Market Initiative, Invoice,
+Lead, Order, Talent Pool), now stated on the Record as read-only traceability.
