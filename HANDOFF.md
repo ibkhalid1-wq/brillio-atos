@@ -286,11 +286,16 @@ assert on the running board, and put the number in the commit.
     blob. Most is noise; the TS18047s are where a real crash would hide. Not in
     `check:edge` until they are cleared, so the gate stays honest rather than
     aspirational. The two public-facing functions ARE clean and gated.
-11. **The stakeholder write path is half-built.** `src/v3/lib/ledger/stakeholderAnswers.ts`
-    turns a per-locus answer into an attributed closure (locus closes, `heard` ticks,
-    the in-flight row clears — all guarded). The TRANSPORT is not built: `FlowRespond`
-    still collects one block of free text and `flow-portal` still accepts `answers` as
-    a single string. The shape they must produce is in that module's header.
+11. **The stakeholder write path is built but NOT DEPLOYED.** End to end:
+    `FlowRespond` sends `locusAnswers` → `flow-portal` validates each against the
+    pack's own `questionLoci` and quarantines them → the operator's ingest promotes
+    them into `listen._stakeholderAnswers` → `useProgramLedger` mints an
+    `asserted · closed` claim attributed to the person. Locus closes, `heard` ticks,
+    the in-flight row clears. Guarded in `stakeholderWritePath.test.ts` (the ledger)
+    and `writePathTransport.test.ts` (the pipe + the security boundary).
+    **`flow-portal` must be deployed** for any of it to run against a real link:
+    `npx supabase functions deploy flow-portal --no-verify-jwt`. Until then the
+    client sends a field the deployed edge ignores — additive, so nothing breaks.
 
 ## What is NOT wired (do not mistake these for bugs)
 

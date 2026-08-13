@@ -967,6 +967,48 @@ function ingestInterviewResponse(program: ProgramSummary, itemId: string, actor:
   }
   phaseInputs[targetMovement] = bucket;
 
+  /**
+   * PROMOTE THE PER-LOCUS ANSWERS — the last link in the write path.
+   *
+   * The reply arrived on this person's own token-gated link, already bound to the
+   * loci it answers (the edge validated each one against the pack's own
+   * `questionLoci`). Ingest is the operator's REVIEW — "nothing enters the record
+   * unreviewed" — and this is what it promotes them into: `_stakeholderAnswers`,
+   * where `useProgramLedger` turns each one into an `asserted · closed` claim
+   * attributed to them. That closes the locus, ticks `heard`, and clears the
+   * in-flight row.
+   *
+   * ALWAYS the LISTEN bucket, whatever movement the transcript went to: the ledger
+   * reads one field in one place, and a Frame follow-up's answer is still an answer
+   * to a claim. Underscore-prefixed, so promoting it cannot flag documents stale.
+   *
+   * `via` is the inbox item — the provenance that distinguishes this from an
+   * operator capture, and what stakeholderAnswers.ts refuses to close a locus
+   * without.
+   */
+  const answered = Array.isArray(item.locusAnswers) ? (item.locusAnswers as unknown[]).filter(isRecord) : [];
+  if (answered.length) {
+    const listen = isRecord(phaseInputs.listen) ? { ...(phaseInputs.listen as Record<string, unknown>) } : {};
+    const existingRaw = typeof listen._stakeholderAnswers === "string" ? listen._stakeholderAnswers as string : "";
+    let existing: unknown[] = [];
+    try { const parsed = JSON.parse(existingRaw || "[]"); if (Array.isArray(parsed)) existing = parsed; } catch { existing = []; }
+    const receivedAt = String(item.receivedAt ?? "");
+    listen._stakeholderAnswers = JSON.stringify([
+      ...existing,
+      ...answered
+        .map((row) => ({
+          about: String(row.about ?? "").trim(),
+          answer: String(row.answer ?? "").trim(),
+          saidByName: stakeholder,
+          saidByRole: role,
+          at: receivedAt,
+          via: `portal:${itemId}`,
+        }))
+        .filter((row) => row.about && row.answer),
+    ]);
+    phaseInputs.listen = listen;
+  }
+
   // Deferred questions are ROUTING facts, saved fingerprint-safe on Listen:
   // the script derivation gives each to its target's card and drops it from
   // everyone else's, and answered-suppression skips them (deferred ≠ answered).
