@@ -78,9 +78,15 @@ describe("no strip describes an act it does not offer", () => {
 
   it("the derived-types strip offers the review it describes", () => {
     // MUTATION: delete the "review the N" button → RED.
-    expect(inbox).toContain("review the {derived.length}");
+    expect(inbox).toContain("`review the ${derived.length}`");
     expect(inbox, "the review must open the grid on those rows, not the open wall")
       .toContain("rows={derivedRows}");
+    // …and it must be a TOGGLE. It opened the grid with no way back: the only thing
+    // that closed it was committing a confirmation, so an operator who opened it to
+    // LOOK had to answer something or reload the page.
+    // MUTATION: revert to `setShowDerived(true)` → RED.
+    expect(inbox).toContain("setShowDerived((v) => !v)");
+    expect(inbox).toContain("setShowGrid((v) => !v)");
   });
 
   it("the no-system bucket opens its questions", () => {
@@ -97,5 +103,61 @@ describe("the grid tells the truth about which population it is showing", () => 
     // MUTATION: drop the `given ?` branch → RED.
     expect(grid).toContain('{given ? "Aura typed from their names" : "still need a type"}');
     expect(grid).toContain("code-derived · weak");
+  });
+});
+
+describe("every section of the Inbox looks and acts the same", () => {
+  /**
+   * "inbox - make each section look and act consistently."
+   *
+   * Measured before the shared header existed: five of eight sections carried an
+   * ownership or source tag and three did not; ONE collapsed and seven could not;
+   * seven bolded their count and "Decided" printed a bare number in prose. No single
+   * header was wrong, which is why it drifted — each was written beside its own
+   * section, and the next one matched only if somebody remembered.
+   *
+   * These read the SOURCE rather than a render, because the contract is about what a
+   * section is allowed to omit, and a render only shows the sections a fixture
+   * happens to populate.
+   */
+  const inbox = SRC("OperatorInbox.tsx");
+
+  it("the header is one component, not eight hand-written ones", () => {
+    // MUTATION: inline a header back into a section → the count below rises.
+    const handWritten = inbox.match(/<header className="v3ib-h">/g) ?? [];
+    expect(handWritten.length,
+      `${handWritten.length} hand-written headers — every section owes the reader the same parts`)
+      .toBeLessThanOrEqual(2);
+  });
+
+  it("that component gives every section a tag, a verb, a count and a disclosure", () => {
+    const at = inbox.indexOf("function IbSection");
+    expect(at, "the shared header is gone").toBeGreaterThan(-1);
+    const body = inbox.slice(at, at + 4200);
+    for (const part of ['className="v3ib-disc"', "{tag}", 'className="v3ib-verb"', 'className="v3ib-n"']) {
+      expect(body, `the shared header stopped rendering ${part}`).toContain(part);
+    }
+    // …and the disclosure actually collapses the body, rather than only turning a caret
+    expect(body).toContain("{open ? <div id={bodyId}>{children}</div> : null}");
+  });
+
+  it("the disclosure names the section it hides, not just 'show'", () => {
+    // Eight identical "show" buttons is the failure the a11y guard catches elsewhere;
+    // this is the rule that prevents it at the source.
+    const at = inbox.indexOf("function IbSection");
+    expect(inbox.slice(at, at + 4200)).toContain('aria-label={`${open ? "Hide" : "Show"} ${verb}');
+  });
+
+  it("no section spells its own plural, and a compound noun pluralises correctly", () => {
+    // `unit` is singular and pluralised once, in the header — so "1 conflict" and
+    // "2 conflicts" cannot disagree between sections. Appending "s" is not enough on
+    // its own: "system of record" rendered as "0 system of records" on the live
+    // board, which is why a unit may state its own plural.
+    // MUTATION: drop `unitPlural` and always append "s" → RED.
+    const at = inbox.indexOf("function IbSection");
+    const body = inbox.slice(at, at + 4200);
+    expect(body).toContain("count === 1 ? unit : unitPlural ?? `${unit}s`");
+    expect(inbox, "the compound unit is back to appending a bare s")
+      .toContain('unitPlural="systems of record"');
   });
 });

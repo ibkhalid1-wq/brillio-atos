@@ -189,8 +189,8 @@ describe("Sessions — the disclosure itself", () => {
     expect(btn.hasAttribute("disabled")).toBe(false);
     toggle();
     expect(disclosure()!.getAttribute("aria-expanded")).toBe("true");
-    // open → it points at the list it opened
-    expect(disclosure()!.getAttribute("aria-controls")).toBe("ib-sessions-rows");
+    // open → it points at the body it opened
+    expect(disclosure()!.getAttribute("aria-controls")).toBe("ib-sessions-body");
     expect(host.querySelector("#ib-sessions-rows")).not.toBeNull();
   });
 
