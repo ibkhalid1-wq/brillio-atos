@@ -132,3 +132,37 @@ describe("one card per contradiction", () => {
     expect(dedupeContradictionDecisions(plain).map((d) => d.id)).toEqual(["x", "y", "z"]);
   });
 });
+
+describe("the survivor is the card that says what the conflict is", () => {
+  // Measured on Laila New: FOUR stored decisions for one finding, differing only
+  // by separator (tab / " · " / space) — four GENERATIONS of the watcher. The
+  // oldest carried the bare glued statement as its summary and no `claim`; the
+  // newest carried "Evidence: … — the charter still says …". A stored decision
+  // renders the strings it was minted with, so keeping the first arrival kept the
+  // card that never says what the contradiction IS.
+  const generation = (id: string, statement: string, claim: string, summary: string) => ({
+    id, summary,
+    payload: { contradictionEntries: [{ statement, claim, between: "sheet vs Charter" }] },
+  });
+  const STMT = "Audit/previous-value fields dropped\t9\tUse proper change-history tracking";
+  const oldest = generation("oldest", STMT, "", "Audit/previous-value fields dropped 9 Use proper change-history tracking");
+  const newest = generation("newest", STMT.replace(/\t/g, " · "), "Replace the current CRM outright",
+    "Evidence: “Audit/previous-value fields dropped · 9 · …” — the charter still says “Replace the current CRM outright”");
+
+  it("keeps the generation carrying the contradicted claim", () => {
+    // MUTATION: revert to first-wins (`if (seen.has(key)) continue`) → "oldest".
+    expect(dedupeContradictionDecisions([oldest, newest]).map((d) => d.id)).toEqual(["newest"]);
+  });
+
+  it("keeps it whichever order they arrive in", () => {
+    expect(dedupeContradictionDecisions([newest, oldest]).map((d) => d.id)).toEqual(["newest"]);
+  });
+
+  it("does not reorder the board — the survivor holds the first card's place", () => {
+    // A richer duplicate arriving later must not jump the queue past unrelated
+    // cards, or the operator's list reshuffles as generations land.
+    const other = { id: "other", summary: "", payload: { demoInvites: ["ana"] } };
+    expect(dedupeContradictionDecisions([oldest, other, newest]).map((d) => d.id))
+      .toEqual(["newest", "other"]);
+  });
+});

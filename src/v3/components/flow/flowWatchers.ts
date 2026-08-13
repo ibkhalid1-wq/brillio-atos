@@ -407,6 +407,25 @@ export function negatedClaimProposal(program: ProgramSummary): WatcherProposal |
     for (const sentence of entry.text.split(/(?<=[.!?])\s+|\n+/)) {
       const line = sentence.trim();
       if (line.length < 15 || line.length > 300 || !NEGATION.test(line)) continue;
+      // A TABLE ROW IS NOT A CLAIM, so it cannot contradict one.
+      //
+      // The only contradiction on Laila New was this, four times over:
+      //
+      //   "Audit/previous-value fields dropped ⇥ 9 ⇥ Use proper change-history
+      //    tracking in new system"
+      //
+      // — one row of an uploaded schema-gap sheet: a gap, a COUNT, a recommendation.
+      // The negation regex fired on "dropped", the token match found "system" in the
+      // charter's objective, and Aura asked the operator to adjudicate a dispute
+      // between a spreadsheet row and the programme's objective. There was no
+      // dispute. Nobody asserted anything; a sheet listed three cells.
+      //
+      // An earlier pass made this row RENDER legibly (readableEvidenceLine above),
+      // which was the wrong layer: a row rendered beautifully is still not a
+      // proposition. Three or more columns is the measurable signature of a row —
+      // prose does not carry two tabs. Single-tab lines (a "label: value" note) are
+      // left alone, since those can genuinely assert something.
+      if ((line.match(/\t/g) ?? []).length >= 2) continue;
       // Dispute bookkeeping is not evidence: script echoes ("Q: Two accounts
       // disagree…") and operator resolution notes both QUOTE the claims they
       // settle — mining them refiles every dispute the moment it closes.

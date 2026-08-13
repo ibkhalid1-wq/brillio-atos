@@ -69,8 +69,13 @@ describe("an extracted spreadsheet row still reads as a row", () => {
  * never its use. What the operator reads is what the DETECTOR emits.
  */
 describe("the statement the detector actually emits", () => {
-  /** A programme with a standing charter claim and one tab-separated evidence row. */
-  const withSpreadsheetEvidence = (): ProgramSummary => {
+  /**
+   * A programme with a standing charter claim and one line of evidence.
+   *
+   * `line` is the only variable: a three-column SHEET ROW and a one-tab CLAIM are
+   * treated differently on purpose (see "a table row is not a claim" below).
+   */
+  const withEvidence = (line: string): ProgramSummary => {
     const listen = flowMovements().find((m) => m.id === "listen")!;
     const field = (listen.inputFields ?? []).find((f) => f.type === "transcript" || f.type === "document");
     expect(field, "Listen has no evidence field — re-anchor this fixture").toBeTruthy();
@@ -83,10 +88,7 @@ describe("the statement the detector actually emits", () => {
           },
           phaseInputs: {
             listen: {
-              [field!.id]: [
-                "— Dana Patel, RevOps, 2026-08-12 —",
-                "Audit/previous-value fields dropped\t9\tUse proper change-history tracking in new system",
-              ].join("\n"),
+              [field!.id]: `— Dana Patel, RevOps, 2026-08-12 —\n${line}`,
             },
           },
         },
@@ -94,20 +96,48 @@ describe("the statement the detector actually emits", () => {
     } as unknown as ProgramSummary;
   };
 
+  /** A claim somebody asserts, carrying ONE tab — a "label: value" note. */
+  const CLAIM = "Audit/previous-value fields dropped\tthe team no longer keeps change history";
+  /** A row of an uploaded gap sheet: a gap, a COUNT, a recommendation. */
+  const ROW = "Audit/previous-value fields dropped\t9\tUse proper change-history tracking in new system";
+
   it("REGRESSION: the emitted statement keeps its columns apart", () => {
-    const proposal = negatedClaimProposal(withSpreadsheetEvidence());
+    const proposal = negatedClaimProposal(withEvidence(CLAIM));
     expect(proposal, "the detector found nothing — this case would prove nothing").toBeTruthy();
     const entries = (proposal!.payload as { contradictionEntries: Array<{ statement: string }> }).contradictionEntries;
     expect(entries.length).toBeGreaterThan(0);
     const statement = entries[0].statement;
-    expect(statement, "the columns ran together on the card").not.toContain("dropped 9 Use");
+    expect(statement, "the columns ran together on the card").not.toContain("dropped the team");
     expect(statement).toContain(" · ");
   });
 
   it("and so does the quoted evidence in its positions line", () => {
-    const proposal = negatedClaimProposal(withSpreadsheetEvidence())!;
+    const proposal = negatedClaimProposal(withEvidence(CLAIM))!;
     const entries = (proposal.payload as { contradictionEntries: Array<{ positions: string }> }).contradictionEntries;
-    expect(entries[0].positions).not.toContain("dropped 9 Use");
+    expect(entries[0].positions).not.toContain("dropped the team");
+  });
+
+  /**
+   * A TABLE ROW IS NOT A CLAIM (2026-08-12). Reported from the running Inbox:
+   * "not clear what the contradiction is". It was not clear because there was no
+   * contradiction — the only one on Laila New was one row of an uploaded schema-gap
+   * sheet, matched to the charter's objective because both contain "system".
+   *
+   * This REVERSES the earlier reading of the same row. Rendering it legibly (the
+   * helper above, still exercised by CLAIM) was the wrong layer: a row rendered
+   * beautifully is still not a proposition, and the operator was being asked to
+   * adjudicate a dispute between a spreadsheet and an objective.
+   */
+  it("a three-column sheet row is not a contradiction at all", () => {
+    // MUTATION: drop the `>= 2` tab guard in flowWatchers → a proposal appears.
+    expect(negatedClaimProposal(withEvidence(ROW)),
+      "a gap/count/recommendation row was filed as a dispute").toBeNull();
+  });
+
+  it("but a claim carrying one tab is still heard", () => {
+    // The guard must cut ROWS, not evidence that happens to contain a tab. If this
+    // passes while the row case passes, the rule discriminates rather than silences.
+    expect(negatedClaimProposal(withEvidence(CLAIM))).toBeTruthy();
   });
 });
 
@@ -185,8 +215,8 @@ describe("a reformatted statement is the same contradiction", () => {
       } as unknown as ProgramSummary;
       return negatedClaimProposal(program)?.id ?? null;
     };
-    const a = idFor("Audit/previous-value fields dropped\t9\tUse proper change-history tracking in new system");
-    const b = idFor("Audit/previous-value fields dropped, 9, Use proper change-history tracking in new system");
+    const a = idFor("Audit/previous-value fields dropped\tthe team no longer keeps change history");
+    const b = idFor("Audit/previous-value fields dropped, the team no longer keeps change history");
     expect(a, "the detector found nothing — this case would prove nothing").toBeTruthy();
     expect(a).toBe(b);
   });
@@ -200,7 +230,7 @@ describe("the card says what is in conflict", () => {
       id: "p1", name: "T",
       rawData: { data: {
         transformationCharter: { approach: "The programme keeps audit and previous-value fields for change history throughout." },
-        phaseInputs: { listen: { [field.id]: "— Dana Patel, RevOps, 2026-08-12 —\nAudit/previous-value fields dropped\t9\tUse proper change-history tracking in new system" } },
+        phaseInputs: { listen: { [field.id]: "— Dana Patel, RevOps, 2026-08-12 —\nAudit/previous-value fields dropped\tthe team no longer keeps change history" } },
       } },
     } as unknown as ProgramSummary);
   };
