@@ -552,22 +552,8 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
   if (queue.rendered === 0) return null;
 
   // ONE UNIT — QUESTIONS, the same unit the burn-down uses, so no reader reconciles
-  // "12" against "18". A 0 section is hidden below (by request), so its 0 stat hides
-  // here too — a count button must always jump to a section that exists. When NOTHING
-  // is countable the whole header goes with it: a bare "INBOX — the operator-decision
-  // queue…" caption is chrome describing an empty thing, not information.
-  const stats = ([
-    ["ib-assign", queue.assign, "need an owner"],
-    // QUESTIONS, not seams — the same number the Sessions summary line prints, from the
-    // same function. The row's unit suffix (" · questions") is now true of every term.
-    ["ib-sessions", queue.sessionQuestions, "awaiting a date"],
-    ["ib-adjudicate", queue.adjudicate, "to adjudicate"],
-    // A DIFFERENT unit of decision from "in flight": these are pinned questions a
-    // re-derivation wants to move. Counted separately so neither number restates
-    // the other — the pin holds until the operator says otherwise.
-    ["ib-pinned", queue.pinned, "pinned — routing to decide"],
-    ["ib-inflight", queue.inFlight, "in flight"],
-  ] as const).filter(([, n]) => n > 0);
+  // THE HEADER'S STAT ROW went with the header (2026-08-13). Each section states its
+  // own count on its own badge now, which is one place for a number instead of two.
 
   /**
    * THE QUESTION ROWS, one definition.
