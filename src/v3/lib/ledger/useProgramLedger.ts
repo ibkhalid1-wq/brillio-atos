@@ -36,6 +36,7 @@ import { projectKitQuestions, type KitQuestion } from "./kitProjection";
 import { deriveArtifactAsks, parseDeclaredSors, type ArtifactAskMark, type ArtifactAskView, systemOfRecordQuestionOverlay } from "./artifactAsks";
 import { reconcile } from "./merge";
 import { readDictionarySources, dictionaryToClaims, TYPING_SLOTS } from "./dictionary";
+import { readStakeholderAnswers, stakeholderAnswerClaims } from "./stakeholderAnswers";
 import { deriveRoles } from "@shared/semanticRoles.ts";
 import {
   derivedTypeProposals, derivedTypeClaims, derivedTypeSuggestions,
@@ -296,6 +297,23 @@ export function useProgramLedger(program?: ProgramSummary): ProgramLedger {
     const captures = actions.filter((a): a is CaptureAction => a.kind === "capture");
     const redirects = actions.filter((a): a is RedirectAction => a.kind === "redirect");
     const fold = foldOwnership(actions);
+    // ── STAKEHOLDER ANSWERS (the write path) — last, and strongest ──
+    // A person answering the question they were asked, through their own link. It
+    // runs AFTER the dictionary and after the derived readings, over whatever is
+    // still open, because that is the precedence the lattice already states:
+    // `asserted` beats `code-derived` in both worlds, and a human answer is the last
+    // word. Same fingerprint-safe underscore channel as the dictionary — answering a
+    // question must not flag every document stale.
+    //
+    // This is the ONLY path that produces an attributed closure, which is why `heard`
+    // read 0 on every real programme before it existed. See stakeholderAnswers.ts for
+    // why an operator `capture` is deliberately not this.
+    const stakeholderAnswers = readStakeholderAnswers(program);
+    if (stakeholderAnswers.length) {
+      reconcile(migrated, stakeholderAnswerClaims(migrated, stakeholderAnswers, fold),
+        new Set(migrated.elements().map((e) => e.id)));
+    }
+
     // ── CURATION overlay: elements PROPOSED from ontology-gap kit questions, each with
     // the one `?unknown` it opens. Same shape as the ownership overlay — appended to what
     // buildReadModel is handed, never written into the frozen store. Provisional (id
