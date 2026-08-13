@@ -89,33 +89,60 @@ describe("the line on screen", () => {
   });
 });
 
-describe("every Inbox strip carries a control", () => {
-  // The rule behind four separate reports in one sitting ("is this informational?",
-  // "how does the operator action this?"). The Inbox is the operator's decision
-  // surface; a strip that only describes belongs on the Record.
+describe("every Inbox block carries a control", () => {
+  // The rule behind five separate reports ("is this informational?", "how does the
+  // operator action this?", "what is the operator action here?", "review 18, confirm
+  // the types here, chase crm again, and show 37 all behave differently"). The Inbox
+  // is the operator's decision surface; a block that only describes belongs on the
+  // Record, and a block that acts must look like the other blocks that act.
   const inbox = SRC("OperatorInbox.tsx");
-  const STRIPS = ["v3ib-dict-derivedtypes", "v3ib-dict-ask", "v3ib-dict-answerhere", "v3ib-dict-settled"];
 
-  for (const cls of STRIPS) {
-    it(`${cls} offers an act`, () => {
-      const at = inbox.indexOf(`className="${cls}"`);
-      expect(at, `${cls} is not rendered at all — this case would pass over nothing`).toBeGreaterThan(-1);
-      const block = inbox.slice(at, at + 2600);
-      const end = block.indexOf("</div>");
-      expect(block.slice(0, end > 0 ? end : undefined)).toContain("<button");
-    });
-  }
+  it("blocks are cards, not four hand-rolled containers", () => {
+    // MUTATION: bring back any of `-derivedtypes` / `-answerhere` / `-settled` as a
+    // container → RED. They had drifted into four shapes for four equally important
+    // things: a dashed accent border, a tinted fill, a plain box, and one with its
+    // own title class.
+    for (const gone of ["v3ib-dict-derivedtypes", "v3ib-dict-answerhere", "v3ib-dict-settled"]) {
+      expect(inbox, `${gone} is back — that block is not a card`).not.toContain(gone);
+    }
+    expect((inbox.match(/<IbCard/g) ?? []).length,
+      "the dictionary section has four blocks; each should be a card").toBeGreaterThanOrEqual(4);
+  });
+
+  it("a card's reveal and a card's write are different controls", () => {
+    const at = inbox.indexOf("function IbCard");
+    expect(at, "the card primitive is gone").toBeGreaterThan(-1);
+    const body = inbox.slice(at, at + 2400);
+    // the reveal: ghost, announced, and it flips its own label
+    expect(body).toContain('className="v3ib-btn ghost sm" aria-expanded={reveal.open}');
+    expect(body).toContain('{reveal.open ? (reveal.hideLabel ?? "hide") : reveal.label}');
+    // the write: filled, and never wearing the reveal's clothes
+    expect(inbox).toContain('className="v3ib-btn sm"');
+  });
+
+  it("a reveal opens INSIDE its card", () => {
+    // "show the 37" opened a modal while "review the 18" beside it expanded in place.
+    // MUTATION: render children unconditionally, or move them out of the card → RED.
+    const at = inbox.indexOf("function IbCard");
+    expect(inbox.slice(at, at + 2400))
+      .toContain('{reveal?.open ? <div className="v3ib-card-body">{children}</div> : null}');
+  });
 
   it("a field with no source and no system can be ruled out of scope", () => {
     // The fourth answer, which did not exist: chase / ask / type-by-hand all assume
-    // the field is real. Laila New carried "Does every Account need a ANOTHER…" —
-    // an attribute the model invented while summarising, with nobody able to answer
-    // because there is nothing to answer.
-    // MUTATION: delete the button → RED.
+    // the field is real. Laila New carried "Does every Account need a ANOTHER…".
     expect(inbox).toContain("this field shouldn’t exist");
     expect(inbox, "it must record WHY, or the field vanishes without a reason")
       .toContain('decision: "out-of-scope"');
     expect(inbox, "offered only where it is the right answer — sourceless AND system-less")
-      .toContain("{!src && peek.orphan ?");
+      .toContain("{!src && orphan ?");
+  });
+
+  it("the question rows have ONE definition, so a list and a dialog cannot diverge", () => {
+    // They lived inside the peek modal, which is WHY showing a set of questions
+    // needed a dialog at all.
+    expect((inbox.match(/const QuestionList = /g) ?? []).length).toBe(1);
+    expect(inbox).toContain("<QuestionList abouts={peek.abouts}");
+    expect(inbox).toContain("<QuestionList abouts={unattributed.abouts}");
   });
 });
