@@ -47,6 +47,7 @@ import { pinsForSend } from "@/v3/lib/ledger/operatorActions";
 import { ProvisionalMark, ClaimStatus, SourceTag } from "@/v3/components/flow/studio/ledgerPrimitives";
 import DesignLoopZones from "@/v3/components/flow/DesignLoopZones";
 import { ownerLabelsForCast } from "@/v3/lib/ledger/ownerBinding";
+import { lifecycleEntities, lifecycleReason } from "@/v3/lib/ledger/lifecycle";
 import { dictionaryCoverage, isSpreadsheetName, mergeDictionaryCsv, parseDictionaryCsv, readDictionaryWorkbook } from "@/v3/lib/ledger/dictionary";
 import { currentDesignRound } from "@/v3/components/flow/flowDesignRound";
 import { renderQuestion } from "@/v3/lib/ledger/renderQuestion";
@@ -1038,6 +1039,9 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
     inScope: number; entities: string[];
   } | null>(null);
   const [capDictBusy, setCapDictBusy] = useState(false);
+  const [lcBusy, setLcBusy] = useState<string | null>(null);
+  /** Read, never written from here — one definition, in lifecycle.ts. */
+  const lifecycles = useMemo(() => lifecycleEntities(ledger.store), [ledger.store]);
   const readAttachedDictionary = async (files: File[]) => {
     // SEQUENTIALLY, into one running CSV. A system's dictionary arrives as several
     // per-object workbooks, so the whole selection is one reading — and merging
@@ -1281,6 +1285,60 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
               the dictionary ask — is the Inbox's job. One "Inbox", one meaning. */}
           {/* Discover as an engagement dashboard: who needs attention and why, sorted by
               state. Ageing on in-flight is operator-tracked until the link is live. */}
+          {/* ENTITY LIFECYCLES ARE CONFIRMED IN LISTEN, by the people who live the
+              process — not exported from a schema and not drawn by hand in a design
+              studio later. Aura reads them off what the ledger already holds (see
+              lifecycle.ts for the four signals and why a name alone is not enough),
+              and this states them for confirmation.
+
+              A confirmed stage list is written as a DICTIONARY ROW through
+              `commitDictionary` — the exact path an uploaded schema takes — so a
+              lifecycle a person confirmed and one a schema stated land in the same
+              place under the same precedence. No new write mechanism. */}
+          {lifecycles.length ? (
+            <div className="v3ln-lifecycle" role="note" aria-label="Entity lifecycles to confirm">
+              <span className="v3ln-lifecycle-l">
+                <b>{lifecycles.length}</b> entit{lifecycles.length === 1 ? "y" : "ies"} look{lifecycles.length === 1 ? "s" : ""} to have a lifecycle
+              </span>
+              <span className="v3ln-lifecycle-m">
+                A thing the business moves through stages. Confirm the stages with the people who
+                move it — the stage list is theirs to state, not the schema&rsquo;s.
+              </span>
+              {lifecycles.map((lc) => (
+                <div key={lc.about} className="v3ln-lifecycle-row">
+                  <span className="v3ln-lifecycle-e">
+                    <b>{lc.entity}</b>{lc.confident ? null : <em className="v3ln-lifecycle-maybe"> · unconfirmed reading</em>}
+                  </span>
+                  <span className="v3ln-lifecycle-why" title={lifecycleReason(lc)}>{lifecycleReason(lc)}</span>
+                  {lc.stages.length ? (
+                    <span className="v3ln-lifecycle-stages">
+                      {lc.stages.map((stage, i) => (
+                        <span key={stage} className="v3ln-lifecycle-stage">
+                          {i ? <span aria-hidden="true">→ </span> : null}{stage}
+                        </span>
+                      ))}
+                      {commits.canWrite ? (
+                        <button type="button" className="v3ln-a" disabled={lcBusy === lc.about}
+                          aria-label={`Confirm the stages of ${lc.entity}`}
+                          onClick={() => {
+                            setLcBusy(lc.about);
+                            // entity,field,values — the same three columns a schema
+                            // export carries, so the merge cannot tell them apart.
+                            const cell = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+                            const csv = `entity,field,values\n${[lc.entity, lc.attribute, lc.stages.join("; ")].map(cell).join(",")}`;
+                            void commits.commitDictionary(csv, null).finally(() => setLcBusy(null));
+                          }}>{lcBusy === lc.about ? "Confirming…" : "confirm these stages"}</button>
+                      ) : null}
+                    </span>
+                  ) : (
+                    <span className="v3ln-lifecycle-stages none">
+                      no stages on the record yet — ask {lc.entity}&rsquo;s owner what they are
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : null}
           <div className="v3ln-engbar" role="note" aria-label="Engagement — who needs attention">
             <span className="v3ln-engbar-l">Who to engage</span>
             <span className="v3ln-engpill is-ready"><b>{engSummary.ready}</b> ready</span>
