@@ -69,12 +69,12 @@ describe("the two populations really are different", () => {
 describe("the line on screen", () => {
   const zones = SRC("DesignLoopZones.tsx");
 
-  it("subtracts the dictionary bucket through the ledger's own definition", () => {
-    // MUTATION: revert to `counts.blocking + counts[...]` → RED.
-    expect(zones).toContain("!isDictionaryQuestion(i)");
-    expect(zones, "a local re-derivation would drift from the surface it points at")
-      .toContain('from "@/v3/lib/ledger/projections"');
-  });
+    /* RETIRED 2026-08-13. This proved the recount on the design round's "N open
+     questions" line — the one that had counted the dictionary bucket and called
+     itself the burn-down. The LINE was removed on request along with the rest of the
+     band's foot, so there is no longer a number here to be right or wrong. The two
+     populations it distinguished are still proved above, on the data. */
+
 
   it("no longer calls a subset of the burn-down the burn-down", () => {
     // MUTATION: restore the old sentence → RED.
@@ -82,12 +82,12 @@ describe("the line on screen", () => {
     expect(zones).not.toMatch(/is Listen&rsquo;s burn-down/);
   });
 
-  it("states the dictionary questions rather than dropping them", () => {
-    // A miss stays visible: the ~121 are not hidden by the recount, they are named
-    // and pointed at the surface that does work them.
-    expect(zones).toContain("dictionaryOpen");
-    expect(zones).toMatch(/answered by a data dictionary/);
-  });
+    /* RETIRED 2026-08-13. This proved the recount on the design round's "N open
+     questions" line — the one that had counted the dictionary bucket and called
+     itself the burn-down. The LINE was removed on request along with the rest of the
+     band's foot, so there is no longer a number here to be right or wrong. The two
+     populations it distinguished are still proved above, on the data. */
+
 });
 
 describe("every Inbox block carries a control", () => {

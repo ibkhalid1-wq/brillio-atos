@@ -1229,7 +1229,6 @@ export default function TheLine({ program, onOpenInbox, onSaveInputs, onRenamePe
               onGenerate={onRunAgent ? generate : undefined}
               onMintReview={onMintReview}
               onDesignRound={onDesignRound}
-              onGoDiscover={() => setTab("discovery")}
               /* The consumers only ask "is this one in flight", so they get booleans:
                  the document snapshot is this component's own bookkeeping for knowing
                  when the run came back, not something a child should have to know. */
