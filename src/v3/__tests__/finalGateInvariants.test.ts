@@ -51,9 +51,19 @@ const NO_LEDGER_ITEMS: OperatorQueueReads = {
 };
 // One ledger-side item and nothing on the record — the shape that used to show a bare
 // icon over a populated Inbox.
-const ONE_SESSION: OperatorQueueReads = {
+/**
+ * ONE LEDGER-HALF ITEM THAT ACTUALLY DRAWS.
+ *
+ * This was a single SESSION, and a session used to make the page non-empty. Seam
+ * questions now go out on both owners' links (2026-08-13), so a seam draws nothing
+ * and counts nothing — which turned this fixture into a second spelling of "nothing
+ * at all" and the case below into a tautology. It is an assignment now: still one
+ * ledger-half item, still nothing on the record half, and still drawn.
+ */
+const ONE_LEDGER_ITEM: OperatorQueueReads = {
   ...NO_LEDGER_ITEMS,
-  sessionQueue: [{ pair: "Sales ⋈ Finance", abouts: ["el:x#phase"], items: [] }] as OperatorQueueReads["sessionQueue"],
+  assignments: [{ kind: "assign", about: "el:x#phase", slot: "phase",
+    owner: { label: "Sales Ops", isRole: true }, by: "op", at: "2026-08-13T00:00:00.000Z" }],
 };
 // The decided TRACE and nothing else — history the page draws, work nobody is waiting on.
 const DECIDED_ONLY: OperatorQueueReads = {
@@ -94,9 +104,9 @@ describe("(c) the badge and the Inbox emptiness check are the same expression", 
     // gating on the badge there put "Nothing needs you right now" over the trace.
     const cases: Array<[ProgramSummary, OperatorQueueReads, boolean]> = [
       [bare, NO_LEDGER_ITEMS, true],            // nothing at all -> quiet block earns the page
-      [bare, ONE_SESSION, false],               // ledger half only -> quiet block must NOT show
+      [bare, ONE_LEDGER_ITEM, false],           // ledger half only -> quiet block must NOT show
       [withRecordItem, NO_LEDGER_ITEMS, false], // record half only
-      [withRecordItem, ONE_SESSION, false],     // both
+      [withRecordItem, ONE_LEDGER_ITEM, false], // both
       [bare, DECIDED_ONLY, false],              // trace only -> DRAWN, so not empty (badge is 0)
     ];
     for (const [program, ledger, isEmpty] of cases) {

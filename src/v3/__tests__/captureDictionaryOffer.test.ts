@@ -107,13 +107,21 @@ describe("the offer is an offer", () => {
       .not.toContain("commitDictionary");
   });
 
-  it("applying goes through the surface's existing write channel", () => {
-    expect(LINE).toContain("commits.commitDictionary(capDict.csv, null)");
+  it("applying is handed to the Inbox, which is the surface that writes", () => {
+    // BOUNDARY (2026-08-13): attaching a file is Discover's act — it is how a
+    // stakeholder's evidence arrives. APPLYING it as a dictionary answers open
+    // questions programme-wide at schema strength, which is an operator move, so it
+    // is handed to the Inbox instead of performed here.
+    // MUTATION: put the write back → RED.
+    expect(LINE, "an operator write is back on Discover").not.toContain("commits.commitDictionary(capDict.csv, null)");
+    expect(LINE, "the handoff replaced it").toContain("apply it in the Inbox");
   });
 
-  it("the button is absent when there is nothing to close", () => {
+  it("the handoff is absent when the file would close nothing", () => {
     // A dictionary matching no open locus would write claims nobody asked about.
-    expect(LINE).toContain("commits.canWrite && capDict.closes > 0");
+    // Still conditional on the file closing something: a route offered for a file
+    // that would answer nothing is a worse dead end than no route at all.
+    expect(LINE).toContain("onOpenInbox && capDict.closes > 0");
   });
 
   it("the zero case is still STATED — the miss stays visible", () => {

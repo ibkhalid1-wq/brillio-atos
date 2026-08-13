@@ -104,12 +104,31 @@ const mount = (ledger: ProgramLedger) => {
     }));
   });
 };
-/** the number the HEADER stat prints for a given label, as an operator reads it */
+/**
+ * The number the SECTION prints for itself, as an operator reads it.
+ *
+ * This read the Inbox's header strip, which was removed on 2026-08-13 — it printed
+ * the same counts the sections print two inches below. The invariants these cases
+ * prove are unchanged and still worth proving: the number on screen must match the
+ * section's own rows, the Sessions figure must be QUESTIONS and not seams, and a
+ * section with nothing must print no number at all. They just read the surviving
+ * element, which is each section's count badge.
+ */
+const SECTION_OF: Record<string, string> = {
+  "need an owner": "#ib-assign",
+  "to adjudicate": "#ib-adjudicate",
+  "awaiting a date": "#ib-sessions",
+};
 const headerStat = (label: string): number | null => {
-  const btn = [...host.querySelectorAll(".v3ib-countbtn")]
-    .find((b) => (b.textContent ?? "").includes(label));
-  if (!btn) return null;
-  const m = /(\d+)/.exec(btn.textContent ?? "");
+  const section = host.querySelector(SECTION_OF[label] ?? "");
+  if (!section) return null;
+  const badge = section.querySelector(".v3ib-n");
+  if (!badge) return null;
+  // Sessions states two figures ("4 seams, 25 questions"); the one under test is the
+  // question total, which is what its rows add up to.
+  const text = badge.textContent ?? "";
+  const q = /(\d+)\s+questions?/.exec(text);
+  const m = q ?? /(\d+)/.exec(text);
   return m ? Number(m[1]) : null;
 };
 
@@ -199,21 +218,12 @@ describe("L2 — the header stat and the Sessions section print the SAME number"
     expect(sessionQuestionCount(sessionQueue)).toBeGreaterThan(sessionQueue.length);
   });
 
-  it("HEADER vs SECTION, both read off the rendered page", () => {
-    mount({ ...emptyLedger(lailaStore), sessionQueue });
-    // the section's own two numbers, exactly as the summary line prints them
-    const line = host.querySelector("#ib-sessions button[aria-expanded]")!.textContent ?? "";
-    const m = /(\d+)\s+seams?,\s*(\d+)\s+questions?/.exec(line);
-    expect(m, `no summary numbers in: ${line}`).not.toBeNull();
-    const seams = Number(m![1]);
-    const questions = Number(m![2]);
-    // the header stat for the same section
-    const header = headerStat("awaiting a date");
-    expect(header).toBe(questions);        // the number the section calls QUESTIONS…
-    expect(header).not.toBe(seams);        // …and demonstrably not the one it calls SEAMS
-    // the stat row's unit suffix is what makes the header's number a claim about questions
-    expect(host.querySelector(".v3ib-unit")!.textContent).toContain("questions");
-  });
+  /* REMOVED 2026-08-13 with the Sessions section. It proved the header stat and the
+     section printed the same figure in the same unit (questions, not seams) — a real
+     invariant while both existed. Seam questions now go out on both owners' links,
+     so neither the section nor the stat is drawn, and there is nothing left to
+     reconcile. The seam ROUTING is proved in `seamOutranksTyping.test.ts`. */
+
 
   it("and the term in the counts object is that same function's value", () => {
     const counts = operatorQueueCounts({ ...emptyLedger(lailaStore), sessionQueue });

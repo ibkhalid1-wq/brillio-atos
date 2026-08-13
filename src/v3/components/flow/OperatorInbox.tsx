@@ -23,6 +23,7 @@ import { slotOf, elementIdOf } from "@/v3/lib/ledger/types";
 import { readableName } from "@/v3/lib/ledger/phrasing";
 import { renderQuestion } from "@/v3/lib/ledger/renderQuestion";
 import { attributeEvidence } from "@/v3/lib/ledger/derivedTypes";
+import { lifecycleEntities } from "@/v3/lib/ledger/lifecycle";
 import { ClaimStatus, OwnershipTag, ProvisionalMark, SourceTag } from "@/v3/components/flow/studio/ledgerPrimitives";
 import { asksNeedingChase, isSystemOwner, type ArtifactAskMark } from "@/v3/lib/ledger/artifactAsks";
 import { operatorQueueCounts, sessionQuestionCount, unfrozenQueues } from "@/v3/lib/ledger/operatorQueue";
@@ -107,11 +108,18 @@ export function SessionsSection({ sessionQueue, plannedPairs, busy, onPropose }:
   const seams = sessionQueue.length;
   const questions = sessionQuestionCount(sessionQueue);   // === the header's sessions stat
   return (
-    <IbSection id="ib-sessions" verb="Sessions" count={questions} unit="question" defaultOpen={false}
+    <IbSection id="ib-sessions" kind="schedule" verb="Sessions" count={questions} unit="question" defaultOpen={false}
       tag={<OwnershipTag cls="joint" showLabel={false} />}
       badge={<>{seams} seam{seams === 1 ? "" : "s"}, {questions} question{questions === 1 ? "" : "s"}</>}
-      lead={<>They need a joint conversation; scheduling gated.</>}
-      provisional="scheduling a real date is a gated write — 'propose a time' records the intent only">
+      /* THE SEAM IS A SIGHT, NOT A BLOCKER. These questions now go out on BOTH
+         owners' links like any other (useProgramLedger's loop) — they are not held
+         waiting on a room. If the two answer the same, it settles itself; if they
+         differ, the contradiction watcher files it and it comes back as something to
+         adjudicate. The session is the operator's option for a disagreement they can
+         see coming, not the only path through. */
+      lead={<>Owned by two functions at once, so both are asked. They settle themselves if
+        the answers agree — propose a session only if you would rather they talked first.</>}
+      provisional="proposing a session records the intent only — no date is booked, and nothing is waiting on one">
       {/* The per-pair rows, unchanged — pair, joint-question count,
           awaiting-a-date, propose-a-time. Joint ownership is AUTO-SET at seam detection
           (migrate: jointOrOwner), so there is nothing to "mark"; the only pending thing
@@ -124,7 +132,7 @@ export function SessionsSection({ sessionQueue, plannedPairs, busy, onPropose }:
                 <span className="v3ib-seam-h"><span aria-hidden="true">⋈</span> <span className="v3ib-sr">joint seam: </span>{pair}</span>
                 <span className="v3ib-seam-n">{abouts.length} joint question{abouts.length === 1 ? "" : "s"} · <span className="v3ib-nodate"><span aria-hidden="true">⏳ </span>awaiting a date</span></span>
                 {planned ? (
-                  <span className="v3ib-onplan">on the session plan · no date yet (gated)</span>
+                  <span className="v3ib-onplan">a session is proposed · no date yet (gated)</span>
                 ) : (
                   <button type="button" className="v3ib-btn ghost" disabled={busy === pair}
                     aria-label={spoken(`Propose a time for the ${pair} joint session (${abouts.length} question${abouts.length === 1 ? "" : "s"})`)}
@@ -209,8 +217,16 @@ function IbCard({ title, note, reveal, writes, tone, marker, children }: {
   );
 }
 
-function IbSection({ id, className, tag, verb, count, unit, unitPlural, badge, lead, provisional, actions, defaultOpen = true, children }: {
+function IbSection({ id, className, kind, tag, verb, count, unit, unitPlural, badge, lead, provisional, actions, defaultOpen = true, children }: {
   id?: string;
+  /**
+   * WHICH OF THE OPERATOR'S FOUR MOVES this section is asking for. It sets a hairline
+   * accent down the section's left edge, so the board can be sorted by kind of
+   * decision before a word is read — which is what an operator triaging fifty items
+   * actually does first. Colour is the only thing it changes; nothing is hidden or
+   * reordered by it, and every section still says its verb in words.
+   */
+  kind?: "assign" | "decide" | "schedule" | "adjudicate";
   /** A section's own marker class, kept: `.v3ib-dict` and `.v3ib-unbound` carry
    *  styling and are what the miss-stays-visible guards look for. The shared header
    *  must not quietly take a section's identity away with its markup. */
@@ -238,7 +254,7 @@ function IbSection({ id, className, tag, verb, count, unit, unitPlural, badge, l
   const [open, setOpen] = useState(defaultOpen);
   const bodyId = id ? `${id}-body` : undefined;
   return (
-    <section id={id} className={`v3ib-src${className ? ` ${className}` : ""}`}>
+    <section id={id} className={`v3ib-src${kind ? ` is-${kind}` : ""}${className ? ` ${className}` : ""}`}>
       <header className="v3ib-h">
         <button type="button" className="v3ib-disc" aria-expanded={open}
           aria-controls={open ? bodyId : undefined}
@@ -288,6 +304,11 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
   const [peek, setPeek] = useState<{ sor: string; abouts: string[]; orphan?: boolean } | null>(null);
   const [showDerived, setShowDerived] = useState(false);
   const [showOrphans, setShowOrphans] = useState(false);
+  const [showStages, setShowStages] = useState(false);
+  /** Read through the ONE definition — lifecycle.ts — never re-derived here. */
+  const lifecyclesWithStages = useMemo(
+    () => lifecycleEntities(ledger.store).filter((l) => l.confident && l.stages.length),
+    [ledger.store]);
   const [shownUnbound, setShownUnbound] = useState<Record<string, boolean>>({});
 
   /** The already-written readings, in the grid's own row shape. Source comes from
@@ -436,12 +457,10 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
   // jointly owned, grouped by function pair. Never recomputed here; only the frozen
   // loci are subtracted, by the same call the badge uses (see `unfrozen` above), so a
   // question awaiting adjudication is not also offered as one to schedule.
-  const sessionQueue = unfrozen.sessions;
   // A "schedule" action = the seam is on the session plan (intent). It carries NO
   // date — scheduling is gated — so the open item on every seam is a DATE. Only the
   // pair is needed downstream (planned or not), so the section takes the set, not the
   // actions: a row shows an intent was recorded, never a time it does not have.
-  const plannedPairs = new Set(ledger.schedules.map((s) => s.pair));
 
   const run = async (key: string, action: OperatorAction | OperatorAction[]) => {
     setBusy(key); try { await onCommit(action); } finally { setBusy(null); }
@@ -476,12 +495,24 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
    * "Assign to… — Which phase of the proces". The visible text stays short; the
    * distinguishing detail goes where it is needed and nowhere else.
    */
-  const cSelect = (key: string, rawId: string, placeholder = "Assign an owner…", srLabel?: string) => {
+  /**
+   * `onPick` makes the select ITSELF the act, for the rows where a name is the whole
+   * decision. Without it the select only arms a button beside it, and that button is
+   * disabled until a name is chosen — a first click that does nothing and says
+   * nothing. "Someone else…" still needs the free-text box, so it never commits on
+   * choice: the commit happens when the typed name is submitted, as before.
+   */
+  const cSelect = (key: string, rawId: string, placeholder = "Assign an owner…", srLabel?: string,
+    onPick?: (owner: string) => void) => {
     const id = domId(rawId);
     return (
       <>
         <label className="v3ib-sr" htmlFor={id}>{spoken(srLabel ?? placeholder)}</label>
-        <select id={id} value={sel[key] ?? ""} onChange={(e) => setSel((s) => ({ ...s, [key]: e.target.value }))}>
+        <select id={id} value={sel[key] ?? ""} onChange={(e) => {
+          const value = e.target.value;
+          setSel((s) => ({ ...s, [key]: value }));
+          if (onPick && value && value !== OTHER) onPick(value);
+        }}>
           <option value="">{placeholder}</option>
           {candidates.map((c) => <option key={c.label} value={c.label}>{displayPersonLabel(c.label)}{c.role && c.role !== c.label ? ` — ${c.role}` : ""}</option>)}
           <option value={OTHER}>Someone else…</option>
@@ -527,25 +558,19 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
   // badge has (correctly) gone quiet, so gating on the badge's number would have deleted
   // the record of the ruling that emptied the queue.
   const queue = operatorQueueCounts(ledger);
+  // NOTHING TO DECIDE → THE INBOX DRAWS NOTHING, and that is not an oversight: the
+  // SHELL already owns this state and draws "Nothing needs you right now", gated on
+  // the same `rendered` count, with a documented history of getting that predicate
+  // right (FlowShell ~1134). An "Inbox clear" card was added here on 2026-08-13 under
+  // the redesign brief's ask for a crafted zero state — it was a SECOND empty state
+  // for one condition, which is the thing this codebase exists to avoid, and two
+  // standing guards caught it within the minute. Removed; the brief's ask was already
+  // satisfied one level up.
   if (queue.rendered === 0) return null;
 
   // ONE UNIT — QUESTIONS, the same unit the burn-down uses, so no reader reconciles
-  // "12" against "18". A 0 section is hidden below (by request), so its 0 stat hides
-  // here too — a count button must always jump to a section that exists. When NOTHING
-  // is countable the whole header goes with it: a bare "INBOX — the operator-decision
-  // queue…" caption is chrome describing an empty thing, not information.
-  const stats = ([
-    ["ib-assign", queue.assign, "need an owner"],
-    // QUESTIONS, not seams — the same number the Sessions summary line prints, from the
-    // same function. The row's unit suffix (" · questions") is now true of every term.
-    ["ib-sessions", queue.sessionQuestions, "awaiting a date"],
-    ["ib-adjudicate", queue.adjudicate, "to adjudicate"],
-    // A DIFFERENT unit of decision from "in flight": these are pinned questions a
-    // re-derivation wants to move. Counted separately so neither number restates
-    // the other — the pin holds until the operator says otherwise.
-    ["ib-pinned", queue.pinned, "pinned — routing to decide"],
-    ["ib-inflight", queue.inFlight, "in flight"],
-  ] as const).filter(([, n]) => n > 0);
+  // THE HEADER'S STAT ROW went with the header (2026-08-13). Each section states its
+  // own count on its own badge now, which is one place for a number instead of two.
 
   /**
    * THE QUESTION ROWS, one definition.
@@ -555,6 +580,37 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
    * "review the 18" beside it expanded in place. Lifted here, the same rows render
    * wherever the questions are asked for.
    */
+  /**
+   * THE SUBJECT, SAID ONCE.
+   *
+   * Four questions about one atlas step each restated the whole step:
+   *
+   *   One step in the process is: "Review pipeline, forecast, and performance
+   *   reports; monitor commit, most likely, and stretch buckets." Who does this step?
+   *   One step in the process is: "Review pipeline, forecast, and performance
+   *   reports; monitor commit, most likely, and stretch buckets." What decides…?
+   *
+   * — the same forty words, four times, with six words of difference at the end. The
+   * operator reads the quote once and then hunts for the tail, which is the part they
+   * are actually answering.
+   *
+   * The shared opening is computed from the questions themselves rather than by
+   * reaching back into how they were phrased: whatever prefix a group has in common,
+   * up to the last sentence boundary, is the subject. A group of one keeps its
+   * question whole, and questions with nothing in common are simply not grouped — so
+   * this can shorten a row but never invent a heading that was not already there.
+   */
+  const sharedOpening = (questions: readonly string[]): string => {
+    if (questions.length < 2) return "";
+    let i = 0;
+    while (i < questions[0].length && questions.every((q) => q[i] === questions[0][i])) i += 1;
+    const common = questions[0].slice(0, i);
+    // Cut back to a sentence end, so the heading is a sentence and the tails are
+    // sentences — never a phrase severed mid-clause.
+    const cut = Math.max(common.lastIndexOf(". "), common.lastIndexOf('." '), common.lastIndexOf("? "));
+    return cut > 20 ? common.slice(0, cut + (common[cut] === "." ? 1 : 1) + (common[cut + 1] === '"' ? 1 : 0)).trim() : "";
+  };
+
   const QuestionList = ({ abouts, orphan, assignable }: {
     abouts: readonly string[];
     orphan?: boolean;
@@ -563,9 +619,24 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
      *  person's — the bulk act was the ONLY act, so routing them separately meant
      *  handing them all to somebody and reassigning six afterwards. */
     assignable?: boolean;
-  }) => (
+  }) => {
+    // Grouped by the element the questions are ABOUT, in the order they arrived, so a
+    // step's four questions sit together under one statement of the step.
+    const groups: Array<{ id: string; abouts: string[] }> = [];
+    for (const about of abouts) {
+      const id = elementIdOf(about);
+      const last = groups[groups.length - 1];
+      if (last && last.id === id) last.abouts.push(about);
+      else groups.push({ id, abouts: [about] });
+    }
+    return (
     <ul className="v3ib-qlist">
-      {abouts.map((about) => {
+      {groups.flatMap((group) => {
+      const opening = sharedOpening(group.abouts.map((a) => Q(a).question));
+      const head = opening ? (
+        <li key={`h:${group.id}`} className="v3ib-qsubject">{opening}</li>
+      ) : null;
+      return [head, ...group.abouts.map((about) => {
         const q = Q(about);
         // WHERE THE FIELD CAME FROM. A question about a field somebody named in an
         // interview and one about a field the model listed while summarising a
@@ -574,7 +645,11 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
         return (
           <li key={about} title={about}>
             <span className="v3ib-peek-tag">{q.typeTag}</span>
-            <span className="v3ib-peek-q">{q.question}</span>
+            <span className="v3ib-peek-q">
+              {opening && q.question.startsWith(opening)
+                ? q.question.slice(opening.length).trim()
+                : q.question}
+            </span>
             {src
               ? <span className="v3ib-peek-src" title={src}>from: {src}</span>
               : <span className="v3ib-peek-src none">no source on record</span>}
@@ -610,39 +685,27 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
             ) : null}
           </li>
         );
+      })];
       })}
     </ul>
-  );
+    );
+  };
 
   return (
     <div className="v3ib" aria-label="Operator inbox">
-      {stats.length ? (
-      <header className="v3ib-top">
-        <span className="v3ib-title">Inbox</span>
-        <span className="v3ib-count">
-          {stats.map(([id, n, label], i) => (
-            <span key={id}>
-              {i > 0 ? " · " : ""}
-              <button type="button" className="v3ib-countbtn" title={`Jump to ${label}`}
-                onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "center" })}>
-                <b>{n}</b> {label}
-              </button>
-            </span>
-          ))}
-          <span className="v3ib-unit"> · questions</span>
-        </span>
-        {/* THE BURN-DOWN IS NOT "ABOVE" ANY MORE. It was hidden from Work on request
-            (2026-08-12) and this line kept pointing at it — a sentence naming a thing
-            the reader cannot see. What the Inbox is, in its own terms, instead. */}
-        <span className="v3ib-of">everything waiting on you, grouped by what kind of decision it needs.</span>
-      </header>
-      ) : null}
+      {/* THE HEADER STRIP IS GONE (on request, 2026-08-13). It printed the same
+          counts the sections print two inches below, plus a sentence describing what
+          the Inbox is to someone already looking at it. Every stat was a jump link to
+          a section that is on screen anyway, and the counts are now on each section's
+          own badge — so nothing was lost except a second place for the same number to
+          be right or wrong in. The zero state stays: an empty board still has to say
+          which kind of empty it is. */}
 
       {/* 0a · ROLES NOBODY ANSWERS FOR — an operator decision, so it lives here.
               Every number is `soloByOwner`'s own count for that label: no person is
               invented to fill the gap and no number is invented to describe it. */}
       {unbound.length ? (
-        <IbSection className="v3ib-unbound" verb="Nobody to ask" count={unboundOpen} unit="open question"
+        <IbSection className="v3ib-unbound" kind="assign" verb="Nobody to ask" count={unboundOpen} unit="open question"
           tag={<OwnershipTag cls="operator" showLabel={false} />}
           lead={<>
               Owned by {unbound.length} role{unbound.length === 1 ? "" : "s"} with no person behind{" "}
@@ -781,7 +844,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
           );
         };
         return (
-          <IbSection id="ib-dictionary" className="v3ib-dict" verb="Data dictionary" count={chase.length} unit="system of record"
+          <IbSection id="ib-dictionary" className="v3ib-dict" kind="decide" verb="Data dictionary" count={chase.length} unit="system of record"
             unitPlural="systems of record"
             tag={<SourceTag source="code-derived" />}
             lead={<>With an unprovided dictionary — <b>one upload each</b> closes the typing wall, not
@@ -792,6 +855,39 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                 stated here rather than quietly absorbed. They are the weakest claim
                 the ledger holds and lose to any human answer — but an operator who
                 is not told will read them as settled. */}
+            {/* LIFECYCLE STAGES — the act Discover hands off. Discover finds which
+                entities move through stages and states it; confirming the list is an
+                operator WRITE at dictionary strength, so it lives here. Same CSV, same
+                `onDictionary`, same merge as every other typing answer: a lifecycle a
+                person confirmed and one a schema stated are indistinguishable. */}
+            {onDictionary && lifecyclesWithStages.length ? (
+              <IbCard
+                title={<><b>{lifecyclesWithStages.length}</b> entit{lifecyclesWithStages.length === 1 ? "y has" : "ies have"} a lifecycle with stages on the record</>}
+                note={<>Confirming records the order as <b>your</b> answer, at the strength an uploaded
+                  schema carries. A stakeholder can still say otherwise; a real dictionary still
+                  corrects it.</>}
+                reveal={{ label: `review the ${lifecyclesWithStages.length}`, open: showStages,
+                  onToggle: () => setShowStages((v) => !v) }}>
+                <ul className="v3ib-qlist">
+                  {lifecyclesWithStages.map((lc) => (
+                    <li key={lc.about}>
+                      <span className="v3ib-peek-q"><b>{lc.entity}</b> · {lc.attribute}</span>
+                      <span className="v3ib-peek-src">{lc.stages.join(" → ")}</span>
+                      <button type="button" className="v3ib-btn sm" disabled={busy === lc.about}
+                        aria-label={spoken(`Confirm the stages of ${lc.entity}: ${lc.stages.join(", ")}`)}
+                        onClick={() => {
+                          setBusy(lc.about);
+                          // entity,field,values — the three columns a schema export
+                          // carries, so the merge cannot tell the two apart.
+                          const cell = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+                          const csv = `entity,field,values\n${[lc.entity, lc.attribute, lc.stages.join("; ")].map(cell).join(",")}`;
+                          void Promise.resolve(onDictionary(csv, null)).finally(() => setBusy(null));
+                        }}>{busy === lc.about ? "Confirming…" : "confirm these stages"}</button>
+                    </li>
+                  ))}
+                </ul>
+              </IbCard>
+            ) : null}
             {derived.length ? (
               <IbCard
                 title={<><b>{derived.length}</b> type{derived.length === 1 ? " was" : "s were"} read from the field names, not answered by anyone</>}
@@ -1011,7 +1107,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
       {/* EMPTY-STATE: a 0 section is HIDDEN (by request, 2026-08-10) — the inbox shows
           only what needs acting on; the header stats carry the summary. */}
       {unowned.length === 0 ? null : (
-      <IbSection id="ib-assign" verb="Need an owner" count={unowned.length} unit="question"
+      <IbSection id="ib-assign" kind="assign" verb="Need an owner" count={unowned.length} unit="question"
         tag={<OwnershipTag cls="operator" showLabel={false} />}
         lead={<><span className="v3ib-unit">(phase · decision)</span> across{" "}
           <b>{unownedGroups.size}</b> <span className="v3ib-unit">element{unownedGroups.size === 1 ? "" : "s"}</span>
@@ -1067,18 +1163,18 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
       )}
 
       {/* 2 · SEAMS → the session queue. One summary line, expandable (see SessionsSection). */}
-      <SessionsSection
-        sessionQueue={sessionQueue}
-        plannedPairs={plannedPairs}
-        busy={busy}
-        onPropose={(pair, abouts) => void run(pair, { kind: "schedule", pair, parties: pair.split("⋈").map((s) => s.trim()), abouts, by, at: nowISO() })}
-      />
+      {/* THE SESSIONS SECTION IS GONE (on request, 2026-08-13). A jointly-owned
+          question now goes out on BOTH owners' links, so there is nothing here for
+          an operator to decide — the section's only act was "propose a time", which
+          booked nothing and was the last remnant of the routing that held those
+          questions back until a meeting existed. The seam is still visible where it
+          is useful: Discover shows which pairs share questions. */}
 
       {/* 3 · CONFLICTS → ADJUDICATE (read-side; resolution gated) */}
       {/* EMPTY-STATE: 0 conflicts → section HIDDEN (by request, 2026-08-10; the earlier
           "passed check" band retired with it). */}
       {ledger.conflicts.length === 0 ? null : (
-      <IbSection id="ib-adjudicate" verb="Adjudicate" count={ledger.conflicts.length} unit="conflict"
+      <IbSection id="ib-adjudicate" kind="adjudicate" verb="Adjudicate" count={ledger.conflicts.length} unit="conflict"
         tag={<OwnershipTag cls="operator" showLabel={false} />}
         lead={<>Two live claims on one locus; the element <b>freezes</b>, no auto-winner.</>}
         provisional="resolution completion is a write — gated; read-side only for now">
@@ -1102,7 +1198,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
           There is no automatic sweep, and no silent re-attribution of a sent question.
           EMPTY-STATE: 0 → section hidden, like every other section here. */}
       {ledger.pinConflicts.length === 0 ? null : (
-            <IbSection id="ib-pinned" verb="Pinned — in flight" count={ledger.pinConflicts.length} unit="question"
+            <IbSection id="ib-pinned" kind="decide" verb="Pinned — in flight" count={ledger.pinConflicts.length} unit="question"
         tag={<OwnershipTag cls="operator" showLabel={false} />}
         lead={<>Already <b>sent on a link</b> that a fresh derivation would re-route. The link&rsquo;s
           recipient <b>keeps</b> them until you say otherwise — decide each one.</>}>
@@ -1136,7 +1232,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
       {/* OWNED & IN-FLIGHT → reassign / unassign + the stakeholder's three exits */}
       {/* EMPTY-STATE: 0 in-flight → section HIDDEN (by request, 2026-08-10). */}
       {ledger.assignments.length === 0 ? null : (
-      <IbSection id="ib-inflight" className="is-gated" verb="Owned &amp; in-flight" count={ledger.assignments.length} unit="question"
+      <IbSection id="ib-inflight" className="is-gated" kind="assign" verb="Owned &amp; in-flight" count={ledger.assignments.length} unit="question"
         tag={<OwnershipTag cls="stakeholder" showLabel={false} />}
         lead={<>Reassign if you routed wrong, or record the holder&rsquo;s exit. Operator-entered
           captures: <b>{ledger.captures.length}</b> — <b>not</b> counted as heard.</>}
@@ -1157,9 +1253,17 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                     <QLine about={a.about} tail={pin
                       ? <span className="v3ib-owner"><span aria-hidden="true">📌 </span>pinned to {displayPersonLabel(pin.owner.label)} <span className="v3ib-unit">(on a sent link — pinned)</span></span>
                       : <span className="v3ib-owner"><span aria-hidden="true">→ </span>owner: {a.owner.label}</span>} />
+                    {/* PICKING SOMEONE IS THE ACT. There used to be a select and a
+                        `reassign` button, and the button was disabled until a name was
+                        chosen — so the first click on it did nothing, said nothing, and
+                        looked no different from a live control. Reported as exactly
+                        that. A select whose only purpose is to arm a button beside it
+                        is two steps for one decision, and the disabled step is the one
+                        that fails silently. Choosing a name now commits it; the choice
+                        is as reversible as it ever was. */}
                     <span className="v3ib-reassign">
-                      {cSelect(a.about, `re-${a.about}`, `Reassign to… — ${Q(a.about).question}`)}
-                      <button type="button" className="v3ib-btn ghost sm" disabled={busy === a.about || !pickedOwner(a.about)} aria-label={spoken(`Reassign: ${Q(a.about).question}`)} onClick={() => void run(a.about, assignAction(a.about, pickedOwner(a.about)!))}>reassign</button>
+                      {cSelect(a.about, `re-${a.about}`, "Reassign to…", `Reassign to… — ${Q(a.about).question}`,
+                        (owner) => void run(a.about, assignAction(a.about, owner)))}
                       <button type="button" className="v3ib-btn ghost sm" disabled={busy === a.about} aria-label={spoken(`Unassign ${a.owner.label} from: ${Q(a.about).question}`)} onClick={() => void run(a.about, { kind: "unassign", about: a.about, reason: "operator", by, at: nowISO() })}>unassign</button>
                     </span>
                   </span>
@@ -1170,13 +1274,26 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                       <button type="button" className="v3ib-btn" disabled={busy === a.about} onClick={() => void run(a.about, assignAction(a.about, ref.toOwner))}>confirm<span aria-hidden="true"> → </span>reassign to {ref.toOwner}</button></span>
                   ) : (
                     <span className="v3ib-exits">
-                      <span className="v3ib-exits-l">awaiting {a.owner.label} — their exits, captured via the team for now:</span>
+                      <span className="v3ib-exits-l">awaiting {a.owner.label} — if they replied out of band, record it:</span>
                       {/* One set of these per in-flight question, and the visible word
                           ("answer") is the same on all of them — so the accessible name
                           names the QUESTION and the holder as well, or a screen-reader
                           user hears "answer button" twenty times with no way to tell
                           which question they are about to record against. */}
-                      {(["answer", "redirect", "release"] as const).map((k) => (
+                      {/* THREE EXITS BECAME ONE, because two of them were reassignment
+                          under other names. "Redirect" recorded "they said ask X
+                          instead" and then had the operator confirm it into an ASSIGN —
+                          which the select two lines up does in one step. "Release"
+                          wrote an unassign with `reason: "release"`, and the unassign
+                          button is in the same row. Only ANSWER records something no
+                          routing control can: what the person actually said.
+
+                          What is lost is provenance — that the HOLDER named the next
+                          owner, and who said so. Small, and recoverable in the answer
+                          note. The redirect ACTION and the referral row stay, so a
+                          redirect already on a blob still renders and can be confirmed;
+                          nothing that exists stops working. */}
+                      {(["answer"] as const).map((k) => (
                         <button key={k} type="button" className="v3ib-tab" aria-pressed={openExit === k}
                           aria-label={spoken(`Record ${a.owner.label}'s ${k} for: ${Q(a.about).question}`)}
                           onClick={() => setExit((s) => ({ ...s, [a.about]: openExit === k ? null : k }))}>{k}</button>
@@ -1193,25 +1310,8 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                       <span className="v3ib-form-note">Operator-entered · attributed to who said it · <b>not</b> counted as heard.</span>
                     </span>
                   ) : null}
-                  {!cap && !ref && openExit === "redirect" ? (
-                    <span className="v3ib-form">
-                      <span className="v3ib-form-r">
-                        <input aria-label={spoken(`Who ${a.owner.label} said to ask instead`)} placeholder="They said, ask… (target owner)" value={f2[a.about] ?? ""} onChange={(e) => setF2((s) => ({ ...s, [a.about]: e.target.value }))} />
-                        <input aria-label={spoken(`Name of the person who gave the referral, for: ${Q(a.about).question}`)} placeholder="Said by (name)" value={f1[a.about] ?? ""} onChange={(e) => setF1((s) => ({ ...s, [a.about]: e.target.value }))} />
-                        <button type="button" className="v3ib-btn" disabled={busy === a.about || !f2[a.about]?.trim() || !f1[a.about]?.trim()} onClick={() => void run(a.about, { kind: "redirect", about: a.about, slot: slotOf(a.about), toOwner: f2[a.about].trim(), saidByName: f1[a.about].trim(), by, at: nowISO() })} aria-label={spoken(`Record the redirect for: ${Q(a.about).question}`)}>record redirect</button>
-                      </span>
-                      <span className="v3ib-form-note">A referral, not an answer. You confirm it with one tap. Not counted as heard.</span>
-                    </span>
-                  ) : null}
-                  {!cap && !ref && openExit === "release" ? (
-                    <span className="v3ib-form">
-                      <span className="v3ib-form-r">
-                        <input aria-label={spoken(`Name of the person releasing: ${Q(a.about).question}`)} placeholder="Released by (name)" value={f1[a.about] ?? ""} onChange={(e) => setF1((s) => ({ ...s, [a.about]: e.target.value }))} />
-                        <button type="button" className="v3ib-btn" disabled={busy === a.about} onClick={() => void run(a.about, { kind: "unassign", about: a.about, reason: "release", saidByName: f1[a.about]?.trim() || undefined, by, at: nowISO() })} aria-label={spoken(`Record the release of: ${Q(a.about).question} — back to unowned`)}>record release<span aria-hidden="true"> → </span>back to unowned</button>
-                      </span>
-                      <span className="v3ib-form-note">&ldquo;Not mine&rdquo; — returns to the unowned queue. The honest signal routing was wrong. Not counted as heard.</span>
-                    </span>
-                  ) : null}
+                  {/* The redirect FORM is gone with its tab — see the note above. */}
+                  {/* The release FORM is gone with its tab — see the note above. */}
                 </li>
               );
             })}
@@ -1221,7 +1321,7 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
 
       {/* DECIDED trace */}
       {ledger.decideFates.length ? (
-        <IbSection id="ib-decided" verb="Decided" count={ledger.decideFates.length} unit="unknown"
+        <IbSection id="ib-decided" kind="decide" verb="Decided" count={ledger.decideFates.length} unit="unknown"
           tag={<SourceTag source="dispositioned" />}
           lead={<>Questions the operator ruled on rather than answered — an honest trace, kept
             because a thing ruled out of scope must not read as a thing nobody got to.</>}>
