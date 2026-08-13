@@ -30,3 +30,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run validate
+      # THE EDGE FUNCTIONS ARE DENO AND `npm test` DOES NOT SEE THEM. They were never
+      # type-checked at all until 2026-08-13, and the first check found real errors in
+      # both public-facing ones. Kept OUT of `validate` on purpose: a new engineer must
+      # not need a second runtime installed to run the project's gate. CI has both, so
+      # CI runs both.
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: npm run check:edge

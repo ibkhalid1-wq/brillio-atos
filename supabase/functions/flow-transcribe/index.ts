@@ -62,7 +62,11 @@ Deno.serve(async (request) => {
     : `recording.${mime.split("/")[1]?.split(";")[0] || "webm"}`;
 
   const form = new FormData();
-  form.append("file", new Blob([bytes], { type: mime }), filename);
+  // `bytes` is a Uint8Array over an ArrayBufferLike, which newer TS lib definitions
+  // will not accept as a BlobPart because that union includes SharedArrayBuffer.
+  // Copying into a fresh view is the narrowing rather than a cast — it is guaranteed
+  // ArrayBuffer-backed, and an audio upload copies its buffer either way.
+  form.append("file", new Blob([new Uint8Array(bytes)], { type: mime }), filename);
   form.append("model", "whisper-1");
   form.append("response_format", "json");
 

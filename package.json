@@ -13,6 +13,7 @@
     "preview": "vite preview",
     "lint": "eslint src --ext js,jsx,ts,tsx --report-unused-disable-directives --max-warnings 0",
     "typecheck": "tsc --noEmit",
+    "check:edge": "deno check supabase/functions/flow-portal/index.ts supabase/functions/flow-transcribe/index.ts",
     "validate": "npm run typecheck && npm run lint && npm run build && npm run test",
     "test": "vitest run",
     "claims:regen": "vite-node scripts/claims/regen.ts",

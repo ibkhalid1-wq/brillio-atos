@@ -42,8 +42,13 @@ not a known state. Node 20 or newer (`.nvmrc` pins what CI uses).
 - **Supabase project**: `vudqrrqpipnkxzxslbim` (auth, Postgres, Realtime, Edge Functions).
 - Client env: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (a publishable `sb_…` key; safe in the client).
 - Deploy an edge function: `npx supabase functions deploy <name>` (add `--no-verify-jwt`
-  **only** for `flow-portal` — it is the public, token-gated face). Edge functions are
-  Deno and are **not** exercised by `npm test`; `run-agent` is at **v221** deployed.
+  **only** for `flow-portal` — it is the public, token-gated face). `run-agent` is at
+  **v221** deployed.
+- **Edge functions are Deno; `npm test` does not see them.** `npm run check:edge`
+  type-checks the two public-facing ones, and CI runs it after `validate`. It is
+  deliberately NOT in `validate` — you should not need a second runtime to run the
+  project's own gate. Behind a TLS-intercepting proxy, Deno needs
+  `DENO_TLS_CA_STORE=system` or its remote imports fail with `UnknownIssuer`.
 
 ## Architecture in five rules
 
@@ -274,6 +279,18 @@ assert on the running board, and put the number in the commit.
    anyone who has already cloned, so it is flagged, not done.
 9. **Per-attribute evidence covers attributes only.** Atlas STEP questions still say
    "no source on record"; the evidence work did not reach the atlas side.
+10. **`run-agent/index.ts` does not type-check: 273 errors** (`deno check
+    supabase/functions/run-agent/index.ts`). Measured 2026-08-13, the first time any
+    edge code was checked at all. Shape: 126 × TS2339 (property missing on type) and
+    107 × TS18047 (possibly null) — the signature of untyped traversal over the JSON
+    blob. Most is noise; the TS18047s are where a real crash would hide. Not in
+    `check:edge` until they are cleared, so the gate stays honest rather than
+    aspirational. The two public-facing functions ARE clean and gated.
+11. **The stakeholder write path is half-built.** `src/v3/lib/ledger/stakeholderAnswers.ts`
+    turns a per-locus answer into an attributed closure (locus closes, `heard` ticks,
+    the in-flight row clears — all guarded). The TRANSPORT is not built: `FlowRespond`
+    still collects one block of free text and `flow-portal` still accepts `answers` as
+    a single string. The shape they must produce is in that module's header.
 
 ## What is NOT wired (do not mistake these for bugs)
 
