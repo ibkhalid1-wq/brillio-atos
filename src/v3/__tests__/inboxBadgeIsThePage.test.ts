@@ -28,7 +28,9 @@
  *
  * THE ONE DELIBERATE DIVERGENCE, encoded rather than assumed away:
  * Sessions collapses ELEVEN pair rows into ONE summary line reading "11 seams, 49
- * questions", and the badge term is the 49. So `pageWaiting` reads the sessions term off
+ * questions" — that collapse and its term were REMOVED on 2026-08-13 when seam
+ * questions began going out on both owners' links. Kept here as the reason the
+ * divergence note below reads the way it does. Historically: `pageWaiting` read it off
  * that summary LINE — the number the operator's eye actually lands on — instead of
  * counting `<li>`s, and a separate test expands the disclosure and proves the 49 is the
  * eleven rows added up. A second divergence, the decided trace, is subtracted by name:
@@ -219,22 +221,9 @@ const n = (sel: string) => host.querySelectorAll(sel).length;
 /** THE BADGE — the integer on the rail's Inbox item. Absent === 0 (it hides at 0). */
 const badge = (): number => Number(host.querySelector(".v3fs-dock-n")?.textContent ?? 0);
 /** The Sessions summary line's question total, read as an operator reads it. */
-const sessionsLine = (): number => {
-  const line = host.querySelector("#ib-sessions button[aria-expanded]");
-  if (!line) return 0;                                      // 0 seams → the section is hidden
-  // The count is the header's COUNT BADGE now (2026-08-12): every Inbox section grew
-  // the same header, so the number that used to be prose inside each section's lead
-  // is one element in one place. Read the badge, not the sentence around it — the
-  // sentence is free to change wording and this must not care.
-  const badge = line.querySelector(".v3ib-n");
-  if (!badge) throw new Error(`no count badge on the sessions header: ${line.textContent}`);
-  // Sessions counts TWO things — seams and the questions across them — so its badge
-  // states both ("4 seams, 25 questions"). This guard is about the QUESTION total,
-  // which is the number the rows below add up to.
-  const m = /(\d+)\s+questions?/.exec(badge.textContent ?? "");
-  if (!m) throw new Error(`no question total on the sessions badge: ${badge.textContent}`);
-  return Number(m[1]);
-};
+/* `sessionsLine` is gone with the section it read (2026-08-13): a jointly-owned
+   question goes out on both owners' links, so nothing about a seam waits on the
+   operator and nothing about it is drawn on this page. */
 
 /**
  * WHAT THE PAGE IS SHOWING, counted off the DOM — one entry per thing an operator can see
@@ -244,7 +233,6 @@ const sessionsLine = (): number => {
 const page = () => {
   const record = n("section.v3fs-inbox article.v3fs-dec");   // decisions/portal/approvals/disputes/roles/coverage/exceptions
   const assign = n("#ib-assign li.v3ib-grp-q");              // per QUESTION, not per element group
-  const sessions = sessionsLine();                           // the collapsed line's own number — see the file header
   const adjudicate = n("#ib-adjudicate li.v3ib-row");
   const pinned = n("#ib-pinned li.v3ib-row");
   const inFlight = n("#ib-inflight li.v3ib-row");
@@ -254,11 +242,14 @@ const page = () => {
   const chase = n(".v3ib-dict-ask, .v3ib-dict-residue");
   const decided = n("li.v3ib-row.is-decided");               // HISTORY — drawn, never waiting
   return {
-    record, assign, sessions, adjudicate, pinned, inFlight, chase, decided,
+    record, assign, adjudicate, pinned, inFlight, chase, decided,
     /** what the badge should equal */
-    waiting: record + assign + sessions + adjudicate + pinned + inFlight + chase,
+    // SESSIONS IS NOT A TERM ANY MORE (2026-08-13). A jointly-owned question goes
+    // out on BOTH owners' links, so the section that asked the operator to propose a
+    // meeting is gone and a seam is no longer something waiting on them.
+    waiting: record + assign + adjudicate + pinned + inFlight + chase,
     /** every row on the page, the trace included */
-    rendered: record + assign + sessions + adjudicate + pinned + inFlight + chase + decided,
+    rendered: record + assign + adjudicate + pinned + inFlight + chase + decided,
   };
 };
 
@@ -300,7 +291,7 @@ describe("the rail badge equals the rows the Inbox page renders", () => {
     mount(MIXED);
     const p = page();
     expect(p.record).toBe(3);                                // approval + interview + unresolved role
-    expect(p.sessions).toBeGreaterThan(0);                   // and the ledger half is still there
+    expect(p.assign + p.chase).toBeGreaterThan(0);           // and the ledger half is still there
     expect(p.chase).toBeGreaterThan(0);
     expect(badge()).toBe(p.waiting);
     // the record section's own "N items" header is the same three rows
@@ -341,84 +332,10 @@ describe("the rail badge equals the rows the Inbox page renders", () => {
   });
 });
 
-describe("the ONE collapsed section — the summary line IS its rows", () => {
-  it("Sessions shows one line for many pairs, and its number is those pairs added up", () => {
-    // The only place the badge's term and the visible row count legitimately differ.
-    // It is defensible because the number is on screen; this proves the number is true.
-    mount(LEDGER_ONLY);
-    const collapsed = sessionsLine();
-    const disclosure = host.querySelector("#ib-sessions button[aria-expanded]") as HTMLButtonElement;
-    expect(disclosure.getAttribute("aria-expanded")).toBe("false");
-    expect(n("#ib-sessions li.v3ib-seam")).toBe(0);          // collapsed: ONE line, no rows
-    act(() => disclosure.click());
-    const rows = [...host.querySelectorAll("#ib-sessions li.v3ib-seam")];
-    expect(rows.length).toBeGreaterThan(1);                  // many pairs behind that one line
-    expect(rows.length).toBeLessThan(collapsed);             // …carrying more questions than pairs
-    const perPair = rows.map((li) => {
-      const m = /(\d+)\s+joint question/.exec(li.textContent ?? "");
-      if (!m) throw new Error(`no per-pair count: ${li.textContent}`);
-      return Number(m[1]);
-    });
-    expect(perPair.reduce((a, b) => a + b, 0)).toBe(collapsed);
-    // and expanding moved nothing: the badge still equals the page
-    expect(badge()).toBe(page().waiting);
-  });
+/* The collapsed Sessions section and its cases were removed on 2026-08-13: seam
+   questions go out on both owners' links, so the section that collapsed them is gone
+   and there is no summary line left to check against its rows. */
 
-  /**
-   * …AND THE NUMBER IS THE RIGHT ONE. The assertion above compares the summary against its
-   * own rows, and both are rendered from `abouts.length` — so it holds for ANY `abouts`,
-   * including a wrong one. This is the half that was missing: the same on-screen number,
-   * checked against a total recomputed from the queue items, which never touches `abouts`.
-   * Wrong SET (a typing question kept, a frozen locus counted, a seam dropped) now fails
-   * here even though the summary and its rows still agree with each other.
-   */
-  it("and that number holds every joint question this store can see, and nothing frozen", () => {
-    // WHY THIS IS NOT AN EQUALITY ANY MORE. It was `sessionsLine() === witness`, and
-    // that held while both sides excluded typing questions. Since a seam began
-    // outranking the typing route (2026-08-13) the page's sessions figure includes
-    // jointly-owned TYPING questions — correctly — and this store cannot count those
-    // to the same total, because the page renders a ledger with the DICTIONARY MERGE
-    // applied and this one is `migrate` alone: the dictionary has closed some of them
-    // and there is no way here to know which.
-    //
-    // Re-stating it as equality by picking whichever number matched would be tuning
-    // the guard to the result. So it asserts the two things that remain exactly true
-    // and still discriminate: nothing that must be counted is missing, and nothing
-    // frozen is counted. The seam ROUTING itself is proved exactly, on a fixture built
-    // for it, in `seamOutranksTyping.test.ts`.
-    mount(LEDGER_ONLY);
-    // the witness must be non-trivial, or this test passes by describing nothing
-    expect(jointQuestionsFromItems).toBeGreaterThan(0);
-    expect(sessionsLine(),
-      "a joint question this store can see is missing from the sessions figure")
-      .toBeGreaterThanOrEqual(jointQuestionsFromItems);
-    // …and a frozen locus is never in it: freezing removes a question from the
-    // conversation you could schedule, and counting it would offer a session over a
-    // question nobody may answer yet.
-    const frozenJoint = lailaQueue.items.filter((i) =>
-      i.owner.kind === "joint" && FROZEN_ABOUTS.has(i.about)).length;
-    expect(sessionsLine() + frozenJoint,
-      "the sessions figure swallowed a frozen locus")
-      .toBeLessThanOrEqual(lailaQueue.items.filter((i) => i.owner.kind === "joint").length + frozenJoint);
-
-    // expanded, the rows carry that same total — the disclosure renders zero rows while
-    // collapsed, so it has to be opened before the rows exist to be counted at all
-    const disclosure = host.querySelector("#ib-sessions button[aria-expanded]") as HTMLButtonElement;
-    act(() => disclosure.click());
-    const perPair = [...host.querySelectorAll("#ib-sessions li.v3ib-seam")].map((li) => {
-      const m = /(\d+)\s+joint question/.exec(li.textContent ?? "");
-      if (!m) throw new Error(`no per-pair count: ${li.textContent}`);
-      return Number(m[1]);
-    });
-    // THE SUMMARY IS ITS ROWS — page against page, which is what this block is named
-    // for and what is exactly checkable. Both numbers come from the rendered section,
-    // so a wrong SET still fails here: drop a pair, double-count one, or let a frozen
-    // locus through, and the badge stops equalling what is drawn beneath it.
-    expect(perPair.reduce((a, b) => a + b, 0)).toBe(sessionsLine());
-    // …and it is not vacuous: the section really did render more than one pair.
-    expect(perPair.length).toBeGreaterThan(1);
-  });
-});
 
 describe("D1 — approvals are counted unconditionally, so they render unconditionally", () => {
   it("an approval reply is drawn even when the record handler is missing", () => {
