@@ -39,7 +39,7 @@ import {
 } from "@/v3/components/flow/flowShellData";
 import {
   listOpenFlowDecisions, listFlowAttestations, describeDecisionChanges,
-  type FlowDecision, dedupeContradictionDecisions, plainDisputeSides } from "@/v3/components/flow/flowDecisions";
+  type FlowDecision, dedupeContradictionDecisions, plainDisputeSides, plainBand, withdrawNonClaimContradictions, isTableRowStatement } from "@/v3/components/flow/flowDecisions";
 import {
   listFlowTracks, trackAcceptance, trackPace,
 } from "@/v3/components/flow/flowTracks";
@@ -1040,7 +1040,13 @@ function DecisionCard({ program, decision, movementLabel, busy, onResolve }: {
   return (
     <article className="v3fs-dec">
       <div className="v3fs-dec-top">
-        <span className={`v3fs-tier t${decision.tier}`}>Tier {decision.tier}</span>
+        {/* "TIER 2" IS THE LEDGER'S WORD FOR HOW FAR AURA MAY GO ON ITS OWN, and it
+            was printed at an operator who has no reason to know the scale. Tier 2 =
+            Aura prepared it and stopped; tier 3 = it needs a decision above the
+            operator. Both say so. */}
+        <span className={`v3fs-tier t${decision.tier}`}>
+          {decision.tier === 3 ? "needs a sponsor call" : "needs your say-so"}
+        </span>
         {movementLabel ? <span className="v3fs-dec-mv">{movementLabel}</span> : null}
         {decision.createdAt ? <span className="v3fs-dec-when">{timeAgo(decision.createdAt)}</span> : null}
       </div>
@@ -1056,7 +1062,12 @@ function DecisionCard({ program, decision, movementLabel, busy, onResolve }: {
               the button keeps the words. */}
           <div className="v3fs-dec-rec-a">Recommended</div>
           {decision.recommendation.rationale ? <div className="v3fs-dec-rec-r">{decision.recommendation.rationale}</div> : null}
-          {decision.recommendation.band ? <div className="v3fs-dec-rec-b">{decision.recommendation.band}</div> : null}
+          {/* The band was printed verbatim in monospace — "proposal — additive, log
+              rows only" is how the ledger describes a write's blast radius, not how a
+              person asks "what could this break?". `plainBand` answers that question
+              in a sentence; anything it does not recognise passes through unchanged
+              rather than being half-translated. */}
+          {decision.recommendation.band ? <div className="v3fs-dec-rec-b">{plainBand(decision.recommendation.band)}</div> : null}
         </div>
       ) : null}
       {changes.length ? (
@@ -1078,8 +1089,12 @@ function DecisionCard({ program, decision, movementLabel, busy, onResolve }: {
         <button type="button" className="v3fs-btn pri" disabled={busy} onClick={() => onResolve(decision.id, "confirmed")}>
           {busy ? "Applying…" : decision.recommendation?.action || "Confirm"}
         </button>
+        {/* "Decline" names the gesture, not the outcome. On a card proposing to file a
+            disagreement, declining says THIS IS NOT ONE — and that is a judgement the
+            operator is making about the evidence, worth saying out loud. */}
         <button type="button" className="v3fs-btn" disabled={busy} onClick={() => onResolve(decision.id, "declined")}>
-          Decline
+          {decision.payload && Array.isArray(decision.payload.contradictionEntries)
+            ? "Not a disagreement" : "No, don’t"}
         </button>
       </div>
     </article>
@@ -1162,7 +1177,9 @@ function FlowToday({ program, ledger, programs, onSelectProgram, onResolveDecisi
     // and nothing stands. A false sentence on the record is worse than a vague one.
     const note = `— Settled by the operator, ${new Date().toISOString().slice(0, 10)} —\n`
       + `${plainDisputeSides(row.between)}, over: "${statement}"\n`
-      + `${SETTLED_VERDICT}. Recorded as evidence; the dispute is closed.`;
+      + `${isTableRowStatement(statement)
+        ? "Not a disagreement — this is one row of an uploaded spreadsheet (a gap, a count and a recommendation), not a claim anybody made"
+        : SETTLED_VERDICT}. Recorded as evidence; the dispute is closed.`;
     setDisputeBusy(statement);
     try {
       await onSaveInputs("listen", {
@@ -1452,7 +1469,7 @@ function FlowToday({ program, ledger, programs, onSelectProgram, onResolveDecisi
               worded differently is a different id, so the same finding arrived
               four times and the operator had to work out whether any of them
               differed. Everything else passes through untouched. */}
-          {dedupeContradictionDecisions(open).map((decision) => (
+          {withdrawNonClaimContradictions(dedupeContradictionDecisions(open)).map((decision) => (
             <DecisionCard key={decision.id} program={program} decision={decision} movementLabel={label(decision.movementId)}
               busy={busyId === decision.id} onResolve={resolve} />
           ))}
@@ -1541,11 +1558,11 @@ function FlowToday({ program, ledger, programs, onSelectProgram, onResolveDecisi
                     upload's filename, the word VS, and a camelCase field key, none
                     of which are things a person says. `plainDisputeSides` turns the
                     same two sides into the sentence they mean. */}
-                <span className="v3fs-dec-mv">{plainDisputeSides(row.between)}</span>
+                <span className="v3fs-dec-mv is-sentence">{plainDisputeSides(row.between)}</span>
                 {row.routedTo ? <span className="v3fs-tag ev">{row.routedTo} was asked to settle it</span> : null}
               </div>
               <p className="v3fs-dec-s">“{row.statement.trim().slice(0, 200)}{row.statement.trim().length > 200 ? "…" : ""}”</p>
-              <div className="v3fs-dec-rec-b">Settling it writes your decision to the record as evidence and closes the dispute. Or send it to whoever can settle it — it lands on their follow-up questions.</div>
+              <p className="v3fs-dec-s">Settling it writes your decision to the record as evidence and closes the dispute. Or send it to whoever can settle it — it lands on their follow-up questions.</p>
               <div className="v3fs-dec-cta">
                 {onSaveInputs ? (
                   <button type="button" className="v3fs-btn pri" disabled={disputeBusy === row.statement.trim()}
@@ -1554,7 +1571,17 @@ function FlowToday({ program, ledger, programs, onSelectProgram, onResolveDecisi
                         on every dispute whatever it was about — including disputes with no
                         account anywhere in them. `SETTLED_VERDICT` is the one wording, so
                         the button and the note it writes to the record cannot drift. */}
-                    {disputeBusy === row.statement.trim() ? "Settling…" : <><span aria-hidden="true">✓ </span>Settle it — {SETTLED_VERDICT}</>}
+                    {disputeBusy === row.statement.trim() ? "Settling…"
+                      : isTableRowStatement(row.statement)
+                        // A ROW ALREADY FILED. The detector stopped mining table rows,
+                        // and a card proposing to file one is withdrawn — but four were
+                        // filed before either rule existed, and they sit in the log
+                        // asking which side is right. Neither is: it is a gap, a count
+                        // and a recommendation from a spreadsheet. The settlement on
+                        // offer is the true one, and it uses the same path (the row
+                        // leaves the log, the reason lands on the record as evidence).
+                        ? <><span aria-hidden="true">✓ </span>Not a disagreement — it&rsquo;s a spreadsheet row</>
+                        : <><span aria-hidden="true">✓ </span>Settle it — {SETTLED_VERDICT}</>}
                   </button>
                 ) : null}
                 {onSaveInputs && people.length ? (

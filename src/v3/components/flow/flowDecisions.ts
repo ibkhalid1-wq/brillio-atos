@@ -160,6 +160,25 @@ export const contradictionKey = (statement: string): string =>
   statement.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
 /**
+ * THE BLAST RADIUS OF A WRITE, IN ENGLISH.
+ *
+ * `band` is how the ledger describes what a confirm can reach — "proposal —
+ * additive, log rows only" — and it was printed verbatim, in monospace, under a
+ * heading a person reads to answer one question: what could this break? These say
+ * that. A band this does not recognise passes through unchanged, because a
+ * half-translated warning is worse than an untranslated one.
+ */
+export function plainBand(band: string): string {
+  const b = band.trim().toLowerCase();
+  if (!b) return "";
+  if (b.includes("additive") && b.includes("log")) return "Only adds a row to the log. Nothing already written is changed.";
+  if (b.includes("additive")) return "Only adds to the record. Nothing already written is changed.";
+  if (b.includes("reversible")) return "Reversible — you can undo this.";
+  if (b.includes("irreversible")) return "Cannot be undone.";
+  return band;
+}
+
+/**
  * THE TWO SIDES OF A DISPUTE, IN ENGLISH.
  *
  * `between` is minted for the record — "Brillio_Opportunity_Clean_Schema -
@@ -199,6 +218,39 @@ function plainDisputeSide(side: string): string {
   return s;
 }
 
+
+/**
+ * A CARD THAT WOULD FILE A NON-STATEMENT IS WITHDRAWN.
+ *
+ * The detector stopped mining table rows on 2026-08-12 ("a table row is not a
+ * claim"), but a decision already on file keeps the statement it was minted with —
+ * so Laila New still offered "File 1 contradiction to the log" over
+ *
+ *   Audit/previous-value fields dropped · 9 · Use proper change-history tracking
+ *
+ * a gap, a COUNT and a recommendation from an uploaded sheet. Confirming it writes
+ * that into the contradiction log, where Listen's gate re-asks it until somebody
+ * resolves a dispute that was never had.
+ *
+ * The same rule, applied where stored decisions are read: three or more columns is a
+ * row, whether the columns are separated by tabs or by the " · " the extractor
+ * renders them as. Only cards whose contradictions are ALL rows are withdrawn — one
+ * real dispute in the payload keeps the card.
+ */
+const COLUMN_SPLIT = /\t| · /g;
+export const isTableRowStatement = (statement: string): boolean =>
+  (statement.match(COLUMN_SPLIT) ?? []).length >= 2;
+
+export function withdrawNonClaimContradictions<T extends { payload?: Record<string, unknown> | null }>(
+  decisions: readonly T[],
+): T[] {
+  return decisions.filter((d) => {
+    const entries = d.payload && Array.isArray(d.payload.contradictionEntries)
+      ? (d.payload.contradictionEntries as unknown[]) : null;
+    if (!entries || !entries.length) return true;
+    return !entries.every((e) => isTableRowStatement(String((e as { statement?: unknown })?.statement ?? "")));
+  });
+}
 
 /**
  * ONE CARD PER CONTRADICTION, whatever queued it.
