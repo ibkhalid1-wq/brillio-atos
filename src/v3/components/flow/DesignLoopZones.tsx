@@ -48,7 +48,6 @@
  * today. That 0 is marked provisional and named as UNKNOWN, never dressed up as
  * convergence the ledger does not have.
  */
-import { isDictionaryQuestion } from "@/v3/lib/ledger/projections";
 import { useMemo, useState, type ReactNode } from "react";
 import type { ProgramSummary } from "@/new/types";
 import type { LineBand, LineStation } from "@/v3/lib/lineModel";
@@ -60,8 +59,7 @@ import {
   type DesignVersion,
 } from "@/v3/components/flow/flowDesignRound";
 import {
-  OwnershipTag, ProvisionalMark,
-  ClaimStatus, SourceTag, DeviationMarker,
+  OwnershipTag, ClaimStatus, SourceTag, DeviationMarker,
 } from "@/v3/components/flow/studio/ledgerPrimitives";
 
 /**
@@ -100,7 +98,6 @@ interface Props {
   /** Go to Discover — where role-owned open questions are actually worked (links
    *  minted, per person). The band states the count and hands the work over; it does
    *  not run Listen's burn-down from inside the design-approval zone. */
-  onGoDiscover?: () => void;
   regenBusy: Record<string, boolean>;
   genBusy: Record<string, boolean>;
   /* NO `onQuestion`. A stakeholder QUESTIONS an operator decision, and a stakeholder is
@@ -625,7 +622,7 @@ function DesignRoundZone({ program, roster, locked, onMintReview, onDesignRound 
   );
 }
 
-export default function DesignLoopZones({ band, program, ledger, roster, onOpen, onRegen, onGenerate, onMintReview, onDesignRound, onGoDiscover, regenBusy, genBusy }: Props) {
+export default function DesignLoopZones({ band, program, ledger, roster, onOpen, onRegen, onGenerate, onMintReview, onDesignRound, regenBusy, genBusy }: Props) {
   const stationOf = (id: string) => band.stations.find((s) => s.id === id);
   const opStations = band.stations.filter((s) => ZONE_OF[s.id]?.zone === "operator");
   const validation = stationOf("validation");
@@ -634,27 +631,6 @@ export default function DesignLoopZones({ band, program, ledger, roster, onOpen,
   // burn-down, stated here as ONE line with a way to the surface that works it.
   // Assertions on record = the honest heard-count (0 stakeholder asserts in the
   // read-only model, which is UNKNOWN rather than none — see the foot).
-  /**
-   * THE QUESTIONS DISCOVER ACTUALLY SHOWS — the number and its name were both wrong.
-   *
-   * This was `blocking + answerable-without-a-meeting`, printed as "191 open
-   * questions … that is Listen's burn-down" beside a link to Discover. Two errors in
-   * one line:
-   *
-   *  · it is NOT the burn-down. The burn-down was 206 at the same moment; this is a
-   *    subset of it (owned, open, not blocked).
-   *  · it INCLUDED the ~121 typing questions that go to a data dictionary — which
-   *    Discover deliberately stopped showing on person cards, because nobody is
-   *    asked them. So it sent the operator to a surface holding ~70 of the 191.
-   *
-   * Counted through `isDictionaryQuestion`, the ledger's own definition of that
-   * bucket, so this cannot drift from the surface it points at. The dictionary
-   * questions are not hidden — they are named on their own line below, because a
-   * miss stays visible.
-   */
-  const stakeholderOpen = ledger.queue.items.filter((i) =>
-    (i.routing === "blocking" || i.routing === "answerable-without-a-meeting") && !isDictionaryQuestion(i)).length;
-  const dictionaryOpen = ledger.queue.items.filter(isDictionaryQuestion).length;
   const stakeholderAsserts = ledger.ownership.stakeholder; // 0 in-browser (write path gated)
   // A movement whose gate is recorded has its inputs frozen — the same rule the Kit
   // matrix reads. A locked Design Loop opens no round and records no verdict.
@@ -778,37 +754,19 @@ export default function DesignLoopZones({ band, program, ledger, roster, onOpen,
           (2) WHERE THE OTHER LOOP IS. Role-owned open questions are Listen's burn-down.
               One line, one number, one way there — not a second copy of Discover's own
               split, and not a second job for the approval zone above. */}
-      <div className="v3dl-foot">
-        {!ledger.devs.length || !stakeholderAsserts ? (
-          <p className="v3dl-quiet" role="note">
-            <span className="v3dl-quiet-l">Not drawn — nothing on record</span>
-            {!ledger.devs.length ? (
-              <span className="v3dl-quiet-i">the deviation register: no as-is to-be deviation on this programme</span>
-            ) : null}
-            {!stakeholderAsserts ? (
-              <span className="v3dl-quiet-i">
-                asserted intent and prototype refinements: the stakeholder write path is not wired in
-                the browser, so this reads unknown rather than none
-                {" "}<ProvisionalMark what="intent assertions and refinements arrive on the stakeholder write path (gated)" />
-              </span>
-            ) : null}
-          </p>
-        ) : null}
-        {stakeholderOpen > 0 ? (
-          <p className="v3dl-elsewhere">
-            <b>{stakeholderOpen}</b> open question{stakeholderOpen === 1 ? "" : "s"} are owned by someone
-            and waiting on them — Listen&rsquo;s work, not this design round.
-            {dictionaryOpen ? <> A further <b>{dictionaryOpen}</b> are answered by a data dictionary,
-            not by a person, and are worked in the Inbox.</> : null}
-            {onGoDiscover ? (
-              <button type="button" className="v3dl-golink" onClick={onGoDiscover}
-                title="Go to Discover — every owned question, per person, with the link that carries it">
-                work them in Discover<span aria-hidden="true"> →</span>
-              </button>
-            ) : null}
-          </p>
-        ) : null}
-      </div>
+      {/* THE FOOT IS GONE (on request, 2026-08-13). Two blocks lived here and
+          neither survived its own reason for existing:
+
+          · "Not drawn — nothing on record" reported ABSENCES — no deviation on this
+            programme, and a stakeholder write path that is gated. Both are true, and
+            neither is something the operator does anything about; a design round is
+            not the place to be told what a different, unbuilt path would carry.
+
+          · The "N open questions are owned by someone" line pointed at Listen's work
+            from inside the design round. It was already the wrong number twice over
+            (it counted the dictionary bucket and called itself the burn-down, both
+            fixed earlier today) — and the questions it names are on the person cards
+            in Discover, one click away, where they can actually be sent. */}
     </div>
   );
 }

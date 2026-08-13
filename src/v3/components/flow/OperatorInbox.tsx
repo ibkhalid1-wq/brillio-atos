@@ -1274,13 +1274,26 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                       <button type="button" className="v3ib-btn" disabled={busy === a.about} onClick={() => void run(a.about, assignAction(a.about, ref.toOwner))}>confirm<span aria-hidden="true"> → </span>reassign to {ref.toOwner}</button></span>
                   ) : (
                     <span className="v3ib-exits">
-                      <span className="v3ib-exits-l">awaiting {a.owner.label} — their exits, captured via the team for now:</span>
+                      <span className="v3ib-exits-l">awaiting {a.owner.label} — if they replied out of band, record it:</span>
                       {/* One set of these per in-flight question, and the visible word
                           ("answer") is the same on all of them — so the accessible name
                           names the QUESTION and the holder as well, or a screen-reader
                           user hears "answer button" twenty times with no way to tell
                           which question they are about to record against. */}
-                      {(["answer", "redirect", "release"] as const).map((k) => (
+                      {/* THREE EXITS BECAME ONE, because two of them were reassignment
+                          under other names. "Redirect" recorded "they said ask X
+                          instead" and then had the operator confirm it into an ASSIGN —
+                          which the select two lines up does in one step. "Release"
+                          wrote an unassign with `reason: "release"`, and the unassign
+                          button is in the same row. Only ANSWER records something no
+                          routing control can: what the person actually said.
+
+                          What is lost is provenance — that the HOLDER named the next
+                          owner, and who said so. Small, and recoverable in the answer
+                          note. The redirect ACTION and the referral row stay, so a
+                          redirect already on a blob still renders and can be confirmed;
+                          nothing that exists stops working. */}
+                      {(["answer"] as const).map((k) => (
                         <button key={k} type="button" className="v3ib-tab" aria-pressed={openExit === k}
                           aria-label={spoken(`Record ${a.owner.label}'s ${k} for: ${Q(a.about).question}`)}
                           onClick={() => setExit((s) => ({ ...s, [a.about]: openExit === k ? null : k }))}>{k}</button>
@@ -1297,25 +1310,8 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
                       <span className="v3ib-form-note">Operator-entered · attributed to who said it · <b>not</b> counted as heard.</span>
                     </span>
                   ) : null}
-                  {!cap && !ref && openExit === "redirect" ? (
-                    <span className="v3ib-form">
-                      <span className="v3ib-form-r">
-                        <input aria-label={spoken(`Who ${a.owner.label} said to ask instead`)} placeholder="They said, ask… (target owner)" value={f2[a.about] ?? ""} onChange={(e) => setF2((s) => ({ ...s, [a.about]: e.target.value }))} />
-                        <input aria-label={spoken(`Name of the person who gave the referral, for: ${Q(a.about).question}`)} placeholder="Said by (name)" value={f1[a.about] ?? ""} onChange={(e) => setF1((s) => ({ ...s, [a.about]: e.target.value }))} />
-                        <button type="button" className="v3ib-btn" disabled={busy === a.about || !f2[a.about]?.trim() || !f1[a.about]?.trim()} onClick={() => void run(a.about, { kind: "redirect", about: a.about, slot: slotOf(a.about), toOwner: f2[a.about].trim(), saidByName: f1[a.about].trim(), by, at: nowISO() })} aria-label={spoken(`Record the redirect for: ${Q(a.about).question}`)}>record redirect</button>
-                      </span>
-                      <span className="v3ib-form-note">A referral, not an answer. You confirm it with one tap. Not counted as heard.</span>
-                    </span>
-                  ) : null}
-                  {!cap && !ref && openExit === "release" ? (
-                    <span className="v3ib-form">
-                      <span className="v3ib-form-r">
-                        <input aria-label={spoken(`Name of the person releasing: ${Q(a.about).question}`)} placeholder="Released by (name)" value={f1[a.about] ?? ""} onChange={(e) => setF1((s) => ({ ...s, [a.about]: e.target.value }))} />
-                        <button type="button" className="v3ib-btn" disabled={busy === a.about} onClick={() => void run(a.about, { kind: "unassign", about: a.about, reason: "release", saidByName: f1[a.about]?.trim() || undefined, by, at: nowISO() })} aria-label={spoken(`Record the release of: ${Q(a.about).question} — back to unowned`)}>record release<span aria-hidden="true"> → </span>back to unowned</button>
-                      </span>
-                      <span className="v3ib-form-note">&ldquo;Not mine&rdquo; — returns to the unowned queue. The honest signal routing was wrong. Not counted as heard.</span>
-                    </span>
-                  ) : null}
+                  {/* The redirect FORM is gone with its tab — see the note above. */}
+                  {/* The release FORM is gone with its tab — see the note above. */}
                 </li>
               );
             })}

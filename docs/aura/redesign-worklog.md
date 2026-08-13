@@ -107,3 +107,20 @@ person cards now EXCEPT the readings with a single signal behind them: they have
 question anywhere, so they are currently invisible. That is a miss. It belongs on the
 Record — the surface for what was found and when — and it is recorded here rather
 than dropped quietly.
+
+## The design round no longer narrates absence
+
+The band's foot was removed on request (2026-08-13). Two blocks lived there:
+
+- **"Not drawn — nothing on record"** reported ABSENCES: no deviation on this
+  programme, and a stakeholder write path that is gated. Both true; neither is
+  something the operator acts on.
+- **"N open questions are owned by someone"** pointed at Listen's work from inside the
+  design round. It had been wrong twice over (counted the dictionary bucket, called
+  itself the burn-down) and both were fixed earlier the same day.
+
+**The trade, stated:** the band no longer distinguishes EMPTY from UNKNOWN on screen —
+0 deviations (a real zero) and 0 stakeholder assertions (a gated write path) now read
+the same, which is to say they do not read at all. The distinction still holds in the
+ledger and on the surfaces that act on it. Three guards that proved the distinction
+were retired with this note rather than weakened.

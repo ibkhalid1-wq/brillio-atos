@@ -271,25 +271,17 @@ describe("§1 CAPABILITY — every verb the band offered is still reachable", ()
     expect(host.querySelectorAll(".v3dr-person").length, "a participant was dropped by the stage sort").toBe(ROSTER.length);
   });
 
-  it("CAPABILITY work the role-owned open questions — the band hands them to Discover", () => {
-    // The routing-filtered drill list ("341 open unknowns owned by a role · 148 blocking
-    // · 193 answerable · 1 blocked") is Listen's burn-down and lived inside the design-
-    // APPROVAL zone, giving that zone two unrelated jobs. It is one line at the foot now,
-    // and the line's button lands on the tab where the questions are actually worked.
-    //
-    // On the REAL Laila ledger, so the count is a real one and the case cannot pass by
-    // the section being hidden at zero.
-    const program = laila();
-    mountShell(program);
-    const line = host.querySelector(".v3dl-elsewhere")!;
-    expect(line, "the owned-question line is missing on a programme that has hundreds").toBeTruthy();
-    expect(Number(line.querySelector("b")!.textContent)).toBeGreaterThan(0);
-    // …and the three-way split it used to print here is NOT reprinted
-    expect(line.textContent).not.toMatch(/blocking|answerable|blocked/);
-    act(() => { buttonSaying(line, "work them in Discover")!.click(); });
-    expect(host.querySelector('[aria-label="Discover"]'), "the band's link did not land on Discover").toBeTruthy();
-    expect(host.querySelector(".v3dl"), "the Work board is still drawn — the tab did not change").toBeNull();
-  });
+    /* RETIRED 2026-08-13, with the band's foot. It proved a real principle — a
+     vanished section is accounted for, and 0-deviations (a real zero) reads
+     differently from 0-stakeholder-assertions (a gated write path). The foot was
+     removed on request: it reported ABSENCES the operator does nothing about, and
+     its second line pointed at Listen's work from inside the design round.
+
+     THE TRADE IS REAL AND IS RECORDED: the band no longer distinguishes empty from
+     unknown on screen. The distinction still holds in the ledger and on the surfaces
+     that act on it; it is simply not narrated here any more. Worklog: "the design
+     round no longer narrates absence". */
+
 
   it("CAPABILITY read the precedence rules — they moved into disclosures, they were not deleted", () => {
     // "An asserted refinement wins over the operator's re-gen" is a RULE: true on every
@@ -409,7 +401,7 @@ const mountBandWith = (
     root.render(createElement(DesignLoopZones, {
       band: loop, program, ledger,
       roster: ROSTER.map((p) => ({ ...p, isRole: false })),
-      onOpen: () => {}, onGoDiscover: () => {},
+      onOpen: () => {},
       onDesignRound: async () => {},
       regenBusy: {}, genBusy: {},
       ...over,
@@ -436,22 +428,29 @@ describe("§3 EMPTY ≠ ZERO ≠ UNKNOWN — F2 applied to this band", () => {
     expect(zone.textContent).toContain("auto-tiered");
   });
 
-  it("a vanished section is ACCOUNTED FOR — 'nothing here yet' never reads as 'broken'", () => {
-    mountBand(seed(), ledgerWith([]));
-    const quiet = host.querySelector(".v3dl-quiet")!;
-    expect(quiet, "sections disappeared with no account of themselves").toBeTruthy();
-    expect(quiet.textContent).toContain("Not drawn");
-    expect(quiet.textContent).toContain("deviation register");
-  });
+    /* RETIRED 2026-08-13, with the band's foot. It proved a real principle — a
+     vanished section is accounted for, and 0-deviations (a real zero) reads
+     differently from 0-stakeholder-assertions (a gated write path). The foot was
+     removed on request: it reported ABSENCES the operator does nothing about, and
+     its second line pointed at Listen's work from inside the design round.
 
-  it("EMPTY vs UNKNOWN — 0 deviations is a real zero; 0 stakeholder assertions is a gated write path", () => {
-    mountBand(seed(), ledgerWith([]));
-    const quiet = host.querySelector(".v3dl-quiet")!.textContent ?? "";
-    expect(quiet).toContain("no as-is to-be deviation on this programme");   // a real zero
-    expect(quiet).toContain("unknown rather than none");                     // NOT a zero
-    expect(quiet).toContain("write path is not wired");
-    expect(host.querySelector(".v3dl-quiet .v3lc-prov"), "the unknown lost its provisional mark").toBeTruthy();
-  });
+     THE TRADE IS REAL AND IS RECORDED: the band no longer distinguishes empty from
+     unknown on screen. The distinction still holds in the ledger and on the surfaces
+     that act on it; it is simply not narrated here any more. Worklog: "the design
+     round no longer narrates absence". */
+
+
+    /* RETIRED 2026-08-13, with the band's foot. It proved a real principle — a
+     vanished section is accounted for, and 0-deviations (a real zero) reads
+     differently from 0-stakeholder-assertions (a gated write path). The foot was
+     removed on request: it reported ABSENCES the operator does nothing about, and
+     its second line pointed at Listen's work from inside the design round.
+
+     THE TRADE IS REAL AND IS RECORDED: the band no longer distinguishes empty from
+     unknown on screen. The distinction still holds in the ledger and on the surfaces
+     that act on it; it is simply not narrated here any more. Worklog: "the design
+     round no longer narrates absence". */
+
 
   it("with assertions on record the register's count is drawn, and the quiet line drops that item", () => {
     mountBand(seed(), ledgerWith(ONE_DEV, 7));
