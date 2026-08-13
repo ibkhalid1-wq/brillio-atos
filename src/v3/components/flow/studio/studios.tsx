@@ -586,8 +586,7 @@ function AgentifyStudio({ doc, onChange, program, gapRoutes, onRouteGap }: Studi
     () => (atlasWorkflows.length ? atlasWorkflows : asArray(doc.workflows)).map(asRecord),
     [atlasWorkflows, doc.workflows],
   );
-  const edDoc = (program ? readArtifactDoc(program, "experienceDesign") : null) as Record<string, unknown> | null;
-  const decisions = React.useMemo(() => readDecisions(doc, atlasDoc, edDoc), [doc, atlasDoc, edDoc]);
+  const decisions = React.useMemo(() => readDecisions(doc, atlasDoc), [doc, atlasDoc]);
   // THE ONE DOOR to this document. Every control on every row routes through it, and
   // it is shut when the artifact is locked or derived — belt to the braces of the
   // `disabled` on each control, so a locked Agentify cannot be written however the

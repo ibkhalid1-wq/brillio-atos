@@ -119,9 +119,7 @@ export function projectFutureState(program: ProgramSummary): FutureState {
   const atlasWfs = atlas && Array.isArray(atlas.workflows) ? atlas.workflows.filter(isRecord) : [];
   const agentifyWfs = agentify && Array.isArray(agentify.workflows) ? agentify.workflows.filter(isRecord) : [];
   const sourceWfs = atlasWfs.length ? atlasWfs : agentifyWfs;
-  // `design` carries the retired ⚡ marks; readDecisions folds them in as legacy so
-  // a team that made its calls on the old Experience Design surface keeps them.
-  const decisions = readDecisions(agentify, atlas, design);
+  const decisions = readDecisions(agentify, atlas);
   const isMode = (value: string): value is FutureMode =>
     value === "agentify" || value === "assist" || value === "keep";
   const workflows: FutureWorkflow[] = sourceWfs

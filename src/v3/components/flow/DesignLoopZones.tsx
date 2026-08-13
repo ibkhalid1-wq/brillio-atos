@@ -48,6 +48,7 @@
  * today. That 0 is marked provisional and named as UNKNOWN, never dressed up as
  * convergence the ledger does not have.
  */
+import { isDictionaryQuestion } from "@/v3/lib/ledger/projections";
 import { useMemo, useState, type ReactNode } from "react";
 import type { ProgramSummary } from "@/new/types";
 import type { LineBand, LineStation } from "@/v3/lib/lineModel";
@@ -633,7 +634,27 @@ export default function DesignLoopZones({ band, program, ledger, roster, onOpen,
   // burn-down, stated here as ONE line with a way to the surface that works it.
   // Assertions on record = the honest heard-count (0 stakeholder asserts in the
   // read-only model, which is UNKNOWN rather than none — see the foot).
-  const stakeholderOpen = ledger.queue.counts.blocking + ledger.queue.counts["answerable-without-a-meeting"];
+  /**
+   * THE QUESTIONS DISCOVER ACTUALLY SHOWS — the number and its name were both wrong.
+   *
+   * This was `blocking + answerable-without-a-meeting`, printed as "191 open
+   * questions … that is Listen's burn-down" beside a link to Discover. Two errors in
+   * one line:
+   *
+   *  · it is NOT the burn-down. The burn-down was 206 at the same moment; this is a
+   *    subset of it (owned, open, not blocked).
+   *  · it INCLUDED the ~121 typing questions that go to a data dictionary — which
+   *    Discover deliberately stopped showing on person cards, because nobody is
+   *    asked them. So it sent the operator to a surface holding ~70 of the 191.
+   *
+   * Counted through `isDictionaryQuestion`, the ledger's own definition of that
+   * bucket, so this cannot drift from the surface it points at. The dictionary
+   * questions are not hidden — they are named on their own line below, because a
+   * miss stays visible.
+   */
+  const stakeholderOpen = ledger.queue.items.filter((i) =>
+    (i.routing === "blocking" || i.routing === "answerable-without-a-meeting") && !isDictionaryQuestion(i)).length;
+  const dictionaryOpen = ledger.queue.items.filter(isDictionaryQuestion).length;
   const stakeholderAsserts = ledger.ownership.stakeholder; // 0 in-browser (write path gated)
   // A movement whose gate is recorded has its inputs frozen — the same rule the Kit
   // matrix reads. A locked Design Loop opens no round and records no verdict.
@@ -775,8 +796,10 @@ export default function DesignLoopZones({ band, program, ledger, roster, onOpen,
         ) : null}
         {stakeholderOpen > 0 ? (
           <p className="v3dl-elsewhere">
-            <b>{stakeholderOpen}</b> open questions are owned by a role and still unanswered — that is
-            Listen&rsquo;s burn-down, not this design round.
+            <b>{stakeholderOpen}</b> open question{stakeholderOpen === 1 ? "" : "s"} are owned by someone
+            and waiting on them — Listen&rsquo;s work, not this design round.
+            {dictionaryOpen ? <> A further <b>{dictionaryOpen}</b> are answered by a data dictionary,
+            not by a person, and are worked in the Inbox.</> : null}
             {onGoDiscover ? (
               <button type="button" className="v3dl-golink" onClick={onGoDiscover}
                 title="Go to Discover — every owned question, per person, with the link that carries it">
