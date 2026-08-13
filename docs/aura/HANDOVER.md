@@ -14,8 +14,8 @@ npm run validate        # typecheck → lint → build → test. All four must p
 npm run dev             # the app, on :5173
 ```
 
-`npm run validate` is the gate. It is green as of `de98fb1`; if it is red, that is a
-regression, not a known state.
+`npm run validate` is the gate. It is green as of `e80bdc7` (2718 tests, 176 files);
+if it is red, that is a regression, not a known state.
 
 **You will need your own `.env.local`** — it is deliberately not in the repo. Copy
 `.env.local.example` and fill in the Supabase URL and keys. Without it the app runs
@@ -106,9 +106,10 @@ surface reached seven button variants and six radii by drift, one component at a
 
 ## 5 · Known limits and open items
 
-1. **Four artifacts on Laila New carry `status: "stale"`** with fresh fingerprints —
-   Domain Ontology and three Envision artifacts. The edge fix that clears the flag is
-   deployed; each needs **one regeneration** to come unstuck.
+1. **Four artifacts on Laila New read stale** — Agentify, Architecture Strategy,
+   Experience Design, Agentic Blueprint. The edge fix that clears the flag is
+   deployed; each needs **one regeneration**, now reachable from the artifact's own
+   header on either surface (Work or Library).
 2. **The service-role key needs rotating.** It was exposed in a working session.
 3. **`any` in app code: 110 occurrences**, almost all in three pre-v3 files —
    `src/lib/adamDecisionUtils.ts` (56), `src/lib/adamCopilot.ts` (27),
