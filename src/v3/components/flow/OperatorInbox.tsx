@@ -111,8 +111,15 @@ export function SessionsSection({ sessionQueue, plannedPairs, busy, onPropose }:
     <IbSection id="ib-sessions" kind="schedule" verb="Sessions" count={questions} unit="question" defaultOpen={false}
       tag={<OwnershipTag cls="joint" showLabel={false} />}
       badge={<>{seams} seam{seams === 1 ? "" : "s"}, {questions} question{questions === 1 ? "" : "s"}</>}
-      lead={<>They need a joint conversation; scheduling gated.</>}
-      provisional="scheduling a real date is a gated write — 'propose a time' records the intent only">
+      /* THE SEAM IS A SIGHT, NOT A BLOCKER. These questions now go out on BOTH
+         owners' links like any other (useProgramLedger's loop) — they are not held
+         waiting on a room. If the two answer the same, it settles itself; if they
+         differ, the contradiction watcher files it and it comes back as something to
+         adjudicate. The session is the operator's option for a disagreement they can
+         see coming, not the only path through. */
+      lead={<>Owned by two functions at once, so both are asked. They settle themselves if
+        the answers agree — propose a session only if you would rather they talked first.</>}
+      provisional="proposing a session records the intent only — no date is booked, and nothing is waiting on one">
       {/* The per-pair rows, unchanged — pair, joint-question count,
           awaiting-a-date, propose-a-time. Joint ownership is AUTO-SET at seam detection
           (migrate: jointOrOwner), so there is nothing to "mark"; the only pending thing
@@ -125,7 +132,7 @@ export function SessionsSection({ sessionQueue, plannedPairs, busy, onPropose }:
                 <span className="v3ib-seam-h"><span aria-hidden="true">⋈</span> <span className="v3ib-sr">joint seam: </span>{pair}</span>
                 <span className="v3ib-seam-n">{abouts.length} joint question{abouts.length === 1 ? "" : "s"} · <span className="v3ib-nodate"><span aria-hidden="true">⏳ </span>awaiting a date</span></span>
                 {planned ? (
-                  <span className="v3ib-onplan">on the session plan · no date yet (gated)</span>
+                  <span className="v3ib-onplan">a session is proposed · no date yet (gated)</span>
                 ) : (
                   <button type="button" className="v3ib-btn ghost" disabled={busy === pair}
                     aria-label={spoken(`Propose a time for the ${pair} joint session (${abouts.length} question${abouts.length === 1 ? "" : "s"})`)}
@@ -563,6 +570,37 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
    * "review the 18" beside it expanded in place. Lifted here, the same rows render
    * wherever the questions are asked for.
    */
+  /**
+   * THE SUBJECT, SAID ONCE.
+   *
+   * Four questions about one atlas step each restated the whole step:
+   *
+   *   One step in the process is: "Review pipeline, forecast, and performance
+   *   reports; monitor commit, most likely, and stretch buckets." Who does this step?
+   *   One step in the process is: "Review pipeline, forecast, and performance
+   *   reports; monitor commit, most likely, and stretch buckets." What decides…?
+   *
+   * — the same forty words, four times, with six words of difference at the end. The
+   * operator reads the quote once and then hunts for the tail, which is the part they
+   * are actually answering.
+   *
+   * The shared opening is computed from the questions themselves rather than by
+   * reaching back into how they were phrased: whatever prefix a group has in common,
+   * up to the last sentence boundary, is the subject. A group of one keeps its
+   * question whole, and questions with nothing in common are simply not grouped — so
+   * this can shorten a row but never invent a heading that was not already there.
+   */
+  const sharedOpening = (questions: readonly string[]): string => {
+    if (questions.length < 2) return "";
+    let i = 0;
+    while (i < questions[0].length && questions.every((q) => q[i] === questions[0][i])) i += 1;
+    const common = questions[0].slice(0, i);
+    // Cut back to a sentence end, so the heading is a sentence and the tails are
+    // sentences — never a phrase severed mid-clause.
+    const cut = Math.max(common.lastIndexOf(". "), common.lastIndexOf('." '), common.lastIndexOf("? "));
+    return cut > 20 ? common.slice(0, cut + (common[cut] === "." ? 1 : 1) + (common[cut + 1] === '"' ? 1 : 0)).trim() : "";
+  };
+
   const QuestionList = ({ abouts, orphan, assignable }: {
     abouts: readonly string[];
     orphan?: boolean;
@@ -571,9 +609,24 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
      *  person's — the bulk act was the ONLY act, so routing them separately meant
      *  handing them all to somebody and reassigning six afterwards. */
     assignable?: boolean;
-  }) => (
+  }) => {
+    // Grouped by the element the questions are ABOUT, in the order they arrived, so a
+    // step's four questions sit together under one statement of the step.
+    const groups: Array<{ id: string; abouts: string[] }> = [];
+    for (const about of abouts) {
+      const id = elementIdOf(about);
+      const last = groups[groups.length - 1];
+      if (last && last.id === id) last.abouts.push(about);
+      else groups.push({ id, abouts: [about] });
+    }
+    return (
     <ul className="v3ib-qlist">
-      {abouts.map((about) => {
+      {groups.flatMap((group) => {
+      const opening = sharedOpening(group.abouts.map((a) => Q(a).question));
+      const head = opening ? (
+        <li key={`h:${group.id}`} className="v3ib-qsubject">{opening}</li>
+      ) : null;
+      return [head, ...group.abouts.map((about) => {
         const q = Q(about);
         // WHERE THE FIELD CAME FROM. A question about a field somebody named in an
         // interview and one about a field the model listed while summarising a
@@ -582,7 +635,11 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
         return (
           <li key={about} title={about}>
             <span className="v3ib-peek-tag">{q.typeTag}</span>
-            <span className="v3ib-peek-q">{q.question}</span>
+            <span className="v3ib-peek-q">
+              {opening && q.question.startsWith(opening)
+                ? q.question.slice(opening.length).trim()
+                : q.question}
+            </span>
             {src
               ? <span className="v3ib-peek-src" title={src}>from: {src}</span>
               : <span className="v3ib-peek-src none">no source on record</span>}
@@ -618,9 +675,11 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
             ) : null}
           </li>
         );
+      })];
       })}
     </ul>
-  );
+    );
+  };
 
   return (
     <div className="v3ib" aria-label="Operator inbox">

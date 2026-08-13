@@ -128,12 +128,17 @@ describe("Sessions — collapsed by default, one line", () => {
     });
   });
 
-  it("the collapsed line names the joint conversation and the gate", () => {
+  it("the collapsed line says who owes it and that nothing is waiting on a room", () => {
+    // It used to say "they need a joint conversation; scheduling gated", which was
+    // true of the old routing: a joint question reached nobody until the operator
+    // booked a meeting. Now it goes out on BOTH owners' links like any other, so the
+    // line says that, and the session is the option rather than the gate.
     mount();
     const text = host.querySelector("#ib-sessions")!.textContent ?? "";
     expect(text).toContain("Sessions");
-    expect(text).toContain("joint conversation");
-    expect(text).toContain("scheduling gated");
+    expect(text).toContain("Owned by two functions at once");
+    expect(text, "the session must read as optional, not as the way through")
+      .toContain("only if you would rather they talked first");
     // the gated-scheduling provisional mark survives the collapse
     expect(host.querySelector("#ib-sessions .v3lc-prov")).not.toBeNull();
   });
@@ -224,7 +229,7 @@ describe("Sessions — the expanded rows are unchanged", () => {
     toggle();
     const first = rows()[0];
     expect(first.className).toContain("planned");
-    expect(first.textContent).toContain("on the session plan");
+    expect(first.textContent).toContain("a session is proposed");
     expect(first.querySelector(".v3ib-btn")).toBeNull();
     expect([...host.querySelectorAll("li.v3ib-seam .v3ib-btn")]).toHaveLength(sessionQueue.length - 1);
   });

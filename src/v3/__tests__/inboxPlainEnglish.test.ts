@@ -375,3 +375,42 @@ describe("Discover reads and the Inbox acts — one system, one boundary", () =>
       .toContain("if (queue.rendered === 0) return null;");
   });
 });
+
+describe("a question list states its subject once", () => {
+  /**
+   * "repeating". Four questions about one atlas step each restated the whole step:
+   *
+   *   One step in the process is: "Review pipeline, forecast, and performance
+   *   reports; monitor commit, most likely, and stretch buckets." Who does this step?
+   *   One step in the process is: "Review pipeline, forecast, and performance
+   *   reports; monitor commit, most likely, and stretch buckets." What decides…?
+   *
+   * — the same forty words, four times, with six words of difference at the end.
+   */
+  const inbox = SRC("OperatorInbox.tsx");
+
+  it("groups the rows by the element they are about", () => {
+    // MUTATION: drop the grouping and map `abouts` flat → RED.
+    expect(inbox).toContain("const groups: Array<{ id: string; abouts: string[] }> = [];");
+    expect(inbox).toContain("const id = elementIdOf(about);");
+  });
+
+  it("derives the shared opening from the questions, not from how they were phrased", () => {
+    // It could have re-implemented renderQuestion's prefixes and drifted from them
+    // the first time one changed. Whatever the questions actually share is the
+    // subject, so this can shorten a row but never invent a heading.
+    expect(inbox).toContain("const sharedOpening = (questions: readonly string[]): string =>");
+    expect(inbox, "a group of one has nothing to share and keeps its question whole")
+      .toContain("if (questions.length < 2) return \"\";");
+  });
+
+  it("cuts the heading at a sentence end, never mid-clause", () => {
+    expect(inbox).toContain('common.lastIndexOf(". ")');
+    expect(inbox).toContain("cut > 20 ?");
+  });
+
+  it("and the row prints only what is left, when there is a shared opening", () => {
+    // MUTATION: always print `q.question` → RED, and the wall of repetition is back.
+    expect(inbox).toContain("q.question.slice(opening.length).trim()");
+  });
+});
