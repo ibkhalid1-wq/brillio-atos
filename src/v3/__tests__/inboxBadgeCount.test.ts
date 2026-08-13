@@ -128,10 +128,11 @@ describe("operatorQueueCounts — every rendered section is a term", () => {
   });
 
   it("every WAITING section is wired: one item in any one of them lifts the badge off 0", () => {
-    // `sessionQueue` is deliberately absent from the cases below. It is no longer a
-    // waiting section: a jointly-owned question goes out on BOTH owners' links, so a
-    // seam is a fact about the board rather than a decision waiting on the operator.
-    // Its own case — that it is read but never summed — is directly above.
+    // `sessionQueue` and `assignments` are deliberately absent from the cases below.
+    // Neither is a waiting section any more: a jointly-owned question goes out on
+    // BOTH owners' links, and an in-flight question is with the person who holds it
+    // — both are facts about the board rather than decisions waiting on the
+    // operator. Their own cases (read, drawn, never summed) are above and below.
     // One item per section, each the shape that section renders from. Laila's own
     // assign queue is empty (its open unknowns are owned or typing), so the assign
     // case borrows a real queue item rather than inventing one. `decideFates` is NOT
@@ -140,16 +141,30 @@ describe("operatorQueueCounts — every rendered section is a term", () => {
       ["assignQueue", { ...NO_LEDGER_ITEMS, assignQueue: queue.items.slice(0, 1) }, "assign"],
       ["conflicts", { ...NO_LEDGER_ITEMS, conflicts: [{ about: "el:attr:case.status?dataType", slot: "dataType", count: 2 }] }, "adjudicate"],
       ["pinConflicts", { ...NO_LEDGER_ITEMS, pinConflicts: [{ about: "b", slot: "phase", pinned: "Ada", derived: "Ops", pin: { kind: "pin", about: "b", slot: "phase", owner: { label: "Ada", isRole: false }, sentAt: AT, by: "op", at: AT } }] }, "pinned"],
-      ["assignments", { ...NO_LEDGER_ITEMS, assignments: [{ kind: "assign", about: "a", slot: "phase", owner: { label: "Ops", isRole: true }, by: "op", at: AT }] }, "inFlight"],
       ["artifactAsks", { ...NO_LEDGER_ITEMS, artifactAsks }, "chase"],
     ];
     for (const [section, reads, field] of cases) {
       const c = operatorQueueCounts(reads);
       expect(c[field], `${String(section)} does not reach the badge`).toBeGreaterThan(0);
-      expect(c.total).toBe(c.assign + c.adjudicate + c.pinned + c.inFlight + c.chase);
-      expect(c.rendered).toBe(c.total + c.decided);
+      expect(c.total).toBe(c.assign + c.adjudicate + c.pinned + c.chase);
+      expect(c.rendered).toBe(c.total + c.sessionQuestions + c.inFlight + c.decided);
       expect(inboxWaitingCount(bare, reads)).toBe(c.total);
     }
+  });
+
+  it("an IN-FLIGHT question is drawn but never waiting — it is with its owner", () => {
+    // Reported twice from the running board ("showing in inbox", then "still showing
+    // up in inbox"): eight rows in the operator's queue that asked them for nothing.
+    // Reassigning is a correction they may choose to make, not one the board holds.
+    // The same reasoning that took the seam out of the badge, applied to the section
+    // beside it. MUTATION: add `inFlight` back into `total` → RED on both lines.
+    const IN_FLIGHT: OperatorQueueReads = { ...NO_LEDGER_ITEMS,
+      assignments: [{ kind: "assign", about: "a", slot: "phase", owner: { label: "Ops", isRole: true }, by: "op", at: AT }] };
+    const c = operatorQueueCounts(IN_FLIGHT);
+    expect(c.inFlight, "the section lost its item").toBe(1);   // still READ
+    expect(c.total, "an in-flight question is back in the badge").toBe(0);
+    expect(c.rendered, "…and the page stopped drawing it").toBe(1);
+    expect(inboxWaitingCount(bare, IN_FLIGHT)).toBe(0);
   });
 
   it("the DECIDED trace is rendered but never waiting — the badge can return to 0", () => {

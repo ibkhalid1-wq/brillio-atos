@@ -1421,13 +1421,26 @@ export default function OperatorInbox({ ledger, candidates, by, onCommit, onAskM
       </IbSection>
       )}
 
-      {/* OWNED & IN-FLIGHT → reassign / unassign + the stakeholder's three exits */}
-      {/* EMPTY-STATE: 0 in-flight → section HIDDEN (by request, 2026-08-10). */}
+      {/* OWNED & IN-FLIGHT → reassign / unassign + the stakeholder's three exits.
+          EMPTY-STATE: 0 in-flight → section HIDDEN (by request, 2026-08-10).
+
+          NOT A QUEUE — A READING, so it opens closed and does not burn in the badge.
+          Every question here is with the person who holds it and is waiting on THEM;
+          it is already listed on Discover under their name, with their link. Two
+          reports ("showing in inbox", then "still showing up in inbox") against eight
+          rows that asked the operator for nothing. Sessions took the same treatment
+          for the same reason on 2026-08-10 — see SessionsSection.
+
+          It stays on this surface, collapsed, because reassign and unassign ARE
+          operator moves and Discover does not carry operator moves. One click in is
+          the difference between a control that is quiet and a control that is gone. */}
       {ledger.assignments.length === 0 ? null : (
-      <IbSection id="ib-inflight" className="is-gated" kind="assign" verb="Owned &amp; in-flight" count={ledger.assignments.length} unit="question"
+      <IbSection id="ib-inflight" className="is-gated" kind="assign" verb="Owned &amp; in-flight" count={ledger.assignments.length} unit="question" defaultOpen={false}
         tag={<OwnershipTag cls="stakeholder" showLabel={false} />}
-        lead={<>Reassign if you routed wrong, or record the holder&rsquo;s exit. Operator-entered
-          captures: <b>{ledger.captures.length}</b> — <b>not</b> counted as heard.</>}
+        lead={<>With their owners and waiting on them — nothing here needs you. They are
+          listed on Discover under whoever holds them; open this only to fix a routing you
+          got wrong. Operator-entered captures: <b>{ledger.captures.length}</b> —
+          {" "}<b>not</b> counted as heard.</>}
         provisional="only a stakeholder ANSWER through the system ticks heard — gated">
           <ul className="v3ib-list">
             {ledger.assignments.map((a) => {

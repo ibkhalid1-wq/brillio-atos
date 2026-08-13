@@ -207,7 +207,12 @@ describe("L3 — the decided trace is history, not a queue", () => {
     const base = { ...emptyLedger(createLedgerStore()), sessionQueue };
     const withTrace = operatorQueueCounts({ ...base, decideFates: [decided, decided] });
     expect(withTrace.total).toBe(operatorQueueCounts(base).total);
-    expect(withTrace.rendered).toBe(withTrace.total + 2);
+    // `rendered` is every section that DRAWS, and the seam section draws — it was
+    // outside this sum while still on the page, so a programme holding nothing but
+    // seams rendered an empty Inbox (`rendered === 0` is the page's own null-render).
+    // Caught on 2026-08-13 while giving in-flight the same de-badging.
+    expect(withTrace.rendered).toBe(withTrace.total + withTrace.sessionQuestions + 2);
+    expect(withTrace.sessionQuestions, "the fixture stopped carrying a seam").toBeGreaterThan(0);
   });
 });
 

@@ -118,7 +118,22 @@ export interface OperatorQueueCounts {
   adjudicate: number;
   /** pinned questions a re-derivation wants to move — an operator decision */
   pinned: number;
-  /** questions currently owned through an assignment */
+  /**
+   * QUESTIONS CURRENTLY OWNED THROUGH AN ASSIGNMENT — and, like `sessionQuestions`,
+   * no longer a term in the badge.
+   *
+   * These are waiting on the STAKEHOLDER, not the operator. The section's own lead
+   * says as much — "reassign if you routed wrong, or record the holder's exit" —
+   * and both of those are CORRECTIONS the operator may choose to make, not decisions
+   * the board is holding for them. Every one of these questions is already on
+   * Discover under the person who holds it, which is the surface for who owes what.
+   *
+   * Reported twice from the running board: "showing in inbox" and then "still
+   * showing up in inbox", against a section of eight rows that needed nothing.
+   *
+   * Kept as a READING (and still in `rendered`): the operator has to be able to fix
+   * a bad routing, so the section stays, collapsed, with its controls one click in.
+   */
   inFlight: number;
   /** dictionary asks still owed, plus ONE for the unattributed residue when it
    *  carries weight (the Inbox draws that residue as a single row, not per locus) */
@@ -147,11 +162,18 @@ export function operatorQueueCounts(ledger: OperatorQueueReads): OperatorQueueCo
   const inFlight = ledger.assignments.length;
   const chase = asksNeedingChase(ledger.artifactAsks).length + (ledger.artifactAsks.unattributed.weight ? 1 : 0);
   const decided = ledger.decideFates.length;
-  // `sessionQuestions` is deliberately NOT summed: see the field's own note. Both
-  // owners are asked directly, so a seam is a fact about the board, not a decision
-  // waiting on the operator.
-  const total = assign + adjudicate + pinned + inFlight + chase;
-  return { assign, sessionQuestions, adjudicate, pinned, inFlight, chase, decided, total, rendered: total + decided };
+  // `sessionQuestions` and `inFlight` are deliberately NOT summed: see each field's
+  // own note. Both owners of a seam are asked directly, and an in-flight question is
+  // waiting on the person who holds it — both are facts about the board, not
+  // decisions waiting on the operator. Both are still drawn, so both are in
+  // `rendered`; neither burns in the badge.
+  const total = assign + adjudicate + pinned + chase;
+  // RENDERED IS EVERY SECTION THAT DRAWS, or `rendered === 0` silences a page that
+  // still has content on it. `sessionQuestions` was already outside this sum while
+  // its section was still drawn — so a programme holding nothing but seams rendered
+  // an empty Inbox. Caught while giving `inFlight` the same de-badging.
+  return { assign, sessionQuestions, adjudicate, pinned, inFlight, chase, decided,
+    total, rendered: total + sessionQuestions + inFlight + decided };
 }
 
 /** The one integer a caller that only wants the size of the queue should read. */
