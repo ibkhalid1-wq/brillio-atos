@@ -44,7 +44,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useProgramLedger } from "@/v3/lib/ledger/useProgramLedger";
 import { useOperatorCommits } from "@/v3/lib/ledger/useOperatorCommits";
 import { pinsForSend } from "@/v3/lib/ledger/operatorActions";
-import { HeardReadout, ConvergenceReadout, ProvisionalMark, ClaimStatus, SourceTag } from "@/v3/components/flow/studio/ledgerPrimitives";
+import { ProvisionalMark, ClaimStatus, SourceTag } from "@/v3/components/flow/studio/ledgerPrimitives";
 import DesignLoopZones from "@/v3/components/flow/DesignLoopZones";
 import { ownerLabelsForCast } from "@/v3/lib/ledger/ownerBinding";
 import { dictionaryCoverage, isSpreadsheetName, mergeDictionaryCsv, parseDictionaryCsv, readDictionaryWorkbook } from "@/v3/lib/ledger/dictionary";
@@ -1140,33 +1140,20 @@ export default function TheLine({ program, onSaveInputs, onRenamePerson, onRenam
 
       {tab === "work" ? (
         <>
-        {/* THE BURN-DOWN, on the operator's own board. Moved off Discover, which
-            is for the questions aimed at stakeholders — an operator judging where
-            the programme stands reads it here, beside the round and the
-            convergence that answer the same question at different resolutions. */}
-        <div className="v3ln-goal work">
-          <span className="v3ln-goal-lead">The goal — close the burn-down</span>
-          <span className="v3ln-goal-stats">
-            <b>{ledger.kit.burnDown.open}</b> open <span className="v3ln-unit">questions</span> · <b>{ledger.heard.total}</b> answered
-            {" "}· <b>{ledger.unownedOpen}</b> need an owner{ledger.typingLoci.length ? <> · <b>{ledger.typingLoci.length}</b> → dictionary</> : null} · <b>{ledger.seamBands.length}</b> seam{ledger.seamBands.length === 1 ? "" : "s"}
-          </span>
-        </div>
-        <div className="v3ln-stats ledger">
-          <div><span className="v3ln-sl">Round</span><span className="v3ln-sv">{model.round}</span></div>
-          <button type="button" className="v3ln-statbtn wide" onClick={() => setTab("discovery")}
-            title="Attributed closures — a person closed the slot. The honest heard-count, not a roster tally.">
-            {/* No "attributed closures" sub-note here: HeardReadout prints the
-                number WITH that unit four pixels to the right, so the label was
-                the same two words twice. The button's title still carries the
-                distinction that matters (attributed vs machine-import). */}
-            <span className="v3ln-sl">Heard</span>
-            <HeardReadout heard={ledger.heard} />
-          </button>
-          <div className="v3ln-stat-wide">
-            <span className="v3ln-sl">Convergence <span className="v3ln-sl-note">real claim closures</span></span>
-            <ConvergenceReadout burnDown={ledger.kit.burnDown} />
-          </div>
-        </div>
+        {/* THE BURN-DOWN STRIP IS HIDDEN (on request, 2026-08-12). "206 open · 0
+            answered · 0 need an owner · 106 → dictionary · 4 seams" is five
+            programme-wide numbers stacked at the top of the board, none of them a
+            thing to do — and each is already stated where it can be acted on: the
+            open count on the Discover cards, the dictionary bucket on the Inbox's
+            dictionary panel, the seams on their own band. Nothing is recomputed
+            anywhere; the numbers still exist, they are just no longer restated as a
+            headline above the work. */}
+        {/* ROUND / HEARD / CONVERGENCE HIDDEN (on request, 2026-08-12), the last
+            of the headline strips to go. On a programme where nothing has been
+            heard yet it read "Round 1 · 0 attributed closures · 0% closed · 90.9%
+            incl. pre-filled · nothing heard yet" — five provisional readings of
+            the same fact, none of them an action. Heard is still a button on
+            Discover; convergence is still on the gate that consumes it. */}
         {/* UnownedSeamStrip hidden by request (2026-08-09) — the same numbers stay
             readable in the goal line (unowned/seams) and the inbox sections. */}
         </>

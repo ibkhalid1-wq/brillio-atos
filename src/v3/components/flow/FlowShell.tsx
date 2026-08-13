@@ -665,7 +665,6 @@ export default function FlowShell(props: FlowShellProps) {
   // stop) but self-quiets: it hides the moment they are already on that view,
   // so it guides without nagging.
   const nextId: FlowView = waitingCount > 0 ? "today" : "flow";
-  const nextHint = nextId === "today" ? `${waitingCount} waiting` : "Continue";
   // Already on the next stop? One id per view now, so this is a plain equality —
   // the pointer quiets the moment the operator arrives.
   const atNext = view === nextId;
@@ -773,14 +772,12 @@ export default function FlowShell(props: FlowShellProps) {
                   }}>
                   {id === "today" && waitingCount > 0 ? <span className="v3fs-dock-n">{waitingCount}</span> : null}
                   <DockIcon id={id} /><span className="v3fs-rlb">{label}</span>
-                  {isNext ? (
-                    <span className="v3fs-next" role="status">
-                      <span className="v3fs-next-arw" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M15 6l-6 6 6 6" /></svg>
-                      </span>
-                      <span className="v3fs-next-txt"><span>Next</span><b>{nextHint}</b></span>
-                    </span>
-                  ) : null}
+                  {/* THE "NEXT — 5 WAITING" FLYOUT IS GONE (removed on request,
+                      2026-08-12). It floated out of the rail over the page, pulsed,
+                      and said what the rail's own count already says one icon away.
+                      `v3fs-dock-next` still marks the rail item itself, and the
+                      accessible name still says "go here next", so the steer
+                      survives without a pulsing overlay on top of the work. */}
                 </button>
               );
             })}
