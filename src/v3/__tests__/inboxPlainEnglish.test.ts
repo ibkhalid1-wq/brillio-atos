@@ -469,3 +469,58 @@ describe("a busy flag that nothing clears is a lie", () => {
     expect(line).toContain("Object.fromEntries(Object.keys(regenBusy).map((id) => [id, true]))");
   });
 });
+
+describe("the detail pane", () => {
+  /**
+   * Both briefs ask for one; it was deferred because this Inbox is sections of CARDS
+   * and every reveal was deliberately made to open IN PLACE after a
+   * modal-for-one/panel-for-another inconsistency was reported. So the pane does not
+   * REPLACE the reveals — it answers what an expanded row cannot: what the record
+   * holds about THIS question, with the acts in one place instead of along the row.
+   */
+  const inbox = SRC("OperatorInbox.tsx");
+  const css = readFileSync(resolve(__dirname, "../components/flow/theLine.css"), "utf8");
+
+  it("is derived, never a second source", () => {
+    // Every line reads the same ledger the rows read.
+    expect(inbox).toContain("const item = ledger.queue.items.find((i) => i.about === about);");
+    expect(inbox).toContain("attributeEvidence(ledger.store, elementIdOf(about))");
+    expect(inbox, "the trail is the locus's own operator history").toContain("ledger.actions");
+  });
+
+  it("anchors its acts at the bottom, which is the point of having it", () => {
+    expect(css).toContain(".v3ib-pane-acts{margin-top:auto");
+    // and they are the SAME calls the row would have made
+    expect(inbox).toContain("(owner) => void run(about, assignAction(about, owner))");
+  });
+
+  it("says 'no source on record' rather than leaving a blank", () => {
+    // The difference between a field somebody named and one the model listed while
+    // summarising is the whole reason the pane shows provenance at all.
+    expect(inbox).toContain('{src || "no source on record"}');
+  });
+
+  it("takes focus on the BOARD, not the row", () => {
+    // The row cannot hold focus for one render: QuestionList is defined inside this
+    // component, so React sees a new type every render and remounts the subtree —
+    // the focused <li> is destroyed and focus falls to <body>. The board is one
+    // stable element.
+    // MUTATION: focus the row instead → the arrows stop working after one press.
+    expect(inbox).toContain("boardRef.current?.focus()");
+    expect(inbox).toContain("<div ref={boardRef} tabIndex={-1}");
+  });
+
+  it("moves with the arrows and closes with Escape — not j/k", () => {
+    // j/k reads as a power feature on a board that is sections of cards, where the
+    // arrows already mean "move" everywhere else.
+    expect(inbox).toContain('if (e.key === "Escape" && selected)');
+    expect(inbox).toContain('if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;');
+    expect(inbox, "typing in a control must not move the selection")
+      .toContain('if ((e.target as HTMLElement).closest("input, textarea, select")) return;');
+  });
+
+  it("collapses to one column on a split view", () => {
+    // A 240px pane beside a squeezed list is worse than no pane.
+    expect(css).toMatch(/@media \(max-width:1100px\)\{[\s\S]{0,120}\.v3ib\.has-pane\{display:flex/);
+  });
+});

@@ -893,6 +893,52 @@
 .v3ib-src.is-schedule::before{background:var(--v3-amber)}
 .v3ib-src.is-adjudicate::before{background:var(--aura-kind-adjudicate)}
 
+/* ════ THE DETAIL PANE ═════════════════════════════════════════════════════════
+   Two columns when a question is selected, one when nothing is. The pane is
+   STICKY rather than fixed: it belongs to the board it is describing, and a fixed
+   panel over a scrolling list is a different product's idea.
+
+   Below 1100px it stops being a column and becomes the first block in the flow —
+   on a split view there is no room for two columns of substance, and a 240px pane
+   is worse than no pane. */
+.v3ib.has-pane{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,340px);
+  gap:var(--aura-s3);align-items:start}
+.v3ib.has-pane > *{min-width:0}
+.v3ib-pane{grid-column:2;grid-row:1 / span 99;position:sticky;top:var(--aura-s3);
+  display:flex;flex-direction:column;gap:var(--aura-s2);padding:var(--aura-s3);
+  border:1px solid var(--fs-line);border-radius:var(--aura-r-box);background:var(--fs-card);
+  box-shadow:var(--aura-e-raised);max-height:calc(100vh - 2 * var(--aura-s3));overflow:auto}
+.v3ib-pane-h{display:flex;align-items:center;justify-content:space-between;gap:var(--aura-s2)}
+.v3ib-pane-q{margin:0;font-size:var(--aura-t-title);color:var(--v3-text-primary);line-height:1.5}
+.v3ib-pane-facts{display:grid;grid-template-columns:max-content minmax(0,1fr);
+  gap:2px var(--aura-s2);margin:0;font-size:var(--aura-t-body)}
+.v3ib-pane-facts dt{color:var(--v3-text-muted)}
+.v3ib-pane-facts dd{margin:0;color:var(--v3-text-primary)}
+.v3ib-pane-facts dd.none{color:var(--v3-amber);font-style:normal}
+.v3ib-pane-cap{font-size:var(--aura-t-meta);font-weight:600;letter-spacing:.055em;
+  text-transform:uppercase;color:var(--v3-text-muted)}
+.v3ib-pane-trail ol{margin:4px 0 0;padding-left:16px;font-size:var(--aura-t-body);
+  color:var(--v3-text-secondary);display:flex;flex-direction:column;gap:2px}
+.v3ib-pane-trail.none{margin:0;font-size:var(--aura-t-body);color:var(--v3-text-muted)}
+.v3ib-pane-when{color:var(--v3-text-muted)}
+/* The acts sit at the bottom, always in the same place — the brief's requirement,
+   and the reason is the row: a question's controls were spread along it, so the same
+   act sat somewhere different on every one. */
+.v3ib-pane-acts{margin-top:auto;padding-top:var(--aura-s2);border-top:1px solid var(--fs-line);
+  display:flex;flex-wrap:wrap;align-items:center;gap:var(--aura-s2)}
+
+/* SELECTED. The row keeps its shape and gains a mark: a selected row that changes
+   size makes the list jump under the pointer that selected it. */
+.v3ib-qlist > li.is-selected{background:color-mix(in srgb,var(--v3-accent-2) 6%,transparent);
+  box-shadow:inset 3px 0 0 var(--v3-accent-2)}
+.v3ib-qlist > li[data-about]{cursor:pointer;transition:background var(--aura-motion)}
+.v3ib-qlist > li[data-about]:hover{background:var(--v3-surface-2)}
+
+@media (max-width:1100px){
+  .v3ib.has-pane{display:flex;flex-direction:column}
+  .v3ib-pane{position:static;max-height:none}
+}
+
 /* ════ THE CARD every block inside a section is drawn as ════════════════════════
    Four blocks had grown four containers — one dashed accent border, one tinted
    fill, one plain, one with its own title class — so a column that holds four
