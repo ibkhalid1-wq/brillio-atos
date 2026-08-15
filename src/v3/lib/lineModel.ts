@@ -359,9 +359,14 @@ export function buildLineModel(program: ProgramSummary): LineModel {
         // Design half (Envision) — a pipeline: choose the shape, design the
         // experience, blueprint the agents, build. Each carries its section
         // preview so the phase's structure reads without opening a studio.
+        // ORDER IS THE OPERATOR'S (2026-08-15), and it pairs up two to a row:
+        //   shape ▸ agents        — what we are building, and what runs it
+        //   experience ▸ build    — how it is navigated, and the thing itself
+        // The old run was a single four-step pipeline (shape → experience → agents
+        // → build), which read as a queue rather than as two related pairs.
         { ...station(program, card("architecture-strategy"), envisionOk), lane: "design", sections: sectionPreview(program, "architecture-strategy") },
-        { ...station(program, card("experience-design"), envisionOk), lane: "design", sections: sectionPreview(program, "experience-design") },
         { ...station(program, card("agentic-blueprint"), envisionOk), lane: "design", sections: sectionPreview(program, "agentic-blueprint") },
+        { ...station(program, card("experience-design"), envisionOk), lane: "design", sections: sectionPreview(program, "experience-design") },
         { ...station(program, proto, envisionOk, { id: "prototype", title: "Prototype" }), lane: "design", sections: sectionPreview(program, "prototype-build") },
         // Validate half (Show) — clients meet the built prototype.
         { ...station(program, demoCard, showOk, {

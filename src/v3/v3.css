@@ -9192,3 +9192,5 @@ body { text-rendering: optimizeLegibility; }
 .v3fs-bp-rest-h:hover{color:var(--v3-text)}
 .v3fs-bp-rest-h:focus-visible{outline:2px solid var(--v3-accent-2);outline-offset:3px;border-radius:4px}
 .v3fs-bp-rest-b{margin-top:12px;display:flex;flex-direction:column;gap:8px}
+.v3ed-children{font-size:11px;color:var(--v3-text-secondary);line-height:1.5;display:flex;gap:7px;flex-wrap:wrap}
+.v3ed-children-k{font-size:9.5px;font-weight:700;letter-spacing:.055em;text-transform:uppercase;color:var(--v3-text-muted)}

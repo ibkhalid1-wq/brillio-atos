@@ -403,7 +403,16 @@
 .v3dl-zone-t{font-size:14px;font-weight:700;color:var(--v3-text-primary)}
 .v3dl-zone-d{font-size:11.5px;color:var(--v3-text-muted);flex-basis:100%}
 /* operator tiles — decided-with-basis, not refreshable blobs */
-.v3dl-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}
+/* SAME TILE WIDTH AS EVERY OTHER PHASE (2026-08-15). The loop had its own track
+   sizing (210px) against the bands' 212px, and then a fixed two-column grid — so a
+   Design Loop tile was a different width from a Listen or Frame tile on the same
+   screen, which is exactly the drift the shared header work removed everywhere else.
+   It uses the bands' own track now, `.v3ln-stns`, including its 680px collapse.
+   The operator's pairing (shape ▸ agents, then experience ▸ build) is carried by the
+   ORDER, which survives the reflow; forcing two columns to draw it cost consistency
+   with every other band on the board, which is the more valuable of the two. */
+.v3dl-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(212px,1fr));gap:10px}
+@media(max-width:680px){.v3dl-tiles{grid-template-columns:1fr}}
 .v3dl-tile{display:flex;flex-direction:column;border:1px solid var(--fs-line);border-radius:10px;
   background:var(--v3-surface-2);overflow:hidden}
 .v3dl-tile.present{background:var(--fs-card)}

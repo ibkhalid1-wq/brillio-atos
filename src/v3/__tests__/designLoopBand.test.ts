@@ -196,13 +196,17 @@ afterEach(() => {
 
 describe("§1 CAPABILITY — every verb the band offered is still reachable", () => {
   it("CAPABILITY open an operator-built artifact — all FOUR are tiles now, in dependency order", () => {
-    // Architecture → Experience Design → Blueprint → Prototype. Experience Design used
-    // to be an "open Experience Design →" link buried in the joint zone's right-hand
-    // column; it is a tile beside its siblings now, which is also how it is generated
-    // and rebuilt.
+    // TWO PAIRS, two to a row (operator direction 2026-08-15):
+    //   shape ▸ agents      — what we are building, and what runs it
+    //   experience ▸ build  — how it is navigated, and the thing itself
+    // Was a single four-step pipeline (Architecture → Experience → Blueprint →
+    // Prototype), which read as a queue rather than as two related pairs. Experience
+    // Design used to be an "open Experience Design →" link buried in the joint zone's
+    // right-hand column; it is a tile beside its siblings now, which is also how it is
+    // generated and rebuilt.
     mountShell(seed());
     const names = [...host.querySelectorAll(".v3dl-tile-n")].map((n) => n.textContent);
-    expect(names).toEqual(["Architecture Strategy", "Experience Design", "Agentic Blueprint", "Prototype"]);
+    expect(names).toEqual(["Architecture Strategy", "Agentic Blueprint", "Experience Design", "Prototype"]);
     for (const title of names as string[]) {
       const open = tile(title)!.querySelector(".v3dl-tile-open") as HTMLButtonElement;
       expect(open.disabled, `${title} cannot be opened`).toBe(false);
