@@ -16,6 +16,22 @@
  * array is NOT deleted from the document — a programme that has one keeps it, it is
  * simply no longer authored here, and `experienceParentEntities` falls back to it so a
  * document authored the old way still names its navigation.
+ *
+ * ── AND WHAT EACH OF THOSE SCREENS LEADS WITH ────────────────────────────────
+ *
+ * The menu was the first decision the assembler could not take for itself. Three more
+ * sit immediately behind it, and the assembler was deciding all three alone: which
+ * columns head an entity's list, which of its related collections stand open on the
+ * detail, and — where the entity declares a status — whether the list opens on the
+ * board rather than the table. `screenOptions` (a per-entity record) is the whole of
+ * that answer, read through the same one definition the assembler spends it by.
+ *
+ * The surface offers ONLY what this ontology can honour: the columns are its own
+ * attributes, the collections are the child regions the fabric actually declares, and
+ * the board is offered only where a status attribute exists — because the assembler
+ * ignores a board asked for without one, and a control that is ignored is a lie. Where
+ * a choice runs past the page's budget the surface SAYS SO, naming what will not
+ * appear, rather than being quietly truncated on the way to the build.
  */
 import { useMemo } from "react";
 import type { ProgramSummary } from "@/new/types";
@@ -23,7 +39,10 @@ import {
   asArray, asRecord, asText, useStudioLocked, Section, EmptyState, type StudioProps,
 } from "./StudioKit";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
-import { parentEntitiesFor } from "@shared/prototypeAssembly.ts";
+import {
+  parentEntitiesFor, screenOptionsFor, screenFactsFor, openSectionPlan, humanizeField,
+  SCREEN_BUDGET, type EntityScreenOptions, type EntityScreenFacts,
+} from "@shared/prototypeAssembly.ts";
 
 /** One entity as this surface needs it: what it is, and what hangs off it. */
 export interface EntityChoice {
@@ -52,6 +71,30 @@ export function experienceParentEntities(doc: Record<string, unknown> | null | u
   // both runtimes call it. A second copy here is how the studio's menu and the
   // built application would quietly stop agreeing.
   return parentEntitiesFor(doc);
+}
+
+/**
+ * THE ONE DEFINITION of the per-entity screen options, delegated for the same
+ * reason `experienceParentEntities` is: the edge assembles the same prototype and
+ * cannot import from `src/v3`, so the reading lives in the shared assembly module and
+ * every runtime calls it. A second copy here is how a toggle on this surface and the
+ * built application quietly stop agreeing.
+ */
+export function experienceScreenOptions(
+  doc: Record<string, unknown> | null | undefined,
+): Record<string, EntityScreenOptions> {
+  return screenOptionsFor(doc);
+}
+
+/**
+ * WHAT THIS ONTOLOGY CAN HONOUR, per entity — derived from the same fabric and the
+ * same roles the assembler builds from, so this surface cannot offer a column, a
+ * collection or a board the build will ignore.
+ */
+export function readScreenFacts(program: ProgramSummary | null | undefined): Map<string, EntityScreenFacts> {
+  const ontology = program ? readArtifactDoc(program, "domainOntology") : null;
+  const atlas = program ? readArtifactDoc(program, "currentStateAtlas") : null;
+  return new Map(screenFactsFor(ontology ?? {}, atlas ?? {}).map((f) => [f.entity, f] as const));
 }
 
 /** Every entity the ontology holds, with its relations resolved both ways. */
@@ -86,6 +129,8 @@ export default function ExperienceDesignStudio({ doc, onChange, program }: Studi
   const entities = useMemo(() => readEntityChoices(program), [program]);
   const chosen = useMemo(() => experienceParentEntities(doc), [doc]);
   const chosenSet = useMemo(() => new Set(chosen), [chosen]);
+  const facts = useMemo(() => readScreenFacts(program), [program]);
+  const options = useMemo(() => experienceScreenOptions(doc), [doc]);
 
   /** Toggle one entity. Order is menu order, so a re-added entity goes to the end
    *  rather than silently reclaiming its old position. */
@@ -94,6 +139,26 @@ export default function ExperienceDesignStudio({ doc, onChange, program }: Studi
     const next = chosenSet.has(name) ? chosen.filter((n) => n !== name) : [...chosen, name];
     onChange({ ...doc, parentEntities: next });
   };
+
+  /**
+   * WRITE ONE ENTITY'S OPTIONS — and write NOTHING where the answer is the derived
+   * one. An emptied list and an explicit "table" are both the default, so they are
+   * stored as absence: a document that recorded the default would assemble the same
+   * bytes and diff as though a decision had been taken.
+   */
+  const setOption = (name: string, patch: Partial<EntityScreenOptions>) => {
+    if (locked) return;
+    const next: EntityScreenOptions = { ...(options[name] ?? {}), ...patch };
+    if (!next.columns?.length) delete next.columns;
+    if (!next.collections?.length) delete next.collections;
+    if (next.view !== "board") delete next.view;
+    const all: Record<string, EntityScreenOptions> = { ...options };
+    if (Object.keys(next).length) all[name] = next; else delete all[name];
+    onChange({ ...doc, screenOptions: all });
+  };
+  /** Click order is the order the build reads, so a re-added name goes to the end. */
+  const toggleIn = (list: readonly string[], value: string): string[] =>
+    list.includes(value) ? list.filter((x) => x !== value) : [...list, value];
 
   if (!entities.length) {
     return (
@@ -114,6 +179,123 @@ export default function ExperienceDesignStudio({ doc, onChange, program }: Studi
     entities.filter((x) => x.parents.includes(e.name) && !chosenSet.has(x.name)).map((x) => x.name)
       .concat(e.related.filter((r) => !chosenSet.has(r) && !byName.get(r)?.parents.includes(e.name)))
       .filter((n, i, a) => a.indexOf(n) === i).sort();
+
+  /**
+   * WHICH ENTITIES ACTUALLY GET A SCREEN in the build these options would land in —
+   * the same fallback the assembler applies (`navigationFor`): the operator's choice
+   * when they have made one, every entity when they have not. Offering screen options
+   * for an entity that has no screen would be offering work the build cannot spend.
+   */
+  const willHaveScreen = (name: string) => (chosen.length ? chosenSet.has(name) : true);
+
+  /** An attribute as the built table heads it — `humanizeField` is the assembler's
+   *  own labelling, so the chip and the column head read the same. `_display` is not
+   *  an attribute: it is the record's own name, headed with the entity. */
+  const columnLabel = (entity: string, column: string) =>
+    (column === "_display" ? entity : humanizeField(column));
+
+  /**
+   * ONE ENTITY'S SCREEN OPTIONS. Every control here is derived from what the ontology
+   * holds, and every one states what the build will do with it — including where a
+   * choice runs past the page's budget, which is the one place this surface could
+   * otherwise promise something the assembler quietly drops.
+   */
+  const optionsPanel = (e: EntityChoice) => {
+    const f = facts.get(e.name);
+    if (!f) return null;
+    const o = options[e.name] ?? {};
+    // Only names the ontology still holds count — a stale one is not a column.
+    const cols = (o.columns ?? []).filter((c) => f.attributes.includes(c));
+    const colsShown = cols.slice(0, SCREEN_BUDGET.listColumns);
+    const colsOver = cols.slice(SCREEN_BUDGET.listColumns);
+    const namedCollections = (o.collections ?? []).filter((c) => f.collections.includes(c));
+    const plan = openSectionPlan(f.collections, namedCollections);
+    const authoredCount = colsShown.length + namedCollections.length + (o.view === "board" ? 1 : 0);
+    return (
+      <details className="v3ed-opts">
+        <summary className="v3ed-opts-s">
+          Screen options
+          <span className="v3ed-opts-n">{authoredCount ? `${authoredCount} chosen` : "all derived"}</span>
+        </summary>
+
+        <div className="v3ed-opt">
+          <span className="v3ed-opt-k">Columns that lead the list</span>
+          {f.attributes.length ? (
+            <div className="v3ed-chips">
+              {f.attributes.map((a) => {
+                const pos = cols.indexOf(a);
+                return (
+                  <button key={a} type="button" disabled={locked} aria-pressed={pos >= 0}
+                    className={`v3ed-chip${pos >= 0 ? " is-on" : ""}`}
+                    onClick={() => setOption(e.name, { columns: toggleIn(cols, a) })}>
+                    {columnLabel(e.name, a)}
+                    {pos >= 0 ? <span className="v3ed-chip-n">#{pos + 1}</span> : null}
+                  </button>
+                );
+              })}
+            </div>
+          ) : <span className="v3ed-note">{e.name} holds no attributes yet, so its list leads with the record itself.</span>}
+          <span className="v3ed-note">
+            {cols.length
+              ? `Leads with ${colsShown.map((c) => columnLabel(e.name, c)).join(", ")} — here and wherever ${e.name} appears as a related list (the first ${SCREEN_BUDGET.relatedColumns} of them there).`
+              : `Derived: ${f.columns.map((c) => columnLabel(e.name, c)).join(", ")}. Choose to override.`}
+            {colsOver.length
+              ? ` Past the ${SCREEN_BUDGET.listColumns}-column budget, so ${colsOver.map((c) => columnLabel(e.name, c)).join(", ")} will not appear.`
+              : ""}
+          </span>
+        </div>
+
+        {f.collections.length ? (
+          <div className="v3ed-opt">
+            <span className="v3ed-opt-k">Related collections that lead the detail</span>
+            <div className="v3ed-chips">
+              {f.collections.map((c) => {
+                const pos = namedCollections.indexOf(c);
+                return (
+                  <button key={c} type="button" disabled={locked} aria-pressed={pos >= 0}
+                    className={`v3ed-chip${pos >= 0 ? " is-on" : ""}`}
+                    onClick={() => setOption(e.name, { collections: toggleIn(namedCollections, c) })}>
+                    {c}
+                    {pos >= 0 ? <span className="v3ed-chip-n">#{pos + 1}</span> : null}
+                  </button>
+                );
+              })}
+            </div>
+            {/* NOTHING IS EVER DROPPED — the tail collapses, and the surface says so
+                by name, so an operator can see that the section they did not name is
+                still on the page rather than gone from it. */}
+            <span className="v3ed-note">
+              {`Stands open: ${plan.open.join(", ")}.`}
+              {plan.collapsed.length
+                ? ` The other ${plan.collapsed.length} ${plan.collapsed.length === 1 ? "collapses" : "collapse"} behind “+${plan.collapsed.length} more related”: ${plan.collapsed.join(", ")}.`
+                : ""}
+            </span>
+          </div>
+        ) : null}
+
+        <div className="v3ed-opt">
+          <span className="v3ed-opt-k">The list opens on</span>
+          {/* A BOARD NEEDS A STATUS TO LANE BY. The assembler offers no board without
+              one, so neither does this — the alternative is a switch that writes a
+              choice the build has to ignore. */}
+          {f.status ? (<>
+            <div className="v3ed-chips" role="group" aria-label={`Opening view for ${e.name}`}>
+              {(["table", "board"] as const).map((v) => (
+                <button key={v} type="button" disabled={locked} aria-pressed={(o.view ?? "table") === v}
+                  className={`v3ed-chip${(o.view ?? "table") === v ? " is-on" : ""}`}
+                  onClick={() => setOption(e.name, { view: v })}>
+                  {v === "table" ? "Table" : "Board"}
+                </button>
+              ))}
+            </div>
+            <span className="v3ed-note">Laned by {humanizeField(f.status)} — the attribute this ontology holds as {e.name}&rsquo;s status.</span>
+          </>) : (
+            <span className="v3ed-note">Table. {e.name} declares no status attribute, so there are no lanes to build a board from.</span>
+          )}
+        </div>
+      </details>
+    );
+  };
 
   return (
     <div className="v3ed">
@@ -163,6 +345,11 @@ export default function ExperienceDesignStudio({ doc, onChange, program }: Studi
                   ) : on ? (
                     <span className="v3ed-children"><span className="v3ed-children-k">inside it</span>nothing — every entity it owns has its own screen</span>
                   ) : null}
+                  {/* WHAT THAT SCREEN LEADS WITH. Offered for every entity the build
+                      will actually give a screen to — the operator's chosen ones, or
+                      all of them while nothing is chosen, which is the same fallback
+                      the assembler applies. */}
+                  {willHaveScreen(e.name) ? optionsPanel(e) : null}
                 </span>
               </li>
             );
