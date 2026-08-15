@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.8";
 import { UNNAMED_SUFFIX } from "../_shared/unnamedSuffix.ts";
+import { upsertFlowDecision } from "../_shared/flowDecisionQueue.ts";
 import {
   streamClaudeText,
 } from "../_shared/claudeClient.ts";
@@ -8109,9 +8110,13 @@ function queueFlowDecision(programData: ProgramState, decision: Record<string, J
   return updateInnerProgramData(programData, (inner) => {
     const list = Array.isArray(inner.flowDecisions) ? inner.flowDecisions as JsonValue[] : [];
     const id = `dec-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+    // One open decision per QUESTION, when the caller names one (`dedupeKey`).
+    // A re-raise refreshes the open row with the newest payload instead of
+    // asking again — see _shared/flowDecisionQueue.ts for why that is a
+    // correctness fix and not merely tidying.
     return {
       ...inner,
-      flowDecisions: [...list, { id, status: "open", createdAt: new Date().toISOString(), ...decision } as JsonValue].slice(-60),
+      flowDecisions: upsertFlowDecision(list, decision, id, new Date().toISOString()) as JsonValue[],
     };
   });
 }
@@ -11367,6 +11372,12 @@ Deno.serve(async (req) => {
           nextProgramData = queueFlowDecision(contextProgramData, {
             tier: 2,
             movementId,
+            // THE QUESTION is "does this regeneration of <artifact> replace the
+            // record?" — it is not "did the 14:38 run shrink?". Keying it on the
+            // artifact collapses a re-raise onto the row already waiting, and
+            // the refreshed row carries the NEWEST draft, so confirming can
+            // never write a proposal from an earlier run.
+            dedupeKey: `regen-guard:${request.agentId}`,
             title: shrunk && !handEdited
               ? `Regenerated ${spec.title} covers LESS than the record — review before it replaces it`
               : `Accept the regenerated ${spec.title}`,

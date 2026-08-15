@@ -12,7 +12,7 @@
  */
 import { deriveFabric, type Fabric } from "./fabric.ts";
 import { deriveRoles, type ValueRole } from "./semanticRoles.ts";
-import { generateSeed } from "./seedData.ts";
+import { generateSeed, type SeedRecord } from "./seedData.ts";
 import { meridianStylesheet } from "./prototypeDesignSystem.ts";
 
 const esc = (s: unknown) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
@@ -84,10 +84,26 @@ export function navigationFor(
   derived: readonly string[],
   known: readonly string[],
 ): string[] {
+  const picked = curatedNavigation(chosen, known);
+  return picked.length ? picked : [...derived];
+}
+
+/**
+ * The operator's choice alone — empty when they have not chosen, or when every
+ * name they chose has since been retired from the ontology.
+ *
+ * `navigationFor` folds this together with the derived order, which is what the
+ * SCREENS need. The sidebar needs the two cases apart: a curated menu is a flat
+ * list in the operator's order, while an uncurated one is the derived spine and
+ * tree. Deriving "did they choose?" by comparing the two outputs would be wrong
+ * the moment a choice happens to equal the derived order.
+ */
+export function curatedNavigation(
+  chosen: readonly string[] | undefined,
+  known: readonly string[],
+): string[] {
   const set = new Set(known);
-  const picked = (chosen ?? []).map((n) => n.trim()).filter((n) => n && set.has(n));
-  const deduped = [...new Set(picked)];
-  return deduped.length ? deduped : [...derived];
+  return [...new Set((chosen ?? []).map((n) => n.trim()).filter((n) => n && set.has(n)))];
 }
 
 export function assemblePrototype(ontology: Record<string, unknown>, atlas: Record<string, unknown>, parentEntities?: readonly string[]): AssembledPrototype {
@@ -111,7 +127,8 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
   // The menu: the operator's chosen parent entities when they have chosen, else the
   // derived order. Everything else still exists — it appears inside the detail of
   // whatever owns it, which is what the related-collection regions below render.
-  const ordered = navigationFor(parentEntities, graph.navOrder.filter((n) => names.includes(n)), names);
+  const curated = curatedNavigation(parentEntities, names);
+  const ordered = curated.length ? curated : graph.navOrder.filter((n) => names.includes(n));
   const es = new Map(names.map((n) => [n, slug(n)]));
   let regionCount = 0;
   const region = (id: string, inner: string) => { regionCount += 1; return `<div data-fabric-id="${esc(id)}">${inner}</div>`; };
@@ -123,28 +140,45 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
     return String((typeof v === "string" && v ? v : undefined) ?? r._display ?? r.id ?? "");
   };
 
+  /**
+   * THE ONE DEFINITION of "which columns lead a table of this entity", used by
+   * the list screen and by every child collection on a detail screen — so a
+   * collection is a real list OF THAT ENTITY, headed the way its own list
+   * screen heads it, rather than a second, differently-chosen set of columns.
+   *
+   * Lead with the entity's TITLE attribute, not with whatever the ontology
+   * happened to list first: a positional pick put Contact's `buyingRole` where
+   * the contact's name belongs, account names under "Category" and opportunity
+   * names under "Stage". When the ontology names no title attribute the lead
+   * column is the record's DISPLAY NAME, headed with the entity itself.
+   */
+  const leadColumnsFor = (name: string, limit: number, exclude?: string): string[] => {
+    // `exclude` drops the attribute that points BACK at the context. Inside
+    // Account's detail, an "Account Id" column on every Opportunity row is the
+    // same value repeated down the table — it says only "these are this
+    // account's", which the card's heading already said.
+    const all = attrsOf(name).filter((a) => !exclude || a.toLowerCase() !== exclude.toLowerCase());
+    const titleAttr = all.find((a) => roleOf.get(`${name} ${a}`) === "title");
+    return (titleAttr ? [titleAttr, ...all.filter((a) => a !== titleAttr)] : ["_display", ...all]).slice(0, limit);
+  };
+  const headFor = (name: string, c: string) => (c === "_display" ? name : humanizeField(c));
+
+  /** One row of an entity's table — the same cell rules wherever it appears. */
+  const rowCells = (name: string, cols: string[], r: Record<string, unknown>, s: string, withAction: boolean): string =>
+    cols.map((c, i) => i === 0
+      ? `<td><div class="m-cell-main">${esc(r[c] ?? r._display ?? r.id)}</div><div class="m-cell-sub">${esc(r.id)}</div></td>`
+      : `<td>${renderCell(roleOf.get(`${name} ${c}`), r[c])}</td>`).join("")
+    + (withAction ? `<td class="m-row-actions"><button class="m-btn m-btn--secondary m-btn--sm" onclick="show('detail-${s}')">Open</button></td>` : "");
+
   // ── one list screen per entity ──
   const listScreen = (name: string): string => {
     const s = es.get(name)!; const rows = seed.records[name] ?? [];
-    // Lead with the entity's TITLE attribute, not with whatever the ontology
-    // happened to list first. The first column renders as the row's headline
-    // (with the record id beneath it), so a positional pick put Contact's
-    // `buyingRole` where the contact's name belongs.
-    const all = attrsOf(name);
-    const titleAttr = all.find((a) => roleOf.get(`${name} ${a}`) === "title");
-    // When the ontology names no title attribute, the lead column is the
-    // record's DISPLAY NAME, headed with the entity. It used to be whatever
-    // attribute came first, which put account names under "Category" and
-    // opportunity names under "Stage" — and buried the real value of both.
-    const cols = (titleAttr ? [titleAttr, ...all.filter((a) => a !== titleAttr)] : ["_display", ...all]).slice(0, 5);
-    const headOf = (c: string) => (c === "_display" ? name : humanizeField(c));
+    const cols = leadColumnsFor(name, 5);
+    const headOf = (c: string) => headFor(name, c);
     const head = cols.map((c) => `<th class="m-th-sort${c === cols[0] ? " is-desc" : ""}">${esc(headOf(c))}</th>`).join("") + `<th style="text-align:right">Actions</th>`;
     const body = rows.length ? rows.slice(0, 24).map((r) => {
       const flagged = Object.values(r).some((v) => v === null);
-      return `<tr${flagged ? ' class="is-flagged"' : ""}>` + cols.map((c, i) => i === 0
-        ? `<td><div class="m-cell-main">${esc(r[c] ?? r._display ?? r.id)}</div><div class="m-cell-sub">${esc(r.id)}</div></td>`
-        : `<td>${renderCell(roleOf.get(`${name} ${c}`), r[c])}</td>`).join("")
-        + `<td class="m-row-actions"><button class="m-btn m-btn--secondary m-btn--sm" onclick="show('detail-${s}')">Open</button></td></tr>`;
+      return `<tr${flagged ? ' class="is-flagged"' : ""}>` + rowCells(name, cols, r, s, true) + `</tr>`;
     }).join("") : "";
     const table = rows.length
       ? `<div class="m-table-wrap"><table class="m-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`
@@ -156,29 +190,105 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
       ${region(`screen:${s}:list`, table)}</section>`;
   };
 
-  // ── one detail screen per entity (first record) ──
+  // ── one detail screen per entity (the SHOWCASE record) ──
   const detailScreen = (name: string): string => {
-    const s = es.get(name)!; const rows = seed.records[name] ?? []; const r = rows[0]; const attrs = attrsOf(name);
+    const s = es.get(name)!; const rows = seed.records[name] ?? []; const attrs = attrsOf(name);
+    // child collections from the fabric (region:{s}:{child})
+    const childRegions = fabric.nodes.filter((n) => n.kind === "region" && n.id.startsWith(`region:${s}:`) && n.id !== `region:${s}:summary`);
+    // THE RECORD SHOWN IS THE ONE WITH THE MOST TO SHOW. It was `rows[0]` — and
+    // the seed deliberately gives the FIRST parent row zero children as the
+    // cardinality extreme, so every detail page demoed the empty extreme: on a
+    // reviewed CRM build 16 of 22 child sections read "No X yet" with 95
+    // opportunities sitting in the seed. The extreme stays in the seed, where
+    // stress belongs; the ONE record each entity gets to show stops being it.
+    // Count only children the fabric will actually render, so the pick cannot
+    // be won by rows a hidden relation owns. Ties keep the earliest row, so a
+    // childless entity still shows rows[0] and the pick stays deterministic.
+    const childNamesOf = childRegions
+      .map((n) => names.find((x) => es.get(x) === n.id.split(":")[2]))
+      .filter((x): x is string => Boolean(x));
+    const fk = `${name.toLowerCase()}Id`;
+    const shown = new Map<string, number>();
+    for (const cn of childNamesOf) {
+      for (const c of seed.records[cn] ?? []) {
+        const v = c[fk]; if (v == null) continue;
+        shown.set(String(v), (shown.get(String(v)) ?? 0) + 1);
+      }
+    }
+    const r = rows.reduce<SeedRecord | undefined>((best, row) =>
+      best && (shown.get(String(best.id)) ?? 0) >= (shown.get(String(row.id)) ?? 0) ? best : row, rows[0]);
     if (!r) return "";
     const dl = attrs.map((a) => `<div><dt>${esc(humanizeField(a))}</dt><dd>${renderCell(roleOf.get(`${name} ${a}`), r[a])}</dd></div>`).join("");
     const headline = displayNameOf(name, r);
-    // child collections from the fabric (region:{s}:{child})
-    const childRegions = fabric.nodes.filter((n) => n.kind === "region" && n.id.startsWith(`region:${s}:`) && n.id !== `region:${s}:summary`);
+    // RENDER BY ROLE, NOT BY ID PREFIX.
+    //
+    // Every child region used to render identically: a `<dl>` of up to five
+    // id/name pairs. The ontology draws a distinction the fabric already
+    // carries and this threw away — `relationshipRolesFor` maps 1:N to
+    // `collection`, N:M to `multi-select`, N:1 and 1:1 to `parent-ref` — so a
+    // one-to-many showed as a pair-list rather than as a LIST OF THE CHILD
+    // ENTITY, and a many-to-many looked exactly the same as it.
+    //
+    // A collection is now a real table headed the way that entity's own list
+    // screen heads it (`leadColumnsFor`, the one definition), so the prototype
+    // says what the ontology said.
+    const childrenOf = (childName: string) =>
+      (seed.records[childName] ?? []).filter((c) => String(c[`${name.toLowerCase()}Id`]) === String(r.id));
     const children = childRegions.map((n) => {
       const childName = names.find((x) => es.get(x) === n.id.split(":")[2]);
-      const crows = (childName ? seed.records[childName] ?? [] : []).filter((c) => String(c[`${name.toLowerCase()}Id`]) === String(r.id)).slice(0, 5);
-      return region(n.id, `<section class="m-card" style="margin-top:16px"><div class="m-card-h"><div class="m-card-t">${esc(childName)}</div><span class="m-badge">${crows.length}</span></div>`
-        // Each child row is named the way its own list screen names it. The
-        // first string on the record used to stand in for that, and the first
-        // string on every record is the classification marker — so every child
-        // collection in the demo read "SYNTHETIC-SEED".
-        + (crows.length ? `<div class="m-dl">${crows.map((c) => `<div><dt>${esc(c.id)}</dt><dd>${esc(displayNameOf(childName ?? "", c))}</dd></div>`).join("")}</div>` : `<div class="m-empty"><div class="m-empty-t">No ${esc(childName)} yet</div></div>`) + `</section>`);
+      if (!childName) return region(n.id, "");
+      const cs = es.get(childName)!;
+      const all = childrenOf(childName);
+      const shownRows = all.slice(0, 5);
+      const head = `<div class="m-card-h"><div class="m-card-t">${esc(childName)}</div><span class="m-badge">${all.length}</span></div>`;
+      // A many-to-many is a set of tags, not a table of owned rows. Its
+      // membership is not materialised in the seed yet (the seeder declares
+      // that skip as an assumption), so it states the gap rather than
+      // rendering an empty table that implies there is nothing there.
+      if (n.role === "multi-select") {
+        const chips = shownRows.length
+          ? `<div class="m-chips">${shownRows.map((c) => `<span class="m-chip">${esc(displayNameOf(childName, c))}</span>`).join("")}</div>`
+          : `<div class="m-empty"><div class="m-empty-t">No ${esc(childName)} linked</div>Many-to-many membership is not generated in the seed — see the run's assumptions.</div>`;
+        return region(n.id, `<section class="m-card" style="margin-top:16px">${head}${chips}</section>`);
+      }
+      // `collection` (1:N, and the default for an undeclared cardinality).
+      const cols = leadColumnsFor(childName, 4, `${name.toLowerCase()}Id`);
+      const body = shownRows.map((c) => `<tr>${rowCells(childName, cols, c, cs, false)}</tr>`).join("");
+      const table = shownRows.length
+        ? `<div class="m-table-wrap"><table class="m-table"><thead><tr>${cols.map((c) => `<th>${esc(headFor(childName, c))}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table></div>`
+          + (all.length > shownRows.length
+            ? `<div class="m-card-f"><button class="m-btn m-btn--secondary m-btn--sm" onclick="show('list-${cs}')">View all ${all.length} ${esc(childName)} →</button></div>`
+            : "")
+        : `<div class="m-empty"><div class="m-empty-t">No ${esc(childName)} yet</div></div>`;
+      return region(n.id, `<section class="m-card" style="margin-top:16px">${head}${table}</section>`);
     }).join("");
+
+    // THE PARENT REFERENCES — an N:1 must produce a LINK.
+    //
+    // `deriveFabric` mints `nav:{child}:{parent}` nodes with role `parent-ref`
+    // for exactly this, and the assembler read `kind === "nav"` zero times: a
+    // reference relation rendered nothing at all, so the one direction the
+    // ontology states most often was invisible. The record shown is the parent
+    // the showcase record actually points at, so the link goes somewhere true.
+    const parentNavs = fabric.nodes.filter((nd) => nd.kind === "nav" && nd.id.startsWith(`nav:${s}:`));
+    const parents = parentNavs.map((nd) => {
+      const parentName = nd.source.relation?.[0] ?? "";
+      const ps = es.get(parentName);
+      if (!ps) return region(nd.id, "");
+      const pid = r[`${parentName.toLowerCase()}Id`];
+      const prow = (seed.records[parentName] ?? []).find((p) => String(p.id) === String(pid));
+      const label = prow ? displayNameOf(parentName, prow) : "—";
+      return region(nd.id, `<button class="m-linkcard" onclick="show('detail-${ps}')">`
+        + `<span class="m-linkcard-k">${esc(parentName)}</span>`
+        + `<span class="m-linkcard-v">${esc(label)}</span><span class="m-linkcard-go">→</span></button>`);
+    }).join("");
+    const parentBand = parents ? `<section class="m-card" style="margin-top:16px"><div class="m-card-t" style="margin-bottom:12px">Belongs to</div><div class="m-linkcards">${parents}</div></section>` : "";
     return `<section class="m-screen" data-screen="detail-${s}" hidden>
       <div class="m-crumbs"><a href="#" onclick="show('list-${s}')">${esc(name)}</a> / <span>${esc(headline)}</span></div>
       <header class="m-page-h"><div><div class="m-eyebrow">${esc(name)}</div><h1 class="m-title">${esc(headline)}</h1></div>
       <div style="display:flex;gap:10px"><button class="m-btn m-btn--secondary" onclick="show('form-${s}')">Edit</button><button class="m-btn m-btn--danger">Delete</button></div></header>
       ${region(`region:${s}:summary`, `<section class="m-card"><div class="m-card-t" style="margin-bottom:14px">Details</div><dl class="m-dl">${dl}</dl></section>`)}
+      ${parentBand}
       ${children}</section>`;
   };
 
@@ -204,7 +314,23 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
   // in structural order. It is NOT a hardcoded CRM list: on a three-entity
   // surgical ontology the spine is simply all three, because at that size a flat
   // list is already the right answer.
-  const lead = graph.spine[0] ?? ordered[0];
+  // THE MENU IS THE OPERATOR'S, WHEN THEY HAVE MADE ONE. `ordered` already held
+  // their choice, but it only ever reached the SCREENS — the sidebar below was
+  // still walking `names`, every entity in the ontology. That shipped three
+  // faults at once: an entity they switched OFF still got a nav row pointing at
+  // a screen that was never built (a dead click), an entity they switched ON was
+  // filed under its structural parent instead of standing as its own menu item,
+  // and `lead` could name a screen outside `ordered` — so the prototype opened
+  // blank. All three are the same omission.
+  //
+  // When they HAVE curated: a flat list, in their order. Experience Design's
+  // promise is "each one ON becomes a menu item"; nesting one chosen entity
+  // under another silently downgrades that promise, and the structural tree is
+  // exactly the IA they overrode by choosing. Unchosen entities are not lost —
+  // they render as child collections inside the detail of whatever owns them.
+  //
+  // When they have NOT: the derived spine and tree, unchanged.
+  const lead = curated.length ? ordered[0] : (graph.spine[0] ?? ordered[0]);
   const navItem = (n: string) =>
     `<span class="m-nav-item${n === lead ? " is-active" : ""}" data-nav="list-${es.get(n)}" onclick="event.preventDefault();event.stopPropagation();show('list-${es.get(n)}')">${esc(n)}<span class="m-nav-count">${seed.counts[n] ?? 0}</span></span>`;
   // Every entity keeps exactly ONE home in the tree — its shallowest parent — so
@@ -219,11 +345,19 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
     return `<details class="m-nav-group"${level < 2 ? " open" : ""}><summary class="m-nav-row">${navItem(n)}</summary>`
       + `<div class="m-nav-sub">${kids.map((k) => branch(k, level + 1)).join("")}</div></details>`;
   };
-  const tree = graph.roots.filter((r) => names.includes(r)).map((r) => branch(r, 0)).join("");
-  const spineNav = graph.spine.filter((n) => names.includes(n)).map((n) => `<div class="m-nav-row">${navItem(n)}</div>`).join("");
-  const nav = graph.spine.length && graph.spine.length < ordered.length
-    ? `<div class="m-nav-sec">Primary</div>${spineNav}<div class="m-nav-sec">All records</div>${tree}`
-    : `<div class="m-nav-sec">Records</div>${tree}`;
+  const tree = graph.roots.filter((r) => ordered.includes(r)).map((r) => branch(r, 0)).join("");
+  const spine = graph.spine.filter((n) => ordered.includes(n));
+  const spineNav = spine.map((n) => `<div class="m-nav-row">${navItem(n)}</div>`).join("");
+  const flat = ordered.map((n) => `<div class="m-nav-row">${navItem(n)}</div>`).join("");
+  // Both sides of the comparison must count the SAME set. It read
+  // `graph.spine.length < ordered.length` — the spine of every entity against a
+  // possibly-curated menu — so a five-entity choice against a six-entity spine
+  // collapsed the split for a reason that had nothing to do with the menu.
+  const nav = curated.length
+    ? `<div class="m-nav-sec">Records</div>${flat}`
+    : spine.length && spine.length < ordered.length
+      ? `<div class="m-nav-sec">Primary</div>${spineNav}<div class="m-nav-sec">All records</div>${tree}`
+      : `<div class="m-nav-sec">Records</div>${tree}`;
   const screens = ordered.map((n) => listScreen(n) + detailScreen(n) + formScreen(n)).join("\n");
   const firstList = `list-${es.get(lead)}`;
 
