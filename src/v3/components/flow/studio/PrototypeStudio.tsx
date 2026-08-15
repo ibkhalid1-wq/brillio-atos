@@ -183,7 +183,7 @@ export default function PrototypeStudio({ doc, onChange, program, onRefineProtot
         <div className="v3fs-proto-edit">
           <div className="v3fs-proto-editcol">
             <label className="v3fs-proto-editlbl">
-              Prototype source — the Experience Designer&rsquo;s edits <b>propose</b> a change; they don&rsquo;t overwrite the record until confirmed.
+              Prototype source — your edits <b>propose</b> a change; they don&rsquo;t overwrite the record until confirmed.
             </label>
             <textarea className="v3fs-proto-src" value={draft} spellCheck={false}
               onChange={(e) => setDraft(e.target.value)} aria-label="Prototype HTML source" />
