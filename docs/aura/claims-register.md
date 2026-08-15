@@ -317,7 +317,17 @@ deterministic assembly, so the linked page can state its provenance for the firs
   what the BLUEPRINT says, not about what the team intends.
 - **"N state no failure handling"** is a plain count of agents whose `guardrails[]` is
   empty. No judgement — an empty array is an empty array.
+- **The two verbs, added 2026-08-15.** The flag now carries a decision: **gate this**
+  appends a `hitlPoints` row marked `addedBy: "operator"`, and **accept the risk**
+  writes `_acceptedUngoverned`. Both demand a reason and both leave a `_curationLog`
+  entry, so neither is a click — they are attested operator decisions beside a
+  generated document, never a silent edit of one. An accepted agent stops being
+  flagged, which is the point: the strip asks once and records the answer.
+- **What "accepted" does NOT claim.** Only that a named actor recorded a reason on a
+  date. It is not a safety review, not an approval, and it does not make the agent
+  safe — the roster still shows the same autonomy, blast radius and reversibility.
 - **Status:** **TRUE** — pinned by `blueprintRoster.test.ts`, which asserts the
   conjunction fires on each limb and does NOT fire when a gate exists (either the
-  agent's own flag or a document-level HITL point), when autonomy is low, when the
-  damage is narrow and reversible, or when autonomy is simply unstated.
+  agent's own flag or a document-level HITL point), when an operator has accepted it,
+  when autonomy is low, when the damage is narrow and reversible, or when autonomy is
+  simply unstated.

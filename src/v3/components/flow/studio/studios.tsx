@@ -923,7 +923,7 @@ function BlueprintStudio({ doc, onChange, program }: StudioProps) {
       </div>
       <CollapsibleCard label="Blueprint canvas — one model, toggle the lens" defaultOpen
         hint="agents and what flows between them; the lens re-emphasises data contracts · HITL · eval · build on the same canvas">
-        <BlueprintGraph doc={doc} />
+        <BlueprintGraph doc={doc} onChange={onChange} />
       </CollapsibleCard>
       <div className="v3fs-bp-editdiv" role="note">The sections below <b>edit</b> the one model above — each is the underlying detail of a lens, not a separate document.</div>
       <CollapsibleCard label="Journeys" hint="the orchestrated experience — stages across, lanes down: customer · user · agent · systems">

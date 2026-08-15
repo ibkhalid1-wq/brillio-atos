@@ -21,8 +21,18 @@
  * that an agent with wide blast radius, no reversibility and no human gate cannot sit
  * quietly in the middle of a graph looking like every other box.
  */
-import { useMemo } from "react";
-import { asArray, asRecord, asText, asStrings, EmptyState, Section, type StudioProps } from "./StudioKit";
+import { useMemo, useState } from "react";
+import { asArray, asRecord, asText, asStrings, curationNote, useStudioLocked, EmptyState, Section, type StudioProps } from "./StudioKit";
+
+/** Agents an operator has looked at and decided to leave ungated. Underscore-prefixed:
+ *  fingerprint-safe, carried by the snapshot ring, skipped by the regen extractor —
+ *  the same channel `curationNote` uses, for the same reason. */
+export const ACCEPTED_FIELD = "_acceptedUngoverned";
+export interface AcceptedRisk { agent: string; reason: string; by: string; at: string }
+export const readAccepted = (doc: Record<string, unknown>): AcceptedRisk[] =>
+  asArray(doc[ACCEPTED_FIELD]).map(asRecord).map((r) => ({
+    agent: asText(r.agent), reason: asText(r.reason), by: asText(r.by), at: asText(r.at),
+  })).filter((r) => r.agent && r.reason);
 
 /** One agent, read once, with the doc-level facts folded in. */
 interface AgentRow {
@@ -44,6 +54,8 @@ interface AgentRow {
   gate: string;
   /** The pass bar from `evalPlan`, if any. */
   passBar: string;
+  /** An operator looked at this one ungated and said so, with a reason. */
+  accepted?: AcceptedRisk;
 }
 
 /** Token overlap, so "ReconciliationAction" matches "reconciliation actions". */
@@ -90,7 +102,8 @@ const isIrreversible = (v: string) => /irreversible|permanent|cannot|not reversi
  * Exported because the guard asserts on it: a reading that decides which agents get
  * flagged must be testable without mounting a component.
  */
-export function isUngoverned(a: Pick<AgentRow, "autonomy" | "blast" | "reversibility" | "requiresHitl" | "gate">): boolean {
+export function isUngoverned(a: Pick<AgentRow, "autonomy" | "blast" | "reversibility" | "requiresHitl" | "gate"> & { accepted?: boolean }): boolean {
+  if (a.accepted) return false;                                // somebody looked and said so
   if (a.requiresHitl || a.gate) return false;                  // a human is in the path
   const risky = isWide(a.blast) || isIrreversible(a.reversibility);
   return risky && isHigh(a.autonomy);
@@ -102,6 +115,7 @@ export function readAgentRows(doc: Record<string, unknown>): AgentRow[] {
   const evals = asArray(doc.evalPlan).map(asRecord);
   const build = asStrings(doc.buildSequence);
   const rows: AgentRow[] = [];
+  const accepted = new Map(readAccepted(doc).map((a) => [a.agent, a] as const));
   const allNames = agents.map((a) => asText(a.name).trim()).filter(Boolean);
   for (const a of agents) {
     const name = asText(a.name).trim();
@@ -127,6 +141,7 @@ export function readAgentRows(doc: Record<string, unknown>): AgentRow[] {
       buildIndex: bi >= 0 ? bi + 1 : 0,
       gate: h ? (asText(h.point ?? h.where) || asText(h.approver) || "a human approves") : "",
       passBar: e ? (asText(e.passBar ?? e.threshold ?? e.target) || asText(e.metric ?? e.what ?? e.check)) : "",
+      accepted: accepted.get(name),
     });
   }
   // Build order is implementation order — the order somebody will actually do this in.
@@ -142,11 +157,46 @@ const Chip = ({ label, value, tone }: { label: string; value: string; tone?: "wa
   </span>
 );
 
-export default function BlueprintGraph({ doc }: Pick<StudioProps, "doc">) {
+export default function BlueprintGraph({ doc, onChange }: Pick<StudioProps, "doc" | "onChange">) {
+  const locked = useStudioLocked();
   const rows = useMemo(() => readAgentRows(doc), [doc]);
+  const ungovernedRows = useMemo(() => rows.filter((r) => isUngoverned({ ...r, accepted: !!r.accepted })), [rows]);
+  const [open, setOpen] = useState<string | null>(null);
+  const [mode, setMode] = useState<"gate" | "accept">("gate");
+  const [reason, setReason] = useState("");
+
+  /**
+   * BOTH VERBS ARE ATTESTED OPERATOR DECISIONS, never silent edits.
+   *
+   * A generated document changes by REGENERATION; operator intent is recorded beside
+   * it. So gating appends a `hitlPoints` row marked `addedBy: "operator"` — a claim
+   * the next regeneration can see and honour — and accepting writes to an
+   * underscore-prefixed field the fingerprint ignores. Both leave a `_curationLog`
+   * entry carrying the reason, which is what makes this a decision on the record
+   * rather than a click.
+   */
+  const commit = (agent: string) => {
+    const why = reason.trim();
+    if (!why) return;
+    const at = new Date().toISOString();
+    if (mode === "gate") {
+      onChange({
+        ...doc,
+        hitlPoints: [...asArray(doc.hitlPoints), { agent, point: why, addedBy: "operator", at }],
+        ...curationNote(doc, `Gated “${agent}” — a human approves`, why),
+      });
+    } else {
+      onChange({
+        ...doc,
+        [ACCEPTED_FIELD]: [...readAccepted(doc), { agent, reason: why, by: "operator", at }],
+        ...curationNote(doc, `Accepted “${agent}” running ungated`, why),
+      });
+    }
+    setOpen(null); setReason("");
+  };
   const stats = useMemo(() => ({
     gated: rows.filter((r) => r.requiresHitl || r.gate).length,
-    ungoverned: rows.filter(isUngoverned).length,
+    ungoverned: rows.filter((r) => isUngoverned({ ...r, accepted: !!r.accepted })).length,
     noAutonomy: rows.filter((r) => !r.autonomy.trim()).length,
     noGuardrails: rows.filter((r) => !r.guardrails.length).length,
     unsequenced: rows.filter((r) => !r.buildIndex).length,
@@ -159,6 +209,48 @@ export default function BlueprintGraph({ doc }: Pick<StudioProps, "doc">) {
 
   return (
     <div className="v3bp">
+      {/* THE ONE THING ON THIS PAGE THAT ASKS FOR A DECISION.
+          Reported as "a lot of information and sub-pages, but not clear what are the
+          calls to action". The eight sections below are reference; this is the only
+          block that addresses a person. Both verbs WRITE, both demand a reason, and
+          both are attested — gating appends to `hitlPoints` as an operator decision
+          (never a silent edit of a generated document), accepting records that a
+          named person looked. Zero flagged → the strip is not drawn at all. */}
+      {ungovernedRows.length ? (
+        <div className="v3bp-decide">
+          <p className="v3bp-decide-h">
+            <b>{ungovernedRows.length}</b> agent{ungovernedRows.length === 1 ? "" : "s"} can act alone on
+            something wide or irreversible, with nothing stated that catches it. Gate it, or say you have
+            looked — either way it stops asking.
+          </p>
+          <ul className="v3bp-decide-list">
+            {ungovernedRows.map((r) => (
+              <li key={r.name} className="v3bp-decide-row">
+                <b>{r.name}</b>
+                <span className="v3bp-decide-why">{r.autonomy || "autonomy not stated"} · {r.blast || "blast radius not stated"}</span>
+                {open === r.name ? (
+                  <span className="v3bp-decide-form">
+                    <input autoFocus className="v3bp-decide-in" value={reason} placeholder={mode === "gate" ? "Who approves, and when?" : "Why is this acceptable?"}
+                      aria-label={mode === "gate" ? `Who approves ${r.name}` : `Why ${r.name} is acceptable ungated`}
+                      onChange={(e) => setReason(e.target.value)} />
+                    <button type="button" className="v3bp-btn primary" disabled={!reason.trim()}
+                      onClick={() => commit(r.name)}>{mode === "gate" ? "record the gate" : "record the decision"}</button>
+                    <button type="button" className="v3bp-btn" onClick={() => { setOpen(null); setReason(""); }}>cancel</button>
+                  </span>
+                ) : (
+                  <span className="v3bp-decide-acts">
+                    <button type="button" className="v3bp-btn primary" disabled={locked}
+                      onClick={() => { setMode("gate"); setOpen(r.name); setReason(""); }}>gate this</button>
+                    <button type="button" className="v3bp-btn" disabled={locked}
+                      onClick={() => { setMode("accept"); setOpen(r.name); setReason(""); }}>accept the risk</button>
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       {/* THE HEADLINE IS THE RISK, not the count. "12 agents" tells nobody whether
           this is safe to build; "3 can act alone with nothing to catch them" does. */}
       <div className="v3bp-top">
@@ -173,7 +265,7 @@ export default function BlueprintGraph({ doc }: Pick<StudioProps, "doc">) {
         hint="The order someone will implement them in. Each row is what the blueprint states — nothing here is inferred beyond reading those fields together.">
         <ol className="v3bp-list">
           {rows.map((r) => {
-            const ungoverned = isUngoverned(r);
+            const ungoverned = isUngoverned({ ...r, accepted: !!r.accepted });
             return (
               <li key={r.name} className={`v3bp-row${ungoverned ? " is-ungoverned" : ""}`}>
                 <span className="v3bp-seq" aria-label={r.buildIndex ? `build step ${r.buildIndex}` : "not in the build sequence"}>

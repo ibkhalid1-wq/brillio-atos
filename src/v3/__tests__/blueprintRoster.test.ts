@@ -14,7 +14,7 @@
  * because a flag that over-fires is noise and one that under-fires is worse than none.
  */
 import { describe, it, expect } from "vitest";
-import { readAgentRows, isUngoverned } from "@/v3/components/flow/studio/BlueprintGraph";
+import { readAgentRows, isUngoverned, readAccepted, ACCEPTED_FIELD } from "@/v3/components/flow/studio/BlueprintGraph";
 
 const agent = (over: Record<string, unknown> = {}) => ({
   name: "Reconciliation Agent", purpose: "Reconciles ledger entries",
@@ -94,7 +94,7 @@ describe("the roster", () => {
     // requiresHitl: false — but hitlPoints names a human. The two must be read
     // together or the flag lies.
     const late = readAgentRows(doc).find((r) => r.name === "Late Agent")!;
-    expect(isUngoverned(late)).toBe(false);
+    expect(isUngoverned({ ...late, accepted: !!late.accepted })).toBe(false);
   });
 
   it("keeps guardrails, and keeps the empty ones out", () => {
@@ -110,5 +110,29 @@ describe("the roster", () => {
 
   it("returns nothing for a document with no agents", () => {
     expect(readAgentRows({})).toEqual([]);
+  });
+});
+
+describe("the decision an operator records on it", () => {
+  it("an accepted agent stops being flagged", () => {
+    // The strip asks once and records the answer. Without this it asks for ever, and
+    // a question that will not take an answer is noise.
+    const base = { autonomy: "high", blast: "wide", reversibility: "irreversible", requiresHitl: false, gate: "" };
+    expect(isUngoverned({ ...base, accepted: true })).toBe(false);
+    expect(isUngoverned({ ...base, accepted: false })).toBe(true);
+  });
+
+  it("reads an acceptance back off the document, with who and why", () => {
+    const rows = readAgentRows({
+      agents: [agent()],
+      [ACCEPTED_FIELD]: [{ agent: "Reconciliation Agent", reason: "batch is reviewed nightly", by: "operator", at: "2026-08-15T00:00:00Z" }],
+    });
+    expect(rows[0].accepted?.reason).toBe("batch is reviewed nightly");
+    expect(isUngoverned({ ...rows[0], accepted: !!rows[0].accepted })).toBe(false);
+  });
+
+  it("ignores an acceptance with no reason — the reason IS the attestation", () => {
+    // A click with no rationale is not a decision on the record.
+    expect(readAccepted({ [ACCEPTED_FIELD]: [{ agent: "X", reason: "" }, { agent: "", reason: "y" }] })).toEqual([]);
   });
 });
