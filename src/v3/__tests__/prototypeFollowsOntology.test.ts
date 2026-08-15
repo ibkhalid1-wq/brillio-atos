@@ -158,8 +158,11 @@ describe("children are rendered under their parent", () => {
     const homes = new Map<string, number>();
     for (const n of g.nodes) homes.set(n.name, n.primaryParent ? 1 : 0);
     for (const n of g.nodes) expect([0, 1]).toContain(homes.get(n.name));
-    // and the tree covers everything exactly once
-    const placed = g.nodes.flatMap((n) => n.treeChildren).concat(g.roots);
+    // and the tree covers everything exactly once. Counted from `treeRoots`,
+    // which is where the tree actually starts: `roots` is the relation fact
+    // (nothing produces it), and an entity promoted to the top band for business
+    // primacy is in one list and not the other.
+    const placed = g.nodes.flatMap((n) => n.treeChildren).concat(g.treeRoots);
     expect(new Set(placed).size).toBe(g.entities.length);
     expect(placed.length).toBe(g.entities.length);
   });

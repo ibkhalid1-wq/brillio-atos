@@ -333,19 +333,29 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
   const lead = curated.length ? ordered[0] : (graph.spine[0] ?? ordered[0]);
   const navItem = (n: string) =>
     `<span class="m-nav-item${n === lead ? " is-active" : ""}" data-nav="list-${es.get(n)}" onclick="event.preventDefault();event.stopPropagation();show('list-${es.get(n)}')">${esc(n)}<span class="m-nav-count">${seed.counts[n] ?? 0}</span></span>`;
-  // Every entity keeps exactly ONE home in the tree — its shallowest parent — so
-  // nothing is listed twice and nothing is orphaned. The other parents are not
-  // lost: each still carries this entity as a child collection on its detail
-  // screen, which is where a second or third owner belongs.
+  // Every entity keeps exactly ONE home in the tree — its shallowest parent, or
+  // the top level when the graph promoted it there — so nothing is listed twice
+  // and nothing is orphaned. The other parents are not lost: each still carries
+  // this entity as a child collection on its detail screen, which is where a
+  // second or third owner belongs.
   const branch = (n: string, level: number): string => {
     const kids = (graph.byName[n]?.treeChildren ?? []).filter((k) => names.includes(k));
     if (!kids.length) return `<div class="m-nav-row">${navItem(n)}</div>`;
-    // 32 entities nested and pinned open is a wall; the top two levels are open,
-    // everything deeper starts collapsed and one click away.
-    return `<details class="m-nav-group"${level < 2 ? " open" : ""}><summary class="m-nav-row">${navItem(n)}</summary>`
+    // 32 entities nested and pinned open is a wall. The top band and its
+    // immediate children are open; anything with descendants below that starts
+    // collapsed, one click away. This used to open two levels, which was the
+    // same intent measured against a tree one level deeper — every branch of the
+    // ontology that put its central object under a footnote. Now that the graph
+    // promotes that object to the top band, two levels IS the whole ontology.
+    return `<details class="m-nav-group"${level < 1 ? " open" : ""}><summary class="m-nav-row">${navItem(n)}</summary>`
       + `<div class="m-nav-sub">${kids.map((k) => branch(k, level + 1)).join("")}</div></details>`;
   };
-  const tree = graph.roots.filter((r) => ordered.includes(r)).map((r) => branch(r, 0)).join("");
+  // THE TREE STARTS WHERE THE TREE STARTS — `treeRoots`, not `roots`. The two
+  // differ exactly where an entity was promoted for business primacy: `roots` is
+  // the relation fact (nothing produces it) that the SEEDER needs, and reading it
+  // here would build the nav from the promoted entity's old home and leave the
+  // entity itself unreachable from the tree.
+  const tree = graph.treeRoots.filter((r) => ordered.includes(r)).map((r) => branch(r, 0)).join("");
   const spine = graph.spine.filter((n) => ordered.includes(n));
   const spineNav = spine.map((n) => `<div class="m-nav-row">${navItem(n)}</div>`).join("");
   const flat = ordered.map((n) => `<div class="m-nav-row">${navItem(n)}</div>`).join("");
