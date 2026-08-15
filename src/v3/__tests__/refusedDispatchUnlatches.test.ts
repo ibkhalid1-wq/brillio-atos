@@ -151,3 +151,26 @@ describe("a run that finishes without changing anything", () => {
     expect(h.api.regenerating(CARD.id)).toBe(true);
   });
 });
+
+describe("a run someone else started", () => {
+  it("shows as rebuilding even though this hook never dispatched it", () => {
+    // The artifact studio's ↻ Regenerate, the spine runner, or the queue draining an
+    // earlier click. The tile used to sit on "rebuild from claims" through all of it.
+    // MUTATION: drop the `runningAgentIds?.has(...)` limb → false, the bug is back.
+    const h = mount(async () => true, new Set([CARD.id]));
+    expect(h.api.regenerating(CARD.id)).toBe(true);
+    expect(h.api.regeneratingIds).toContain(CARD.id);
+  });
+
+  it("stops showing it when that run finishes", () => {
+    const h = mount(async () => true, new Set([CARD.id]));
+    expect(h.api.regenerating(CARD.id)).toBe(true);
+    h.setRunning(new Set<string>());
+    expect(h.api.regenerating(CARD.id)).toBe(false);
+  });
+
+  it("says nothing about an artifact nobody is running", () => {
+    const h = mount(async () => true, new Set(["some-other-agent"]));
+    expect(h.api.regenerating(CARD.id)).toBe(false);
+  });
+});

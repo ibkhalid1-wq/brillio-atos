@@ -112,6 +112,10 @@ interface TheLineProps {
   onRunAgent?: (agentId: string, phaseId?: string) => void | Promise<boolean | void>;
   /** Agent ids the backend reports as running — how a rebuild knows it finished. */
   runningAgentIds?: ReadonlySet<string>;
+  /** Saves a studio's edited document. WITHOUT IT EVERY STUDIO OPENS LOCKED — the
+   *  artifact studio computes `editable` from the presence of a save path, so the
+   *  board's mount silently disabled every control in every studio it opened. */
+  onSaveArtifactDoc?: (input: import("./studio/FlowArtifactStudio").ArtifactEditInput) => Promise<void>;
   /** Record a movement's gate — demonstrated. Reopen — evidence changed.
    * Classic's own handlers; the parent re-checks criteria at write time. */
   onRecordGate?: (movementId: string) => Promise<void>;
@@ -399,7 +403,7 @@ function packFor(program: ProgramSummary, who: string, movementId: "frame" | "li
   return shown.find(linkIsOpen) ?? shown[shown.length - 1];
 }
 
-export default function TheLine({ program, onOpenInbox, onSaveInputs, onRenamePerson, onRenameRole, onMintFollowUp, onMintReview, onCloseLink, onScheduleFollowUp, onRunAgent, runningAgentIds, onRecordGate, onReopenGate, onSendForApproval, onDesignRound }: TheLineProps) {
+export default function TheLine({ program, onOpenInbox, onSaveInputs, onRenamePerson, onRenameRole, onMintFollowUp, onMintReview, onCloseLink, onScheduleFollowUp, onRunAgent, runningAgentIds, onSaveArtifactDoc, onRecordGate, onReopenGate, onSendForApproval, onDesignRound }: TheLineProps) {
   const model = useMemo(() => buildLineModel(program), [program]);
   // The ONE in-browser ledger read every surface here shares (read-only migrate).
   const ledger = useProgramLedger(program);
@@ -1863,6 +1867,10 @@ export default function TheLine({ program, onOpenInbox, onSaveInputs, onRenamePe
       {docFor ? (
         <Suspense fallback={null}>
           <FlowArtifactStudio program={program} artifact={docFor} initialSection={docSection}
+            onSaveDoc={onSaveArtifactDoc}
+            /* The board's `onSaveInputs` may return void; the studio wants a promise.
+               Adapted here rather than widening the studio's contract for one caller. */
+            onSaveInputs={onSaveInputs ? async (phaseId, inputs, opts) => { await onSaveInputs(phaseId, inputs, opts); } : undefined}
             onClose={() => { setDocFor(null); setDocSection(undefined); }}
             onRegenerate={regenerate ? () => regenerate(docFor) : undefined}
             regenerating={regenerating(docFor.id)}

@@ -109,7 +109,18 @@ export function useArtifactRegen(
           });
         }
       : undefined,
-    regenerating: (artifactId: string) => artifactId in busy,
-    regeneratingIds: Object.keys(busy),
+    /**
+     * A RUN IN FLIGHT IS A RUN IN FLIGHT, whoever started it.
+     *
+     * This answered only for rebuilds dispatched through THIS hook's own button, so a
+     * regeneration started anywhere else — the artifact studio's ↻ Regenerate, the
+     * spine runner, the queue draining an earlier click — left the Design Loop tile
+     * sitting on "↻ rebuild from claims" while the agent was actually running.
+     * Reported as "generating architecture strategy — the status remains in rebuild
+     * from claim". The backend's running set is the truth about what is running; the
+     * local latch only covers the window before the backend has registered it.
+     */
+    regenerating: (artifactId: string) => artifactId in busy || (runningAgentIds?.has(artifactId) ?? false),
+    regeneratingIds: [...new Set([...Object.keys(busy), ...(runningAgentIds ?? [])])],
   };
 }

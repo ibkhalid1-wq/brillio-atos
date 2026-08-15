@@ -294,3 +294,30 @@ deterministic assembly, so the linked page can state its provenance for the firs
   `heard`), by the form note that ships beside the control, and by the recorded block that
   states what is still open.
 
+
+### 20 · Agentic Blueprint roster: "nothing catches this one"
+- **Where:** `src/v3/components/flow/studio/BlueprintGraph.tsx` — the per-agent flag and
+  the header stat "N can act alone on something wide or irreversible".
+- **Added 2026-08-15**, replacing the node graph. The graph made a weaker claim
+  implicitly (every agent is a box like every other box) which was worse: it stated
+  nothing and therefore never stated anything false, while leaving the reader to
+  conclude the design had been assessed.
+- **What the claim says, and what it does NOT.** `isUngoverned` is a CONJUNCTION of
+  fields the generated blueprint already states: `autonomyLevel` reads high, AND
+  (`blastRadius` reads wide OR `reversibility` reads irreversible), AND neither
+  `requiresHitl` nor any `hitlPoints` row names a human. Nothing is inferred beyond
+  reading those together. It does not claim the agent IS dangerous, that the blueprint
+  is wrong, or that anyone has reviewed it — only that, as written, no gate is stated
+  for an agent that says it can act alone on something it cannot undo.
+- **The honest limits, and they are real.** The fields are free text from a generator,
+  matched by regex (`high|full|autonomous`, `wide|broad|org|external`, …), so a
+  wording the patterns miss reads as "not stated" rather than as safe — the chip says
+  **not stated**, which is the truthful rendering of an unmatched value. And an agent
+  gated somewhere the document does not record is flagged wrongly; the flag is about
+  what the BLUEPRINT says, not about what the team intends.
+- **"N state no failure handling"** is a plain count of agents whose `guardrails[]` is
+  empty. No judgement — an empty array is an empty array.
+- **Status:** **TRUE** — pinned by `blueprintRoster.test.ts`, which asserts the
+  conjunction fires on each limb and does NOT fire when a gate exists (either the
+  agent's own flag or a document-level HITL point), when autonomy is low, when the
+  damage is narrow and reversible, or when autonomy is simply unstated.
