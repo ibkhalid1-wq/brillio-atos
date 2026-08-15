@@ -17,7 +17,7 @@
  * assumptions list — direct input to the Listen sessions.
  */
 import { deriveRoles, readsLikeATitle, type ValueRole } from "./semanticRoles.ts";
-import { deriveOntologyGraph, type OntologyGraph } from "./ontologyGraph.ts";
+import { deriveOntologyGraph, joinKeyFor, junctionKeyFor, type OntologyGraph } from "./ontologyGraph.ts";
 
 /** `_display` is what a person would call this record. It is present only when
  *  the ontology gives the entity no name-like attribute to call it by — see the
@@ -29,8 +29,22 @@ export interface SeedAssumption {
   assumed: string;
   listenQuestion: string;
 }
+/**
+ * ONE LINK of a many-to-many. A junction owns no FK on either side, so its rows
+ * live in their own table rather than pretending to be columns on one of the
+ * two entities. `fromId`/`toId` are real record ids in the graph's normalised
+ * direction — the same direction the fabric's `multi-select` region declares.
+ */
+export interface SeedJunctionLink { id: string; fromId: string; toId: string }
 export interface SeedResult {
   records: Record<string, SeedRecord[]>;
+  /**
+   * Junction membership, keyed by `junctionKeyFor(from, to)` — the address the
+   * fabric's multi-select region carries, so the renderer looks it up rather
+   * than deriving it. Kept OUT of `records` on purpose: those are entity rows,
+   * and every consumer of `records`/`counts` reads them per entity name.
+   */
+  junctionLinks: Record<string, SeedJunctionLink[]>;
   assumptions: SeedAssumption[];
   counts: Record<string, number>;
   /** The structure the generation walked — roots, parents/children, depth and
@@ -122,9 +136,6 @@ export function generateSeed(ontology: Record<string, unknown>, version: string,
   const graph = deriveOntologyGraph(ontology);
   const { edges, order } = graph;
   const assumptions: SeedAssumption[] = [];
-  for (const j of graph.junctions) {
-    assumptions.push({ kind: "fan-out", subject: `${j.from}↔${j.to}`, assumed: "skipped (no junction generated)", listenQuestion: `Is ${j.from}↔${j.to} a true many-to-many needing a join table?` });
-  }
   for (const e of edges) {
     const { parent, child, cardinality: card, relation: verb } = e;
     // optionality is absent on every relation — assume child-optional/parent-optional
@@ -193,8 +204,10 @@ export function generateSeed(ontology: Record<string, unknown>, version: string,
         };
         rec[a] = valueFor(roleOf.get(`${name} ${a}`), name, a, i, rnd, refValue);
       });
-      // FK columns
-      for (const [pName, pid] of Object.entries(parentIds)) rec[`${pName.toLowerCase()}Id`] = pid;
+      // FK columns — `joinKeyFor` is the ONE definition, shared with the fabric
+      // region that declares the relation, so the reader never has to guess how
+      // the writer spelled it.
+      for (const [pName, pid] of Object.entries(parentIds)) rec[joinKeyFor(pName)] = pid;
       // planted edge cases (once, on the first non-root entity with attributes)
       if (!planted && !isRoot.has(name) && attrs.length) {
         if (i === 0) { const t = titleAttrOf(name) ?? attrs.find((a) => roleOf.get(`${name} ${a}`) === "identifier") ?? attrs[0]; rec[t] = `${rec[t]} — an unusually long synthetic label used to stress the layout of ${name} rows and columns`; }
@@ -223,7 +236,49 @@ export function generateSeed(ontology: Record<string, unknown>, version: string,
     }
     records[name] = rows;
   }
+  // ── junction membership ──
+  //
+  // A many-to-many owns no foreign key on either side, so the FK pass above
+  // cannot reach it, and this generator used to stop there: it declared the
+  // skip as an assumption ("no junction generated") and left it. Honest, and
+  // it meant every multi-select region in every prototype was permanently
+  // empty — the one relation kind that renders as a SET of links had no links
+  // to show, on every build, for every client.
+  //
+  // Membership is now materialised as its own rows, in the graph's normalised
+  // direction, from the SAME fabric-version-seeded PRNG as everything else: no
+  // clock, no Math.random, so two runs on one ontology produce byte-identical
+  // links. It runs after the entity loop because a link can only point at rows
+  // that exist. The extremes are planted here too — the first row of the `from`
+  // side gets zero links so the empty state stays reachable, the second gets
+  // the maximum so the wrap case is on screen.
+  const junctionLinks: Record<string, SeedJunctionLink[]> = {};
+  for (const j of graph.junctions) {
+    const key = junctionKeyFor(j.from, j.to);
+    const rnd = mulberry32(hashSeed(`${version}::junction::${j.from}::${j.to}`));
+    const fromRows = records[j.from] ?? [];
+    const toRows = records[j.to] ?? [];
+    const links: SeedJunctionLink[] = [];
+    const perRow = Math.min(maxFanOut, toRows.length);
+    for (let fi = 0; fi < fromRows.length && links.length < maxPerEntity; fi += 1) {
+      const k = fi === 0 ? 0 : fi === 1 ? perRow : Math.floor(rnd() * (perRow + 1));
+      const taken = new Set<number>();
+      for (let m = 0; m < k && links.length < maxPerEntity; m += 1) {
+        let ix = Math.floor(rnd() * toRows.length);
+        while (taken.has(ix)) ix = (ix + 1) % toRows.length;   // distinct within one row, never a duplicate chip
+        taken.add(ix);
+        links.push({ id: `${key}-${String(links.length + 1).padStart(4, "0")}`, fromId: String(fromRows[fi].id), toId: String(toRows[ix].id) });
+      }
+    }
+    junctionLinks[key] = links;
+    // The assumption now says what WAS generated — the miss it used to declare
+    // no longer exists, and the fan-out it guessed at is still a Listen question.
+    assumptions.push({ kind: "fan-out", subject: `${j.from}↔${j.to}`,
+      assumed: `synthetic membership: 0–${perRow} ${j.to} per ${j.from} (${links.length} link${links.length === 1 ? "" : "s"})`,
+      listenQuestion: `Is ${j.from}↔${j.to} a true many-to-many needing a join table, and how many ${j.to} does a ${j.from} really carry?` });
+  }
+
   const counts: Record<string, number> = {};
   for (const [k, v] of Object.entries(records)) counts[k] = v.length;
-  return { records, assumptions, counts, graph };
+  return { records, junctionLinks, assumptions, counts, graph };
 }
