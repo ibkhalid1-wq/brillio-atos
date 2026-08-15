@@ -48,16 +48,30 @@ export interface GraphNode {
   parents: string[];
   /** Entities this one owns (deduped, ontology order). */
   children: string[];
-  /** The ONE home in the nesting tree; null for a root. */
+  /** The ONE home in the nesting tree; null for a tree root. */
   primaryParent: string | null;
+  /**
+   * The structural parent this entity was LIFTED OUT OF to stand as a tree root
+   * — null when it was never promoted. The relation is untouched (it is still in
+   * `parents`, and that parent still carries this entity as a child collection);
+   * this records that the NESTING chose not to file it there, and why it could:
+   * see the promotion rule below.
+   */
+  promotedFrom: string | null;
   /** Children in the nesting tree — those whose `primaryParent` is this node. */
   treeChildren: string[];
-  /** Shortest distance from a root over parent edges. Roots are 0. */
+  /** Shortest distance from a RELATION root (`isRoot`) over parent edges; those
+   *  are 0. A tree root promoted for primacy keeps its structural distance —
+   *  this measures the relations, not the navigation. */
   depth: number;
   /** How many distinct OTHER entities reference this one (FK, attribute, or N:M). */
   fanIn: number;
   /** Who they are — so a consumer can show its work. */
   fanInFrom: string[];
+  /** A root of the RELATION graph: nothing produces it (or a cycle was broken
+   *  here). This is the seeding fact — a root has no parent rows to fan out
+   *  from. It is NOT the same question as "does the tree start here": for that,
+   *  read `primaryParent === null` / `treeRoots`. */
   isRoot: boolean;
   rootReason: "no-parent" | "cycle-break" | null;
   /** Entities reachable through the nesting tree, including this one. */
@@ -70,8 +84,17 @@ export interface OntologyGraph {
   byName: Record<string, GraphNode>;
   edges: GraphEdge[];
   junctions: GraphJunction[];
-  /** Top-level entities: no parent, plus any promoted to break a relation cycle. */
+  /** Top-level entities of the RELATION graph: no parent, plus any promoted to
+   *  break a relation cycle. The seeding fact — see `GraphNode.isRoot`. */
   roots: string[];
+  /**
+   * Where the NESTING TREE starts — `roots`, plus every entity promoted out of
+   * its structural parent by the primacy rule below. This is what a navigation
+   * walks; `roots` is what a generator seeds from. They were one list until an
+   * ontology filed its most-referenced object under a footnote that happened to
+   * own a foreign key.
+   */
+  treeRoots: string[];
   /** Topological order over ALL parent edges — the safe insert order for seeding. */
   order: string[];
   /** Depth-first pre-order over the nesting tree — the presentation order. */
@@ -216,35 +239,102 @@ export function deriveOntologyGraph(ontology: Record<string, unknown>): Ontology
   }
 
   // ── exactly one home per entity: the shallowest parent, then the strongest ──
-  const primaryParent = new Map<string, string | null>();
+  const structuralParent = new Map<string, string | null>();
   for (const n of names) {
-    if (rootReason.has(n)) { primaryParent.set(n, null); continue; }
+    if (rootReason.has(n)) { structuralParent.set(n, null); continue; }
     const ps = [...(parents.get(n) ?? [])].sort((a, b) =>
       (depth.get(a) ?? 0) - (depth.get(b) ?? 0) || fanIn(b) - fanIn(a) || index.get(a)! - index.get(b)!);
-    primaryParent.set(n, ps[0] ?? null);
+    structuralParent.set(n, ps[0] ?? null);
   }
-  const treeChildren = new Map<string, string[]>(names.map((n) => [n, []]));
-  for (const n of names) { const p = primaryParent.get(n); if (p) treeChildren.get(p)!.push(n); }
-
-  // subtree size (post-order over the tree — it is acyclic by construction)
-  const subtree = new Map<string, number>();
-  const sizeOf = (n: string): number => {
-    const cached = subtree.get(n); if (cached != null) return cached;
-    subtree.set(n, 1); // guard, overwritten below
-    const total = 1 + (treeChildren.get(n) ?? []).reduce((s, c) => s + sizeOf(c), 0);
-    subtree.set(n, total);
-    return total;
+  /** The nesting tree implied by a home-per-entity map. */
+  const treeUnder = (home: Map<string, string | null>) => {
+    const kids = new Map<string, string[]>(names.map((n) => [n, []]));
+    for (const n of names) { const p = home.get(n); if (p) kids.get(p)!.push(n); }
+    return kids;
   };
-  for (const n of names) sizeOf(n);
+  /** Subtree size, post-order (the tree is acyclic by construction). */
+  const sizesOf = (kids: Map<string, string[]>) => {
+    const size = new Map<string, number>();
+    const sizeOf = (n: string): number => {
+      const cached = size.get(n); if (cached != null) return cached;
+      size.set(n, 1); // guard, overwritten below
+      const total = 1 + (kids.get(n) ?? []).reduce((s, c) => s + sizeOf(c), 0);
+      size.set(n, total);
+      return total;
+    };
+    for (const n of names) sizeOf(n);
+    return size;
+  };
+  const structuralSubtree = sizesOf(treeUnder(structuralParent));
+
+  // ── the spine: the objects everything else hangs off ──
+  // MEMBERSHIP is decided by fan-in — the ontology says which objects everything
+  // else points at. It is computed HERE, before the tree, because the tree's
+  // roots are chosen against it; the spine is ORDERED by the finished tree
+  // further down, so it reads as the top of the navigation and not as a second,
+  // differently-sorted list.
+  const SPINE_MIN = 5, SPINE_MAX = 7, FLAT_AT = 8, HUB_MIN = 2;
+  const byFanIn = [...names].sort((a, b) => fanIn(b) - fanIn(a) || (structuralSubtree.get(b) ?? 0) - (structuralSubtree.get(a) ?? 0) || index.get(a)! - index.get(b)!);
+  // Below FLAT_AT entities a flat list IS the right IA — there is no long tail to
+  // hide behind a spine, so the spine is the whole set.
+  const hubs = names.filter((n) => fanIn(n) >= HUB_MIN).length;
+  const spineMembers = new Set(names.length <= FLAT_AT
+    ? names
+    : byFanIn.slice(0, Math.min(names.length, Math.max(SPINE_MIN, Math.min(SPINE_MAX, hubs)))).filter((n) => fanIn(n) > 0));
+
+  // ── BUSINESS PRIMACY PICKS THE TREE ROOT ──
+  //
+  // The home above is the SHALLOWEST parent, which is graph-true and can be
+  // backwards to every user of the system it describes: on a reviewed CRM build
+  // it filed the account — the object seven other entities point at — underneath
+  // a partner record that exactly one entity points at, because that one
+  // relation happened to start a level higher. Fan-in already knows which object
+  // is central; only the root choice ignored it.
+  //
+  // THE RULE (generic, never a list of names). An entity stands as its own tree
+  // root when BOTH hold:
+  //   1. it is ON THE SPINE — one of the objects the ontology itself points at,
+  //      so promotion can only ever raise something a user navigates by, never
+  //      lift a leaf out of a chain to sit beside its own siblings;
+  //   2. its fan-in MATERIALLY exceeds its structural parent's — at least
+  //      PRIMACY_RATIO times as many distinct entities reference it as reference
+  //      the thing claiming to contain it.
+  //
+  // Why a multiple and not a difference: the failure this rule must not have is
+  // promoting everything, and every legitimate nesting in the fixtures is a near
+  // miss on a difference. A CRM's opportunity out-references its account 14 to 7
+  // and belongs under it; a facility's asset out-references its room 4 to 2 and
+  // belongs in it. Both are 2×. The defect — an account referenced by seven
+  // entities filed under a partner referenced by one — is 7×. A container the
+  // rest of the ontology points at a third as often as at its contents is not
+  // being used as a container; it is a footnote that happens to own a foreign
+  // key. Below that margin the graph's answer stands.
+  //
+  // A structural parent always has fan-in ≥ 1 (its own child references it), so
+  // there is no runaway ratio and no empty ontology special case.
+  const PRIMACY_RATIO = 3;
+  const primaryParent = new Map(structuralParent);
+  const promotedFrom = new Map<string, string | null>(names.map((n) => [n, null]));
+  for (const n of names) {
+    const p = structuralParent.get(n);
+    if (!p || !spineMembers.has(n)) continue;
+    if (fanIn(n) < PRIMACY_RATIO * fanIn(p)) continue;
+    primaryParent.set(n, null);
+    promotedFrom.set(n, p);
+  }
+
+  const treeChildren = treeUnder(primaryParent);
+  const subtree = sizesOf(treeChildren);
 
   // presentation order: biggest structures first, then the strongest reference hubs
   const rank = (a: string, b: string) =>
     (subtree.get(b) ?? 0) - (subtree.get(a) ?? 0) || fanIn(b) - fanIn(a) || index.get(a)! - index.get(b)!;
   for (const n of names) treeChildren.get(n)!.sort(rank);
   const roots = names.filter((n) => rootReason.has(n)).sort(rank);
+  const treeRoots = names.filter((n) => primaryParent.get(n) == null).sort(rank);
   const navOrder: string[] = [];
   const walk = (n: string) => { navOrder.push(n); for (const c of treeChildren.get(n) ?? []) walk(c); };
-  for (const r of roots) walk(r);
+  for (const r of treeRoots) walk(r);
   for (const n of names) if (!navOrder.includes(n)) navOrder.push(n); // belt and braces
 
   // ── topological order over ALL parent edges (the safe seeding order) ──
@@ -262,27 +352,16 @@ export function deriveOntologyGraph(ontology: Record<string, unknown>): Ontology
   }
   for (const n of names) if (!order.includes(n)) order.push(n); // cycle remnants
 
-  // ── the spine: the objects everything else hangs off ──
-  const byFanIn = [...names].sort((a, b) => fanIn(b) - fanIn(a) || (subtree.get(b) ?? 0) - (subtree.get(a) ?? 0) || index.get(a)! - index.get(b)!);
-  const SPINE_MIN = 5, SPINE_MAX = 7, FLAT_AT = 8;
-  // Below FLAT_AT entities a flat list IS the right IA — there is no long tail to
-  // hide behind a spine, so the spine is the whole (structurally ordered) set.
-  const hubs = names.filter((n) => fanIn(n) >= 2).length;
-  // MEMBERSHIP is decided by fan-in — the ontology says which objects everything
-  // else points at. ORDER is decided by the structure, the same rule as the rest
-  // of the navigation, so the spine reads as the top of the tree and not as a
-  // second, differently-sorted list.
-  const spine = (names.length <= FLAT_AT
-    ? [...navOrder]
-    : byFanIn.slice(0, Math.min(names.length, Math.max(SPINE_MIN, Math.min(SPINE_MAX, hubs))))
-      .filter((n) => fanIn(n) > 0)
-  ).sort((a, b) => navOrder.indexOf(a) - navOrder.indexOf(b));
+  // The spine's ORDER is the structure's, the same rule as the rest of the
+  // navigation (membership was decided by fan-in, above).
+  const spine = [...spineMembers].sort((a, b) => navOrder.indexOf(a) - navOrder.indexOf(b));
 
   const nodes: GraphNode[] = names.map((n) => ({
     name: n,
     parents: parents.get(n) ?? [],
     children: children.get(n) ?? [],
     primaryParent: primaryParent.get(n) ?? null,
+    promotedFrom: promotedFrom.get(n) ?? null,
     treeChildren: treeChildren.get(n) ?? [],
     depth: depth.get(n) ?? 0,
     fanIn: fanIn(n),
@@ -294,5 +373,5 @@ export function deriveOntologyGraph(ontology: Record<string, unknown>): Ontology
   const byName: Record<string, GraphNode> = {};
   for (const n of nodes) byName[n.name] = n;
 
-  return { entities: names, nodes, byName, edges, junctions, roots, order, navOrder, spine, references, cycleBroken };
+  return { entities: names, nodes, byName, edges, junctions, roots, treeRoots, order, navOrder, spine, references, cycleBroken };
 }
