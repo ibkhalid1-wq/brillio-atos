@@ -31,6 +31,7 @@ import {
   screenIdsIn, stylesheetIn, withStylesheet, REFINE_CONTRACT, DOCUMENT_REFINE_BUDGET,
 } from "@shared/prototypeRefine.ts";
 import { parentEntitiesFor } from "@shared/prototypeAssembly.ts";
+import { deriveWorkbenches } from "@shared/atlasWorkbenches.ts";
 import { docSectionDiff } from "@/v3/components/flow/flowDecisions";
 
 const ROOT = resolve(__dirname, "../../..");
@@ -84,7 +85,15 @@ describe("the baseline is assembled, not remembered", () => {
   it("honours the operator's parent-entity choice, through the one shared reading", () => {
     const curated = prototypeBaselineFor(snap("domain-ontology.json"), snap("current-state-atlas.json"), { parentEntities: ["Account"] })!;
     expect(parentEntitiesFor({ parentEntities: ["Account"] })).toEqual(["Account"]);
-    expect(curated.screenIds).toEqual(["detail-account", "form-account", "list-account"]);
+    // The RECORD screens are exactly the chosen entity's three — curation is a
+    // statement about record types, and nothing else may mint one.
+    //
+    // The build also carries one workbench per role the ATLAS names, which is a
+    // different axis and not the operator's menu: they are asserted here rather
+    // than filtered out, so a workbench that appears from nowhere still fails.
+    const workbenches = deriveWorkbenches(snap("current-state-atlas.json")).map((r) => `work-${r.slug}`);
+    expect(workbenches.length).toBeGreaterThan(0);
+    expect(curated.screenIds).toEqual([...["detail-account", "form-account", "list-account"], ...workbenches].sort());
     expect(curated.fabricIds.length).toBeLessThan(big.fabricIds.length);
   });
 });

@@ -25,7 +25,7 @@
  * test suite: the entrypoint imports remote modules and reads `Deno.env` at load,
  * which vitest cannot execute. This module is pure.
  */
-import { assemblePrototype } from "./prototypeAssembly.ts";
+import { assemblePrototype, paletteFor } from "./prototypeAssembly.ts";
 
 export interface PilotSlice {
   /** The assembled prototype, self-contained. Absent when it can't be derived. */
@@ -56,7 +56,13 @@ export function pilotSliceFor(inner: Record<string, unknown>): PilotSlice {
     // stored artifact the seeder reads. Passed through here so the stakeholder's
     // link and the operator's studio show the same values — the whole reason one
     // `assemblePrototype` exists. Absent, both fall back identically.
-    const { html, regionCount } = assemblePrototype(ontology!, atlas!, undefined, { vocabulary: inner.prototypeValueVocabulary });
+    // The palette is an INPUT of the same standing: the stakeholder's link must
+    // wear the client's brand for the same reason the operator's studio does —
+    // one `assemblePrototype`, one reading of the record, one artefact.
+    const { html, regionCount } = assemblePrototype(ontology!, atlas!, undefined, {
+      vocabulary: inner.prototypeValueVocabulary,
+      theme: paletteFor(inner.experienceDesign),
+    });
     // regionCount 0 means the ontology carries no entities: an empty shell, not a
     // prototype. Say so rather than sending a blank app that just reads as broken.
     if (!regionCount) {

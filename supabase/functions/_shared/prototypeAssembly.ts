@@ -13,7 +13,10 @@
 import { deriveFabric, type Fabric } from "./fabric.ts";
 import { deriveRoles, type ValueRole } from "./semanticRoles.ts";
 import { generateSeed, type SeedAssumption, type SeedRecord } from "./seedData.ts";
-import { meridianStylesheet } from "./prototypeDesignSystem.ts";
+import { meridianStylesheet, type PrototypeTheme } from "./prototypeDesignSystem.ts";
+import { deriveWorkbenches, type AtlasRole, type AtlasWorkflow } from "./atlasWorkbenches.ts";
+import { deriveAgenticSurface, agentsOnEntity, gatedAgents, type SurfacedAgent } from "./agenticSurface.ts";
+import { entityNameResolver } from "./ontologyGraph.ts";
 
 const esc = (s: unknown) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
 const slug = (s: unknown) => String(s ?? "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "x";
@@ -140,6 +143,18 @@ interface ScreenSpec {
   list: ListSpec;
   detail: { summary: SummarySpec; navs: NavSpec[]; kids: KidSpec[] } | null;
 }
+/** One entity's rows as they appear on a PERSON's screen: the same columns its
+ *  own list screen leads with, plus the status column so the workbench can
+ *  count the lanes the role actually works in. */
+interface QueueSpec extends ColumnSpec {
+  region: string; entity: string; slug: string; status: number;
+  emptyTitle: string; cite: EmptyCite | null;
+}
+interface WorkbenchSpec { slug: string; queues: QueueSpec[] }
+/** One gated agent's queue. `key` addresses this session's decisions and is the
+ *  agent's slug — an agent renamed in the blueprint is a different gate, which
+ *  is correct: the decisions were about the old one. */
+interface ApprovalSpec extends ColumnSpec { region: string; key: string; entity: string; slug: string }
 /**
  * The shortest of the three statements of one column, measured rather than
  * guessed — and measured on the serialised bytes, because that is the thing
@@ -184,6 +199,13 @@ interface PrototypeModel {
   screens: ScreenSpec[];
   /** The entity slug the application opens on when the URL names none. */
   first: string;
+  /** The atlas's roles, each with its queues. Empty when the atlas has none. */
+  work: WorkbenchSpec[];
+  /** The gated agents' queues. Empty when the blueprint is absent or gates nothing. */
+  appr: ApprovalSpec[];
+  /** The two reserved route words (see `reserveRoute`). */
+  wbRoute: string;
+  apRoute: string;
 }
 
 /**
@@ -255,6 +277,9 @@ function mCell(R,ri,v){
   // control would be honest and useless at the same time.
   var SCREENS=M.screens||[],SC={},HOME=M.first||"",PAGE=20,i;
   for(i=0;i<SCREENS.length;i++)SC[SCREENS[i].slug]=SCREENS[i];
+  // Workbenches, approval queues, and the two RESERVED route words.
+  var WORK=M.work||[],WB={},APPR=M.appr||[],WBR=M.wbRoute||"workbench",APR=M.apRoute||"approvals";
+  for(i=0;i<WORK.length;i++)WB[WORK[i].slug]=WORK[i];
   // ONE STATE OBJECT PER SCREEN — the page, the filter, the sort, the view, and
   // which record its detail is showing. Keyed by entity slug, never by index.
   var S={},FORM={},UNDO=null,HASH="";
@@ -305,8 +330,9 @@ function mCell(R,ri,v){
   // selector spelled with one hands them a region that does not exist: the
   // first version of this line invented an id called "+id+" and the guards
   // caught it. The map is also 313 fewer document walks.
-  var FID="data-fabric-id",BY={},els=document.querySelectorAll("[data-fabric-id]");
-  for(var q=0;q<els.length;q++)BY[els[q].getAttribute(FID)]=els[q];
+  // Persona and approval queues carry data-region, NOT a fabric id.
+  var FID="data-fabric-id",BY={},els=document.querySelectorAll("[data-fabric-id],[data-region]");
+  for(var q=0;q<els.length;q++){var qk=els[q].getAttribute(FID)||els[q].getAttribute("data-region");if(qk&&!BY[qk])BY[qk]=els[q]}
   function fill(id,html){var e=BY[id];if(e)e.innerHTML=html}
   function cells(t,spec,ri,slug,action){
     var out="",id=at(t,ri,0);
@@ -467,6 +493,7 @@ function mCell(R,ri,v){
     }else inner=empty(kd.emptyTitle,kd.cite);
     fill(kd.region,'<section class="m-card" style="margin-top:16px">'+head+inner+"</section>");
   }
+  /*PERSONA-RENDERER*/
   /** WHICH RECORD THIS DETAIL IS SHOWING: the one the URL named, else the
    *  entity's showcase, else whatever is still there after a delete. */
   function detailRow(sc){
@@ -563,10 +590,13 @@ function mCell(R,ri,v){
     renderAll();
     go(href(u.slug,at(u.t,u.row,0)));
   }
-  function toast(msg){
+  // u defaults TRUE; false where there is nothing to undo.
+  function toast(msg,u){
     var el2=document.getElementById("m-toast");
     if(!el2){el2=document.createElement("div");el2.id="m-toast";el2.className="m-toast";document.body.appendChild(el2)}
-    el2.innerHTML=mEsc(msg)+' <button class="m-btn m-btn--sm" style="background:transparent;color:#fff;border-color:rgba(255,255,255,.4)" onclick="undoDel()">Undo</button>';
+    el2.innerHTML=mEsc(msg)+(u===undefined||u
+      ?' <button class="m-btn m-btn--sm" style="background:transparent;color:#fff;border-color:rgba(255,255,255,.4)" onclick="undoDel()">Undo</button>'
+      :"");
     el2.hidden=false;
   }
   function hideToast(){var el2=document.getElementById("m-toast");if(el2)el2.hidden=true}
@@ -597,7 +627,14 @@ function mCell(R,ri,v){
       if(keep3)s3.value=keep3;
     }
   }
-  function renderAll(){for(var k=0;k<SCREENS.length;k++){renderList(SCREENS[k]);renderDetail(SCREENS[k])}fillPickers()}
+  function renderAll(){
+    for(var k=0;k<SCREENS.length;k++){renderList(SCREENS[k]);renderDetail(SCREENS[k])}
+    // Same live rows as every other region; both arrays are EMPTY unless the
+    // persona segment shipped.
+    for(k=0;k<WORK.length;k++)if(WORK[k].queues.length)renderWorkbench(WORK[k]);
+    if(APPR.length)renderApprovals();
+    fillPickers();
+  }
   // ── routing: the URL names the screen AND the record ──────────────────────
   function setFilter(sl,v){
     var s=st(sl);s.q=v;s.page=0;
@@ -623,7 +660,10 @@ function mCell(R,ri,v){
     var h="";
     try{h=location.hash||""}catch(e){h=""}
     if(!h)h=HASH;
-    var parts=h.replace(/^#/,"").split("/"),sl=parts[0]&&SC[parts[0]]?parts[0]:HOME,sc=SC[sl];
+    var parts=h.replace(/^#/,"").split("/");
+    if(parts[0]===WBR&&WB[parts[1]]){if(WB[parts[1]].queues.length)renderWorkbench(WB[parts[1]]);show("work-"+parts[1]);return}
+    if(parts[0]===APR&&APPR.length){renderApprovals();show("approvals");return}
+    var sl=parts[0]&&SC[parts[0]]?parts[0]:HOME,sc=SC[sl];
     if(!sc)return;
     if(parts[1]==="new"){renderForm(sc,-1);show("form-"+sl);return}
     if(parts[1]){
@@ -641,6 +681,103 @@ function mCell(R,ri,v){
   renderAll();
   route();
 })();`;
+
+/**
+ * THE PERSONA AND AGENT RENDERER — shipped only where there is something for it
+ * to draw.
+ *
+ * It draws the workbench queues and the approval queues, and it is appended to
+ * the renderer above ONLY when the build actually has one: an atlas with no
+ * entities on its steps produces no queue, a programme with no blueprint
+ * produces no approvals, and neither should pay 6KB for a renderer that would
+ * loop over an empty array. The base renderer's own calls are already guarded
+ * by those arrays being empty, so this is an omission the document cannot
+ * notice — the same rule as a board toggle on an entity with no status.
+ */
+const PERSONA_RENDERER = `
+  // ── THE WORKBENCH: one person's work, not one table's rows ────────────────
+  //
+  // The atlas states who owns each workflow and which entities its steps touch,
+  // and the application built from it had no screen that belonged to a person —
+  // only one list and one detail per entity. So each role gets its queue: the
+  // records of the entities its own workflows name, headed the way that
+  // entity's list screen heads it, with its status values counted beside it.
+  // Nothing here is invented: the role, the workflows and the entities are the
+  // atlas's, and the rows are the same seed every other screen reads.
+  function lanes(t,ci,rows){
+    if(ci<0)return "";
+    var by={},order=[],i,v;
+    for(i=0;i<rows.length;i++){v=at(t,rows[i],ci);v=(v==null||v==="")?"Unset":String(v);if(by[v]===undefined){by[v]=0;order.push(v)}by[v]++}
+    order.sort();
+    var out="";
+    for(i=0;i<order.length;i++)out+='<span class="m-badge">'+mEsc(order[i])+" · "+by[order[i]]+"</span>";
+    return out?'<span class="m-lanes">'+out+"</span>":"";
+  }
+  // The lane counts describe the WHOLE queue and sit under the rows they
+  // summarise, not between the heading and the table: a strip of counts
+  // immediately above a table reads as that table's heading — to a person and
+  // to the render gate alike — and a five-row page under a heading saying 52 is
+  // the header/rows contradiction the gate exists to catch. The same reason the
+  // footer says "View all": the page states that it is a page.
+  function renderQueue(qs){
+    var t=D[qs.entity];if(!t){fill(qs.region,"");return}
+    var ix=live(t),shown=ix.slice(0,5),body="",i;
+    for(i=0;i<shown.length;i++)body+="<tr>"+cells(t,qs,shown[i],qs.slug,true)+"</tr>";
+    var inner=shown.length
+      ?'<div class="m-table-wrap"><table class="m-table"><thead><tr>'+heads(qs,"")+'<th style="text-align:right">Actions</th></tr></thead><tbody>'
+        +body+"</tbody></table></div>"
+        +'<div class="m-card-f"><span style="margin-right:auto">'+lanes(t,qs.status,ix)+"</span>"
+        +'<button class="m-btn m-btn--secondary m-btn--sm" onclick="go('+Q+"#"+qs.slug+Q+')">View all '+ix.length+" "+mEsc(qs.entity)+" →</button></div>"
+      :empty(qs.emptyTitle,qs.cite);
+    fill(qs.region,'<section class="m-card" style="margin-top:16px">'
+      +'<div class="m-card-h"><div class="m-card-t">'+mEsc(qs.entity)+'</div><span class="m-badge">'+ix.length+"</span></div>"
+      +inner+"</section>");
+  }
+  function renderWorkbench(wb){for(var i=0;i<wb.queues.length;i++)renderQueue(wb.queues[i])}
+  // ── THE APPROVAL QUEUE: where a gated agent stops ─────────────────────────
+  //
+  // The blueprint says which agents a human has to clear before they act. The
+  // prototype used to say nothing at all, so the one screen that makes an
+  // agentic system different from a system did not exist. The rows are real
+  // seeded records of the entity the agent writes; the decision is this
+  // session's and says so.
+  var DECIDED={};
+  function decide(k,id,ok){
+    DECIDED[k+"|"+decodeURIComponent(id)]=ok?1:2;
+    renderApprovals();
+    toast((ok?"Approved ":"Sent back ")+decodeURIComponent(id),0);
+  }
+  function renderApproval(ap){
+    var t=D[ap.entity];if(!t){fill(ap.region,"");return}
+    var ix=live(t),body="",waiting=0,done=0,i,id,enc;
+    for(i=0;i<ix.length;i++){
+      id=String(at(t,ix[i],0));
+      if(DECIDED[ap.key+"|"+id]){done++;continue}
+      waiting++;
+      if(waiting>5)continue;
+      enc=encodeURIComponent(id).replace(/'/g,"%27");
+      body+="<tr>"+cells(t,ap,ix[i],ap.slug,false)
+        +'<td class="m-row-actions">'
+        +'<button class="m-btn m-btn--secondary m-btn--sm" onclick="decide('+Q+ap.key+Q+","+Q+enc+Q+',0)">Send back</button>'
+        +'<button class="m-btn m-btn--primary m-btn--sm" onclick="decide('+Q+ap.key+Q+","+Q+enc+Q+',1)">Approve</button></td></tr>';
+    }
+    var inner=body
+      ?'<div class="m-table-wrap"><table class="m-table"><thead><tr>'+heads(ap,"")+'<th style="text-align:right">Decision</th></tr></thead><tbody>'
+        +body+"</tbody></table></div>"
+      :'<div class="m-empty"><div class="m-empty-t">Nothing waiting on you</div><div class="m-assumed">'
+        +'<span class="m-assumed-k">This session</span> every '+mEsc(ap.entity)+" this queue held has been decided.</div></div>";
+    fill(ap.region,inner+'<div class="m-card-f"><span class="m-cell-sub">'+waiting+" awaiting · "+done+" decided this session</span></div>");
+  }
+  function renderApprovals(){for(var i=0;i<APPR.length;i++)renderApproval(APPR[i])}
+  window.decide=decide;
+`;
+
+/** The renderer for one build: the base, plus the persona/agent segment when
+ *  that build has queues to draw. A function replacer, never a pattern one —
+ *  the segment is code and `$&` inside it must stay `$&`. */
+function rendererFor(persona: boolean): string {
+  return PROTOTYPE_RENDERER.replace("/*PERSONA-RENDERER*/", () => (persona ? PERSONA_RENDERER : ""));
+}
 
 /**
  * THE OPERATOR'S NAVIGATION, when they have chosen one.
@@ -715,13 +852,66 @@ export function parentEntitiesFor(doc: unknown): string[] {
 }
 
 /**
- * The programme's stored inputs that are NOT the ontology or the atlas. One
- * option today: the value vocabulary, a `{ "Entity.attribute": [values] }`
- * artifact produced by a single model call per ontology change and consumed
- * deterministically by the seeder (see `valueVocabulary.ts`). Passing it changes
- * what the category and status columns SAY; omitting it changes nothing at all.
+ * THE CLIENT'S PALETTE, READ OFF THE EXPERIENCE DESIGN — the one definition,
+ * reached from every surface that assembles or exports a prototype.
+ *
+ * Meridian has been tokenised since it was written (`--m-brand`, `--m-accent`,
+ * …) and the Experience Design studio has always stored a governed `theme` —
+ * and the assembler called `meridianStylesheet()` with no argument, so every
+ * build shipped the house indigo and the palette reached only the ZIP export's
+ * `design-tokens.json`. A demo that could have landed as the client's product
+ * landed as ours, and the input that would have changed that was already on the
+ * record.
+ *
+ * The reading lives beside `parentEntitiesFor` for the same reason: the
+ * operator's studio, the stakeholder's link and the refine baseline must all
+ * read the palette identically or they assemble three differently-skinned
+ * applications. Keys are filtered to the governed surface — an unknown key
+ * cannot become a custom property — and every VALUE is validated downstream by
+ * `resolveTheme`, which keeps the house default for anything that does not fit
+ * its slot.
  */
-export interface AssemblyOptions { vocabulary?: unknown }
+export function paletteFor(doc: unknown): Partial<PrototypeTheme> {
+  const d = (typeof doc === "object" && doc !== null && !Array.isArray(doc)) ? doc as Record<string, unknown> : {};
+  const raw = (typeof d.theme === "object" && d.theme !== null && !Array.isArray(d.theme)) ? d.theme as Record<string, unknown> : {};
+  const out: Record<string, unknown> = {};
+  // The governed surface, named once. `radius` is the only number.
+  const KEYS = ["brand", "brandSoft", "accent", "ink", "inkSoft", "muted", "bg", "surface", "surface2",
+    "line", "positive", "warn", "danger", "radius", "fontSans", "fontDisplay"] as const;
+  for (const k of KEYS) {
+    const v = raw[k];
+    if (k === "radius") { if (typeof v === "number") out[k] = v; continue; }
+    if (typeof v === "string" && v.trim()) out[k] = v.trim();
+  }
+  return out as Partial<PrototypeTheme>;
+}
+
+/**
+ * The programme's stored inputs that are NOT the ontology or the atlas:
+ *
+ *   - `vocabulary` — the value vocabulary, a `{ "Entity.attribute": [values] }`
+ *     artifact produced by a single model call per ontology change and consumed
+ *     deterministically by the seeder (see `valueVocabulary.ts`). Passing it
+ *     changes what the category and status columns SAY; omitting it changes
+ *     nothing at all.
+ *   - `theme` — the client's governed palette (see `paletteFor`). Omitting it
+ *     ships the house default, exactly as before.
+ *
+ * Every one is OPTIONAL and absent means "as it was": the assembly is a pure
+ * function of what it is given, so the same programme always assembles the same
+ * bytes on every surface that reads these the same way.
+ */
+export interface AssemblyOptions {
+  vocabulary?: unknown;
+  theme?: Partial<PrototypeTheme> | null;
+  /**
+   * The agentic blueprint. Passing it puts the agents ON the records they act
+   * on and gives the gated ones an approval queue; omitting it assembles
+   * exactly the application it assembled before — the blueprint adds surfaces,
+   * it never changes the ones derived from the ontology.
+   */
+  blueprint?: unknown;
+}
 
 export function assemblePrototype(ontology: Record<string, unknown>, atlas: Record<string, unknown>, parentEntities?: readonly string[], options: AssemblyOptions = {}): AssembledPrototype {
   const fabric = deriveFabric(ontology, atlas);
@@ -888,11 +1078,267 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
    * because they are one decision — `leadColumnsFor` makes it, here and on the
    * list screen and on every child collection, exactly once.
    */
+  /** WHERE THIS ENTITY'S STATUS LIVES, -1 when it declares none — the one
+   *  definition, read by the list screen's board toggle and by every persona
+   *  queue that counts the lanes a role is working in. */
+  const statusIndexOf = (name: string): number => {
+    const attr = attrsOf(name).find((a) => roleOf.get(`${name} ${a}`) === "status");
+    return attr ? columnIndex(name, attr) : -1;
+  };
   const columnSpec = (name: string, cols: string[]): ColumnSpec => ({
     ix: cols.map((c) => columnIndex(name, c)),
     head: cols.map((c) => headFor(name, c)),
     role: cols.map((c) => roleCode(roleOf.get(`${name} ${c}`))),
   });
+
+  // ── THE ATLAS'S PEOPLE, AND THE BLUEPRINT'S AGENTS ────────────────────────
+  //
+  // Two documents the prototype was assembled beside and never read.
+  //
+  // The ATLAS names, per workflow, an owner and the entities each step touches:
+  // a persona and its work surface, already written down. The assembler used it
+  // for nothing but `flow:` fabric nodes that had no rendering at all, so the
+  // application had no screen that belonged to a person — and the free-form
+  // path's twelve fabricated dashboards were reaching for exactly this screen.
+  //
+  // The BLUEPRINT names, per agent, the entities it consumes and produces and
+  // whether a human stands in its path. None of it reached the prototype, so a
+  // client walked an application in which nothing was agentic and then read a
+  // document in which everything was.
+  //
+  // Both are derived in their own pure modules and joined here, which is what
+  // this file is for. Both are OPTIONAL: an atlas with no workflows produces no
+  // workbenches and a programme with no blueprint produces no agent surfaces,
+  // and in each case the rest of the application is byte-for-byte what it was.
+  //
+  // NEITHER EXISTS WITHOUT AN ONTOLOGY. An ontology with no entities is an
+  // empty shell rather than a prototype — every caller treats a build with no
+  // regions as "nothing to show yet" — and a workbench full of atlas prose over
+  // an application with no records would turn that honest nothing into a page
+  // that looks like something.
+  const roleWorkbenches = names.length ? deriveWorkbenches(atlas) : [];
+  const surface = names.length
+    ? deriveAgenticSurface(options.blueprint, names)
+    : { agents: [], unattributedGates: [] };
+  /** A name written in the atlas or the blueprint → this ontology's entity, or
+   *  null. ONE resolution, so a queue and an agent feed can never disagree
+   *  about whether "Invoices" is `Invoice`. */
+  const asEntity = entityNameResolver(names);
+  /** …and whether this BUILD can show it. An entity outside the operator's
+   *  curated menu has no list or detail screen, so a queue of it would offer
+   *  rows that open nothing. Those are stated, not queued. */
+  const hasScreen = (e: string | null): e is string => !!e && ordered.includes(e);
+  /** A region the client fills that is NOT a fabric node — see the renderer's
+   *  index. It carries no `data-fabric-id` precisely because the fabric never
+   *  declared it: an invented id would corrupt the delta's address space. */
+  const fillSlot = (id: string) => `<div data-region="${esc(id)}"></div>`;
+  /**
+   * A ROUTE WORD NO ENTITY OWNS. `#workbench/sales-operations` and `#approvals`
+   * are addresses in the same space as `#account`, so an ontology holding an
+   * entity called "Workbench" would lose its list screen to a persona. Reserved
+   * by walking away from the collision rather than by hoping.
+   */
+  const reserveRoute = (base: string): string => {
+    let word = base;
+    for (let n = 2; names.some((x) => es.get(x) === word); n += 1) word = `${base}-${n}`;
+    return word;
+  };
+  const WB_ROUTE = reserveRoute("workbench");
+  const AP_ROUTE = reserveRoute("approvals");
+
+  /**
+   * WHERE AN AGENT TOUCHES A RECORD, THE RECORD SAYS SO.
+   *
+   * On the detail screen of every entity an agent reads or writes: what it is,
+   * what it does, how much autonomy it has, and what gates it. `reads` and
+   * `writes` are the blueprint's own inputs and outputs resolved against the
+   * ontology, so this cannot name an entity the model merely mentioned.
+   *
+   * An agent that names an entity the ontology does not hold appears with that
+   * miss printed on it rather than silently narrowed to the part that matched.
+   */
+  const agentBand = (name: string): string => {
+    const acting = agentsOnEntity(surface, name);
+    if (!acting.length) return "";
+    const item = (a: SurfacedAgent): string => {
+      const verbs = [a.reads.includes(name) ? "reads" : "", a.writes.includes(name) ? "writes" : ""].filter(Boolean);
+      const risk = [a.autonomy && `autonomy: ${a.autonomy}`, a.blastRadius && `blast radius: ${a.blastRadius}`,
+        a.reversibility && `${a.reversibility}`].filter(Boolean).join(" · ");
+      const gate = a.gate
+        ? `<div class="m-agent-gate"><span class="m-pill m-pill--warn"><span class="m-dot m-dot--warn"></span>${a.gate.source === "operator" ? "Gated by an operator decision" : "A human approves"}</span>`
+          + `${a.gate.where ? ` <span class="m-cell-sub">${esc(a.gate.where)}</span>` : ""}`
+          + `${apprSlugs.has(a.slug) ? ` <button class="m-btn m-btn--secondary m-btn--sm" onclick="go('#${AP_ROUTE}')">Approval queue →</button>` : ""}</div>`
+        : `<div class="m-agent-gate"><span class="m-pill m-pill--risk"><span class="m-dot m-dot--risk"></span>No human gate stated</span></div>`;
+      const miss = a.unmapped.length
+        ? `<div class="m-assumed"><span class="m-assumed-k">Unmapped</span> this agent also names ${esc(a.unmapped.join(", "))}, which this ontology does not hold.`
+          + `<span class="m-assumed-q">Is that a record the system must keep? Confirm in Listen.</span></div>`
+        : "";
+      return `<li class="m-agent"><div class="m-agent-h"><span class="m-agent-n">${esc(a.name)}</span>`
+        + verbs.map((v) => `<span class="m-badge">${v}</span>`).join("")
+        + `${a.replaces ? `<span class="m-cell-sub">${esc(a.replaces)}</span>` : ""}</div>`
+        + `${a.purpose ? `<div class="m-agent-p">${esc(a.purpose)}</div>` : ""}`
+        + `${risk ? `<div class="m-cell-sub">${esc(risk)}</div>` : ""}${gate}${miss}</li>`;
+    };
+    return `<section class="m-card" style="margin-top:16px"><div class="m-card-h"><div class="m-card-t">Agent activity</div>`
+      + `<span class="m-badge">${acting.length}</span></div>`
+      + `<p class="m-cell-sub">From the agentic blueprint — the agents that act on ${esc(name)} records.</p>`
+      + `<ul class="m-agents">${acting.map(item).join("")}</ul></section>`;
+  };
+
+  /**
+   * THE APPROVAL QUEUE — the screen that makes an agentic system different.
+   *
+   * One card per GATED agent: the gate the blueprint states, and the records it
+   * would be holding. The rows are the same seeded records every other screen
+   * reads, and the decision is this session's and says so — nothing here
+   * pretends to be an audit trail.
+   *
+   * A gated agent whose entities this build has no screen for gets a card that
+   * SAYS that, rather than an empty table that reads as "nothing pending".
+   * Gates the blueprint states without naming an agent are listed too: a
+   * decision with no owner on the diagram is a finding, not a blank.
+   */
+  const apprSpecs: ApprovalSpec[] = [];
+  const apprSlugs = new Set<string>();
+  const gated = gatedAgents(surface);
+  const approvalsScreen = (): string => {
+    if (!gated.length && !surface.unattributedGates.length) return "";
+    const cards = gated.map((a) => {
+      // The entity it WRITES is the one a human is being asked to sign off;
+      // where it writes nothing this build can show, its first read stands in.
+      const target = [...a.writes, ...a.reads].find(hasScreen) ?? null;
+      const named = [...a.writes, ...a.reads, ...a.unmapped];
+      const head = `<div class="m-card-h"><div class="m-card-t">${esc(a.name)}</div>`
+        + `<span class="m-badge">${esc(a.gate?.mechanism || "approve")}</span></div>`
+        + `${a.gate?.why ? `<p class="m-cell-sub">${esc(a.gate.why)}</p>` : ""}`
+        + `${a.gate?.where ? `<p class="m-cell-sub">Gate — ${esc(a.gate.where)}</p>` : ""}`
+        + `${a.gate?.source === "operator" ? `<p class="m-cell-sub">Added on the blueprint as an operator decision.</p>` : ""}`;
+      if (!target) {
+        return `<section class="m-card" style="margin-top:16px">${head}<div class="m-assumed">`
+          + `<span class="m-assumed-k">No queue</span> this agent acts on ${named.length ? esc(named.join(", ")) : "nothing this ontology names"}`
+          + `, which this build has no screen for — so there is nothing here to approve.`
+          + `<span class="m-assumed-q">Should that record type be in the prototype? Confirm in Experience Design.</span></div></section>`;
+      }
+      apprSlugs.add(a.slug);
+      apprSpecs.push({
+        region: `approve:${a.slug}`,
+        key: a.slug,
+        entity: target,
+        slug: es.get(target)!,
+        ...columnSpec(target, leadColumnsFor(target, 3)),
+      });
+      return `<section class="m-card" style="margin-top:16px">${head}`
+        + `<p class="m-cell-sub">Every ${esc(target)} this agent would act on, from the seeded records. Decisions are this session's.</p>`
+        + `${fillSlot(`approve:${a.slug}`)}</section>`;
+    }).join("");
+    const orphans = surface.unattributedGates.length
+      ? `<section class="m-card" style="margin-top:16px"><div class="m-card-h"><div class="m-card-t">Gates with no agent named</div>`
+        + `<span class="m-badge">${surface.unattributedGates.length}</span></div><ul class="m-agents">`
+        + surface.unattributedGates.map((g) => `<li class="m-agent"><div class="m-agent-h"><span class="m-agent-n">${esc(g.where || "A gated decision")}</span>`
+          + `${g.mechanism ? `<span class="m-badge">${esc(g.mechanism)}</span>` : ""}</div>`
+          + `${g.why ? `<div class="m-agent-p">${esc(g.why)}</div>` : ""}`
+          + `<div class="m-assumed"><span class="m-assumed-k">Unattributed</span> the blueprint states this gate without naming the agent it sits on.`
+          + `<span class="m-assumed-q">Which agent stops here? Confirm on the blueprint.</span></div></li>`).join("")
+        + `</ul></section>`
+      : "";
+    return `<section class="m-screen" data-screen="approvals" hidden>
+      <header class="m-page-h"><div><div class="m-eyebrow">Agents</div><h1 class="m-title">Approvals</h1>
+      <p class="m-sub">${gated.length} agent${gated.length === 1 ? "" : "s"} in the blueprint cannot act until a person clears the work.</p></div></header>
+      ${cards}${orphans}</section>`;
+  };
+
+  /**
+   * A PERSONA'S WORKBENCH — the atlas's own role, with the work it owns.
+   *
+   * Its queues are the entities its workflows name, with the status values the
+   * seeded records actually carry counted beside them; its workflows are the
+   * atlas's steps, rendered on the `flow:` fabric node that stood for each one
+   * and had no rendering until now.
+   *
+   * EVERY NAME THE ATLAS STATES SURVIVES. An entity a step names that the
+   * ontology does not hold is printed as an unmodelled name with the question
+   * that settles it. An entity the ontology holds but this build has no screen
+   * for is printed as that. An actor who appears in a step without owning a
+   * workflow is printed as a collaborator on the role that does. None of them
+   * is quietly dropped, which is what a filtered list would have done.
+   */
+  const workSpecs: WorkbenchSpec[] = [];
+  const flowNodes = fabric.nodes.filter((n) => n.kind === "flow");
+  const flowIdFor = (w: AtlasWorkflow): string => {
+    const node = flowNodes[w.index];
+    return node && String(node.source.atlasWorkflow ?? "").trim() === w.name ? node.id : "";
+  };
+  const QUEUES_MAX = 4;
+  const workbenchScreen = (r: AtlasRole): string => {
+    const title = r.role || "Unattributed";
+    const seen = new Set<string>();
+    const queued: string[] = [];
+    const offMenu: string[] = [];
+    const unmodelled: string[] = [];
+    for (const raw of r.entities) {
+      const hit = asEntity(raw);
+      if (!hit) { if (!unmodelled.includes(raw)) unmodelled.push(raw); continue; }
+      if (seen.has(hit)) continue;
+      seen.add(hit);
+      (hasScreen(hit) ? queued : offMenu).push(hit);
+    }
+    const spec = { slug: r.slug, queues: [] as QueueSpec[] };
+    const queues = queued.slice(0, QUEUES_MAX).map((entity) => {
+      const region = `queue:${r.slug}:${es.get(entity)}`;
+      spec.queues.push({
+        region,
+        entity,
+        slug: es.get(entity)!,
+        status: statusIndexOf(entity),
+        ...columnSpec(entity, leadColumnsFor(entity, 4)),
+        emptyTitle: `No ${entity} records yet`,
+        cite: citeOf(assumptionFor(seedParentOf(entity), entity)),
+      });
+      return fillSlot(region);
+    }).join("");
+    workSpecs.push(spec);
+    const chip = (label: string, entity?: string) => entity
+      ? `<button class="m-chip" onclick="go('#${es.get(entity)}')">${esc(label)}</button>`
+      : `<span class="m-chip m-chip--flat">${esc(label)}</span>`;
+    const rest = queued.slice(QUEUES_MAX);
+    const alsoQueued = rest.length
+      ? `<p class="m-sub">Also this role's: ${rest.map((e) => chip(e, e)).join(" ")}</p>` : "";
+    const notHere = offMenu.length
+      ? `<div class="m-assumed"><span class="m-assumed-k">No screen</span> ${esc(offMenu.join(", "))} — in the ontology, but not in this build's menu, so there is no queue for ${offMenu.length === 1 ? "it" : "them"} here.`
+        + `<span class="m-assumed-q">Should this role get ${offMenu.length === 1 ? "that screen" : "those screens"}? Confirm in Experience Design.</span></div>` : "";
+    const notModelled = unmodelled.length
+      ? `<div class="m-assumed"><span class="m-assumed-k">Not modelled</span> the atlas names ${esc(unmodelled.join(", "))} in this role's steps; the ontology holds no such entity.`
+        + `<span class="m-assumed-q">${unmodelled.length === 1 ? "Is that a record" : "Are those records"} the system must keep? Confirm in Listen.</span></div>` : "";
+    const step = (s: { action: string; actor: string; system: string; entities: string[] }): string => {
+      const meta = [s.actor && s.actor !== r.role ? s.actor : "", s.system].filter(Boolean).join(" · ");
+      const chips = s.entities.map((e) => { const hit = asEntity(e); return chip(hit ?? e, hasScreen(hit) ? hit : undefined); }).join(" ");
+      return `<li class="m-step"><div class="m-step-a">${esc(s.action || "—")}</div>`
+        + `${meta ? `<div class="m-cell-sub">${esc(meta)}</div>` : ""}`
+        + `${chips ? `<div class="m-chips">${chips}</div>` : ""}</li>`;
+    };
+    const flows = r.workflows.map((w) => {
+      const inner = `<section class="m-card" style="margin-top:16px">`
+        + `<div class="m-card-h"><div class="m-card-t">${esc(w.name)}</div>`
+        + `<span class="m-badge">${w.steps.length} step${w.steps.length === 1 ? "" : "s"}</span></div>`
+        + `${w.trigger ? `<p class="m-cell-sub">Trigger — ${esc(w.trigger)}</p>` : ""}`
+        + `${w.steps.length ? `<ol class="m-steps">${w.steps.map(step).join("")}</ol>` : `<div class="m-assumed"><span class="m-assumed-k">No steps</span> the atlas names this workflow without stating how it runs.<span class="m-assumed-q">What are the steps? Confirm in Listen.</span></div>`}`
+        + `${w.handoffs.length ? `<p class="m-cell-sub">Hands off — ${esc(w.handoffs.join("; "))}</p>` : ""}</section>`;
+      const fid = flowIdFor(w);
+      // The fabric declares one node per atlas workflow and nothing rendered
+      // them. Where the pairing holds, this IS that node's rendering; where it
+      // cannot be established the block still ships, unaddressed rather than
+      // wrongly addressed.
+      return fid ? region(fid, inner) : inner;
+    }).join("");
+    const works = r.collaborators.length
+      ? `<p class="m-sub">Works with ${esc(r.collaborators.join(", "))} — actors the atlas names inside these workflows.</p>` : "";
+    const unowned = r.role ? "" : `<div class="m-assumed"><span class="m-assumed-k">Unattributed</span> the atlas names neither an owner nor an actor for ${r.workflows.length === 1 ? "this workflow" : "these workflows"}.<span class="m-assumed-q">Who runs it? Confirm in Listen.</span></div>`;
+    return `<section class="m-screen" data-screen="work-${r.slug}" hidden>
+      <header class="m-page-h"><div><div class="m-eyebrow">Workbench</div><h1 class="m-title">${esc(title)}</h1>
+      <p class="m-sub">${r.workflows.length} workflow${r.workflows.length === 1 ? "" : "s"} in the current-state atlas${r.systems.length ? ` · ${esc(r.systems.join(", "))}` : ""}</p>
+      ${works}</div></header>
+      ${unowned}${queues}${alsoQueued}${notHere}${notModelled}${flows}</section>`;
+  };
 
   // ── one list screen per entity ──
   //
@@ -911,8 +1357,7 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
     // the pipeline: `status`. So the toggle is derived, with no model call —
     // and an entity that has no status attribute gets NO toggle, because a
     // board of one nameless lane is a control that offers nothing.
-    const statusAttr = attrsOf(name).find((a) => roleOf.get(`${name} ${a}`) === "status");
-    const statusIx = statusAttr ? columnIndex(name, statusAttr) : -1;
+    const statusIx = statusIndexOf(name);
     screenSpecs.push({
       entity: name,
       slug: s,
@@ -1089,6 +1534,7 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
       <div style="display:flex;gap:10px"><button class="m-btn m-btn--secondary" onclick="editRec('${s}')">Edit</button><button class="m-btn m-btn--danger" onclick="delRec('${s}')">Delete</button></div></header>
       ${slot(`region:${s}:summary`)}
       ${parentBand}
+      ${agentBand(name)}
       ${children}</section>`;
   };
 
@@ -1190,8 +1636,28 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
     : spine.length && spine.length < ordered.length
       ? `<div class="m-nav-sec">Primary</div>${spineNav}<div class="m-nav-sec">All records</div>${tree}`
       : `<div class="m-nav-sec">Records</div>${tree}`;
+  // THE APPROVAL QUEUE IS BUILT FIRST, because the entity detail pages link to
+  // it: an agent's gate on a record's own page is only offered a queue where a
+  // queue exists, and that is decided here.
+  const approvals = approvalsScreen();
   const screens = ordered.map((n) => listScreen(n) + detailScreen(n) + formScreen(n)).join("\n");
+  const workbenches = roleWorkbenches.map(workbenchScreen).join("\n");
   const firstList = `list-${es.get(lead)}`;
+
+  // THE SECOND NAVIGATION — the people and the agents.
+  //
+  // Its own `<nav>`, not more rows in the records menu: these are not record
+  // types, and the operator's curated menu is a statement about record types.
+  // A landmark each, so the two are distinguishable to a screen reader as well
+  // as on the screen.
+  const workNav = roleWorkbenches.map((r) =>
+    `<div class="m-nav-row"><span class="m-nav-item" data-nav="work-${r.slug}" onclick="event.preventDefault();event.stopPropagation();go('#${WB_ROUTE}/${r.slug}')">${esc(r.role || "Unattributed")}<span class="m-nav-count">${r.workflows.length}</span></span></div>`).join("");
+  const apprNav = approvals
+    ? `<div class="m-nav-sec">Agents</div><div class="m-nav-row"><span class="m-nav-item" data-nav="approvals" onclick="event.preventDefault();event.stopPropagation();go('#${AP_ROUTE}')">Approvals<span class="m-nav-count">${gated.length}</span></span></div>`
+    : "";
+  const auxNav = workNav || apprNav
+    ? `<nav class="m-nav" aria-label="Workbenches and agents">${workNav ? `<div class="m-nav-sec">Workbenches</div>${workNav}` : ""}${apprNav}</nav>`
+    : "";
 
   // THE ISLAND. Built after the screens because the screens are what decide
   // which entities are reachable: a curated build ships its chosen parents and
@@ -1202,23 +1668,28 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
   for (const n of names) if (referenced.has(n)) data[n] = tables.get(n)!;
   const links: Record<string, Array<[string, string]>> = {};
   for (const key of junctionsUsed) links[key] = (seed.junctionLinks[key] ?? []).map((l) => [l.fromId, l.toId]);
-  const model: PrototypeModel = { roles: roleLegend, data, links, screens: screenSpecs, first: es.get(lead) ?? "" };
+  const model: PrototypeModel = {
+    roles: roleLegend, data, links, screens: screenSpecs, first: es.get(lead) ?? "",
+    work: workSpecs, appr: apprSpecs, wbRoute: WB_ROUTE, apRoute: AP_ROUTE,
+  };
   // `<` is the ONE character that can end a script block early; escaping it
   // keeps the island valid JSON (a `<` inside a JSON string is just `<`)
   // and unable to close its own element.
   const island = JSON.stringify(model).replace(/</g, "\\u003c");
 
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Prototype — assembled from ontology + atlas</title><style>${meridianStylesheet()}
+<title>Prototype — assembled from ontology + atlas</title><style>${meridianStylesheet(options.theme)}
 .m-screen[hidden]{display:none}.m-screen{display:block}</style></head><body>
-<div class="m-app"><aside class="m-side"><div class="m-brand"><span class="m-brand-dot"></span>Assembled</div><nav class="m-nav">${nav}</nav></aside>
-<main class="m-main">${screens}</main></div>
+<div class="m-app"><aside class="m-side"><div class="m-brand"><span class="m-brand-dot"></span>Assembled</div><nav class="m-nav" aria-label="Records">${nav}</nav>${auxNav}</aside>
+<main class="m-main">${screens}
+${workbenches}
+${approvals}</main></div>
 <script type="application/json" id="m-seed">${island}</script>
 <script>function show(id){document.querySelectorAll('.m-screen').forEach(s=>s.hidden=s.getAttribute('data-screen')!==id);
 var m=document.querySelectorAll('.m-nav-item[data-nav="'+id+'"]');
 if(m.length){document.querySelectorAll('.m-nav-item').forEach(function(n){n.classList.remove('is-active')});
 m.forEach(function(n){n.classList.add('is-active');for(var p=n.parentElement;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true})}
-window.scrollTo(0,0)}${PROTOTYPE_RENDERER}
+window.scrollTo(0,0)}${rendererFor(workSpecs.some((w) => w.queues.length > 0) || apprSpecs.length > 0)}
 if(!document.querySelector('.m-screen:not([hidden])'))show('${firstList}')</script>
 </body></html>`;
   return { html, fabric, regionCount };

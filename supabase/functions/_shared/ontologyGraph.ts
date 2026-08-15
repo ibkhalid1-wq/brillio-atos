@@ -413,3 +413,38 @@ export function deriveOntologyGraph(ontology: Record<string, unknown>): Ontology
 
   return { entities: names, nodes, byName, edges, junctions, roots, treeRoots, order, navOrder, spine, references, cycleBroken };
 }
+
+/**
+ * A NAME WRITTEN SOMEWHERE ELSE, RESOLVED AGAINST THIS ONTOLOGY'S OWN NAMES.
+ *
+ * The atlas names entities inside workflow steps and the blueprint names them in
+ * each agent's inputs and outputs. Both are told to spell them exactly as the
+ * ontology does; neither always does ("Invoices" for `Invoice`, "lead score" for
+ * `Lead Score`). Every consumer of those documents therefore needs the same
+ * question answered — which entity is this, if any — and it must be answered the
+ * SAME way in each of them, or one surface shows a queue the other says does not
+ * exist.
+ *
+ * It resolves on case, spacing and punctuation first, then on a trailing plural,
+ * and then it STOPS. There is no nearest-match: a name that resolves to nothing
+ * returns null, and its caller's job is to say so on the screen rather than bind
+ * it to whichever entity happened to look similar.
+ */
+export function entityNameResolver(names: readonly string[]): (raw: unknown) => string | null {
+  const key = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  const singular = (s: string) => (s.length > 3 && s.endsWith("s") ? s.slice(0, -1) : s);
+  const exact = new Map<string, string>();
+  const loose = new Map<string, string>();
+  for (const n of names) {
+    const k = key(String(n ?? ""));
+    if (!k) continue;
+    if (!exact.has(k)) exact.set(k, n);
+    const s = singular(k);
+    if (!loose.has(s)) loose.set(s, n);
+  }
+  return (raw: unknown) => {
+    const k = key(String(raw ?? "").trim());
+    if (!k) return null;
+    return exact.get(k) ?? loose.get(singular(k)) ?? null;
+  };
+}
