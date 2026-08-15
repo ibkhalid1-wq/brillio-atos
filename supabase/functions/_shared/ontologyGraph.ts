@@ -118,6 +118,44 @@ export function nameWords(s: unknown): string[] {
     .trim().toLowerCase().split(/\s+/).filter(Boolean);
 }
 
+/**
+ * THE JOIN KEY — the ONE definition of the column a child row carries to name
+ * the parent that owns it. The seeder WRITES this key; the assembler READS it
+ * (off the fabric region that declares the relation); nothing else invents it.
+ *
+ * It used to be rebuilt independently on both sides as
+ * `entity.toLowerCase() + "Id"`, which is not a key derivation but a convention
+ * being guessed at. Two things follow from a guess. A multi-word entity got a
+ * column with a SPACE in it — `alliance partnerId` — which is not an identifier
+ * in any schema the prototype claims to be showing, and which any consumer
+ * spelling the convention even slightly differently (camelCase, snake_case)
+ * matches nothing at all: the parent renders zero children while the seed holds
+ * hundreds. And it silently weakened the referential-integrity guard, whose
+ * `endsWith("Id")` lookup could no longer find the entity a spaced key named.
+ *
+ * So the key is derived from the entity's NAME WORDS — the same decomposition
+ * the reference detection uses — and is always a legal identifier:
+ * `Alliance Partner` → `alliancePartnerId`, `Account` → `accountId` (unchanged,
+ * which is why single-word ontologies see no movement at all).
+ *
+ * A many-to-many has NO join key in either direction — that is what makes it a
+ * many-to-many. Its membership lives in its own table; see `junctionKeyFor`.
+ */
+export function joinKeyFor(parent: unknown): string {
+  const w = nameWords(parent);
+  if (!w.length) return "xId";
+  return w[0] + w.slice(1).map((x) => x.charAt(0).toUpperCase() + x.slice(1)).join("") + "Id";
+}
+
+/**
+ * Where a junction's MEMBERSHIP lives — the one address the seeder writes and
+ * the assembler reads, so a many-to-many stops being an untyped hole between
+ * them. Direction is the graph's normalised `from`/`to`, never positional.
+ */
+export function junctionKeyFor(from: unknown, to: unknown): string {
+  return `_junction:${nameWords(from).join("-") || "x"}:${nameWords(to).join("-") || "x"}`;
+}
+
 const entitiesOf = (ontology: Record<string, unknown>) =>
   (Array.isArray(ontology.entities) ? ontology.entities : []) as Array<Record<string, unknown>>;
 const relationsOf = (ontology: Record<string, unknown>) =>

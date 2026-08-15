@@ -204,16 +204,23 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
     // Count only children the fabric will actually render, so the pick cannot
     // be won by rows a hidden relation owns. Ties keep the earliest row, so a
     // childless entity still shows rows[0] and the pick stays deterministic.
-    const childNamesOf = childRegions
-      .map((n) => names.find((x) => es.get(x) === n.id.split(":")[2]))
-      .filter((x): x is string => Boolean(x));
-    const fk = `${name.toLowerCase()}Id`;
+    //
+    // THE JOIN KEY IS THE RELATION'S, NOT A GUESS. Both this count and the
+    // render below used to rebuild the FK column as `name.toLowerCase()+"Id"` —
+    // a convention reconstructed on the reading side and hoped to match the
+    // writing side, which is not a key at all. It is read off the fabric region
+    // that declares the relation (`joinKey`), and a many-to-many, which has no
+    // FK in either direction, is counted from its membership table instead of
+    // being silently counted as zero.
+    const childNameOf = (n: { id: string }) => names.find((x) => es.get(x) === n.id.split(":")[2]);
+    const linksOf = (n: { junctionKey?: string }) => seed.junctionLinks[n.junctionKey ?? ""] ?? [];
     const shown = new Map<string, number>();
-    for (const cn of childNamesOf) {
-      for (const c of seed.records[cn] ?? []) {
-        const v = c[fk]; if (v == null) continue;
-        shown.set(String(v), (shown.get(String(v)) ?? 0) + 1);
-      }
+    const bump = (v: unknown) => { if (v != null) shown.set(String(v), (shown.get(String(v)) ?? 0) + 1); };
+    for (const n of childRegions) {
+      if (n.role === "multi-select") { for (const l of linksOf(n)) bump(l.fromId); continue; }
+      const cn = childNameOf(n);
+      if (!cn || !n.joinKey) continue;
+      for (const c of seed.records[cn] ?? []) bump(c[n.joinKey]);
     }
     const r = rows.reduce<SeedRecord | undefined>((best, row) =>
       best && (shown.get(String(best.id)) ?? 0) >= (shown.get(String(row.id)) ?? 0) ? best : row, rows[0]);
@@ -232,27 +239,32 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
     // A collection is now a real table headed the way that entity's own list
     // screen heads it (`leadColumnsFor`, the one definition), so the prototype
     // says what the ontology said.
-    const childrenOf = (childName: string) =>
-      (seed.records[childName] ?? []).filter((c) => String(c[`${name.toLowerCase()}Id`]) === String(r.id));
     const children = childRegions.map((n) => {
-      const childName = names.find((x) => es.get(x) === n.id.split(":")[2]);
+      const childName = childNameOf(n);
       if (!childName) return region(n.id, "");
       const cs = es.get(childName)!;
-      const all = childrenOf(childName);
+      // A many-to-many is a set of tags, not a table of owned rows, and its
+      // membership lives in its own table — `junctionKey`, the address the
+      // fabric carries — because neither side owns a foreign key.
+      const all = n.role === "multi-select"
+        ? (() => {
+          const linked = new Set(linksOf(n).filter((l) => l.fromId === String(r.id)).map((l) => l.toId));
+          return (seed.records[childName] ?? []).filter((c) => linked.has(String(c.id)));
+        })()
+        : n.joinKey ? (seed.records[childName] ?? []).filter((c) => String(c[n.joinKey!]) === String(r.id)) : [];
       const shownRows = all.slice(0, 5);
       const head = `<div class="m-card-h"><div class="m-card-t">${esc(childName)}</div><span class="m-badge">${all.length}</span></div>`;
-      // A many-to-many is a set of tags, not a table of owned rows. Its
-      // membership is not materialised in the seed yet (the seeder declares
-      // that skip as an assumption), so it states the gap rather than
-      // rendering an empty table that implies there is nothing there.
       if (n.role === "multi-select") {
+        // A record with no links is a real zero now that membership is
+        // generated — but the fan-out behind it is still assumed, so the empty
+        // state says so rather than presenting the guess as a finding.
         const chips = shownRows.length
           ? `<div class="m-chips">${shownRows.map((c) => `<span class="m-chip">${esc(displayNameOf(childName, c))}</span>`).join("")}</div>`
-          : `<div class="m-empty"><div class="m-empty-t">No ${esc(childName)} linked</div>Many-to-many membership is not generated in the seed — see the run's assumptions.</div>`;
+          : `<div class="m-empty"><div class="m-empty-t">No ${esc(childName)} linked</div>Membership is synthetic and its fan-out assumed — see the run's assumptions.</div>`;
         return region(n.id, `<section class="m-card" style="margin-top:16px">${head}${chips}</section>`);
       }
       // `collection` (1:N, and the default for an undeclared cardinality).
-      const cols = leadColumnsFor(childName, 4, `${name.toLowerCase()}Id`);
+      const cols = leadColumnsFor(childName, 4, n.joinKey);
       const body = shownRows.map((c) => `<tr>${rowCells(childName, cols, c, cs, false)}</tr>`).join("");
       const table = shownRows.length
         ? `<div class="m-table-wrap"><table class="m-table"><thead><tr>${cols.map((c) => `<th>${esc(headFor(childName, c))}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table></div>`
@@ -275,7 +287,7 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
       const parentName = nd.source.relation?.[0] ?? "";
       const ps = es.get(parentName);
       if (!ps) return region(nd.id, "");
-      const pid = r[`${parentName.toLowerCase()}Id`];
+      const pid = nd.joinKey ? r[nd.joinKey] : undefined;
       const prow = (seed.records[parentName] ?? []).find((p) => String(p.id) === String(pid));
       const label = prow ? displayNameOf(parentName, prow) : "—";
       return region(nd.id, `<button class="m-linkcard" onclick="show('detail-${ps}')">`
