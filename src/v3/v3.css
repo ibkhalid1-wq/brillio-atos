@@ -9162,3 +9162,20 @@ body { text-rendering: optimizeLegibility; }
 .v3bp-guards i{color:var(--v3-amber);font-style:normal}
 .v3bp-noguards{font-size:11px;color:var(--v3-amber)}
 .v3bp-foot{font-size:11.5px;color:var(--v3-text-muted);line-height:1.55;margin:14px 0 0}
+
+/* The blueprint's one decision block. It is the only thing on the page that asks
+   for anything, so it gets the only accent weight; the roster below it reads. */
+.v3bp-decide{border:1px solid var(--v3-red);background:var(--v3-red-soft);border-radius:10px;
+  padding:12px 14px;margin:0 0 16px}
+.v3bp-decide-h{font-size:12.5px;color:var(--v3-text);line-height:1.55;margin:0 0 10px}
+.v3bp-decide-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px}
+.v3bp-decide-row{display:flex;flex-wrap:wrap;gap:9px;align-items:baseline;font-size:12px}
+.v3bp-decide-why{font-size:11px;color:var(--v3-text-muted)}
+.v3bp-decide-acts,.v3bp-decide-form{display:flex;gap:6px;align-items:center;margin-left:auto}
+.v3bp-decide-in{height:26px;min-width:260px;border-radius:6px;border:1px solid var(--v3-border);
+  padding:0 9px;font-size:11.5px;background:var(--v3-surface);color:var(--v3-text)}
+.v3bp-btn{height:26px;border-radius:6px;border:1px solid var(--v3-border);background:var(--v3-surface);
+  color:var(--v3-text-secondary);font-size:11.5px;font-weight:600;padding:0 11px;cursor:pointer}
+.v3bp-btn.primary{background:var(--v3-accent-2);border-color:var(--v3-accent-2);color:#fff}
+.v3bp-btn:disabled{opacity:.5;cursor:not-allowed}
+.v3bp-btn:focus-visible,.v3bp-decide-in:focus-visible{outline:2px solid var(--v3-accent-2);outline-offset:2px}
