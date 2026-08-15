@@ -57,6 +57,11 @@ not a known state. Node 20 or newer (`.nvmrc` pins what CI uses).
   project's own gate. Behind a TLS-intercepting proxy, Deno needs
   `DENO_TLS_CA_STORE=system` or its remote imports fail with `UnknownIssuer`.
 
+**Moving off Supabase / onto Azure?** Read
+[docs/aura/azure-environment-setup.md](docs/aura/azure-environment-setup.md) first —
+it measures the actual surface (56 data calls, 16 auth calls, 15 edge functions,
+16,340 lines) and says plainly why it is a port rather than a configuration change.
+
 ## Architecture in five rules
 
 1. **One blob per programme.** Everything lives in `adam_programs.data` (JSONB) —
