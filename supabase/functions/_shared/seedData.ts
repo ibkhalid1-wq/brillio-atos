@@ -17,7 +17,7 @@
  * assumptions list — direct input to the Listen sessions.
  */
 import { deriveRoles, readsLikeATitle, type ValueRole } from "./semanticRoles.ts";
-import { deriveOntologyGraph, joinKeyFor, junctionKeyFor, type OntologyGraph } from "./ontologyGraph.ts";
+import { deriveOntologyGraph, joinKeyFor, junctionKeyFor, nameWords, type OntologyGraph } from "./ontologyGraph.ts";
 import { resolveVocabulary, vocabularyKey } from "./valueVocabulary.ts";
 
 /** `_display` is what a person would call this record. It is present only when
@@ -89,6 +89,67 @@ const PEOPLE = ["A. Whitfield", "R. Osei", "M. Lindqvist", "S. Nakamura", "D. Fe
 const CATEGORIES = ["Standard", "Core", "Extended", "Strategic", "Enterprise", "Regional", "Global", "Priority", "Emerging", "Established", "Managed", "Direct"];
 
 const singular = (name: string) => name.replace(/s$/i, "");
+
+// ── lifecycle coherence ─────────────────────────────────────────────────────
+//
+// A RECORD IS NOT A ROW OF INDEPENDENT COLUMNS. It is one thing that happened,
+// and its columns are statements about that thing which have to agree with each
+// other. Every value below used to be drawn on its own, which produced, on a
+// reviewed CRM build: a staffing assignment that ended four months before it
+// started (165 of 366 generated date pairs — nearly half), an invoice due before
+// it was issued, and an account whose opportunities, engagements and escalations
+// were each owned by a different person, none of them the account's own owner.
+//
+// None of that is visible as a bug in a screenshot of one field. It is extremely
+// visible to a client reading a row, and it is the difference between "synthetic
+// data" and "nonsense" — the demo stops being about the product and becomes
+// about the mistake.
+
+/** Does this attribute name a lifecycle BEGINNING or an ENDING? Read from the
+ *  attribute's own words, so `start_date`/`end_date`, `issue_date`/`due_date`
+ *  and `closeDate` all answer without a per-ontology list. Neither, for a date
+ *  that names an instant rather than a bound (`event_date`, `response_date`) —
+ *  those carry no ordering to violate. */
+const LIFECYCLE_START = /(^| )(start|started|begin|began|opened|open|created|create|issue|issued|submitted|received|entered|effective|kickoff|placed|activation|snapshot)($| )/i;
+const LIFECYCLE_END = /(^| )(end|ended|close|closed|closing|complete|completed|completion|resolved|resolution|due|expiry|expires|expiration|until|termination|delivered|shipped|paid|settled)($| )/i;
+function lifecyclePhase(attribute: string): "start" | "end" | undefined {
+  const words = nameWords(attribute).join(" ");
+  // An ending wins a tie: "close start"-shaped names do not occur, and where a
+  // name carries both senses the terminal one is what bounds the record.
+  if (LIFECYCLE_END.test(words)) return "end";
+  if (LIFECYCLE_START.test(words)) return "start";
+  return undefined;
+}
+
+/** A state that says the record's story is OVER. A record in one of these has
+ *  been done, signed, closed or paid — so it cannot also be worth nothing. */
+const SETTLED = /(won|closed|complete|completed|signed|executed|approved|delivered|invoiced|paid|fulfilled|settled)/i;
+
+// Date arithmetic with no clock and no `Date` object — both banned in this
+// module, and neither is needed: every generated date is `2026-MM-DD` with a day
+// of 27 or less, and the offsets below are bounded well inside two years, so a
+// fixed 365-day calendar is exact over the range that can actually occur.
+const MONTH_LENGTHS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+const MONTH_STARTS = MONTH_LENGTHS.reduce<number[]>((acc, len, ix) => [...acc, acc[ix] + len], [0]);
+const BASE_YEAR = 2026;
+/** `YYYY-MM-DD` → days since 2026-01-01, or null for anything that is not one
+ *  (a planted null, a value some other branch produced). */
+function dayNumber(value: unknown): number | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value ?? ""));
+  if (!m) return null;
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  return (y - BASE_YEAR) * 365 + MONTH_STARTS[mo - 1] + (d - 1);
+}
+function dayToIso(n: number): string {
+  const clamped = Math.max(0, Math.min(n, 365 * 3 - 1));   // inside the exact range
+  const year = BASE_YEAR + Math.floor(clamped / 365);
+  const dayOfYear = clamped % 365;
+  let month = 0;
+  while (month < 11 && MONTH_STARTS[month + 1] <= dayOfYear) month += 1;
+  const day = dayOfYear - MONTH_STARTS[month] + 1;
+  return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
 
 /**
  * A synthetic value for one attribute, driven by its semantic role, deterministic.
@@ -237,6 +298,11 @@ export function generateSeed(ontology: Record<string, unknown>, version: string,
   }
   // generate
   const records: Record<string, SeedRecord[]> = {};
+  /** Each entity's rows by id — how a child reaches the PARENT ROW it belongs to
+   *  (not just the parent's id) when a value of its own has to agree with one of
+   *  the parent's. Filled as each entity completes; the insert order is
+   *  topological, so a parent is always indexed before its children generate. */
+  const index: Record<string, Map<string, SeedRecord>> = {};
   const parentEdgesOf = new Map<string, typeof edges>(); // child -> its parent edges
   for (const e of edges) (parentEdgesOf.get(e.child) ?? parentEdgesOf.set(e.child, []).get(e.child)!).push(e);
   // What a REFERENCE to one of an entity's rows should read as: its title
@@ -258,6 +324,15 @@ export function generateSeed(ontology: Record<string, unknown>, version: string,
     const attrs = attrsOf(name);
     const parents = parentEdgesOf.get(name) ?? [];
     const rows: SeedRecord[] = [];
+    // The columns whose values have to AGREE WITH EACH OTHER, identified once
+    // per entity rather than per row.
+    const roleAttrs = (role: ValueRole) => attrs.filter((a) => roleOf.get(`${name} ${a}`) === role);
+    const dateAttrs = roleAttrs("date");
+    const startAttrs = dateAttrs.filter((a) => lifecyclePhase(a) === "start");
+    const endAttrs = dateAttrs.filter((a) => lifecyclePhase(a) === "end");
+    const stateAttrs = roleAttrs("status");
+    const moneyAttrs = roleAttrs("monetary");
+    const personAttrs = roleAttrs("person-ref");
     const mk = (i: number, parentIds: Record<string, string>): SeedRecord => {
       const rec: SeedRecord = { id: `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${String(i + 1).padStart(4, "0")}`, _synthetic: true, _classification: "SYNTHETIC-SEED" };
       if (needsDisplayName.has(name)) rec._display = `${COMPANIES[i % COMPANIES.length]} ${singular(name)} ${i + 1}`;
@@ -289,6 +364,59 @@ export function generateSeed(ontology: Record<string, unknown>, version: string,
         if (i === 2) { const money = attrs.find((a) => roleOf.get(`${name} ${a}`) === "monetary"); if (money) rec[money] = 0; } // boundary
         if (i === 2) planted = true;
       }
+      // ── the record now has to agree with itself ──
+      //
+      // Runs LAST, over the finished row, including the planted edge cases:
+      // those are deliberate extremes, and an extreme is still a record. It
+      // spends no PRNG draws — every repair is computed from values already on
+      // the row — so the extremes stay exactly where the planting put them and
+      // the run stays reproducible.
+      //
+      // 1 · AN ENDING CANNOT PRECEDE ITS BEGINNING. Each end-shaped date is
+      //     re-placed after the earliest start-shaped one, keeping the spread its
+      //     own drawn value gave it, so the dates still vary across rows.
+      if (startAttrs.length && endAttrs.length) {
+        const starts = startAttrs.map((a) => dayNumber(rec[a])).filter((n): n is number => n !== null);
+        if (starts.length) {
+          const opened = Math.min(...starts);
+          for (const a of endAttrs) {
+            const drawn = dayNumber(rec[a]);
+            if (drawn === null) continue;             // a planted null stays a planted null
+            rec[a] = dayToIso(opened + 1 + (drawn % 240));
+          }
+        }
+      }
+      // 2 · A RECORD THAT IS DONE IS WORTH SOMETHING. A closed-won deal with no
+      //     amount is the contradiction a client spots first. The planted zero
+      //     is not deleted to fix it — it is a real instrument for the layout —
+      //     so the STATE moves back to one the record can honestly be in.
+      //     Only where the state has no non-terminal value to move to does the
+      //     amount take the correction, derived from the record's own id so no
+      //     draw is spent.
+      if (moneyAttrs.length && stateAttrs.length) {
+        const money = moneyAttrs[0];
+        const state = stateAttrs[0];
+        const amount = rec[money];
+        if (SETTLED.test(String(rec[state] ?? "")) && !(typeof amount === "number" && amount > 0)) {
+          const pool = vocabulary?.values.get(vocabularyKey(name, state)) ?? STATUSES;
+          const unsettled = pool.find((s) => !SETTLED.test(s));
+          if (unsettled) rec[state] = unsettled;
+          else rec[money] = 2000 + (hashSeed(String(rec.id)) % 960) * 500;
+        }
+      }
+      // 3 · ONE ACCOUNT, ONE OWNER. Every person-shaped column used to be drawn
+      //     independently, so an account's opportunities, engagements and
+      //     escalations each named a different person and none of them named the
+      //     account's owner — the relationship a CRM exists to represent,
+      //     contradicted on every row of every child table. A record's first
+      //     person column now inherits its parent's.
+      if (personAttrs.length) {
+        const edge = parents.find((e) => parentIds[e.parent]);
+        const parentRow = edge ? index[edge.parent]?.get(parentIds[edge.parent]) : undefined;
+        const parentPerson = edge ? attrsOf(edge.parent).find((a) => roleOf.get(`${edge.parent} ${a}`) === "person-ref") : undefined;
+        const owner = parentRow && parentPerson ? parentRow[parentPerson] : undefined;
+        if (typeof owner === "string" && owner) rec[personAttrs[0]] = owner;
+      }
       return rec;
     };
     if (isRoot.has(name)) { for (let i = 0; i < rootRows; i += 1) rows.push(mk(i, {})); }
@@ -309,6 +437,7 @@ export function generateSeed(ontology: Record<string, unknown>, version: string,
       if (!rows.length && attrs.length) rows.push(mk(0, {})); // ensure a non-empty table where sensible
     }
     records[name] = rows;
+    index[name] = new Map(rows.map((r) => [String(r.id), r] as const));
   }
   // ── junction membership ──
   //
