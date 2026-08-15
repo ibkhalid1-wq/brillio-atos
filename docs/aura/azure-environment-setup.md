@@ -253,6 +253,97 @@ Two specific post-migration checks:
 
 ---
 
+## 7a · Connecting AI
+
+There are **two** places an AI key can live, and one of them silently wins. This has
+cost people an afternoon more than once.
+
+**1 · Environment variables on the function runtime — these WIN.** `claudeClient.ts`
+checks the environment first and returns immediately if it finds a key:
+
+```
+ANTHROPIC_API_KEY          preferred; the deployed Claude runtime
+OPENAI_API_KEY             also enables recording transcription (flow-transcribe)
+GOOGLE_GEMINI_API_KEY      or GEMINI_API_KEY
+ADAM_AI_PROVIDER           anthropic | openai | google — optional, picks between them
+ADAM_AI_MODEL              optional; otherwise the provider default
+```
+
+With no `ADAM_AI_PROVIDER`, the fallback order is **Anthropic, then OpenAI, then
+Google** — whichever key is present.
+
+**2 · The in-app AI Settings screen.** It calls the `configure-ai-settings` function,
+which writes the key to the `adam_ai_provider_settings` table; the runtime reads that
+row only if step 1 found nothing.
+
+**The consequence, stated plainly: if a key is set in the function environment, saving
+a different key in the app changes nothing.** The screen will report success — it did
+save the row — and every run will keep using the environment key. If you are testing a
+key swap, clear the env var or you are testing nothing.
+
+**On Azure.** Put the keys in **Key Vault** and reference them as environment variables
+on the Container App, i.e. path 1. Path 2 stores the key **as plain text in a database
+column**; that is acceptable inside Supabase's RLS, and it is not what you want as the
+primary mechanism in a new environment. If you keep the in-app screen, keep it for
+convenience and treat the env as authoritative — which is what the code already does.
+
+**Setting it on Supabase today**, for reference:
+
+```bash
+npx supabase secrets set ANTHROPIC_API_KEY=sk-ant-… --project-ref <ref>
+```
+
+Nothing to redeploy — functions read secrets at invocation.
+
+**Transcription is deliberately optional.** With no `OPENAI_API_KEY`, `flow-transcribe`
+answers **501** and the record button hides itself rather than offering a feature the
+project cannot deliver. A 501 there is correct behaviour, not a broken environment.
+
+---
+
+## 7b · Validating an environment
+
+`scripts/validate-environment.mjs` answers "does this environment actually work?"
+against Supabase or Azure — it asks the same questions of either.
+
+```bash
+node scripts/validate-environment.mjs
+node scripts/validate-environment.mjs --live-ai      # also spends ~1 token
+```
+
+It reads `API_BASE_URL` / `API_KEY` (falling back to the `VITE_*` names),
+`DATABASE_URL`, and the AI keys above. Everything is optional: a check it cannot run
+reports **SKIP and why** — never PASS. Exit code is non-zero only on a real failure.
+
+What it proves, and what it does not:
+
+| check | what a PASS means |
+|---|---|
+| client env names | `VITE_SUPABASE_PUBLISHABLE_KEY` is set, not the `ANON_KEY` name the docs used to give |
+| origin reachable | DNS, TLS and a listener — a 401 here is healthy |
+| tables exist | all 8 client tables answer; **row visibility is NOT evaluated** |
+| schema (psql) | all 8 present AND `pg_policies` is non-empty — a restore that loses RLS leaves the data unprotected |
+| functions deployed | preflight answered; uses OPTIONS, because a deployed function can answer 404 to a bad POST |
+| AI provider | which key the runtime will actually use, env-first |
+| AI round trip | `--live-ai` only: the provider accepted the key |
+
+Run it after provisioning, and again after each phase in §6. A run against the current
+Supabase project looks like this:
+
+```
+PASS  client env names        VITE_SUPABASE_PUBLISHABLE_KEY set
+PASS  origin reachable        https://…supabase.co → HTTP 401
+PASS  tables exist            8 present, 0 missing — row visibility NOT evaluated
+SKIP  schema (psql)           DATABASE_URL not set
+PASS  functions deployed      configure-ai-settings(200), run-agent(200), flow-portal(204)
+SKIP  AI provider             no provider key in env — the runtime will fall back to
+                              the adam_ai_provider_settings row
+```
+
+Two skips, and they are the point: nobody should read that as a healthy environment.
+
+---
+
 ## 8 · Risks worth naming before a date is committed
 
 1. **`auth.uid()` in RLS.** §5.2. Every policy depends on the replacement, and a wrong
