@@ -925,102 +925,115 @@ function BlueprintStudio({ doc, onChange, program }: StudioProps) {
         hint="agents and what flows between them; the lens re-emphasises data contracts · HITL · eval · build on the same canvas">
         <BlueprintGraph doc={doc} onChange={onChange} />
       </CollapsibleCard>
-      <div className="v3fs-bp-editdiv" role="note">The sections below <b>edit</b> the one model above — each is the underlying detail of a lens, not a separate document.</div>
-      <CollapsibleCard label="Journeys" hint="the orchestrated experience — stages across, lanes down: customer · user · agent · systems">
-        <JourneyGrid doc={doc} onChange={onChange} />
-      </CollapsibleCard>
-      <CollapsibleCard label="Agents" badge={agents.items.length || undefined} hint="each replaces an Atlas workflow">
-        <CardList
-          items={agents.items}
-          itemLabel={(a) => `${asText(a.name) || "Agent"} · ${asText(a.autonomyLevel) || "autonomy"}`}
-          onAdd={() => agents.add({ name: "", purpose: "", tools: [], inputs: [], outputs: [], autonomyLevel: "suggest" })}
-          onRemove={agents.remove}
-          addLabel="Add agent"
-          render={(agent, index) => (
-            <>
-              <div className="v3fs-stu-grid3">
-                <TextField label="Name" value={asText(agent.name)} onChange={(next) => agents.set(index, { name: next })} />
-                <SelectField label="Autonomy" value={asText(agent.autonomyLevel) || "suggest"}
-                  options={["suggest", "act-with-approval", "act"]}
-                  onChange={(next) => agents.set(index, { autonomyLevel: next })} />
-                <TextField label="Escalates to" value={asText(agent.escalatesTo)} onChange={(next) => agents.set(index, { escalatesTo: next })} />
-              </div>
-              <TextArea label="Purpose" rows={2} value={asText(agent.purpose)} onChange={(next) => agents.set(index, { purpose: next })} />
-              <TextField label="Replaces workflow" value={asText(agent.replacesWorkflow)} onChange={(next) => agents.set(index, { replacesWorkflow: next })} />
-              <ChipsField label="Tools" values={asStrings(agent.tools)} onChange={(next) => agents.set(index, { tools: next })} />
-              <div className="v3fs-stu-grid2">
-                <ChipsField label="Consumes (entities)" values={asStrings(agent.inputs)} onChange={(next) => agents.set(index, { inputs: next })} />
-                <ChipsField label="Produces (entities)" values={asStrings(agent.outputs)} onChange={(next) => agents.set(index, { outputs: next })} />
-              </div>
-            </>
-          )}
-        />
-      </CollapsibleCard>
-      <CollapsibleCard label="Orchestration pattern" defaultOpen={false}>
-        <TextField label="Pattern" value={asText(orchestration.pattern)}
-          onChange={(next) => patch({ orchestration: { ...orchestration, pattern: next } })} />
-        <TextArea label="How work flows" rows={2} value={asText(orchestration.description)}
-          onChange={(next) => patch({ orchestration: { ...orchestration, description: next } })} />
-        <TextField label="State lives in" value={asText(orchestration.stateManagement)}
-          onChange={(next) => patch({ orchestration: { ...orchestration, stateManagement: next } })} />
-      </CollapsibleCard>
-      <CollapsibleCard label="Data contracts" badge={asArray(doc.dataContracts).length || undefined} defaultOpen={false} hint="ontology entities and their systems of record">
-        <TableEditor
-          columns={[
-            { key: "entity", label: "Entity" },
-            { key: "source", label: "Source" },
-            { key: "shape", label: "Shape", grow: 2 },
-            { key: "sync", label: "Sync", kind: "select", options: ["live", "batch", "manual"] },
-          ]}
-          rows={asArray(doc.dataContracts).map(asRecord)}
-          onChange={(next) => patch({ dataContracts: next })}
-          addLabel="Add contract"
-        />
-      </CollapsibleCard>
-      <CollapsibleCard label="Human-in-the-loop points" badge={asArray(doc.hitlPoints).length || undefined} defaultOpen={false}>
-        <TableEditor
-          columns={[
-            { key: "where", label: "Where" },
-            { key: "why", label: "Why", grow: 2 },
-            { key: "mechanism", label: "Mechanism", kind: "select", options: ["approve", "review", "override"] },
-          ]}
-          rows={asArray(doc.hitlPoints).map(asRecord)}
-          onChange={(next) => patch({ hitlPoints: next })}
-          addLabel="Add HITL point"
-        />
-      </CollapsibleCard>
-      <CollapsibleCard label="Eval plan" badge={asArray(doc.evalPlan).length || undefined} defaultOpen={false} hint="what must hold, and its pass bar">
-        <TableEditor
-          columns={[
-            { key: "behaviour", label: "Behaviour", grow: 2 },
-            { key: "measure", label: "Measure" },
-            { key: "threshold", label: "Threshold" },
-          ]}
-          rows={asArray(doc.evalPlan).map(asRecord)}
-          onChange={(next) => patch({ evalPlan: next })}
-          addLabel="Add behaviour"
-        />
-      </CollapsibleCard>
-      <CollapsibleCard label="Build sequence" badge={asStrings(doc.buildSequence).length || undefined} defaultOpen={false} hint="the first slice must be demoable">
-        <StringListEditor values={asStrings(doc.buildSequence)} onChange={(next) => patch({ buildSequence: next })} addLabel="Add slice" />
-      </CollapsibleCard>
-      <CollapsibleCard label="Track plan" badge={asArray(doc.tracks).length || undefined} defaultOpen={false} hint="adopting tracks happens through the Inbox decision — edits here reshape the proposal">
-        <TableEditor
-          columns={[
-            { key: "name", label: "Track" },
-            { key: "goal", label: "Goal", grow: 2 },
-            { key: "leadStakeholder", label: "Demos to" },
-          ]}
-          rows={asArray(doc.tracks).map(asRecord)}
-          onChange={(next) => patch({ tracks: next })}
-          addLabel="Add track"
-        />
-      </CollapsibleCard>
-      {asStrings(doc.gaps).length ? (
-        <CollapsibleCard label="Gaps" badge={asStrings(doc.gaps).length} defaultOpen={false}>
-          <StringListEditor values={asStrings(doc.gaps)} onChange={(next) => patch({ gaps: next })} addLabel="Add gap" />
+      {/* EVERYTHING ELSE, BEHIND ONE DOOR.
+          Reported as "a lot of information and sub-pages, but not clear what are the
+          user calls to action". These eight cards are the underlying detail of the
+          model above — journeys, orchestration, contracts, HITL points, evals, the
+          build sequence, tracks, gaps. An engineer opens them while implementing; an
+          operator does not decide anything in them. Eight peers of the roster made the
+          page read as eight equal questions and none of them was one. One door now,
+          shut by default: the decision strip and the roster are the page, and this is
+          the reference behind it. Nothing is removed and every editor still works. */}
+      <details className="v3fs-bp-rest">
+        <summary className="v3fs-bp-rest-h">The rest of the blueprint — journeys, orchestration, contracts, evals, build sequence</summary>
+        <div className="v3fs-bp-rest-b">
+        <CollapsibleCard label="Journeys" hint="the orchestrated experience — stages across, lanes down: customer · user · agent · systems">
+          <JourneyGrid doc={doc} onChange={onChange} />
         </CollapsibleCard>
-      ) : null}
+        <CollapsibleCard label="Agents" badge={agents.items.length || undefined} hint="each replaces an Atlas workflow">
+          <CardList
+            items={agents.items}
+            itemLabel={(a) => `${asText(a.name) || "Agent"} · ${asText(a.autonomyLevel) || "autonomy"}`}
+            onAdd={() => agents.add({ name: "", purpose: "", tools: [], inputs: [], outputs: [], autonomyLevel: "suggest" })}
+            onRemove={agents.remove}
+            addLabel="Add agent"
+            render={(agent, index) => (
+              <>
+                <div className="v3fs-stu-grid3">
+                  <TextField label="Name" value={asText(agent.name)} onChange={(next) => agents.set(index, { name: next })} />
+                  <SelectField label="Autonomy" value={asText(agent.autonomyLevel) || "suggest"}
+                    options={["suggest", "act-with-approval", "act"]}
+                    onChange={(next) => agents.set(index, { autonomyLevel: next })} />
+                  <TextField label="Escalates to" value={asText(agent.escalatesTo)} onChange={(next) => agents.set(index, { escalatesTo: next })} />
+                </div>
+                <TextArea label="Purpose" rows={2} value={asText(agent.purpose)} onChange={(next) => agents.set(index, { purpose: next })} />
+                <TextField label="Replaces workflow" value={asText(agent.replacesWorkflow)} onChange={(next) => agents.set(index, { replacesWorkflow: next })} />
+                <ChipsField label="Tools" values={asStrings(agent.tools)} onChange={(next) => agents.set(index, { tools: next })} />
+                <div className="v3fs-stu-grid2">
+                  <ChipsField label="Consumes (entities)" values={asStrings(agent.inputs)} onChange={(next) => agents.set(index, { inputs: next })} />
+                  <ChipsField label="Produces (entities)" values={asStrings(agent.outputs)} onChange={(next) => agents.set(index, { outputs: next })} />
+                </div>
+              </>
+            )}
+          />
+        </CollapsibleCard>
+        <CollapsibleCard label="Orchestration pattern" defaultOpen={false}>
+          <TextField label="Pattern" value={asText(orchestration.pattern)}
+            onChange={(next) => patch({ orchestration: { ...orchestration, pattern: next } })} />
+          <TextArea label="How work flows" rows={2} value={asText(orchestration.description)}
+            onChange={(next) => patch({ orchestration: { ...orchestration, description: next } })} />
+          <TextField label="State lives in" value={asText(orchestration.stateManagement)}
+            onChange={(next) => patch({ orchestration: { ...orchestration, stateManagement: next } })} />
+        </CollapsibleCard>
+        <CollapsibleCard label="Data contracts" badge={asArray(doc.dataContracts).length || undefined} defaultOpen={false} hint="ontology entities and their systems of record">
+          <TableEditor
+            columns={[
+              { key: "entity", label: "Entity" },
+              { key: "source", label: "Source" },
+              { key: "shape", label: "Shape", grow: 2 },
+              { key: "sync", label: "Sync", kind: "select", options: ["live", "batch", "manual"] },
+            ]}
+            rows={asArray(doc.dataContracts).map(asRecord)}
+            onChange={(next) => patch({ dataContracts: next })}
+            addLabel="Add contract"
+          />
+        </CollapsibleCard>
+        <CollapsibleCard label="Human-in-the-loop points" badge={asArray(doc.hitlPoints).length || undefined} defaultOpen={false}>
+          <TableEditor
+            columns={[
+              { key: "where", label: "Where" },
+              { key: "why", label: "Why", grow: 2 },
+              { key: "mechanism", label: "Mechanism", kind: "select", options: ["approve", "review", "override"] },
+            ]}
+            rows={asArray(doc.hitlPoints).map(asRecord)}
+            onChange={(next) => patch({ hitlPoints: next })}
+            addLabel="Add HITL point"
+          />
+        </CollapsibleCard>
+        <CollapsibleCard label="Eval plan" badge={asArray(doc.evalPlan).length || undefined} defaultOpen={false} hint="what must hold, and its pass bar">
+          <TableEditor
+            columns={[
+              { key: "behaviour", label: "Behaviour", grow: 2 },
+              { key: "measure", label: "Measure" },
+              { key: "threshold", label: "Threshold" },
+            ]}
+            rows={asArray(doc.evalPlan).map(asRecord)}
+            onChange={(next) => patch({ evalPlan: next })}
+            addLabel="Add behaviour"
+          />
+        </CollapsibleCard>
+        <CollapsibleCard label="Build sequence" badge={asStrings(doc.buildSequence).length || undefined} defaultOpen={false} hint="the first slice must be demoable">
+          <StringListEditor values={asStrings(doc.buildSequence)} onChange={(next) => patch({ buildSequence: next })} addLabel="Add slice" />
+        </CollapsibleCard>
+        <CollapsibleCard label="Track plan" badge={asArray(doc.tracks).length || undefined} defaultOpen={false} hint="adopting tracks happens through the Inbox decision — edits here reshape the proposal">
+          <TableEditor
+            columns={[
+              { key: "name", label: "Track" },
+              { key: "goal", label: "Goal", grow: 2 },
+              { key: "leadStakeholder", label: "Demos to" },
+            ]}
+            rows={asArray(doc.tracks).map(asRecord)}
+            onChange={(next) => patch({ tracks: next })}
+            addLabel="Add track"
+          />
+        </CollapsibleCard>
+        {asStrings(doc.gaps).length ? (
+          <CollapsibleCard label="Gaps" badge={asStrings(doc.gaps).length} defaultOpen={false}>
+            <StringListEditor values={asStrings(doc.gaps)} onChange={(next) => patch({ gaps: next })} addLabel="Add gap" />
+          </CollapsibleCard>
+        ) : null}
+        </div>
+      </details>
     </>
   );
 }

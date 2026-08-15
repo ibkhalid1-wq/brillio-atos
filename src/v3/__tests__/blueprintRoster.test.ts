@@ -14,6 +14,8 @@
  * because a flag that over-fires is noise and one that under-fires is worse than none.
  */
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { readAgentRows, isUngoverned, readAccepted, ACCEPTED_FIELD } from "@/v3/components/flow/studio/BlueprintGraph";
 
 const agent = (over: Record<string, unknown> = {}) => ({
@@ -134,5 +136,33 @@ describe("the decision an operator records on it", () => {
   it("ignores an acceptance with no reason — the reason IS the attestation", () => {
     // A click with no rationale is not a decision on the record.
     expect(readAccepted({ [ACCEPTED_FIELD]: [{ agent: "X", reason: "" }, { agent: "", reason: "y" }] })).toEqual([]);
+  });
+});
+
+describe("the page's shape", () => {
+  const studios = readFileSync(resolve(__dirname, "../components/flow/studio/studios.tsx"), "utf8");
+  // To the NEXT top-level function, not a fixed character count — a slice that is
+  // too short silently "proves" a section is missing.
+  const bpStart = studios.indexOf("function BlueprintStudio");
+  const bpEnd = studios.indexOf("\nfunction ", bpStart + 10);
+  const bp = studios.slice(bpStart, bpEnd > bpStart ? bpEnd : undefined);
+
+  it("puts the reference sections behind ONE door, not eight peers", () => {
+    // Eight equal-weight cards made the page read as eight questions, none of which
+    // was one. MUTATION: unwrap the <details> → the count below rises past 2.
+    expect(bp).toContain('<details className="v3fs-bp-rest">');
+    const beforeDoor = bp.slice(0, bp.indexOf('<details className="v3fs-bp-rest">'));
+    const topLevelCards = beforeDoor.match(/<CollapsibleCard label=/g) ?? [];
+    expect(topLevelCards.length,
+      `${topLevelCards.length} cards still compete with the roster above the door`).toBeLessThanOrEqual(2);
+  });
+
+  it("removes nothing — every editor is still mounted, just behind the door", () => {
+    // The point is where they are, not whether they exist. A collapse that dropped an
+    // editor would lose work nobody could get back.
+    for (const label of ["Journeys", "Orchestration pattern", "Data contracts",
+      "Human-in-the-loop points", "Eval plan", "Build sequence", "Track plan"]) {
+      expect(bp, `${label} was dropped, not collapsed`).toContain(`label="${label}"`);
+    }
   });
 });
