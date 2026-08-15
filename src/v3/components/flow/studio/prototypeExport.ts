@@ -32,11 +32,25 @@ export function splitPrototypeHtml(html: string): { indexHtml: string; css: stri
   if (typeof DOMParser === "undefined") return { indexHtml: html, css: "", js: "" };
   const doc = new DOMParser().parseFromString(html, "text/html");
   const css = Array.from(doc.querySelectorAll("style")).map((s) => s.textContent || "").join("\n\n").trim();
+  /**
+   * A DATA ISLAND IS NOT CODE, AND MUST NOT BE LIFTED INTO ONE.
+   *
+   * The assembled build carries its seeded records as a
+   * `<script type="application/json">` block that the page reads at load. It is
+   * a script ELEMENT and it is not a script: concatenated into `app.js` it is a
+   * syntax error that takes the whole renderer with it, and removed from
+   * `index.html` it takes every row in the application. Only executable blocks
+   * move; the island stays exactly where the document put it.
+   */
+  const executable = (s: Element) => {
+    const type = (s.getAttribute("type") || "").toLowerCase();
+    return !s.getAttribute("src") && (!type || type === "text/javascript" || type === "module" || type === "application/javascript");
+  };
   const js = Array.from(doc.querySelectorAll("script"))
-    .filter((s) => !s.getAttribute("src"))
+    .filter(executable)
     .map((s) => s.textContent || "").filter(Boolean).join("\n\n").trim();
   doc.querySelectorAll("style").forEach((s) => s.remove());
-  doc.querySelectorAll("script").forEach((s) => { if (!s.getAttribute("src")) s.remove(); });
+  doc.querySelectorAll("script").forEach((s) => { if (executable(s)) s.remove(); });
   if (css) {
     const link = doc.createElement("link");
     link.setAttribute("rel", "stylesheet");

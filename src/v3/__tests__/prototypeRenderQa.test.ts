@@ -357,9 +357,14 @@ describe("the overlap check pins the property, not a keyword", () => {
   });
 
   it("catches the other way a card lands on a table: a negative margin", () => {
+    // Injected AFTER the list region — the element the page fills with its
+    // table — so the pulled card lands on that table's flow once the document
+    // has rendered. It used to be spliced after a literal `</table>`, which the
+    // served markup stopped containing when the rows became data; the defect is
+    // the same one, expressed against the structure the assembler still emits.
     const pulled = assembled
       .replace("</head>", `<style>.qa-pull{margin-top:-48px;height:60px}</style></head>`)
-      .replace(/(<\/table><\/div>)/, '$1<div class="qa-pull">Totals</div>');
+      .replace(/(<div data-fabric-id="screen:[^"]*:list"><\/div>)/, '$1<div class="qa-pull">Totals</div>');
     const report = auditPrototype(loadPrototype(pulled, { entities: entitiesOf(surgeryOntology), gaps: [] }));
     expect(report.byCheck["layout-overlap"].some((f) => f.severity === "error" && /48px up/.test(f.message))).toBe(true);
   });

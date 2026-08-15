@@ -13,6 +13,7 @@ import { describe, it, expect } from "vitest";
 import { assemblePrototype } from "@shared/prototypeAssembly.ts";
 import { generateSeed } from "@shared/seedData.ts";
 import { deriveFabric } from "@shared/fabric.ts";
+import { renderedDoc } from "./helpers/renderPrototype";
 
 const ent = (name: string, attributes: string[]) => ({ name, attributes, definition: name });
 const ontology = {
@@ -27,11 +28,14 @@ const ontology = {
   ],
 };
 
-const detailOf = (html: string, slug: string) => {
-  const at = html.indexOf(`data-screen="detail-${slug}"`);
-  const end = html.indexOf("<section class=\"m-screen\"", at + 1);
-  return html.slice(at, end === -1 ? undefined : end);
-};
+/**
+ * The detail screen AS RENDERED. The record on stage is chosen by the
+ * assembler and drawn by the page's own script out of the seed it ships as
+ * data, so slicing the served markup would read an empty wrapper and this
+ * whole file would pass with the picker reverted to `rows[0]`.
+ */
+const detailOf = (html: string, slug: string) =>
+  renderedDoc(html).querySelector(`[data-screen="detail-${slug}"]`)?.outerHTML ?? "";
 
 describe("the showcase record", () => {
   const html = assemblePrototype(ontology, {}).html;

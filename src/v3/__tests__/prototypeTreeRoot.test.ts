@@ -37,6 +37,7 @@ import { deriveOntologyGraph } from "@shared/ontologyGraph.ts";
 import { deriveFabric } from "@shared/fabric.ts";
 import { generateSeed } from "@shared/seedData.ts";
 import { assemblePrototype } from "@shared/prototypeAssembly.ts";
+import { renderedDoc } from "./helpers/renderPrototype";
 
 const snap = (f: string) => JSON.parse(readFileSync(resolve(__dirname, `../../../docs/laila/snapshot-2026-08-07/${f}`), "utf8")) as Record<string, unknown>;
 const ontology = snap("domain-ontology.json");
@@ -113,7 +114,7 @@ const clinicalOntology = {
  * this file.
  */
 function sidebar(html: string) {
-  const doc = new DOMParser().parseFromString(html, "text/html");
+  const doc = renderedDoc(html);
   const nav = doc.querySelector("aside.m-side nav.m-nav");
   if (!nav) throw new Error("the assembled page has no sidebar");
   const nameOf = (el: Element): string => (el.querySelector(".m-nav-item")?.childNodes[0]?.textContent ?? "").trim();
@@ -266,7 +267,7 @@ describe("promotion changes where an entity is FILED and nothing else", () => {
   it("Partner's detail still carries its Accounts, rendered", () => {
     const fabric = deriveFabric(ontology, atlas);
     expect(fabric.nodes.some((n) => n.id === "region:partner:account")).toBe(true);
-    const doc = new DOMParser().parseFromString(assemblePrototype(ontology, atlas).html, "text/html");
+    const doc = renderedDoc(assemblePrototype(ontology, atlas).html);
     const regionEl = doc.querySelector('[data-fabric-id="region:partner:account"]');
     expect(regionEl, "Partner's Accounts region is not in the DOM").toBeTruthy();
     expect(regionEl!.querySelector("table"), "Partner's Accounts collection rendered no rows").toBeTruthy();
@@ -304,7 +305,7 @@ describe("the tree still covers the ontology exactly once", () => {
   it("the curated path is unaffected — a chosen menu is flat, with no tree at all", () => {
     const chosen = ["Opportunity", "Account", "Partner"];
     const html = assemblePrototype(ontology, atlas, chosen).html;
-    const doc = new DOMParser().parseFromString(html, "text/html");
+    const doc = renderedDoc(html);
     const nav = doc.querySelector("aside.m-side nav.m-nav")!;
     expect(nav.querySelector(".m-nav-sub"), "a curated menu grew a tree").toBeNull();
     expect([...nav.querySelectorAll(".m-nav-item")].map((i) => (i.childNodes[0]?.textContent ?? "").trim())).toEqual(chosen);
@@ -315,7 +316,7 @@ describe("the tree still covers the ontology exactly once", () => {
 describe("the top band is open and the depth below it is one click away", () => {
   it("every tree root is expanded; branches beneath them ship collapsed", () => {
     const { html } = assemblePrototype(ontology, atlas);
-    const doc = new DOMParser().parseFromString(html, "text/html");
+    const doc = renderedDoc(html);
     const nav = doc.querySelector("aside.m-side nav.m-nav")!;
     const groups = [...nav.querySelectorAll("details.m-nav-group")];
     expect(groups.length).toBeGreaterThan(2);
