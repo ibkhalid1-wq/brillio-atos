@@ -141,10 +141,28 @@ a{color:var(--m-brand);text-decoration:none}
 .m-linkcard-go{color:var(--m-brand);font-weight:700}
 /* Footer of a collection card — "View all N →" when the inline slice is short. */
 .m-card-f{display:flex;justify-content:flex-end;padding-top:12px}
+/* The TAIL of a detail page's related sections. A record with thirteen child
+   collections is a wall, and the one relation that matters is lost in it — so
+   the biggest few stand open and the rest sit behind one control. Collapsed,
+   never dropped: the sections are still in the document. */
+.m-more{margin-top:20px}
+.m-more>summary{list-style:none;cursor:pointer;display:inline-flex;align-items:center;gap:8px;
+  font-size:13px;font-weight:600;color:var(--m-brand);background:var(--m-surface-2);
+  border:1px solid var(--m-line);border-radius:var(--m-r-pill);padding:7px 15px}
+.m-more>summary::-webkit-details-marker{display:none}
+.m-more>summary:hover{border-color:color-mix(in srgb,var(--m-brand) 40%,transparent);background:var(--m-brand-soft)}
 
 /* Empty / loading / error / toast */
 .m-empty{text-align:center;padding:48px var(--m-sp-4);color:var(--m-muted)}
 .m-empty-t{font-family:var(--m-font-display);font-size:16px;font-weight:600;color:var(--m-ink-soft);margin-bottom:6px}
+/* AN EMPTY STATE CARRIES ITS EVIDENCE. "No X yet" is the weakest screen state
+   there is: it reads as a finding when it is actually a guess the generator
+   declared and wrote down. The assumption behind the hole is printed with it,
+   and the question that settles it, so the emptiest screen is the one that
+   collects the most. */
+.m-assumed{margin:10px auto 0;max-width:56ch;font-size:12.5px;line-height:1.55;color:var(--m-muted)}
+.m-assumed-k{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--m-ink-soft);margin-right:6px}
+.m-assumed-q{display:block;margin-top:5px;color:var(--m-ink-soft);font-style:italic}
 .m-skeleton{background:linear-gradient(90deg,var(--m-surface-2) 25%,color-mix(in srgb,var(--m-line) 60%,var(--m-surface-2)) 37%,var(--m-surface-2) 63%);background-size:400% 100%;animation:m-shimmer 1.4s ease infinite;border-radius:var(--m-r-sm);height:14px}
 @keyframes m-shimmer{0%{background-position:100% 0}100%{background-position:0 0}}
 .m-banner{display:flex;align-items:center;gap:10px;padding:11px 14px;border-radius:var(--m-r-md);font-size:13px}
