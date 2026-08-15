@@ -90,17 +90,34 @@ export function screenIdsIn(html: string): string[] {
 }
 
 /**
- * The document's rendered TEXT, as the set of its text nodes plus one flattened
+ * The document's CONTENT, as the set of its text nodes plus one flattened
  * string. Content is compared through this rather than through the markup: a
- * refine is allowed to move a value into a different element, and is not allowed
- * to drop it. Script and style bodies are not content.
+ * refine is allowed to move a value into a different element, and is not
+ * allowed to drop it. Style bodies and executable script are not content.
+ *
+ * A JSON DATA ISLAND IS. The assembled build ships its seeded records as one
+ * `<script type="application/json">` block and draws the rows from it at load,
+ * so a reader that strips every script — which this did — sees a document
+ * whose tables are empty and concludes the records were never there. The
+ * consequence was not academic: `seedValues` is collected by asking what of the
+ * seed reaches the page, and the post-condition below is the only thing
+ * standing between a model rewrite and a silently emptied application. So the
+ * island's strings are read as what they are, the page's content, one step
+ * earlier than the browser reads them.
+ *
+ * An island that no longer parses contributes nothing, which is correct: a
+ * candidate that corrupted the data block has dropped its records whatever its
+ * markup looks like, and the check must say so rather than trust the bytes.
  */
 export function documentText(html: string): { nodes: Set<string>; flat: string } {
+  const nodes = new Set<string>();
   const stripped = html
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<script([^>]*)>([\s\S]*?)<\/script>/gi, (_m, attrs: string, body: string) => {
+      if (/type\s*=\s*(?:"[^"]*json[^"]*"|'[^']*json[^']*'|[^\s"'>]*json[^\s"'>]*)/i.test(attrs)) collectJsonStrings(body, nodes);
+      return " ";
+    })
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
     .replace(/<!--[\s\S]*?-->/g, " ");
-  const nodes = new Set<string>();
   const parts: string[] = [];
   for (const raw of stripped.split(/<[^>]*>/)) {
     const text = decodeEntities(raw).replace(/\s+/g, " ").trim();
@@ -109,6 +126,21 @@ export function documentText(html: string): { nodes: Set<string>; flat: string }
     parts.push(text);
   }
   return { nodes, flat: parts.join(" ") };
+}
+
+/** Every string a JSON data island holds, at any depth. Object KEYS are not
+ *  content — they are the island's schema, and a value that happens to equal
+ *  one must not be counted present because the schema names it. */
+function collectJsonStrings(body: string, into: Set<string>): void {
+  let parsed: unknown;
+  try { parsed = JSON.parse(body); } catch { return; }
+  const walk = (v: unknown, depth: number): void => {
+    if (depth > 12) return;
+    if (typeof v === "string") { const t = v.trim(); if (t) into.add(t); return; }
+    if (Array.isArray(v)) { for (const x of v) walk(x, depth + 1); return; }
+    if (v && typeof v === "object") { for (const x of Object.values(v)) walk(x, depth + 1); }
+  };
+  walk(parsed, 0);
 }
 
 function decodeEntities(s: string): string {
@@ -224,6 +256,7 @@ export const REFINE_CONTRACT = [
   "NEVER alter structure. Every element carrying a data-fabric-id must still be there, exactly once, with the same id — that attribute is how an incremental change resolves to the region it touches, so an id you drop, rename, duplicate or invent breaks the pipeline downstream of you.",
   "NEVER alter navigation: the same data-screen ids, the same links between them.",
   "NEVER alter seed values: every record id, name and value the baseline shows must still be shown. You may re-present a value; you may not remove, replace or invent one.",
+  'The baseline carries its records as ONE JSON data island — a <script type="application/json"> block — which the page renders into the regions at load. Return that block byte for byte. Editing it, reformatting it or dropping it empties every table in the application, and the check reads it as records lost.',
   "DO change presentation INSIDE the regions and in the stylesheet: spacing, hierarchy, type, colour, density, elevation, the component vocabulary, the chrome. That is the whole of your contribution and it is a large one.",
   "If the direction asks for something presentation cannot deliver without moving structure, DO NOT move the structure — name it in gaps instead, so it reaches the people who can change the ontology or the design.",
 ].join("\n");

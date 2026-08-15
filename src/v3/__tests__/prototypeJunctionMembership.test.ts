@@ -30,6 +30,7 @@ import { assemblePrototype } from "@shared/prototypeAssembly.ts";
 import { deriveFabric } from "@shared/fabric.ts";
 import { generateSeed } from "@shared/seedData.ts";
 import { junctionKeyFor } from "@shared/ontologyGraph.ts";
+import { renderedDoc } from "./helpers/renderPrototype";
 
 const snap = (f: string) => JSON.parse(readFileSync(resolve(__dirname, `../../../docs/laila/snapshot-2026-08-07/${f}`), "utf8")) as Record<string, unknown>;
 const ent = (name: string, attributes: string[]) => ({ name, attributes, definition: name });
@@ -53,8 +54,10 @@ const fabric = deriveFabric(ontology, {});
 const seed = generateSeed(ontology, fabric.version);
 const html = assemblePrototype(ontology, {}).html;
 
-/** The rendered DOM, queried — never a regex over the markup. */
-const doc = new DOMParser().parseFromString(html, "text/html");
+/** The rendered DOM, queried — never a regex over the markup, and with the
+ *  page's own script run: the chips below are drawn client-side out of the
+ *  membership table the build ships as data. */
+const doc = renderedDoc(html);
 const regionEl = (id: string): Element | null => doc.querySelector(`[data-fabric-id="${id}"]`);
 
 describe("junction membership exists at all", () => {

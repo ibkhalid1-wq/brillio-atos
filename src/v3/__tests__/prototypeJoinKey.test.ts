@@ -26,6 +26,7 @@ import { describe, it, expect } from "vitest";
 import { assemblePrototype } from "@shared/prototypeAssembly.ts";
 import { deriveFabric } from "@shared/fabric.ts";
 import { generateSeed } from "@shared/seedData.ts";
+import { renderedDoc } from "./helpers/renderPrototype";
 
 const ent = (name: string, attributes: string[]) => ({ name, attributes, definition: name });
 
@@ -54,8 +55,14 @@ const html = assemblePrototype(ontology, {}).html;
  * and reported a feature present, one looked for `class="` in HTML that used
  * single quotes and reported it absent. Parsing and querying cannot make either
  * mistake, and it proves the output is well-formed on the way past.
+ *
+ * The page's own script is RUN before anything is read. The build ships its
+ * records as a data island and draws the rows from it at load, so a document
+ * that is merely parsed shows empty region wrappers — and every assertion
+ * below about which children a record has would pass with the join key
+ * string-guessed again.
  */
-const doc = new DOMParser().parseFromString(html, "text/html");
+const doc = renderedDoc(html);
 const regionEl = (id: string): Element | null => doc.querySelector(`[data-fabric-id="${id}"]`);
 const badgeOf = (el: Element | null): number => Number(el?.querySelector(".m-badge")?.textContent ?? "-1");
 /** The record ids a rendered table shows, read out of its sub-cells. */

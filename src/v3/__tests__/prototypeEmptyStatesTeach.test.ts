@@ -23,6 +23,7 @@ import { resolve } from "node:path";
 import { assemblePrototype } from "@shared/prototypeAssembly.ts";
 import { deriveFabric } from "@shared/fabric.ts";
 import { generateSeed, type SeedAssumption } from "@shared/seedData.ts";
+import { renderedDoc } from "./helpers/renderPrototype";
 
 const snap = (f: string) => JSON.parse(readFileSync(resolve(__dirname, `../../../docs/laila/snapshot-2026-08-07/${f}`), "utf8"));
 const ontology = snap("domain-ontology.json") as Record<string, unknown>;
@@ -30,7 +31,7 @@ const atlas = snap("current-state-atlas.json") as Record<string, unknown>;
 
 const fabric = deriveFabric(ontology, atlas);
 const seed = generateSeed(ontology, fabric.version);
-const doc = new DOMParser().parseFromString(assemblePrototype(ontology, atlas).html, "text/html");
+const doc = renderedDoc(assemblePrototype(ontology, atlas).html);
 
 /** Every empty state on the build, paired with the region it sits inside. */
 const emptyRegions = Array.from(doc.querySelectorAll(".m-empty")).map((el) => {

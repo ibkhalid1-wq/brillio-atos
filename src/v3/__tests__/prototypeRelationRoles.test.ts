@@ -20,6 +20,7 @@
 import { describe, it, expect } from "vitest";
 import { assemblePrototype } from "@shared/prototypeAssembly.ts";
 import { deriveFabric } from "@shared/fabric.ts";
+import { renderedDoc } from "./helpers/renderPrototype";
 
 const ent = (name: string, attributes: string[]) => ({ name, attributes, definition: name });
 
@@ -42,16 +43,18 @@ const ontology = {
 
 const html = assemblePrototype(ontology, {}).html;
 const fabric = deriveFabric(ontology, {});
+/**
+ * THE PAGE AS A BROWSER HAS IT. The assembler ships the seed as data and draws
+ * each region's contents at load, so slicing the served markup between two
+ * `data-fabric-id`s — which is what this file used to do — now reads an empty
+ * wrapper and would pass with every renderer deleted. The document is parsed
+ * and its script is RUN, and the assertions below read the tree.
+ */
+const doc = renderedDoc(html);
 
-/** The markup of one region, by its fabric id. */
-const regionHtml = (id: string): string => {
-  const at = html.indexOf(`data-fabric-id="${id}"`);
-  if (at === -1) return "";
-  // From this region's opening tag to the next region's, which is enough to
-  // hold its own card and no sibling's.
-  const next = html.indexOf('data-fabric-id="', at + 1);
-  return html.slice(at, next === -1 ? at + 4000 : next);
-};
+/** The markup of one region, by its fabric id — its own subtree, no sibling's. */
+const regionHtml = (id: string): string =>
+  doc.querySelector(`[data-fabric-id="${id}"]`)?.outerHTML ?? "";
 
 describe("every fabric node has a rendering", () => {
   it("emits a data-fabric-id for every region and nav node", () => {

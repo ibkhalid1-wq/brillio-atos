@@ -74,3 +74,26 @@ export function loadPrototype(
     window,
   };
 }
+
+/**
+ * WHAT THE PROTOTYPE SHOWS, as opposed to what it ships.
+ *
+ * The assembled build sends its seed as ONE JSON island and draws every
+ * region's contents from it at load: the region wrappers and their
+ * `data-fabric-id`s are in the served bytes, the rows are not. So a guard that
+ * greps the source for a value now measures the island rather than the screen,
+ * and would keep passing with the renderer deleted.
+ *
+ * These two are how a guard reads the SCREEN. `renderedDoc` for structural
+ * questions ("is there a table in this region"), `renderedHtml` for the string
+ * assertions that were written against the baked markup and mean exactly the
+ * same thing against the rendered tree. Both parse the document and run the
+ * page's own script first — which is the rule this area has broken twice.
+ */
+export function renderedDoc(html: string): Document {
+  return loadPrototype(html).doc;
+}
+
+export function renderedHtml(html: string): string {
+  return loadPrototype(html).doc.documentElement.outerHTML;
+}

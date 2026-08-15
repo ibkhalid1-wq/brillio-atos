@@ -22,6 +22,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { assemblePrototype } from "@shared/prototypeAssembly.ts";
 import { deriveFabric } from "@shared/fabric.ts";
+import { renderedDoc } from "./helpers/renderPrototype";
 
 const snap = (f: string) => JSON.parse(readFileSync(resolve(__dirname, `../../../docs/laila/snapshot-2026-08-07/${f}`), "utf8"));
 const wideOntology = snap("domain-ontology.json") as Record<string, unknown>;
@@ -62,7 +63,10 @@ const declarationOrderOntology = {
   ],
 };
 
-const parse = (html: string) => new DOMParser().parseFromString(html, "text/html");
+/** Parsed AND scripted: the sections' contents are drawn at load from the
+ *  data island, so a document that is only parsed carries the wrappers and
+ *  none of the cards this file counts. */
+const parse = (html: string) => renderedDoc(html);
 const detailScreens = (doc: Document) => Array.from(doc.querySelectorAll('section[data-screen^="detail-"]'));
 /** Sections standing OPEN: the region divs that are direct children of the
  *  screen, minus the record's own summary. */
