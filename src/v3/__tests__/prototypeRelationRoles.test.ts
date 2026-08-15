@@ -1,0 +1,134 @@
+/**
+ * THE PROTOTYPE MUST SAY WHAT THE ONTOLOGY SAID.
+ *
+ * `relationshipRolesFor` already maps cardinality to three distinct roles —
+ * 1:N → `collection`, N:M → `multi-select`, N:1 / 1:1 → `parent-ref` — and
+ * `deriveFabric` files them into region and nav nodes accordingly. The
+ * assembler then threw the distinction away: it selected child regions by ID
+ * PREFIX and rendered every one as the same `<dl>` of id/name pairs, and it
+ * read `kind === "nav"` zero times. Measured on the source before the fix:
+ * occurrences of `.role` → 0, occurrences of `kind === "nav"` → 0.
+ *
+ * So a one-to-many did not render as a list, a many-to-many was
+ * indistinguishable from it, and a reference relation rendered nothing at all.
+ *
+ * These pin the CONTRACT BETWEEN THE FABRIC AND THE DOM: every node the fabric
+ * emits has a rendering, and the rendering matches the role. That is the check
+ * whose absence let three separate drops ship unnoticed — assert it here, per
+ * node, rather than trusting a reading of the assembler.
+ */
+import { describe, it, expect } from "vitest";
+import { assemblePrototype } from "@shared/prototypeAssembly.ts";
+import { deriveFabric } from "@shared/fabric.ts";
+
+const ent = (name: string, attributes: string[]) => ({ name, attributes, definition: name });
+
+/** One ontology carrying all three cardinalities at once. */
+const ontology = {
+  entities: [
+    ent("Account", ["id", "name", "region"]),
+    ent("Opportunity", ["id", "name", "stage", "accountId"]),
+    ent("Contact", ["id", "name", "accountId"]),
+    ent("Campaign", ["id", "name"]),
+    ent("Invoice", ["id", "ref", "accountId"]),
+  ],
+  relations: [
+    { from: "Account", to: "Opportunity", cardinality: "1:N" },   // → collection
+    { from: "Account", to: "Contact", cardinality: "1:N" },       // → collection
+    { from: "Account", to: "Invoice", cardinality: "1:N" },       // → collection
+    { from: "Campaign", to: "Account", cardinality: "N:M" },      // → multi-select
+  ],
+};
+
+const html = assemblePrototype(ontology, {}).html;
+const fabric = deriveFabric(ontology, {});
+
+/** The markup of one region, by its fabric id. */
+const regionHtml = (id: string): string => {
+  const at = html.indexOf(`data-fabric-id="${id}"`);
+  if (at === -1) return "";
+  // From this region's opening tag to the next region's, which is enough to
+  // hold its own card and no sibling's.
+  const next = html.indexOf('data-fabric-id="', at + 1);
+  return html.slice(at, next === -1 ? at + 4000 : next);
+};
+
+describe("every fabric node has a rendering", () => {
+  it("emits a data-fabric-id for every region and nav node", () => {
+    // THE property that keeps the rest honest: a node the assembler forgets is
+    // a silent hole. `nav` nodes were exactly that — derived, then unrendered.
+    const missing = fabric.nodes
+      .filter((n) => n.kind === "region" || n.kind === "nav")
+      .filter((n) => !html.includes(`data-fabric-id="${n.id}"`))
+      .map((n) => `${n.kind} ${n.id}`);
+    expect(missing, `fabric nodes with no rendering:\n${missing.join("\n")}`).toEqual([]);
+  });
+});
+
+describe("a 1:N renders as a LIST of the child entity", () => {
+  const id = `region:account:opportunity`;
+
+  it("is a table, not a definition list of ids", () => {
+    // MUTATION: restore the `<dl>` renderer → RED. This is the reported bug.
+    const r = regionHtml(id);
+    expect(r, "the collection region is missing").toBeTruthy();
+    expect(r).toContain("<table");
+    expect(r).not.toContain('<div class="m-dl">');
+  });
+
+  it("is headed the way that entity's OWN list screen heads it", () => {
+    // One definition of the lead columns, so a collection and its list screen
+    // cannot disagree about what an Opportunity looks like.
+    const r = regionHtml(id);
+    expect(r).toContain("Stage");                    // a real Opportunity column
+    expect(r).not.toContain("Account Id");           // the FK is not a column
+  });
+
+  it("carries the true total, and offers the rest", () => {
+    const r = regionHtml(id);
+    const badge = r.match(/<span class="m-badge">(\d+)<\/span>/)?.[1];
+    expect(Number(badge)).toBeGreaterThan(0);
+    if (Number(badge) > 5) expect(r).toMatch(/View all \d+ Opportunity/);
+  });
+});
+
+describe("an N:M renders as a SET, distinguishably", () => {
+  it("is chips, not a table", () => {
+    // MUTATION: render multi-select through the collection branch → RED, and
+    // the two cardinalities become indistinguishable again.
+    const r = regionHtml("region:campaign:account");
+    expect(r, "the multi-select region is missing").toBeTruthy();
+    expect(r).not.toContain("<table");
+    expect(r).toMatch(/m-chips|m-empty/);
+  });
+
+  it("states the gap rather than implying emptiness", () => {
+    // The seeder declares that it generates no junction membership. An empty
+    // table would read as "there are none"; the miss must stay visible.
+    const r = regionHtml("region:campaign:account");
+    if (r.includes("m-empty")) expect(r).toMatch(/not generated|assumptions/i);
+  });
+});
+
+describe("an N:1 renders a LINK to the parent", () => {
+  it("renders every nav node as a control that navigates to the parent detail", () => {
+    // MUTATION: drop the parentNavs block → RED. Before the fix this was the
+    // whole of the reference relation's rendering: nothing.
+    const navs = fabric.nodes.filter((n) => n.kind === "nav");
+    expect(navs.length, "the fixture stopped producing parent-refs").toBeGreaterThan(0);
+    for (const n of navs) {
+      const parent = n.source.relation?.[0] ?? "";
+      const r = regionHtml(n.id);
+      expect(r, `nav ${n.id} has no rendering`).toBeTruthy();
+      expect(r, `nav ${n.id} does not navigate`).toMatch(/onclick="show\('detail-/);
+      expect(r).toContain(parent);
+    }
+  });
+});
+
+describe("determinism survives the role switch", () => {
+  it("assembles byte-identically twice, and the fabric version is unmoved", () => {
+    expect(assemblePrototype(ontology, {}).html).toBe(html);
+    expect(deriveFabric(ontology, {}).version).toBe(fabric.version);
+  });
+});

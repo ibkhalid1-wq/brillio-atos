@@ -127,6 +127,20 @@ a{color:var(--m-brand);text-decoration:none}
 .m-dot--good{background:var(--m-positive)}.m-dot--warn{background:var(--m-warn)}.m-dot--risk{background:var(--m-danger)}
 .m-chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--m-brand);background:var(--m-brand-soft);border:1px solid transparent;border-radius:var(--m-r-pill);padding:4px 11px;cursor:pointer}
 .m-chip:hover{border-color:color-mix(in srgb,var(--m-brand) 30%,transparent)}
+/* A many-to-many is a SET, so its members wrap as tags rather than filling a
+   table of owned rows. */
+.m-chips{display:flex;flex-wrap:wrap;gap:8px;padding:2px 0}
+/* Parent reference (N:1 / 1:1) — a link to the one record this belongs to.
+   Rendered from the fabric's nav nodes, which had no rendering at all. */
+.m-linkcards{display:flex;flex-wrap:wrap;gap:10px}
+.m-linkcard{display:inline-flex;align-items:baseline;gap:10px;font:inherit;text-align:left;cursor:pointer;
+  background:var(--m-surface-2);border:1px solid var(--m-line);border-radius:var(--m-r-md);padding:10px 14px}
+.m-linkcard:hover{border-color:color-mix(in srgb,var(--m-brand) 40%,transparent);background:var(--m-brand-soft)}
+.m-linkcard-k{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--m-muted)}
+.m-linkcard-v{font-size:13px;font-weight:600;color:var(--m-ink)}
+.m-linkcard-go{color:var(--m-brand);font-weight:700}
+/* Footer of a collection card — "View all N →" when the inline slice is short. */
+.m-card-f{display:flex;justify-content:flex-end;padding-top:12px}
 
 /* Empty / loading / error / toast */
 .m-empty{text-align:center;padding:48px var(--m-sp-4);color:var(--m-muted)}
