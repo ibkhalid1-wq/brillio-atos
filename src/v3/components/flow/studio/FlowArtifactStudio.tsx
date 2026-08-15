@@ -98,18 +98,44 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
   // dismissals). Regeneration REPLACES the document, so each is a stakeholder
   // correction about to be discarded — warn before regenerating, with the count.
   const overrideCount = useMemo(() => (entry ? operatorOverrideCount(program, entry.fieldKey) : 0), [program, entry]);
-  const guardedRegenerate = React.useCallback(() => {
-    if (!onRegenerate) return;
-    if (overrideCount > 0 && typeof window !== "undefined"
-      && !window.confirm(`This ${artifact.title} carries ${overrideCount} hand correction${overrideCount === 1 ? "" : "s"} from stakeholder meetings. Regenerating REPLACES the document — those corrections are not merged, and there is no saved version to roll back to. Regenerate anyway?`)) return;
-    onRegenerate();
-  }, [onRegenerate, overrideCount, artifact.title]);
 
   const dialogRef = React.useRef<HTMLDivElement | null>(null);
   useFocusTrap(embedded ? { current: null } : dialogRef);
   const [draft, setDraft] = useState<Record<string, unknown> | null>(storedDoc);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  /**
+   * WHICH SECTIONS A REBUILD WILL DESTROY — `docSectionDiff`, wired to the rebuild.
+   *
+   * The diff was only ever used AFTER a regeneration, to say what had changed. The
+   * moment it is actually needed is BEFORE one: a full rebuild replaces the whole
+   * document and does not merge hand corrections, and the warning for that was a bare
+   * COUNT — "4 hand corrections" — which tells an operator nothing about what they
+   * are about to lose.
+   *
+   * It cannot predict what the AGENT will write (that needs the document that does
+   * not exist yet). It can say exactly what the OPERATOR has changed, which is the
+   * half that gets destroyed: `storedDoc` is what is on the record, `draft` is their
+   * edits, and the diff between them names the sections. That is the whole of the
+   * harm, named rather than counted.
+   */
+  const editedSections = useMemo(
+    () => (dirty && storedDoc && draft ? docSectionDiff(storedDoc, draft) : []),
+    [dirty, storedDoc, draft],
+  );
+  const guardedRegenerate = React.useCallback(() => {
+    if (!onRegenerate) return;
+    // Name the sections when we know them; fall back to the count when the
+    // corrections are stored ones (overrides/dismissals) with no live draft to diff.
+    const named = editedSections.map((r) => r.replace(/ — (rewritten|added|removed)$/, "")).join(", ");
+    const what = named
+      ? `Your unsaved edits to ${named} will be lost.`
+      : `${overrideCount} hand correction${overrideCount === 1 ? "" : "s"} from stakeholder meetings will be lost.`;
+    if ((overrideCount > 0 || editedSections.length > 0) && typeof window !== "undefined"
+      && !window.confirm(`Rebuilding REPLACES this ${artifact.title} from the current claims — corrections are not merged, and there is no saved version to roll back to.\n\n${what}\n\nRebuild anyway?`)) return;
+    onRegenerate();
+  }, [onRegenerate, overrideCount, artifact.title, editedSections]);
   // Read first, everywhere: every artifact opens as the typeset document;
   // Edit flips to its form (or graph), and both Save and Discard land you
   // back on the document. One flow, no mode maze.
