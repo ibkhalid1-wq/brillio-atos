@@ -52,7 +52,11 @@ export function pilotSliceFor(inner: Record<string, unknown>): PilotSlice {
     };
   }
   try {
-    const { html, regionCount } = assemblePrototype(ontology!, atlas!);
+    // The value vocabulary is an INPUT of the same standing as the ontology: a
+    // stored artifact the seeder reads. Passed through here so the stakeholder's
+    // link and the operator's studio show the same values — the whole reason one
+    // `assemblePrototype` exists. Absent, both fall back identically.
+    const { html, regionCount } = assemblePrototype(ontology!, atlas!, undefined, { vocabulary: inner.prototypeValueVocabulary });
     // regionCount 0 means the ontology carries no entities: an empty shell, not a
     // prototype. Say so rather than sending a blank app that just reads as broken.
     if (!regionCount) {

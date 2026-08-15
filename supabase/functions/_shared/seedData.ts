@@ -18,13 +18,14 @@
  */
 import { deriveRoles, readsLikeATitle, type ValueRole } from "./semanticRoles.ts";
 import { deriveOntologyGraph, joinKeyFor, junctionKeyFor, type OntologyGraph } from "./ontologyGraph.ts";
+import { resolveVocabulary, vocabularyKey } from "./valueVocabulary.ts";
 
 /** `_display` is what a person would call this record. It is present only when
  *  the ontology gives the entity no name-like attribute to call it by — see the
  *  `display-name` assumption, which sends that gap to Listen. */
 export interface SeedRecord { id: string; _synthetic: true; _classification: "SYNTHETIC-SEED"; _display?: string; [k: string]: unknown; }
 export interface SeedAssumption {
-  kind: "optionality" | "fan-out" | "relation-verb" | "orphan-entity" | "display-name";
+  kind: "optionality" | "fan-out" | "relation-verb" | "orphan-entity" | "display-name" | "value-vocabulary";
   subject: string;
   assumed: string;
   listenQuestion: string;
@@ -89,7 +90,19 @@ const CATEGORIES = ["Standard", "Core", "Extended", "Strategic", "Enterprise", "
 
 const singular = (name: string) => name.replace(/s$/i, "");
 
-/** A synthetic value for one attribute, driven by its semantic role, deterministic. */
+/**
+ * A synthetic value for one attribute, driven by its semantic role, deterministic.
+ *
+ * `vocab` is this field's OWN values when the programme has a stored value
+ * vocabulary that answers for it (see `valueVocabulary.ts`) — "EMEA" in a region
+ * column instead of "Managed", drawn from a list somebody can read and diff.
+ * Absent, every branch falls back to the generic pool it always used.
+ *
+ * THE DRAW IS THE SAME EITHER WAY. Each branch below spends exactly the same
+ * number of PRNG steps with a vocabulary as without one, so supplying a
+ * vocabulary for one field cannot shift the values of any other field: the
+ * covered column changes and the rest of the seed stays byte-identical.
+ */
 function valueFor(
   role: ValueRole | undefined,
   entity: string,
@@ -97,7 +110,9 @@ function valueFor(
   i: number,
   rnd: () => number,
   refValue: () => string | undefined,
+  vocab?: readonly string[],
 ): unknown {
+  const listed = vocab && vocab.length ? vocab : undefined;
   switch (role) {
     case "monetary": return Math.round((rnd() * 480000 + 2000) / 500) * 500;
     case "quantity": return Math.floor(rnd() * 200);
@@ -106,10 +121,17 @@ function valueFor(
     // Rotated by the attribute's own name so an entity carrying six category
     // columns (tier, region, industry, type, segment, category) doesn't print
     // one word six times across a row.
-    case "category": return CATEGORIES[(hashSeed(attr) + Math.floor(rnd() * 4)) % CATEGORIES.length];
+    case "category": { const pool = listed ?? CATEGORIES; return pool[(hashSeed(attr) + Math.floor(rnd() * 4)) % pool.length]; }
     case "date": { const m = 1 + Math.floor(rnd() * 12); const d = 1 + Math.floor(rnd() * 27); return `2026-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`; }
     case "boolean": return rnd() > 0.5;
-    case "status": return STATUSES[Math.floor(rnd() * STATUSES.length)];
+    case "status": { const pool = listed ?? STATUSES; return pool[Math.floor(rnd() * pool.length)]; }
+    // A health and a priority are closed sets too, and the generic branch has
+    // nothing to say about either: without a vocabulary they fall to the
+    // free-text pool below, exactly as before. With one, they read as the RAG or
+    // the severity ladder the programme actually uses. One draw either way.
+    case "health": case "priority":
+      if (listed) return listed[Math.floor(rnd() * listed.length)];
+      break;
     case "code": return `${entity.slice(0, 3).toUpperCase()}-${String(1000 + Math.floor(rnd() * 8999))}`;
     case "person-ref": return PEOPLE[Math.floor(rnd() * PEOPLE.length)];
     // A reference to another record reads as THAT RECORD'S name. When the
@@ -123,16 +145,32 @@ function valueFor(
     // An identifier is a HANDLE, not a second copy of the title. Sharing the
     // title's branch printed the same string into two adjacent columns.
     case "identifier": return `${entity.replace(/[^A-Za-z]/g, "").slice(0, 3).toUpperCase()}-${String(i + 1).padStart(5, "0")}`;
-    default: return `${COMPANIES[i % COMPANIES.length]} ${WORDS[Math.floor(rnd() * WORDS.length)]}`;
+    default: break;
   }
+  return `${COMPANIES[i % COMPANIES.length]} ${WORDS[Math.floor(rnd() * WORDS.length)]}`;
 }
 
-export interface SeedOptions { rootRows?: number; maxFanOut?: number; maxPerEntity?: number; }
+export interface SeedOptions {
+  rootRows?: number;
+  maxFanOut?: number;
+  maxPerEntity?: number;
+  /**
+   * The programme's stored VALUE VOCABULARY artifact, if it has one — the
+   * `{ "Entity.attribute": ["plausible","values"] }` object produced by one model
+   * call per ontology change (`valueVocabulary.ts`). It is an INPUT, never a
+   * generation step: the seeder reads it exactly as it reads the ontology, so a
+   * rebuild moves nothing. Anything unusable (absent, empty, answering only
+   * fields this ontology no longer has) resolves to no vocabulary at all and the
+   * generic pools answer, byte for byte as before.
+   */
+  vocabulary?: unknown;
+}
 
 export function generateSeed(ontology: Record<string, unknown>, version: string, opts: SeedOptions = {}): SeedResult {
   const rootRows = opts.rootRows ?? 24;       // > page size (20) → a second page
   const maxFanOut = opts.maxFanOut ?? 5;
   const maxPerEntity = opts.maxPerEntity ?? 120;
+  const vocabulary = resolveVocabulary(opts.vocabulary, ontology);
   const roles = deriveRoles(ontology);
   const entities = (Array.isArray(ontology.entities) ? ontology.entities : []) as Array<Record<string, unknown>>;
   const attrsOf = (name: string) => {
@@ -167,6 +205,29 @@ export function generateSeed(ontology: Record<string, unknown>, version: string,
   for (const n of needsDisplayName) {
     assumptions.push({ kind: "display-name", subject: n, assumed: "no name-like attribute; a synthetic display name was supplied",
       listenQuestion: `What does a user call a single ${n}? It has no name, title or label attribute.` });
+  }
+  // WHAT THE VOCABULARY DID NOT ANSWER, said out loud.
+  //
+  // Only when there IS one: with no artifact the build is what it always was,
+  // and an assumption about a feature nobody switched on is noise. With one, two
+  // things can quietly be wrong — it can be older than the ontology it is read
+  // against, and it can cover some fields and not others — and both look
+  // identical on screen to a vocabulary that is right. So both are declared, and
+  // the fields still on the generic pool are named, because "Region: Managed" is
+  // a Listen question and not a finish.
+  if (vocabulary) {
+    if (!vocabulary.current) {
+      assumptions.push({ kind: "value-vocabulary", subject: "stored value vocabulary",
+        assumed: `generated for an earlier version of this ontology (${vocabulary.fingerprint}); ${vocabulary.covered.length} field(s) still matched`,
+        listenQuestion: "The ontology has changed since these picklist values were produced — regenerate the value vocabulary and confirm the lists still read correctly?" });
+    }
+    if (vocabulary.missing.length) {
+      const named = vocabulary.missing.slice(0, 3).map((t) => `${t.entity}.${t.attribute}`).join(", ");
+      const rest = vocabulary.missing.length > 3 ? ` and ${vocabulary.missing.length - 3} more` : "";
+      assumptions.push({ kind: "value-vocabulary", subject: `${vocabulary.missing.length} field(s) with no supplied values`,
+        assumed: `neutral placeholder labels used for ${named}${rest}`,
+        listenQuestion: `What values do ${named}${rest} actually hold? The demo is showing generic labels for them.` });
+    }
   }
   const isRoot = new Set(graph.nodes.filter((n) => n.isRoot).map((n) => n.name));
   for (const n of graph.nodes) {
@@ -215,7 +276,7 @@ export function generateSeed(ontology: Record<string, unknown>, version: string,
           const v = ta ? row[ta] : undefined;
           return typeof v === "string" && v ? v : String(row.id);
         };
-        rec[a] = valueFor(roleOf.get(`${name} ${a}`), name, a, i, rnd, refValue);
+        rec[a] = valueFor(roleOf.get(`${name} ${a}`), name, a, i, rnd, refValue, vocabulary?.values.get(vocabularyKey(name, a)));
       });
       // FK columns — `joinKeyFor` is the ONE definition, shared with the fabric
       // region that declares the relation, so the reader never has to guess how
