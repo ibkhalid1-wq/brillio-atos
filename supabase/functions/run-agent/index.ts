@@ -1587,6 +1587,7 @@ ${REFINE_CONTRACT}
 - APPLY prototypeRefineBrief.openChangeRequests — each is a demo verdict from a named stakeholder about a named area. Answer each in presentation terms, in the requester's own language. An ask you cannot answer without moving structure belongs in "gaps", tagged to who asked.
 - THE THEME IS THE CLIENT'S, NOT YOURS: take upstreamDesign.theme as the palette and the type/spacing scale verbatim; never default to primary-blue-on-white.
 - prototypeRefineBrief.screenIds lists the screens the assembled build already has — a direction naming a screen is answerable when it is in that list, and is a gap when it is not.
+- prototypeRefineBrief.screenSpecSchema is the vocabulary for "screenSpec": the screens you may put summary widgets on, the entities you may reference, and which of each entity's attributes can be measured and which grouped by. Return "screenSpec" when a screen genuinely deserves a number or a chart at the top of it — a pipeline funnel on a list of opportunities, the total value beside it — and return nothing when it does not. The assembler draws it in flow, derives every heading and every count from the seeded records, and REFUSES any reference outside the schema into the artifact's gaps. Do not write labels or numbers into the spec, and never return "screenSpec" together with "html".
 - REPORT what moved: put what you actually changed in "changed". If you could not honour an ask, name it in "gaps" rather than silently dropping it.
 Only when NO prototypeRefineBrief is present — a record with no ontology or atlas to assemble from — do you build the app from scratch per the rules above.
 
@@ -1604,6 +1605,7 @@ Return ONLY valid JSON:
   "entryScreen": "the screen id the app opens on",
   "html": "<!doctype html><html>…the entire self-contained clickable app…</html> — in stylesheet mode OMIT this field entirely",
   "styleCss": "stylesheet mode ONLY: the complete replacement stylesheet, using the baseline's class names",
+  "screenSpec": { "screens": [ { "screen": "a data-screen id from screenSpecSchema", "widgets": [ { "kind": "stat|breakdown|funnel", "entity": "an entity from the schema", "attribute": "the schema attribute a breakdown/funnel groups by", "measure": "the schema measure a stat totals — omit for a count", "where": { "attribute": "a groupable attribute", "equals": "a value the records hold" } } ] } ] },
   "changed": ["what you actually changed this iteration — screen ids, or the presentation areas a re-skin touched"],
   "seededEntities": ["ontology entities whose fixtures are shown in the app"],
   "gaps": ["Experience Design screens too thin to build, flows with no fixture to seed, faked items"],
@@ -2276,6 +2278,7 @@ function getCurrentPhaseScope(programData: ProgramState, phaseId: string): strin
  *  build the model is shown and the build its answer is checked against are the
  *  same document even though they are computed at two different moments in the run. */
 function prototypeBaselineOf(inner: Record<string, unknown>): PrototypeBaseline | null {
+  const priorBuild = isRecord(inner.prototypeBuild) ? inner.prototypeBuild as Record<string, unknown> : null;
   const baseline = prototypeBaselineFor(inner.domainOntology, inner.currentStateAtlas, inner.experienceDesign, {
     // The same stored inputs the studio and the stakeholder's link assemble
     // with. A baseline missing one of them is a different application from the
@@ -2283,13 +2286,17 @@ function prototypeBaselineOf(inner: Record<string, unknown>): PrototypeBaseline 
     // measure the returned document against a build nobody has seen.
     vocabulary: inner.prototypeValueVocabulary,
     blueprint: inner.agenticBlueprint,
+    // …and the screen spec a previous round accepted, for the same reason the
+    // approved skin is carried: the skeleton is re-derived every run, so a
+    // judgement the model already made and the operator already saw would
+    // otherwise be discarded on the next one.
+    screenSpec: priorBuild?.screenSpec,
   });
   if (!baseline) return null;
   // The skeleton is re-derived every run; the SKIN the operator already approved
   // is carried forward off the stored build, so the loop accumulates instead of
   // resetting to the stock stylesheet each round.
-  const prior = isRecord(inner.prototypeBuild) ? (inner.prototypeBuild as Record<string, unknown>).html : null;
-  return baselineWithPriorSkin(baseline, prior);
+  return baselineWithPriorSkin(baseline, priorBuild?.html ?? null);
 }
 
 /**
