@@ -45,7 +45,13 @@ const TERMINAL_RUN_RETENTION_MS = 2 * 60 * 1000;
 // Runs stuck in "running" or "queued" longer than this are treated as locally timed-out.
 // This prevents buttons being stuck forever if the edge function drops a record without
 // writing a terminal status (e.g., 404 when function is not deployed, or hard crash).
-const STALE_RUN_TIMEOUT_MS = 5 * 60 * 1000;
+//
+// 8 MINUTES, not 5. It must sit ABOVE the platform's own wall-clock ceiling — Supabase
+// edge functions are capped at 150s by default and 400s (6m40s) on paid — or the reaper
+// kills work that is still running and tells an operator their build failed while it
+// works. That is a worse failure than the stuck tile it exists to fix: one is a wrong
+// label, the other is a wrong fact. Raised 2026-08-15 with the poller fix below.
+const STALE_RUN_TIMEOUT_MS = 8 * 60 * 1000;
 
 function isTerminalStatus(status: AgentRun["status"] | undefined): boolean {
   return status === "complete" || status === "failed" || status === "cancelled";
@@ -231,10 +237,24 @@ export function useAgentRun(programId: string, enabled = true, onRunComplete?: (
         .in("id", stalledRuns.map((run) => run.id));
 
       if (data) {
-        setActiveRuns((current) => current.map((run) => {
+        // NORMALISE, don't just merge. Every other path into `activeRuns` runs the
+        // list through `normalizeActiveRuns` — the initial load (above) and every
+        // realtime upsert — and that is where `isStaleActiveRun` reaps a run the edge
+        // dropped without writing a terminal status. THIS path did not, and it is the
+        // only one that fires for a long-running run: the poller re-read the row,
+        // found it still "running" (it always will be — the process that would have
+        // written `failed` is the one that died), merged that back, and kept the
+        // zombie alive for ever.
+        //
+        // Observed: `prototype-build` sat "running" for 17 minutes against a 5-minute
+        // stale threshold and a 2.5-minute edge wall-clock, with the programme row
+        // untouched since before the run began. The tile said "rebuilding…", the
+        // regen queue held behind it, and a reload did clear it — because the load
+        // path normalises and this one did not.
+        setActiveRuns((current) => normalizeActiveRuns(current.map((run) => {
           const polled = data.find((entry: { id: string }) => entry.id === run.id);
           return polled ? { ...run, ...polled } : run;
-        }));
+        })));
       }
     }, checkInterval);
 
