@@ -9,7 +9,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { asArray, asRecord, asStrings, asText, type StudioProps } from "./StudioKit";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
-import { assemblePrototype, paletteFor } from "@shared/prototypeAssembly.ts";
+import { assemblePrototype, paletteFor, screenOptionsFor } from "@shared/prototypeAssembly.ts";
 import { experienceParentEntities } from "./ExperienceDesignStudio";
 import { buildPrototypeProject, downloadPrototypeZip, importPrototypeProject, projectSlug } from "./prototypeExport";
 import PrototypeCommandBar from "@/v3/components/flow/PrototypeCommandBar";
@@ -74,6 +74,10 @@ export default function PrototypeStudio({ doc, onChange, program, onRefineProtot
       return assemblePrototype(ontology, atlas, parents, {
         vocabulary,
         theme: paletteFor(design),
+        // …and what each of those screens leads with: the columns, the related
+        // collections and the opening view the operator chose beside the menu,
+        // read from the same document through the same one definition.
+        screenOptions: screenOptionsFor(design),
         blueprint: readArtifactDoc(program, "agenticBlueprint"),
       }).html;
     } catch { return null; }

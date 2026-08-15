@@ -25,7 +25,7 @@
  * test suite: the entrypoint imports remote modules and reads `Deno.env` at load,
  * which vitest cannot execute. This module is pure.
  */
-import { assemblePrototype, paletteFor } from "./prototypeAssembly.ts";
+import { assemblePrototype, paletteFor, screenOptionsFor } from "./prototypeAssembly.ts";
 
 export interface PilotSlice {
   /** The assembled prototype, self-contained. Absent when it can't be derived. */
@@ -62,6 +62,11 @@ export function pilotSliceFor(inner: Record<string, unknown>): PilotSlice {
     const { html, regionCount } = assemblePrototype(ontology!, atlas!, undefined, {
       vocabulary: inner.prototypeValueVocabulary,
       theme: paletteFor(inner.experienceDesign),
+      // The per-entity screen options are an INPUT of the same standing, off the
+      // same document: what a screen leads with is the operator's decision, and a
+      // stakeholder validating the prototype must be validating the one that was
+      // decided — not a second application that heads its tables differently.
+      screenOptions: screenOptionsFor(inner.experienceDesign),
     });
     // regionCount 0 means the ontology carries no entities: an empty shell, not a
     // prototype. Say so rather than sending a blank app that just reads as broken.

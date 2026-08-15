@@ -16,7 +16,7 @@ import { generateSeed, type SeedAssumption, type SeedRecord } from "./seedData.t
 import { meridianStylesheet, type PrototypeTheme } from "./prototypeDesignSystem.ts";
 import { deriveWorkbenches, type AtlasRole, type AtlasWorkflow } from "./atlasWorkbenches.ts";
 import { deriveAgenticSurface, agentsOnEntity, gatedAgents, type SurfacedAgent } from "./agenticSurface.ts";
-import { entityNameResolver } from "./ontologyGraph.ts";
+import { entityNameResolver, type OntologyGraph } from "./ontologyGraph.ts";
 
 const esc = (s: unknown) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
 const slug = (s: unknown) => String(s ?? "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "x";
@@ -122,6 +122,9 @@ interface EmptyCite { a: string; q: string }
 interface ColumnSpec { ix: number[]; head: string[]; role: number[] }
 interface ListSpec extends ColumnSpec {
   region: string; emptyTitle: string; cite: EmptyCite | null;
+  /** The view this list OPENS on. Absent means the table — the default, so an
+   *  unoptioned build ships no key for it and serialises as it always did. */
+  view?: "board";
   /** Column index of the entity's STATUS attribute, -1 when it declares none.
    *  It is what decides whether this list is offered a board view at all: an
    *  entity with no status gets no switch, because a board with one nameless
@@ -283,7 +286,15 @@ function mCell(R,ri,v){
   // ONE STATE OBJECT PER SCREEN — the page, the filter, the sort, the view, and
   // which record its detail is showing. Keyed by entity slug, never by index.
   var S={},FORM={},UNDO=null,HASH="";
-  function st(sl){return S[sl]||(S[sl]={page:0,q:"",view:"table",sort:-1,dir:1,rec:-1})}
+  // The OPENING view is the screen's own — the operator can ask a list with a
+  // status to open on its board — and everything after the first render is this
+  // session's. Read off the spec, so the served tab state and the drawn region
+  // cannot disagree about which view the screen is in.
+  function st(sl){
+    if(S[sl])return S[sl];
+    var sc=SC[sl],v=sc&&sc.list&&sc.list.view==="board"?"board":"table";
+    return S[sl]={page:0,q:"",view:v,sort:-1,dir:1,rec:-1};
+  }
   // The three column encodings, undone. A column is decoded once, the first
   // time a region asks for it, and kept — a build with 33 entities renders 99
   // screens off a handful of them.
@@ -887,6 +898,218 @@ export function paletteFor(doc: unknown): Partial<PrototypeTheme> {
 }
 
 /**
+ * ── WHAT A SCREEN LEADS WITH — the operator's second authored input ──────────
+ *
+ * `parentEntities` answers WHICH entities get a screen. It says nothing about
+ * what those screens lead with, and the three questions a delivery team asks
+ * next are exactly three the assembler already decides for itself and never
+ * asked about: which columns head this entity's list, which of its related
+ * collections stand open on the detail, and — where the entity declares a
+ * status — whether the list opens on the board rather than the table.
+ *
+ * Same shape as `parentEntities`, for the same reason: ONE authored input on the
+ * Experience Design document, everything else derived, and an ABSENT input
+ * assembles byte-for-byte the application it assembled before. An entry naming
+ * an attribute, a relation or a view this ontology cannot support is dropped
+ * (`resolveScreenOptions`) — a stale document must not mint a column that does
+ * not exist — and the studio offers only what `screenFactsFor` says the
+ * ontology can honour, so nothing is offered that the assembler will ignore.
+ */
+export interface EntityScreenOptions {
+  /** The columns that LEAD this entity's list, in the operator's order. Absent
+   *  (or emptied of everything the ontology still holds) → the derived pick. */
+  columns?: string[];
+  /** The child collections that lead its detail page, in the operator's order.
+   *  Never a filter: the ones not named still render, below, and the ones past
+   *  the page's budget collapse into the "+N more" expander exactly as a
+   *  derived tail does. Nothing is ever dropped from the document. */
+  collections?: string[];
+  /** Which view the list OPENS on. `board` is honoured only where the entity
+   *  declares a status attribute — there is nothing to lane a board by
+   *  without one, which is the same rule that decides whether the toggle is
+   *  rendered at all. */
+  view?: "table" | "board";
+}
+
+/**
+ * WHAT A SCREEN CAN HOLD, before anyone chooses anything.
+ *
+ * Every budget in the assembly, stated once and exported, because the surface
+ * that OFFERS the choice has to state the same number the assembler applies.
+ * A studio that lets an operator pick seven columns for a table that shows five
+ * is a control that lies, and the lie is undetectable from either side alone.
+ */
+export const SCREEN_BUDGET = {
+  /** Columns leading an entity's own list screen. */
+  listColumns: 5,
+  /** Columns of that entity where it appears as a related collection — one
+   *  fewer, because the card is narrower than the page. */
+  relatedColumns: 4,
+  /** Child sections standing OPEN on a detail page; the rest collapse. */
+  openSections: 5,
+} as const;
+
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  typeof v === "object" && v !== null && !Array.isArray(v);
+
+/** Trimmed, de-duplicated, empties dropped — the reading `parentEntitiesFor`
+ *  gives the menu, applied to every authored name list. */
+const authoredNames = (v: unknown): string[] => [...new Set(
+  (Array.isArray(v) ? v : [])
+    .map((x) => (typeof x === "string" ? x : x == null ? "" : String(x)).trim())
+    .filter(Boolean),
+)];
+
+/**
+ * THE PER-ENTITY SCREEN OPTIONS, READ OFF THE EXPERIENCE DESIGN — the one
+ * definition, reached from both runtimes, exactly as `parentEntitiesFor` and
+ * `paletteFor` are. An option the document does not carry comes back absent,
+ * and absent means "as it was derived".
+ */
+export function screenOptionsFor(doc: unknown): Record<string, EntityScreenOptions> {
+  const d = isRecord(doc) ? doc : {};
+  const raw = isRecord(d.screenOptions) ? d.screenOptions : {};
+  const out: Record<string, EntityScreenOptions> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    const entity = key.trim();
+    if (!entity || !isRecord(value)) continue;
+    const opt: EntityScreenOptions = {};
+    const columns = authoredNames(value.columns);
+    const collections = authoredNames(value.collections);
+    if (columns.length) opt.columns = columns;
+    if (collections.length) opt.collections = collections;
+    // "table" IS the default, so it is stored as nothing — a document that
+    // records the default would assemble the same bytes and diff differently.
+    if (value.view === "board") opt.view = "board";
+    if (Object.keys(opt).length) out[entity] = opt;
+  }
+  return out;
+}
+
+/**
+ * THE DERIVED LEAD COLUMNS — what a table of this entity heads with when
+ * nobody has chosen.
+ *
+ * Lead with the entity's TITLE attribute, not with whatever the ontology
+ * happened to list first: a positional pick put a contact's buying role where
+ * the contact's name belongs. When the ontology names no title attribute the
+ * lead column is the record's DISPLAY NAME, headed with the entity itself.
+ */
+function derivedLeadColumns(attrs: readonly string[], roleOf: (a: string) => ValueRole | undefined, limit: number): string[] {
+  const titleAttr = attrs.find((a) => roleOf(a) === "title");
+  return (titleAttr ? [titleAttr, ...attrs.filter((a) => a !== titleAttr)] : ["_display", ...attrs]).slice(0, limit);
+}
+
+/**
+ * THE ORDER A DETAIL PAGE'S CHILD SECTIONS STAND IN — the operator's named ones
+ * first, in their order, then the derived weight.
+ *
+ * The derived weight is how much of the ontology hangs off each child
+ * (`subtreeSize` — a child that owns half the model outranks a leaf), then
+ * fan-in, then ontology order. Never array position, so the same ontology
+ * always opens the same sections. Sorting is TOTAL and pure: the comparator
+ * reads only the authored rank and the graph, so two runs cannot disagree.
+ */
+function orderChildSections<T>(
+  items: readonly T[],
+  childOf: (t: T) => string | undefined,
+  graph: OntologyGraph,
+  authored: readonly string[] = [],
+): T[] {
+  const weightOf = (t: T): [number, number, number] => {
+    const cn = childOf(t);
+    const g = cn ? graph.byName[cn] : undefined;
+    return [-(g?.subtreeSize ?? 1), -(g?.fanIn ?? 0), cn ? graph.entities.indexOf(cn) : Number.MAX_SAFE_INTEGER];
+  };
+  const byWeight = [...items].sort((a, b) => {
+    const [as, af, ai] = weightOf(a); const [bs, bf, bi] = weightOf(b);
+    return as - bs || af - bf || ai - bi;
+  });
+  return authoredFirst(byWeight, childOf, authored);
+}
+
+/** THE ONE RULE for "the operator's named ones lead, the rest keep the derived
+ *  order" — applied to fabric regions by the assembler and to entity names by
+ *  the surface that says what will happen. A name nobody derived is not
+ *  promoted: it is not there to promote. */
+function authoredFirst<T>(ordered: readonly T[], keyOf: (t: T) => string | undefined, authored: readonly string[]): T[] {
+  const rank = new Map(authored.map((n, i) => [n, i] as const));
+  const named: T[] = [], rest: T[] = [];
+  for (const t of ordered) (rank.has(keyOf(t) ?? "") ? named : rest).push(t);
+  named.sort((a, b) => rank.get(keyOf(a) ?? "")! - rank.get(keyOf(b) ?? "")!);
+  return [...named, ...rest];
+}
+
+/**
+ * WHICH RELATED COLLECTIONS STAND OPEN ON A DETAIL PAGE, AND WHICH COLLAPSE —
+ * the one definition, read by the assembler when it does it and by the studio
+ * when it tells the operator what will happen.
+ *
+ * `collections` is the derived order (`EntityScreenFacts.collections`). Nothing
+ * is ever dropped: past the budget a section collapses behind the "+N more"
+ * expander, keeps its `data-fabric-id`, and stays addressable by a delta.
+ */
+export function openSectionPlan(
+  collections: readonly string[],
+  authored: readonly string[] = [],
+): { open: string[]; collapsed: string[] } {
+  const ordered = authoredFirst(collections, (c) => c, authored);
+  return { open: ordered.slice(0, SCREEN_BUDGET.openSections), collapsed: ordered.slice(SCREEN_BUDGET.openSections) };
+}
+
+/**
+ * WHAT THIS ONTOLOGY CAN HONOUR, per entity — the offer sheet the studio reads.
+ *
+ * Derived from the same fabric and the same roles the assembler builds from,
+ * through the same two helpers, so the choice a surface offers and the choice
+ * the assembler spends cannot describe different applications. Read it before
+ * rendering a control: an entity whose `status` is null has no board to open
+ * on, and an attribute not in `attributes` is not a column anything can lead
+ * with.
+ */
+export interface EntityScreenFacts {
+  entity: string;
+  /** Every attribute the ontology holds for it — the columns a list can lead with. */
+  attributes: string[];
+  /** What the list heads with when nothing is authored. */
+  columns: string[];
+  /** The child collections its detail page carries, in the derived order — the
+   *  first `SCREEN_BUDGET.openSections` of these stand open. */
+  collections: string[];
+  /** The attribute a board would lane by; null when the entity declares none,
+   *  and then there is no board and no toggle. */
+  status: string | null;
+}
+
+export function screenFactsFor(ontology: Record<string, unknown>, atlas: Record<string, unknown> = {}): EntityScreenFacts[] {
+  const fabric = deriveFabric(ontology, atlas);
+  const roles = deriveRoles(ontology);
+  const roleOf = new Map<string, ValueRole>(roles.attributeRoles.map((r) => [`${r.entity} ${r.attribute}`, r.role] as const));
+  const entities = (Array.isArray(ontology.entities) ? ontology.entities : []) as Array<Record<string, unknown>>;
+  const out: EntityScreenFacts[] = [];
+  for (const e of entities) {
+    const name = String(e.name ?? "").trim();
+    if (!name) continue;
+    const attributes = (Array.isArray(e.attributes) ? e.attributes : [])
+      .map((a) => (typeof a === "string" ? a : String((a as { name?: unknown })?.name ?? ""))).filter(Boolean);
+    // The child regions this entity's detail carries, addressed by the RELATION
+    // the fabric node declares rather than by its id's middle segment — the id
+    // is a slug, and two entities whose names slug alike would otherwise trade
+    // collections.
+    const regions = fabric.nodes.filter((n) => n.kind === "region" && n.source.relation?.[0] === name);
+    out.push({
+      entity: name,
+      attributes,
+      columns: derivedLeadColumns(attributes, (a) => roleOf.get(`${name} ${a}`), SCREEN_BUDGET.listColumns),
+      collections: orderChildSections(regions, (n) => n.source.relation?.[1], fabric.graph)
+        .map((n) => n.source.relation![1]),
+      status: attributes.find((a) => roleOf.get(`${name} ${a}`) === "status") ?? null,
+    });
+  }
+  return out;
+}
+
+/**
  * The programme's stored inputs that are NOT the ontology or the atlas:
  *
  *   - `vocabulary` — the value vocabulary, a `{ "Entity.attribute": [values] }`
@@ -911,6 +1134,14 @@ export interface AssemblyOptions {
    * it never changes the ones derived from the ontology.
    */
   blueprint?: unknown;
+  /**
+   * The operator's per-entity screen options (see `screenOptionsFor`), threaded
+   * the way `parentEntities` is: read once off the Experience Design document
+   * by every surface that assembles, so the studio's preview, the stakeholder's
+   * link and the refine baseline cannot describe different applications.
+   * Omitting it assembles exactly what it assembled before.
+   */
+  screenOptions?: Record<string, EntityScreenOptions> | null;
 }
 
 export function assemblePrototype(ontology: Record<string, unknown>, atlas: Record<string, unknown>, parentEntities?: readonly string[], options: AssemblyOptions = {}): AssembledPrototype {
@@ -930,6 +1161,14 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
     const e = entities.find((x) => String(x.name) === name);
     return (Array.isArray(e?.attributes) ? e!.attributes : []).map((a) => (typeof a === "string" ? a : String((a as { name?: unknown })?.name ?? ""))).filter(Boolean);
   };
+  // THE OPERATOR'S PER-ENTITY SCREEN OPTIONS, normalised through the same
+  // reader both runtimes use — a raw object handed in by a caller is held to
+  // exactly the shape the document is held to. Every one of the three is
+  // validated where it is SPENT (against this entity's attributes, against the
+  // child regions the fabric actually declares, against whether a status
+  // exists), because that is the only place the answer is known.
+  const screenOptions = screenOptionsFor({ screenOptions: options.screenOptions });
+  const optionsFor = (name: string): EntityScreenOptions => screenOptions[name] ?? {};
   // ORDER BY STRUCTURE. This line used to sort by `seed.counts` — by how many
   // rows the generator happened to make — so a 120-row forecast-split junction
   // table led the navigation of a CRM and Account sat 20 rows down. Row volume
@@ -1029,11 +1268,12 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
    * collection is a real list OF THAT ENTITY, headed the way its own list
    * screen heads it, rather than a second, differently-chosen set of columns.
    *
-   * Lead with the entity's TITLE attribute, not with whatever the ontology
-   * happened to list first: a positional pick put Contact's `buyingRole` where
-   * the contact's name belongs, account names under "Category" and opportunity
-   * names under "Stage". When the ontology names no title attribute the lead
-   * column is the record's DISPLAY NAME, headed with the entity itself.
+   * The operator's choice, where they have made one, IS that definition: the
+   * columns they named lead every table of this entity, for the same reason the
+   * derived pick did. Names the ontology no longer holds are dropped rather
+   * than minting a column with nothing behind it, and a choice left with
+   * nothing standing falls back to the derived pick — an absent input is
+   * exactly the build there was before, which is the `parentEntities` contract.
    */
   const leadColumnsFor = (name: string, limit: number, exclude?: string): string[] => {
     // `exclude` drops the attribute that points BACK at the context. Inside
@@ -1041,8 +1281,9 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
     // same value repeated down the table — it says only "these are this
     // account's", which the card's heading already said.
     const all = attrsOf(name).filter((a) => !exclude || a.toLowerCase() !== exclude.toLowerCase());
-    const titleAttr = all.find((a) => roleOf.get(`${name} ${a}`) === "title");
-    return (titleAttr ? [titleAttr, ...all.filter((a) => a !== titleAttr)] : ["_display", ...all]).slice(0, limit);
+    const authored = (optionsFor(name).columns ?? []).filter((a) => all.includes(a));
+    if (authored.length) return authored.slice(0, limit);
+    return derivedLeadColumns(all, (a) => roleOf.get(`${name} ${a}`), limit);
   };
   const headFor = (name: string, c: string) => (c === "_display" ? name : humanizeField(c));
 
@@ -1358,22 +1599,32 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
     // and an entity that has no status attribute gets NO toggle, because a
     // board of one nameless lane is a control that offers nothing.
     const statusIx = statusIndexOf(name);
+    // WHICH VIEW THIS LIST OPENS ON. The operator can ask for the board — a
+    // pipeline is what a sales demo opens on — and the ask is honoured ONLY
+    // where the ontology declares a status, because that is the same condition
+    // that decides whether a board exists at all. Absent, the list opens on the
+    // table exactly as it always did, and the spec carries no `view` key, so an
+    // unoptioned build is byte-identical to the one before this existed.
+    const board = statusIx >= 0 && optionsFor(name).view === "board";
     screenSpecs.push({
       entity: name,
       slug: s,
       list: {
         region: `screen:${s}:list`,
-        ...columnSpec(name, leadColumnsFor(name, 5)),
+        ...columnSpec(name, leadColumnsFor(name, SCREEN_BUDGET.listColumns)),
         emptyTitle: `No ${name} records yet`,
         cite: citeOf(assumptionFor(seedParentOf(name), name)),
         status: statusIx,
+        ...(board ? { view: "board" as const } : {}),
       },
       detail: null,
     });
     // The "Filter" BUTTON is gone. It opened nothing, and the honest version of
     // it is the field itself — a control that filters as it is typed into.
+    // The ACTIVE tab is the view the screen opens on: a board-first list under
+    // a highlighted "Table" tab is the control disagreeing with the screen.
     const toggle = statusIx >= 0
-      ? `<div class="m-tabs" data-view="${s}"><button class="m-tab is-active" data-v="table" onclick="setView('${s}','table')">Table</button><button class="m-tab" data-v="board" onclick="setView('${s}','board')">Board</button></div>`
+      ? `<div class="m-tabs" data-view="${s}"><button class="m-tab${board ? "" : " is-active"}" data-v="table" onclick="setView('${s}','table')">Table</button><button class="m-tab${board ? " is-active" : ""}" data-v="board" onclick="setView('${s}','board')">Board</button></div>`
       : "";
     return `<section class="m-screen" data-screen="list-${s}" hidden>
       <header class="m-page-h"><div><div class="m-eyebrow">${esc(name)}</div><h1 class="m-title">${esc(name)}</h1><p class="m-sub">${rows.length} record${rows.length === 1 ? "" : "s"} · synthetic seed data</p></div>
@@ -1450,7 +1701,7 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
         // through its membership table, because neither side owns a key.
         fk: multi || !n.joinKey ? -1 : columnIndex(childName, n.joinKey),
         junction: multi ? (n.junctionKey ?? "") : "",
-        ...columnSpec(childName, leadColumnsFor(childName, 4, n.joinKey)),
+        ...columnSpec(childName, leadColumnsFor(childName, SCREEN_BUDGET.relatedColumns, n.joinKey)),
         emptyTitle: multi ? `No ${childName} linked` : `No ${childName} yet`,
         // A record with no links is a real zero now that membership is
         // generated — but the fan-out behind it is still assumed, so the empty
@@ -1475,16 +1726,14 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
     //
     // Ties break on fan-in and then on ontology order — never on array position,
     // so the same ontology always opens the same sections.
-    const CHILD_SECTIONS_OPEN = 5;
-    const weightOf = (n: (typeof childRegions)[number]): [number, number, number] => {
-      const cn = childNameOf(n);
-      const g = cn ? graph.byName[cn] : undefined;
-      return [-(g?.subtreeSize ?? 1), -(g?.fanIn ?? 0), cn ? graph.entities.indexOf(cn) : Number.MAX_SAFE_INTEGER];
-    };
-    const byWeight = [...childRegions].sort((a, b) => {
-      const [as, af, ai] = weightOf(a); const [bs, bf, bi] = weightOf(b);
-      return as - bs || af - bf || ai - bi;
-    });
+    //
+    // THE OPERATOR OUTRANKS THE WEIGHT, and outranks it only by ORDER: a
+    // collection they named leads the page, the rest follow by weight, and the
+    // budget still holds. Naming a sixth collection therefore collapses it
+    // rather than growing the wall back — which is why the studio states the
+    // budget instead of letting the choice be quietly truncated.
+    const CHILD_SECTIONS_OPEN = SCREEN_BUDGET.openSections;
+    const byWeight = orderChildSections(childRegions, childNameOf, graph, optionsFor(name).collections ?? []);
     const open = byWeight.slice(0, CHILD_SECTIONS_OPEN).map(childSpec).join("");
     const rest = byWeight.slice(CHILD_SECTIONS_OPEN);
     const children = open + (rest.length

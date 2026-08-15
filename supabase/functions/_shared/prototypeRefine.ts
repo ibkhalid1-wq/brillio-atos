@@ -35,7 +35,7 @@
  * end to end without a model call, which is the only way any of it can be
  * guarded.
  */
-import { assemblePrototype, paletteFor, parentEntitiesFor } from "./prototypeAssembly.ts";
+import { assemblePrototype, paletteFor, parentEntitiesFor, screenOptionsFor } from "./prototypeAssembly.ts";
 import { generateSeed } from "./seedData.ts";
 
 /** The assembled build a refine starts from, plus everything a refine must preserve. */
@@ -213,6 +213,11 @@ export function prototypeBaselineFor(
     const { html, fabric, regionCount } = assemblePrototype(ontology, atlas, parents, {
       vocabulary: inputs.vocabulary,
       theme: paletteFor(experienceDesign),
+      // What each screen leads with is authored on the SAME document as the
+      // menu. A baseline assembled without it is a different application from
+      // the one the operator is looking at, and the post-condition would check
+      // the model's answer against a build nobody asked for.
+      screenOptions: screenOptionsFor(experienceDesign),
       blueprint: inputs.blueprint,
     });
     if (!regionCount) return null;
