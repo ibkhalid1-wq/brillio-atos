@@ -335,8 +335,13 @@ assert on the running board, and put the number in the commit.
 - **Redirect.** The action and the referral row still render, but nothing creates one
   any more: reassigning does the same thing in one step.
 - **`prototype-pack`.** Retired from the methodology 2026-08-15 — it was a
-  specification of how to build what `assemblePrototype` already builds. Nothing is
-  deleted: an existing `prototypePack` document still opens in its studio. **Owed:**
+  specification of how to build what `assemblePrototype` already builds. The document
+  is RETAINED in the blob, but it is no longer surfaced anywhere — with the artifact
+  out of the movement there is no card for it, so it appears on neither the board nor
+  the Library. (The commit that retired it claimed the studio still opened it; that
+  was wrong, and the board reported it within the hour as a Prototype tile reading
+  "upstream not ready".) Recover a pack from the blob or the snapshot ring if one is
+  ever needed. **Owed:**
   `run-agent`'s `UPSTREAM_ARTIFACT_DEPS` still lists the pack upstream of
   `demo-scripts` and does not list `prototype-build`, so the SERVER can still write a
   demo off a specification. The client gate is stricter (it requires the build), which
