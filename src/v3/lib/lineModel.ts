@@ -144,8 +144,7 @@ const SUBTITLES: Record<string, string> = {
   "architecture-strategy": "The shape of the build, chosen on record",
   "experience-design": "What each screen and flow becomes",
   "agentic-blueprint": "What each agent does, and with which data",
-  "prototype-build": "The working build — refined only where asked",
-  "prototype-pack": "The working build — refined only where asked",
+  "prototype-build": "The working build — assembled from the model, refined only where asked",
   "demo-scripts": "A demo for every heard voice; verdicts roll up per area",
   "hardening-plan": "Guardrails and rollback — drafted early from the Blueprint",
   "eval-suite": "Pass bars, from the record",
@@ -216,8 +215,9 @@ export const GENERATION_PREREQS: Record<string, string[][]> = {
   "experience-design": [["architecture-strategy"]],
   "agentic-blueprint": [["experience-design"]],
   "prototype-build": [["agentic-blueprint"]],
-  "prototype-pack": [["agentic-blueprint"]],
-  "demo-scripts": [["prototype-build", "prototype-pack"]],
+  // A demo needs the BUILD. It used to accept either, so a programme with only a
+  // specification could reach the demo gate with nothing to demonstrate.
+  "demo-scripts": [["prototype-build"]],
   "hardening-plan": [["agentic-blueprint"]],
   "eval-suite": [["agentic-blueprint"]],
   "runbook": [["agentic-blueprint"]],
