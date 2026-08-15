@@ -482,7 +482,11 @@ describe("a busy flag that nothing clears is a lie", () => {
   });
 
   it("children still receive booleans — the snapshot is bookkeeping, not their business", () => {
-    expect(regen, "the snapshot leaked out of the hook").toContain("regeneratingIds: Object.keys(busy)");
+    // The snapshot must not leak: children get ids, never the stored document. The
+    // set is the union of our own latch and the backend's running set (2026-08-15 —
+    // a run someone else started is still a run), so this asserts the SHAPE rather
+    // than one expression.
+    expect(regen, "the snapshot leaked out of the hook").toMatch(/regeneratingIds: \[\.\.\.new Set\(\[\.\.\.Object\.keys\(busy\)/);
     expect(line).toContain("Object.fromEntries(regeneratingIds.map((id) => [id, true]))");
   });
 });
