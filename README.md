@@ -48,7 +48,7 @@ Client env (`.env`):
 
 ```
 VITE_SUPABASE_URL=https://vudqrrqpipnkxzxslbim.supabase.co
-VITE_SUPABASE_ANON_KEY=<publishable sb_… key — safe in the client>
+VITE_SUPABASE_PUBLISHABLE_KEY=<sb_publishable_… key — safe in the client>
 ```
 
 Edge functions live in `supabase/functions/` (agents, the public token-gated portal,

@@ -40,7 +40,14 @@ not a known state. Node 20 or newer (`.nvmrc` pins what CI uses).
 `.env.local.example` and fill it in. Without it the app runs and every read fails.
 
 - **Supabase project**: `vudqrrqpipnkxzxslbim` (auth, Postgres, Realtime, Edge Functions).
-- Client env: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (a publishable `sb_…` key; safe in the client).
+- Client env: `VITE_SUPABASE_URL`, **`VITE_SUPABASE_PUBLISHABLE_KEY`** (an `sb_publishable_…`
+  key; safe in the client), `VITE_SUPABASE_PROJECT_ID`. The name matters: this doc and
+  the README both said `VITE_SUPABASE_ANON_KEY` until 2026-08-13, which
+  `client.ts` has never read — set that one and `isSupabaseConfigured` is false, the
+  client is `null`, and the app comes up unable to reach anything.
+  **Vite inlines `VITE_*` at BUILD time**, so they must be present when `npm run build`
+  runs. Setting them as runtime app settings on the host does nothing to an
+  already-built bundle.
 - Deploy an edge function: `npx supabase functions deploy <name>` (add `--no-verify-jwt`
   **only** for `flow-portal` — it is the public, token-gated face). `run-agent` is at
   **v221** deployed.
