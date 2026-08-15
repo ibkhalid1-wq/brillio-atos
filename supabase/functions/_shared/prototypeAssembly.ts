@@ -17,6 +17,10 @@ import { meridianStylesheet, type PrototypeTheme } from "./prototypeDesignSystem
 import { deriveWorkbenches, type AtlasRole, type AtlasWorkflow } from "./atlasWorkbenches.ts";
 import { deriveAgenticSurface, agentsOnEntity, gatedAgents, type SurfacedAgent } from "./agenticSurface.ts";
 import { entityNameResolver, type OntologyGraph } from "./ontologyGraph.ts";
+import {
+  buildSpecSchema, validatePrototypeSpec, widgetBandsHtml, widgetGroupsFor,
+  WIDGET_RENDERER, type PrototypeSpecSchema, type WidgetGroup,
+} from "./prototypeScreenSpec.ts";
 
 const esc = (s: unknown) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
 const slug = (s: unknown) => String(s ?? "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "x";
@@ -51,7 +55,26 @@ export function humanizeField(name: unknown): string {
     : words.replace(/(^|\s)(\S)/g, (_m, lead: string, c: string) => `${lead}${c.toUpperCase()}`);
 }
 
-export interface AssembledPrototype { html: string; fabric: Fabric; regionCount: number; }
+export interface AssembledPrototype {
+  html: string;
+  fabric: Fabric;
+  regionCount: number;
+  /**
+   * WHAT A SCREEN SPEC MAY REFERENCE — derived from THIS ontology and THIS
+   * build's screens, so the model that writes one is writing against the
+   * application that exists rather than against a remembered one.
+   */
+  specSchema: PrototypeSpecSchema;
+  /**
+   * Every widget this build was asked for and did not draw, and why. Empty when
+   * no spec was handed in. The caller writes these into the artifact's `gaps`:
+   * a reference the ontology cannot honour has to be visible, and the failure
+   * this whole path replaces was a silent one.
+   */
+  specViolations: string[];
+  /** How many widgets the spec actually put on the page. */
+  specAccepted: number;
+}
 
 /**
  * ── THE PAGE SHIPS ITS DATA, NOT NINETY-NINE PICTURES OF IT ──────────────────
@@ -209,6 +232,13 @@ interface PrototypeModel {
   /** The two reserved route words (see `reserveRoute`). */
   wbRoute: string;
   apRoute: string;
+  /**
+   * The summary bands a validated screen spec asked for — the model's judgement,
+   * resolved to column addresses. Absent (not empty) when no spec was handed in,
+   * so a build nobody wrote a spec for serialises byte-for-byte as it did before
+   * this existed.
+   */
+  widgets?: WidgetGroup[];
 }
 
 /**
@@ -505,6 +535,7 @@ function mCell(R,ri,v){
     fill(kd.region,'<section class="m-card" style="margin-top:16px">'+head+inner+"</section>");
   }
   /*PERSONA-RENDERER*/
+  /*WIDGET-RENDERER*/
   /** WHICH RECORD THIS DETAIL IS SHOWING: the one the URL named, else the
    *  entity's showcase, else whatever is still there after a delete. */
   function detailRow(sc){
@@ -640,6 +671,10 @@ function mCell(R,ri,v){
   }
   function renderAll(){
     for(var k=0;k<SCREENS.length;k++){renderList(SCREENS[k]);renderDetail(SCREENS[k])}
+    // The summary bands, where a screen spec asked for any. Drawn from the same
+    // live rows as the table under them, so the two cannot disagree; absent
+    // entirely — segment and all — when no spec was accepted.
+    if(typeof renderWidgets==="function")renderWidgets();
     // Same live rows as every other region; both arrays are EMPTY unless the
     // persona segment shipped.
     for(k=0;k<WORK.length;k++)if(WORK[k].queues.length)renderWorkbench(WORK[k]);
@@ -784,10 +819,13 @@ const PERSONA_RENDERER = `
 `;
 
 /** The renderer for one build: the base, plus the persona/agent segment when
- *  that build has queues to draw. A function replacer, never a pattern one —
- *  the segment is code and `$&` inside it must stay `$&`. */
-function rendererFor(persona: boolean): string {
-  return PROTOTYPE_RENDERER.replace("/*PERSONA-RENDERER*/", () => (persona ? PERSONA_RENDERER : ""));
+ *  that build has queues to draw and the widget segment when a screen spec was
+ *  accepted. A function replacer, never a pattern one — the segments are code
+ *  and `$&` inside them must stay `$&`. */
+function rendererFor(persona: boolean, widgets: boolean): string {
+  return PROTOTYPE_RENDERER
+    .replace("/*PERSONA-RENDERER*/", () => (persona ? PERSONA_RENDERER : ""))
+    .replace("/*WIDGET-RENDERER*/", () => (widgets ? WIDGET_RENDERER : ""));
 }
 
 /**
@@ -1142,6 +1180,15 @@ export interface AssemblyOptions {
    * Omitting it assembles exactly what it assembled before.
    */
   screenOptions?: Record<string, EntityScreenOptions> | null;
+  /**
+   * A SCREEN SPEC — the model's judgement about what a screen deserves, as data
+   * (see `prototypeScreenSpec.ts`). Validated here against a schema derived from
+   * this ontology, and drawn by the deterministic renderer: an entity, attribute
+   * or screen it names that this build does not hold is refused into
+   * `specViolations` rather than rendered. Omitting it assembles exactly the
+   * application it assembled before, byte for byte.
+   */
+  spec?: unknown;
 }
 
 export function assemblePrototype(ontology: Record<string, unknown>, atlas: Record<string, unknown>, parentEntities?: readonly string[], options: AssemblyOptions = {}): AssembledPrototype {
@@ -1331,6 +1378,44 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
     head: cols.map((c) => headFor(name, c)),
     role: cols.map((c) => roleCode(roleOf.get(`${name} ${c}`))),
   });
+
+  // ── THE MODEL'S JUDGEMENT, AS DATA ────────────────────────────────────────
+  //
+  // What a screen deserves is a design question, and the deterministic path has
+  // no way to answer it: it can say that Opportunity has a status, not that this
+  // screen is the one a funnel of it belongs on. The free-form path answered it
+  // by writing the HTML, and paid for it — cards positioned out of flow over the
+  // tables, a heading that contradicted its own rows, entities that vanished
+  // while `gaps` came back empty.
+  //
+  // So the answer arrives as a SPEC and the drawing stays here. The schema is
+  // derived from this ontology and this build's screens, every reference in the
+  // spec is resolved against it, and anything unresolved is refused by name into
+  // `specViolations` — which the caller writes into the artifact's gaps, because
+  // a miss the operator cannot see is the defect, not the miss.
+  const specSchema = buildSpecSchema({
+    version: fabric.version,
+    entities: ordered.map((name) => ({
+      entity: name,
+      screen: `list-${es.get(name)}`,
+      attributes: attrsOf(name).map((a) => ({ name: a, role: roleOf.get(`${name} ${a}`) })),
+    })),
+  });
+  const specViolations: string[] = [];
+  const validSpec = options.spec == null
+    ? { screens: [], violations: [], accepted: 0 }
+    : validatePrototypeSpec(options.spec, specSchema, {
+      // The seeded values are the second half of validation: a card headed with
+      // a state no record holds is a label that reads as a finding.
+      valuesOf: (entity, attribute) => [...new Set((seed.records[entity] ?? [])
+        .map((r) => (r[attribute] == null ? "" : String(r[attribute]))).filter(Boolean))].sort(),
+    });
+  specViolations.push(...validSpec.violations);
+  const widgetGroups = widgetGroupsFor(validSpec.screens, {
+    columnIndex,
+    roleCode: (entity, attribute) => roleCode(roleOf.get(`${entity} ${attribute}`)),
+  }, specViolations);
+  const widgetBands = (screen: string): string => widgetBandsHtml(screen, widgetGroups, esc);
 
   // ── THE ATLAS'S PEOPLE, AND THE BLUEPRINT'S AGENTS ────────────────────────
   //
@@ -1626,10 +1711,18 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
     const toggle = statusIx >= 0
       ? `<div class="m-tabs" data-view="${s}"><button class="m-tab${board ? "" : " is-active"}" data-v="table" onclick="setView('${s}','table')">Table</button><button class="m-tab${board ? " is-active" : ""}" data-v="board" onclick="setView('${s}','board')">Board</button></div>`
       : "";
+    // THE SUMMARY BANDS SIT ABOVE THE TABLE, IN FLOW, AND THE TABLE SAYS SO.
+    //
+    // A band of filtered numbers immediately above an unfiltered table is read
+    // as that table's heading — by a person and by the render gate alike — and
+    // that is precisely the "Qualified (BANT)" contradiction. So where a spec
+    // put a band on this screen, the list below it gets its own heading, which
+    // is true of the rows under it: all of them.
+    const bands = widgetBands(`list-${s}`);
     return `<section class="m-screen" data-screen="list-${s}" hidden>
       <header class="m-page-h"><div><div class="m-eyebrow">${esc(name)}</div><h1 class="m-title">${esc(name)}</h1><p class="m-sub">${rows.length} record${rows.length === 1 ? "" : "s"} · synthetic seed data</p></div>
       <div class="m-toolbar">${toggle}<input class="m-input m-search" type="search" data-search="${s}" aria-label="Filter ${esc(name)}" placeholder="Filter ${esc(name)}" oninput="setFilter('${s}',this.value)" /><button class="m-btn m-btn--primary" onclick="go('#${s}/new')">New ${esc(name)}</button></div></header>
-      ${slot(`screen:${s}:list`)}</section>`;
+      ${bands}${bands ? `<div class="m-section-h">All ${esc(name)}</div>` : ""}${slot(`screen:${s}:list`)}</section>`;
   };
 
   // ── one detail screen per entity (the SHOWCASE record) ──
@@ -1920,6 +2013,7 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
   const model: PrototypeModel = {
     roles: roleLegend, data, links, screens: screenSpecs, first: es.get(lead) ?? "",
     work: workSpecs, appr: apprSpecs, wbRoute: WB_ROUTE, apRoute: AP_ROUTE,
+    ...(widgetGroups.length ? { widgets: widgetGroups } : {}),
   };
   // `<` is the ONE character that can end a script block early; escaping it
   // keeps the island valid JSON (a `<` inside a JSON string is just `<`)
@@ -1938,8 +2032,11 @@ ${approvals}</main></div>
 var m=document.querySelectorAll('.m-nav-item[data-nav="'+id+'"]');
 if(m.length){document.querySelectorAll('.m-nav-item').forEach(function(n){n.classList.remove('is-active')});
 m.forEach(function(n){n.classList.add('is-active');for(var p=n.parentElement;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true})}
-window.scrollTo(0,0)}${rendererFor(workSpecs.some((w) => w.queues.length > 0) || apprSpecs.length > 0)}
+window.scrollTo(0,0)}${rendererFor(workSpecs.some((w) => w.queues.length > 0) || apprSpecs.length > 0, widgetGroups.length > 0)}
 if(!document.querySelector('.m-screen:not([hidden])'))show('${firstList}')</script>
 </body></html>`;
-  return { html, fabric, regionCount };
+  // What was ACCEPTED is what is on the page, counted off the bands themselves —
+  // not what validation let through, which a missing column can still stop.
+  const specAccepted = widgetGroups.reduce((n, g) => n + g.items.length, 0);
+  return { html, fabric, regionCount, specSchema, specViolations, specAccepted };
 }
