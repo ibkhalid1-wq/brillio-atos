@@ -9084,3 +9084,33 @@ body { text-rendering: optimizeLegibility; }
   border-color: var(--v3-accent-2);
   color: var(--v3-accent-2);
 }
+
+/* ── Experience Design: which entities get a screen ────────────────────────────
+   One decision per row, so the row is a switch and a description and nothing
+   else. The old studio's palette/canvas/inspector CSS went with the designer it
+   served. */
+.v3ed-lead{font-size:12.5px;color:var(--v3-text-secondary);line-height:1.55;margin:0 0 14px}
+.v3ed-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.v3ed-row{display:flex;gap:12px;align-items:flex-start;padding:11px 13px;border-radius:10px;
+  border:1px solid var(--v3-border);background:var(--v3-surface);transition:border-color 160ms,background 160ms}
+.v3ed-row.is-on{border-color:var(--v3-accent-2);background:var(--v3-accent-2-soft,rgba(79,70,229,.06))}
+@media (prefers-reduced-motion:reduce){.v3ed-row{transition:none}}
+/* The switch: 26px tall like every other control on the surface. */
+.v3ed-toggle{flex:0 0 auto;width:38px;height:22px;margin-top:2px;border-radius:999px;cursor:pointer;
+  border:1px solid var(--v3-border);background:var(--v3-surface-2);padding:0;position:relative;
+  transition:background 160ms,border-color 160ms}
+.v3ed-toggle[aria-checked="true"]{background:var(--v3-accent-2);border-color:var(--v3-accent-2)}
+.v3ed-toggle:disabled{opacity:.5;cursor:not-allowed}
+.v3ed-toggle:focus-visible{outline:2px solid var(--v3-accent-2);outline-offset:2px}
+.v3ed-knob{position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;
+  background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform 160ms}
+.v3ed-toggle[aria-checked="true"] .v3ed-knob{transform:translateX(16px)}
+@media (prefers-reduced-motion:reduce){.v3ed-toggle,.v3ed-knob{transition:none}}
+.v3ed-body{display:flex;flex-direction:column;gap:3px;min-width:0}
+.v3ed-h{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline}
+.v3ed-name{font-size:13px;color:var(--v3-text)}
+.v3ed-pos{font-size:10px;font-weight:700;letter-spacing:.055em;text-transform:uppercase;color:var(--v3-accent-2)}
+.v3ed-sug{font-size:10.5px;color:var(--v3-text-muted);font-style:italic}
+.v3ed-area{font-size:10px;font-weight:700;letter-spacing:.055em;text-transform:uppercase;color:var(--v3-text-muted)}
+.v3ed-def{font-size:11.5px;color:var(--v3-text-secondary);line-height:1.5}
+.v3ed-meta{font-size:11px;color:var(--v3-text-muted);line-height:1.5}

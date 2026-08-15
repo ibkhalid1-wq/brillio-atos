@@ -1,520 +1,151 @@
 /**
- * Experience Design studio — the design crew's working surface. The screens
- * (region/block wireframes), persona flows and workflow machines render as a
- * visual, DIRECTLY EDITABLE design document: the delivery team tunes the
- * governed theme, filters the design to one workflow at a time, reads every
- * flow's steps inline, and marks which steps should be AGENTIFIED — the signal
- * the Agentic Blueprint is built to deliver.
+ * Experience Design — WHICH ENTITIES GET A SCREEN.
+ *
+ * This was a screen designer: a palette, a device canvas, drag-to-reorder blocks per
+ * region, per-screen state copy, wireframes stored on the document. It let a delivery
+ * team draw a screen by hand — and drawing a screen by hand is not the decision this
+ * movement exists to take. The prototype already assembles a list, a detail and the
+ * related collections for any entity from the ontology and the fabric; what it could
+ * not know is which entities deserve to be in the NAVIGATION at all.
+ *
+ * So the surface is now the decision, and only the decision: every entity the ontology
+ * holds, and one toggle — does this get a parent screen? The prototype turns each one
+ * ON into a menu item, its list, its detail, and the related entities that hang off it.
+ *
+ * `parentEntities` (a string[] of entity names) is the whole output. The old `screens`
+ * array is NOT deleted from the document — a programme that has one keeps it, it is
+ * simply no longer authored here, and `experienceParentEntities` falls back to it so a
+ * document authored the old way still names its navigation.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo } from "react";
 import type { ProgramSummary } from "@/new/types";
-import { asArray, asRecord, asText, asStrings, useStudioLocked, TextField, TextArea, StringListEditor, ChipsField, CollapsibleCard as EdCard, type StudioProps } from "./StudioKit";
-import { projectFutureState, type FutureWorkflow } from "@/v3/components/flow/flowFutureState";
+import {
+  asArray, asRecord, asText, asStrings, useStudioLocked, Section, EmptyState, type StudioProps,
+} from "./StudioKit";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
 
-const WF_REGIONS = ["header", "nav", "main", "aside", "footer"] as const;
-const WF_BLOCK_KINDS = ["list", "table", "form", "detail", "metric", "action", "timeline"];
-
-function emptyScreen(): Record<string, unknown> {
-  return {
-    id: "", name: "", purpose: "", journey: "", stage: "", personas: [], entities: [], primaryActions: [],
-    states: { empty: "", loading: "", populated: "", error: "" }, wireframe: [{ region: "main", blocks: [] }], stepBindings: [],
-  };
+/** One entity as this surface needs it: what it is, and what hangs off it. */
+export interface EntityChoice {
+  name: string;
+  area: string;
+  definition: string;
+  attributes: number;
+  /** Entities reachable from this one — what a detail screen can show as related. */
+  related: string[];
+  /** Entities that reach THIS one. A child of something is rarely a parent screen. */
+  parents: string[];
 }
-
-interface Block { kind: string; label: string; entity: string; fields: string[] }
-type Regions = Record<string, Block[]>;
-const SCRD_STATES = ["empty", "loading", "populated", "error"] as const;
-type ScrdState = typeof SCRD_STATES[number];
-
-const toBlock = (r: Record<string, unknown>): Block => ({
-  kind: asText(r.kind) || "detail", label: asText(r.label), entity: asText(r.entity), fields: asStrings(r.fields),
-});
 
 /**
- * The GUI screen designer — a canvas-first modal to design ONE screen. Three
- * panes: a PALETTE of block kinds to drop in, an editable CANVAS (a device
- * frame with click-to-select and drag-to-reorder blocks, and a state toggle),
- * and a contextual INSPECTOR that shows the screen's identity + workflow
- * bindings when nothing is selected, or the block's properties (ontology-aware
- * entity → fields pickers) when a block is. Edits a draft; Cancel discards
- * (guarding unsaved changes), Save applies. Esc cancels, ⌘/Ctrl+Enter saves.
+ * THE ONE DEFINITION of "which entities are parent screens", read by this studio and
+ * by the prototype assembly so a toggle here and a menu item there cannot disagree.
+ *
+ * Order matters — it is the menu order — so this preserves the stored order and only
+ * falls back when nothing has been chosen. The fallback reads the legacy `screens`
+ * array's entities, so a document authored in the old designer still has navigation.
  */
-function ScreenDesigner({ screen, program, allScreens, onSave, onClose }: {
-  screen: Record<string, unknown>; program?: ProgramSummary; allScreens: Array<Record<string, unknown>>;
-  onSave: (next: Record<string, unknown>) => void; onClose: () => void;
-}) {
-  const [name, setName] = useState(asText(screen.name));
-  const [purpose, setPurpose] = useState(asText(screen.purpose));
-  const [journey, setJourney] = useState(asText(screen.journey));
-  const [stage, setStage] = useState(asText(screen.stage));
-  const [personas, setPersonas] = useState(asStrings(screen.personas));
-  const [entities, setEntities] = useState(asStrings(screen.entities));
-  const [primaryActions, setPrimaryActions] = useState(asStrings(screen.primaryActions));
-  const st0 = asRecord(screen.states);
-  const [states, setStates] = useState<Record<ScrdState, string>>({
-    empty: asText(st0.empty), loading: asText(st0.loading), populated: asText(st0.populated), error: asText(st0.error),
-  });
-  const [regions, setRegions] = useState<Regions>(() => {
-    const map: Regions = {};
-    asArray(screen.wireframe).map(asRecord).forEach((r) => {
-      const reg = asText(r.region) || "main";
-      map[reg] = [...(map[reg] ?? []), ...asArray(r.blocks).map(asRecord).map(toBlock)];
-    });
-    return map;
-  });
-  const [bindings, setBindings] = useState<Array<{ workflow: string; action: string }>>(
-    asArray(screen.stepBindings).map(asRecord).map((b) => ({ workflow: asText(b.workflow), action: asText(b.action) })).filter((b) => b.action));
+export function experienceParentEntities(doc: Record<string, unknown> | null | undefined): string[] {
+  const d = asRecord(doc);
+  const chosen = asStrings(d.parentEntities).map((s) => s.trim()).filter(Boolean);
+  if (chosen.length) return [...new Set(chosen)];
+  const legacy: string[] = [];
+  for (const screen of asArray(d.screens).map(asRecord)) {
+    for (const e of asStrings(screen.entities)) { const t = e.trim(); if (t && !legacy.includes(t)) legacy.push(t); }
+  }
+  return legacy;
+}
 
-  const [sel, setSel] = useState<{ region: string; index: number } | null>(null);
-  const [activeState, setActiveState] = useState<ScrdState>("populated");
-  const [drag, setDrag] = useState<{ region: string; index: number } | null>(null);
-
-  const future = useMemo(() => (program ? projectFutureState(program) : null), [program]);
-  // Ontology entities → their field names, so the block inspector offers real
-  // entities and checkable fields instead of free text.
-  const ontology = useMemo(() => {
-    const od = program ? readArtifactDoc(program, "domainOntology") : null;
-    return asArray(od?.entities).map(asRecord)
-      .map((e) => ({ name: asText(e.name), attributes: asStrings(e.attributes) }))
-      .filter((e) => e.name);
-  }, [program]);
-
-  const setBlock = (region: string, i: number, changes: Partial<Block>) =>
-    setRegions((prev) => ({ ...prev, [region]: (prev[region] ?? []).map((b, j) => (j === i ? { ...b, ...changes } : b)) }));
-  const addBlock = (region: string, kind: string) => {
-    setRegions((prev) => {
-      const next = [...(prev[region] ?? []), { kind, label: "", entity: "", fields: [] } as Block];
-      setSel({ region, index: next.length - 1 });
-      return { ...prev, [region]: next };
-    });
-  };
-  const removeBlock = (region: string, i: number) => {
-    setRegions((prev) => ({ ...prev, [region]: (prev[region] ?? []).filter((_, j) => j !== i) }));
-    setSel(null);
-  };
-  const moveBlock = (from: { region: string; index: number }, toRegion: string, toIndex: number) => {
-    setRegions((prev) => {
-      const src = [...(prev[from.region] ?? [])];
-      const [moved] = src.splice(from.index, 1);
-      if (!moved) return prev;
-      const next: Regions = { ...prev, [from.region]: src };
-      const dst = from.region === toRegion ? src : [...(next[toRegion] ?? [])];
-      const at = Math.max(0, Math.min(toIndex, dst.length));
-      dst.splice(at, 0, moved);
-      next[toRegion] = dst;
-      setSel({ region: toRegion, index: at });
-      return next;
-    });
-  };
-
-  const isBound = (w: string, a: string) => bindings.some((b) => b.workflow === w && b.action === a);
-  const toggleBind = (w: string, a: string) =>
-    setBindings((prev) => (isBound(w, a) ? prev.filter((b) => !(b.workflow === w && b.action === a)) : [...prev, { workflow: w, action: a }]));
-  // Coverage — how many of a workflow's steps ANY screen (other screens plus
-  // this draft) already serves, so the designer sees the gaps it's filling.
-  const coverageFor = (w: FutureWorkflow) => {
-    const covered = new Set<string>();
-    allScreens.forEach((s, i) => {
-      if (editMatches(s, screen, i)) return; // skip the screen we're editing; use live draft instead
-      asArray(s.stepBindings).map(asRecord).forEach((b) => { if (asText(b.workflow) === w.name) covered.add(asText(b.action)); });
-    });
-    bindings.forEach((b) => { if (b.workflow === w.name) covered.add(b.action); });
-    return w.steps.filter((s) => covered.has(s.action)).length;
-  };
-
-  const assemble = (): Record<string, unknown> => ({
-    ...screen,
-    id: asText(screen.id) || name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || `screen-${name.length}`,
-    name: name.trim(), purpose, journey, stage, personas, entities, primaryActions, states,
-    wireframe: WF_REGIONS.filter((r) => (regions[r] ?? []).length).map((r) => ({ region: r, blocks: regions[r] })),
-    stepBindings: bindings,
-  });
-
-  // Dirty-guard — snapshot the incoming screen once; compare on close.
-  const baseline = useRef(JSON.stringify({
-    name: asText(screen.name), purpose: asText(screen.purpose), journey: asText(screen.journey), stage: asText(screen.stage),
-    personas: asStrings(screen.personas), entities: asStrings(screen.entities), primaryActions: asStrings(screen.primaryActions),
-    states: { empty: asText(st0.empty), loading: asText(st0.loading), populated: asText(st0.populated), error: asText(st0.error) },
-    regions: (() => { const m: Regions = {}; asArray(screen.wireframe).map(asRecord).forEach((r) => { const reg = asText(r.region) || "main"; m[reg] = [...(m[reg] ?? []), ...asArray(r.blocks).map(asRecord).map(toBlock)]; }); return m; })(),
-    bindings: asArray(screen.stepBindings).map(asRecord).map((b) => ({ workflow: asText(b.workflow), action: asText(b.action) })).filter((b) => b.action),
+/** Every entity the ontology holds, with its relations resolved both ways. */
+export function readEntityChoices(program: ProgramSummary | null | undefined): EntityChoice[] {
+  const od = program ? readArtifactDoc(program, "domainOntology") : null;
+  const entities = asArray(od?.entities).map(asRecord)
+    .map((e) => ({
+      name: asText(e.name).trim(),
+      area: asText(e.area).trim(),
+      definition: asText(e.definition).trim(),
+      attributes: asArray(e.attributes).length,
+    }))
+    .filter((e) => e.name);
+  const known = new Set(entities.map((e) => e.name));
+  const related = new Map<string, Set<string>>();
+  const parents = new Map<string, Set<string>>();
+  for (const r of asArray(od?.relations).map(asRecord)) {
+    const from = asText(r.from).trim(), to = asText(r.to).trim();
+    if (!known.has(from) || !known.has(to) || from === to) continue;
+    (related.get(from) ?? related.set(from, new Set()).get(from)!).add(to);
+    (parents.get(to) ?? parents.set(to, new Set()).get(to)!).add(from);
+  }
+  return entities.map((e) => ({
+    ...e,
+    related: [...(related.get(e.name) ?? [])].sort(),
+    parents: [...(parents.get(e.name) ?? [])].sort(),
   }));
-  const dirty = () => JSON.stringify({ name, purpose, journey, stage, personas, entities, primaryActions, states, regions, bindings }) !== baseline.current;
-  const tryClose = () => { if (!dirty() || window.confirm("Discard unsaved changes to this screen?")) onClose(); };
-  const save = () => { if (name.trim()) onSave(assemble()); };
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { e.preventDefault(); tryClose(); }
-      else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); save(); }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  });
-
-  const selBlock = sel ? (regions[sel.region] ?? [])[sel.index] : undefined;
-  const selEntity = selBlock ? ontology.find((e) => e.name === selBlock.entity) : undefined;
-  const stateNote = states[activeState];
-
-  return (
-    <div className="v3fs-scrd-scrim" role="dialog" aria-modal="true" aria-label="Screen designer" onClick={tryClose}>
-      <div className="v3fs-scrd" onClick={(e) => e.stopPropagation()}>
-        <div className="v3fs-scrd-h">
-          <input className="v3fs-scrd-name" value={name} placeholder="Untitled screen" aria-label="Screen name" onChange={(e) => setName(e.target.value)} autoFocus />
-          <span className="v3fs-scrd-kbd" aria-hidden="true"><kbd>⌘</kbd><kbd>↵</kbd> save · <kbd>esc</kbd> cancel</span>
-          <button type="button" className="v3fs-scrd-x" aria-label="Close" onClick={tryClose}>✕</button>
-        </div>
-
-        <div className="v3fs-scrd-body">
-          {/* PALETTE — drag a tile onto a region, or click to add to the selected region. */}
-          <div className="v3fs-scrd-palette">
-            <b className="v3fs-scrd-pl">Blocks</b>
-            <p className="v3fs-scrd-pal-hint">Drag onto the canvas, or click to add.</p>
-            <div className="v3fs-scrd-pal-grid">
-              {WF_BLOCK_KINDS.map((k) => (
-                <button key={k} type="button" className="v3fs-scrd-pal" draggable
-                  onDragStart={(e) => { e.dataTransfer.setData("text/scrd-kind", k); e.dataTransfer.effectAllowed = "copy"; }}
-                  onClick={() => addBlock(sel?.region ?? "main", k)} title={`Add a ${k} block`}>
-                  <span className="v3fs-scrd-pal-ic" aria-hidden="true">{BLOCK_GLYPH[k] ?? "¶"}</span>
-                  <span className="v3fs-scrd-pal-l">{k}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* CANVAS — the device frame; states toggle; selectable/draggable blocks. */}
-          <div className="v3fs-scrd-canvaswrap">
-            <div className="v3fs-scrd-states" role="tablist" aria-label="Screen state">
-              {SCRD_STATES.map((s) => (
-                <button key={s} type="button" role="tab" aria-selected={activeState === s}
-                  className={`v3fs-scrd-state${activeState === s ? " on" : ""}`} onClick={() => setActiveState(s)}>{s}</button>
-              ))}
-            </div>
-            <div className="v3fs-scrd-canvas" onClick={() => setSel(null)}>
-              <div className="v3fs-scrd-device">
-                <div className="v3fs-scrd-device-bar" aria-hidden="true"><i /><i /><i /><span>{name.trim() || "Untitled screen"}</span></div>
-                {stateNote ? <div className={`v3fs-scrd-statebanner ${activeState}`}>{activeState}: {stateNote}</div> : null}
-                {WF_REGIONS.map((region) => {
-                  const blocks = regions[region] ?? [];
-                  return (
-                    <div key={region} className={`v3fs-scrd-cregion ${region}`}
-                      onDragOver={(e) => { if (e.dataTransfer.types.includes("text/scrd-kind") || drag) e.preventDefault(); }}
-                      onDrop={(e) => {
-                        e.preventDefault(); e.stopPropagation();
-                        const kind = e.dataTransfer.getData("text/scrd-kind");
-                        if (kind) addBlock(region, kind);
-                        else if (drag) moveBlock(drag, region, blocks.length);
-                        setDrag(null);
-                      }}>
-                      <div className="v3fs-scrd-cregion-h">
-                        <span>{region}</span>
-                        <button type="button" className="v3fs-scrd-cadd" aria-label={`Add block to ${region}`}
-                          onClick={(e) => { e.stopPropagation(); addBlock(region, "detail"); }}>＋</button>
-                      </div>
-                      {blocks.length ? blocks.map((block, i) => (
-                        <button key={i} type="button" draggable
-                          className={`v3fs-scrd-cblock ${block.kind}${sel?.region === region && sel.index === i ? " sel" : ""}`}
-                          onClick={(e) => { e.stopPropagation(); setSel({ region, index: i }); }}
-                          onDragStart={(e) => { setDrag({ region, index: i }); e.dataTransfer.effectAllowed = "move"; }}
-                          onDragEnd={() => setDrag(null)}
-                          onDragOver={(e) => { if (drag) { e.preventDefault(); e.stopPropagation(); } }}
-                          onDrop={(e) => { if (drag) { e.preventDefault(); e.stopPropagation(); moveBlock(drag, region, i); setDrag(null); } }}>
-                          <span className="v3fs-scrd-cblock-ic" aria-hidden="true">{BLOCK_GLYPH[block.kind] ?? "¶"}</span>
-                          <span className="v3fs-scrd-cblock-l">{block.label || block.kind}</span>
-                          {block.entity ? <em className="v3fs-scrd-cblock-e">{block.entity}</em> : null}
-                        </button>
-                      )) : <div className="v3fs-scrd-cempty">drop a block here</div>}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* INSPECTOR — block properties when a block is selected, else the screen's. */}
-          <div className="v3fs-scrd-inspect">
-            {selBlock ? (
-              <>
-                <div className="v3fs-scrd-ihead">
-                  <b className="v3fs-scrd-pl">Block</b>
-                  <button type="button" className="v3fs-scrd-idel" onClick={() => removeBlock(sel!.region, sel!.index)}>Delete</button>
-                </div>
-                <label className="v3fs-stu-field">
-                  <span className="v3fs-stu-fl">Kind</span>
-                  <select value={selBlock.kind} onChange={(e) => setBlock(sel!.region, sel!.index, { kind: e.target.value })}>
-                    {WF_BLOCK_KINDS.map((k) => <option key={k} value={k}>{k}</option>)}
-                  </select>
-                </label>
-                <TextField label="Label" value={selBlock.label} onChange={(v) => setBlock(sel!.region, sel!.index, { label: v })} placeholder="what this block shows" />
-                <label className="v3fs-stu-field">
-                  <span className="v3fs-stu-fl">Region</span>
-                  <select value={sel!.region} onChange={(e) => moveBlock({ region: sel!.region, index: sel!.index }, e.target.value, (regions[e.target.value] ?? []).length)}>
-                    {WF_REGIONS.map((r) => <option key={r} value={r}>{r}</option>)}
-                  </select>
-                </label>
-                <label className="v3fs-stu-field">
-                  <span className="v3fs-stu-fl">Entity</span>
-                  <select value={selBlock.entity} onChange={(e) => setBlock(sel!.region, sel!.index, { entity: e.target.value, fields: [] })}>
-                    <option value="">— none —</option>
-                    {ontology.map((e) => <option key={e.name} value={e.name}>{e.name}</option>)}
-                    {selBlock.entity && !ontology.some((e) => e.name === selBlock.entity) ? <option value={selBlock.entity}>{selBlock.entity}</option> : null}
-                  </select>
-                </label>
-                {selEntity && selEntity.attributes.length ? (
-                  <div className="v3fs-scrd-fields">
-                    <span className="v3fs-stu-fl">Fields</span>
-                    {selEntity.attributes.map((f) => {
-                      const on = selBlock.fields.includes(f);
-                      return (
-                        <label key={f} className="v3fs-scrd-fld">
-                          <input type="checkbox" checked={on} onChange={() => setBlock(sel!.region, sel!.index, { fields: on ? selBlock.fields.filter((x) => x !== f) : [...selBlock.fields, f] })} />
-                          <span>{f}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <ChipsField label="Fields" values={selBlock.fields} onChange={(v) => setBlock(sel!.region, sel!.index, { fields: v })} placeholder="field names" />
-                )}
-              </>
-            ) : (
-              <>
-                <b className="v3fs-scrd-pl">Screen</b>
-                <TextArea label="Purpose" rows={2} value={purpose} onChange={setPurpose} placeholder="one sentence — what this screen is for" />
-                <div className="v3fs-stu-grid2">
-                  <TextField label="Journey" value={journey} onChange={setJourney} />
-                  <TextField label="Stage" value={stage} onChange={setStage} />
-                </div>
-                <ChipsField label="Personas" values={personas} onChange={setPersonas} />
-                <ChipsField label="Entities shown" values={entities} onChange={setEntities} />
-                <StringListEditor label="Primary actions" values={primaryActions} onChange={setPrimaryActions} addLabel="action" />
-                <label className="v3fs-stu-field">
-                  <span className="v3fs-stu-fl">Note for “{activeState}” state</span>
-                  <textarea rows={2} value={stateNote} placeholder={`what the ${activeState} state shows`}
-                    onChange={(e) => setStates((prev) => ({ ...prev, [activeState]: e.target.value }))} />
-                </label>
-                <div className="v3fs-scrd-bind">
-                  <span className="v3fs-stu-fl">Bound workflow steps <em className="v3fs-scrd-req">— at least one</em></span>
-                  {future && future.workflows.length ? future.workflows.map((w) => {
-                    const cov = coverageFor(w);
-                    return (
-                      <div key={w.name} className="v3fs-scrd-wf">
-                        <div className="v3fs-scrd-wf-n">{w.name}
-                          <em className={`v3fs-scrd-cov${cov >= w.steps.length ? " full" : ""}`}>{cov}/{w.steps.length}</em>
-                        </div>
-                        {w.steps.map((step, si) => (
-                          <label key={si} className="v3fs-scrd-step">
-                            <input type="checkbox" checked={isBound(w.name, step.action)} onChange={() => toggleBind(w.name, step.action)} />
-                            <span>{step.action}</span>
-                          </label>
-                        ))}
-                      </div>
-                    );
-                  }) : <div className="v3fs-empty">No workflows yet — generate the Current-State Atlas in Listen.</div>}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-
-        <div className="v3fs-scrd-foot">
-          <span className={`v3fs-scrd-hint${bindings.length ? "" : " warn"}`}>
-            {bindings.length ? `Bound to ${bindings.length} workflow step${bindings.length === 1 ? "" : "s"}` : "⚠ Not bound to any workflow step yet"}
-          </span>
-          <div className="v3fs-scrd-actions">
-            <button type="button" className="v3fs-btn" onClick={tryClose}>Cancel</button>
-            <button type="button" className="v3fs-btn pri" disabled={!name.trim()} onClick={save}>Save screen</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 }
-
-/** True when `s` (the i-th of allScreens) is the same screen we're editing —
- *  match by id when present, else by object identity / name, so coverage never
- *  double-counts the draft. */
-function editMatches(s: Record<string, unknown>, editing: Record<string, unknown>, _i: number): boolean {
-  const eid = asText(editing.id), sid = asText(s.id);
-  if (eid && sid) return eid === sid;
-  return s === editing || (!!asText(editing.name) && asText(s.name) === asText(editing.name));
-}
-
-const BLOCK_GLYPH: Record<string, string> = {
-  list: "☰", table: "▦", form: "✎", detail: "¶", metric: "◔", action: "▸", timeline: "⋯",
-};
-
-export function WireBlock({ block }: { block: Record<string, unknown> }) {
-  const kind = asText(block.kind) || "detail";
-  const fields = asStrings(block.fields);
-  return (
-    <div className={`v3fs-wf-block ${kind}`}>
-      <div className="v3fs-wf-block-h">
-        <span aria-hidden="true">{BLOCK_GLYPH[kind] ?? "¶"}</span>
-        <b>{asText(block.label) || kind}</b>
-        {asText(block.entity) ? <em className="v3fs-wf-entity">{asText(block.entity)}</em> : null}
-      </div>
-      {/* Skeleton lines suggest the block's shape without inventing content. */}
-      {kind === "table" || kind === "list" ? (
-        <div className="v3fs-wf-skel rows">{[0, 1, 2].map((i) => <span key={i} />)}</div>
-      ) : kind === "form" ? (
-        <div className="v3fs-wf-skel fields">{(fields.length ? fields.slice(0, 4) : ["", ""]).map((f, i) => (
-          <label key={i}>{f || "…"}<span /></label>
-        ))}</div>
-      ) : kind === "metric" ? (
-        <div className="v3fs-wf-skel metric"><b>—</b><span /></div>
-      ) : kind === "action" ? (
-        <div className="v3fs-wf-skel action"><span className="v3fs-wf-btn">{fields[0] || asText(block.label) || "Action"}</span></div>
-      ) : (
-        <div className="v3fs-wf-skel rows">{[0, 1].map((i) => <span key={i} />)}</div>
-      )}
-      {fields.length && kind !== "form" && kind !== "action" ? (
-        <div className="v3fs-wf-fields">{fields.slice(0, 5).join(" · ")}</div>
-      ) : null}
-    </div>
-  );
-}
-
-export function ScreenCard({ screen, active, onClick }: { screen: Record<string, unknown>; active: boolean; onClick: () => void }) {
-  const regions = asArray(screen.wireframe).map(asRecord);
-  const byRegion = (name: string) => regions.filter((r) => asText(r.region) === name);
-  const mains = [...byRegion("main"), ...regions.filter((r) => !["header", "nav", "main", "aside", "footer"].includes(asText(r.region)))];
-  const asides = byRegion("aside");
-  return (
-    <button type="button" className={`v3fs-wf-screen${active ? " on" : ""}`} onClick={onClick}
-      title={asText(screen.purpose) || undefined}>
-      <div className="v3fs-wf-title">
-        <b>{asText(screen.name) || asText(screen.id) || "Screen"}</b>
-        <span>{[asText(screen.journey), asText(screen.stage)].filter(Boolean).join(" · ")}</span>
-      </div>
-      <div className="v3fs-wf-frame">
-        {byRegion("header").length ? <div className="v3fs-wf-region header">{byRegion("header").flatMap((r) => asArray(r.blocks).map(asRecord)).map((b, i) => <WireBlock key={i} block={b} />)}</div> : null}
-        <div className="v3fs-wf-body">
-          {byRegion("nav").length ? <div className="v3fs-wf-region nav">{byRegion("nav").flatMap((r) => asArray(r.blocks).map(asRecord)).map((b, i) => <WireBlock key={i} block={b} />)}</div> : null}
-          <div className="v3fs-wf-region main">{mains.flatMap((r) => asArray(r.blocks).map(asRecord)).map((b, i) => <WireBlock key={i} block={b} />)}</div>
-          {asides.length ? <div className="v3fs-wf-region aside">{asides.flatMap((r) => asArray(r.blocks).map(asRecord)).map((b, i) => <WireBlock key={i} block={b} />)}</div> : null}
-        </div>
-      </div>
-      <div className="v3fs-wf-meta">
-        {asStrings(screen.personas).slice(0, 3).map((p) => <span key={p} className="v3fs-wf-chip">{p}</span>)}
-        {asStrings(screen.entities).slice(0, 3).map((e) => <span key={e} className="v3fs-wf-chip ent">{e}</span>)}
-      </div>
-    </button>
-  );
-}
-
-/** The seven governed theme tokens, editable as live colour wells. */
 
 export default function ExperienceDesignStudio({ doc, onChange, program }: StudioProps) {
   const locked = useStudioLocked();
-  const screens = useMemo(() => asArray(doc.screens).map(asRecord), [doc.screens]);
-  const flows = useMemo(() => asArray(doc.flows).map(asRecord), [doc.flows]);
-  // The screen designer modal: an index into `screens`, "new" for a fresh
-  // screen, or null when closed.
-  const [editScreen, setEditScreen] = useState<number | "new" | null>(null);
+  const entities = useMemo(() => readEntityChoices(program), [program]);
+  const chosen = useMemo(() => experienceParentEntities(doc), [doc]);
+  const chosenSet = useMemo(() => new Set(chosen), [chosen]);
 
-  // The Screens filter — focus the wireframes on one journey. The Workflows
-  // section below has its own area grouping (the Listen workflows), so it isn't
-  // driven by this filter.
-  const journeys = useMemo(() => {
-    const set = new Set<string>();
-    flows.forEach((f) => { const j = asText(f.journey) || asText(f.name); if (j) set.add(j); });
-    return [...set];
-  }, [flows]);
-  const [filter, setFilter] = useState<string>("");
-  const screenInFilter = (s: Record<string, unknown>) => !filter || asText(s.journey) === filter;
-  const shownScreens = screens.filter(screenInFilter);
-
-  // The Listen workflows, grouped by area, with a per-step agentic SUGGESTION
-  // (from the future-state projection) the delivery team approves — plus a
-  /**
-   * THE ⚡ MARK MACHINERY IS GONE with the card it served (see the note below where
-   * that card was). It wrote `agentifyMarks` — a second, text-keyed store for a call
-   * Agentify already owns under the step's element id. `readDecisions` folds any
-   * existing marks in as legacy, so nothing anyone decided here was lost; this studio
-   * simply no longer makes the call.
-   */
-
-  // Direct edits — this is the delivery team's own document.
-  const patch = (next: Record<string, unknown>) => onChange({ ...doc, ...next });
-  // Screen CRUD via the designer modal.
-  const saveScreen = (next: Record<string, unknown>) => {
-    const arr = [...screens];
-    if (editScreen === "new") arr.push(next);
-    else if (typeof editScreen === "number") arr[editScreen] = next;
-    patch({ screens: arr });
-    setEditScreen(null);
+  /** Toggle one entity. Order is menu order, so a re-added entity goes to the end
+   *  rather than silently reclaiming its old position. */
+  const toggle = (name: string) => {
+    if (locked) return;
+    const next = chosenSet.has(name) ? chosen.filter((n) => n !== name) : [...chosen, name];
+    onChange({ ...doc, parentEntities: next });
   };
-  const removeScreen = (index: number) => patch({ screens: screens.filter((_, i) => i !== index) });
+
+  if (!entities.length) {
+    return (
+      <EmptyState icon="◫" title="No entities yet"
+        hint="The Domain Ontology names the entities this decision is about. Generate it in Listen, then come back and choose which of them get a screen." />
+    );
+  }
+
+  // Suggest, never decide: an entity nothing points AT is a natural top-level record,
+  // and one that is only ever a child usually belongs inside its parent's detail.
+  const suggested = (e: EntityChoice) => !e.parents.length && e.related.length > 0;
 
   return (
-    <>
-      {/* DESIGN INTENT AND THEME REMOVED (on request, 2026-08-12).
-          The studio is where the delivery team designs the SCREENS and the
-          behaviour behind them. The intent prose and the colour/radius/spacing
-          tokens are still on the document — nothing was deleted from the record,
-          and the prototype still builds from them — they are simply no longer
-          edited here, where they sat above the work and were tuned once. */}
-
-      <EdCard label="Screens" badge={shownScreens.length} hint="click a screen to open the designer; ＋ adds one">
-        <div className="v3fs-wf-screenbar">
-          {journeys.length > 1 ? (
-            <div className="v3fs-wf-filter" role="tablist" aria-label="Focus a journey">
-              <button type="button" role="tab" aria-selected={!filter} className={`v3fs-wf-filter-b${!filter ? " on" : ""}`} onClick={() => setFilter("")}>All</button>
-              {journeys.map((j) => (
-                <button key={j} type="button" role="tab" aria-selected={filter === j} className={`v3fs-wf-filter-b${filter === j ? " on" : ""}`} onClick={() => setFilter(j)}>{j}</button>
-              ))}
-            </div>
-          ) : <span />}
-          {!locked ? <button type="button" className="v3fs-btn pri v3fs-wf-addscreen" onClick={() => setEditScreen("new")}>＋ Add screen</button> : null}
-        </div>
-        <div className="v3fs-wf-grid">
-          {shownScreens.map((screen) => {
-            const realIndex = screens.indexOf(screen);
+    <div className="v3ed">
+      <Section label="Parent screens"
+        hint="Each one ON becomes a menu item in the prototype: its own list, a detail page for one record, and the related entities that hang off it.">
+        <p className="v3ed-lead">
+          <b>{chosen.length}</b> of {entities.length} {entities.length === 1 ? "entity" : "entities"} will
+          get a screen. Everything else still exists in the model — it simply appears inside the detail
+          of whatever owns it, rather than in the navigation.
+        </p>
+        <ul className="v3ed-list">
+          {entities.map((e) => {
+            const on = chosenSet.has(e.name);
+            const order = on ? chosen.indexOf(e.name) + 1 : 0;
             return (
-              <div key={realIndex} className="v3fs-wf-screenwrap">
-                <ScreenCard screen={screen} active={false} onClick={() => setEditScreen(realIndex)} />
-                {!locked ? (
-                  <button type="button" className="v3fs-wf-screendel" aria-label="Remove screen"
-                    title="Remove this screen" onClick={(e) => { e.stopPropagation(); removeScreen(realIndex); }}>×</button>
-                ) : null}
-              </div>
+              <li key={e.name} className={`v3ed-row${on ? " is-on" : ""}`}>
+                <button type="button" role="switch" aria-checked={on} disabled={locked}
+                  className="v3ed-toggle" onClick={() => toggle(e.name)}
+                  aria-label={`${on ? "Remove" : "Add"} a parent screen for ${e.name}`}>
+                  <span className="v3ed-knob" aria-hidden="true" />
+                </button>
+                <span className="v3ed-body">
+                  <span className="v3ed-h">
+                    <b className="v3ed-name">{e.name}</b>
+                    {on ? <span className="v3ed-pos" aria-label={`menu position ${order}`}>#{order} in the menu</span> : null}
+                    {!on && suggested(e) ? <span className="v3ed-sug">nothing owns it — usually a top-level record</span> : null}
+                    {e.area ? <span className="v3ed-area">{e.area}</span> : null}
+                  </span>
+                  {e.definition ? <span className="v3ed-def">{e.definition}</span> : null}
+                  <span className="v3ed-meta">
+                    {e.attributes} field{e.attributes === 1 ? "" : "s"}
+                    {e.related.length ? <> · shows <b>{e.related.length}</b> related: {e.related.slice(0, 4).join(", ")}{e.related.length > 4 ? ` +${e.related.length - 4}` : ""}</> : <> · no related entities</>}
+                    {e.parents.length ? <> · sits under {e.parents.slice(0, 3).join(", ")}</> : null}
+                  </span>
+                </span>
+              </li>
             );
           })}
-          {!shownScreens.length ? <div className="v3fs-empty">No screens{filter ? " in this journey" : " yet"} — use ＋ Add screen to design one.</div> : null}
-        </div>
-      </EdCard>
-
-      {/* "WORKFLOWS TO AGENTIFY" REMOVED (2026-08-12) — it was a SECOND decision
-          surface for a call Agentify already owns. Both drew the same Atlas steps
-          with the same ⚡ vocabulary, but this one wrote `agentifyMarks` keyed by
-          "workflow::action" TEXT while Agentify writes a register keyed by the
-          step's element id. Two stores, two key schemes, one question: a team that
-          worked here got nothing in the future-state projection, a team that worked
-          in Listen got nothing in the Blueprint, and a rename broke the text-keyed
-          half without a word.
-
-          Nothing is lost. `readDecisions` folds existing marks in as a legacy source
-          — resolved through the Atlas, the same way it already reads the older
-          legacy shape — so every call anyone made on this card survives, now under
-          the id that cannot drift. The call is made in Agentify. */}
-
-      {/* WORKFLOW MACHINES REMOVED (on request, 2026-08-12). A state machine per
-          workflow was the delivery team re-drawing, by hand and in a design studio,
-          behaviour the programme already knows: the Atlas holds the workflow and its
-          steps, Agentify holds the call on each step, and an entity's own stages are
-          confirmed in LISTEN by the people who live them. `workflowMachines` stays on
-          the document — nothing was deleted from any programme — it is simply no
-          longer authored here. */}
-
-      {editScreen !== null ? (
-        <ScreenDesigner
-          screen={editScreen === "new" ? emptyScreen() : (screens[editScreen] ?? emptyScreen())}
-          program={program}
-          allScreens={screens}
-          onSave={saveScreen}
-          onClose={() => setEditScreen(null)} />
-      ) : null}
-    </>
+        </ul>
+      </Section>
+    </div>
   );
 }

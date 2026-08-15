@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ScreenCard } from "@/v3/components/flow/studio/ExperienceDesignStudio";
+import { ScreenCard } from "@/v3/components/flow/studio/ScreenCard";
 import FlowReviewSurface, {
   greetingName, DesignRoundReviewSurface,
   type DesignRoundReviewStamp, type DesignRoundVerdict,

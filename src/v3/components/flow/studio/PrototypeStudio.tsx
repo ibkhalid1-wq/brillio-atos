@@ -10,6 +10,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { asArray, asRecord, asStrings, asText, type StudioProps } from "./StudioKit";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
 import { assemblePrototype } from "@shared/prototypeAssembly.ts";
+import { experienceParentEntities } from "./ExperienceDesignStudio";
 import { buildPrototypeProject, downloadPrototypeZip, importPrototypeProject, projectSlug } from "./prototypeExport";
 import PrototypeCommandBar from "@/v3/components/flow/PrototypeCommandBar";
 
@@ -60,7 +61,10 @@ export default function PrototypeStudio({ doc, onChange, program, onRefineProtot
       const ontology = readArtifactDoc(program, "domainOntology");
       const atlas = readArtifactDoc(program, "currentStateAtlas");
       if (!ontology || !atlas) return null;
-      return assemblePrototype(ontology, atlas).html;
+      // The menu is the operator's call, taken in Experience Design. Read through the
+      // ONE definition so a toggle there and a menu item here cannot disagree.
+      const parents = experienceParentEntities(readArtifactDoc(program, "experienceDesign"));
+      return assemblePrototype(ontology, atlas, parents).html;
     } catch { return null; }
   }, [program]);
   const [view, setView] = useState<"fabric" | "build">("fabric");
