@@ -1013,16 +1013,26 @@ export default function AppShellV3() {
     // site rather than threading the removal through every woven cascade.
     if (RETIRED_AGENT_IDS.has(agentId)) return;
 
+    // A REFUSAL IS A RETURN VALUE, not just a toast.
+    //
+    // Every guard below used to `return` bare. The callers are fire-and-forget, so a
+    // refused dispatch was indistinguishable from a live one — and the Design Loop
+    // tiles latch a "rebuilding…" flag the moment they call this, cleared only when
+    // the document CHANGES. With no AI provider connected, nothing was dispatched,
+    // no document ever changed, and three cards read "rebuilding…" permanently over a
+    // six-second toast nobody was looking at. Reported as exactly that.
+    //
+    // `false` = did not dispatch. `true` = handed to the agent runner.
     // Guard: not signed in — agents require an authenticated session
     if (!authed) {
       pushV3Toast("Sign in to use AI agents.", { tone: "warning", duration: 5000 });
-      return;
+      return false;
     }
 
     // Guard: read-only access — viewers cannot run agents (which mutate the program)
     if (!canEditActiveProgram) {
       pushV3Toast("You have read-only access to this programme and cannot run agents.", { tone: "warning", duration: 6000 });
-      return;
+      return false;
     }
 
     // Guard: AI not connected — block only on definitive negative states.
@@ -1036,7 +1046,7 @@ export default function AppShellV3() {
         duration: 6000,
         action: { label: "AI Settings →", onClick: openAISettings },
       });
-      return;
+      return false;
     }
 
     const resolvedAgentId = resolveAgentId(agentId);
@@ -1316,6 +1326,9 @@ export default function AppShellV3() {
     } finally {
       await refreshPrograms();
     }
+    // Dispatched. Whether the RUN succeeded is a separate question the toasts above
+    // answer; this only says the guards let it through.
+    return true;
   // eslint-disable-next-line react-hooks/exhaustive-deps -- cooldown constant and setup helpers are stable; capturing aiStatus would go stale mid-run by design
   }, [activeProgramId, activeProgram, userId, canEditActiveProgram, refreshPrograms, resolveAgentId, runAgent]);
 

@@ -20,7 +20,9 @@ interface UseAgentTriggersOptions {
   activePhaseId: string | null;
   rawData: Record<string, unknown>;
   activeRuns: AgentRun[];
-  onRunAgent: (params: { agentId: string; phaseId: string; triggeredBy: "user" | "trigger" }) => Promise<void>;
+  /** Resolves false when a guard refused to dispatch — this consumer ignores the
+   *  value (a trigger has no UI to unlatch), but the type has to admit it. */
+  onRunAgent: (params: { agentId: string; phaseId: string; triggeredBy: "user" | "trigger" }) => Promise<boolean | void>;
   onInvalidate?: () => Promise<void> | void;
   narrativeGeneratedAt: string | null;
   raidGeneratedAt: string | null;

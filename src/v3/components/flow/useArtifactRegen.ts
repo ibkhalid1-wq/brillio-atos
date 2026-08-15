@@ -34,7 +34,7 @@ export interface ArtifactRegen {
 
 export function useArtifactRegen(
   program: ProgramSummary,
-  onRunAgent?: (agentId: string, phaseId?: string) => void,
+  onRunAgent?: (agentId: string, phaseId?: string) => void | Promise<boolean | void>,
   /** The surface's own way of saying what just happened — a board toast, a row
    *  note, or nothing. The hook never renders. */
   say?: (message: string) => void,
@@ -56,9 +56,25 @@ export function useArtifactRegen(
   return {
     regenerate: onRunAgent
       ? (card: ArtifactCardModel) => {
-          onRunAgent(card.id, card.movementId);
+          // Latch FIRST, so the tile answers the click immediately — a rebuild that
+          // waits for the whole agent run before acknowledging is a dead button.
           setBusy((s) => ({ ...s, [card.id]: artifactDocument(program, card.id) ?? "" }));
           say?.(`Regenerating ${card.title} from the record — it refreshes when it lands.`);
+          // …and UNLATCH if the dispatch was refused. `onRunAgent` resolves false when
+          // a guard turned it away (not signed in, read-only, AI not connected). It
+          // used to return bare, so a refusal looked exactly like a live run: nothing
+          // dispatched, so no document ever changed, so this flag never cleared and
+          // the tile read "rebuilding…" for ever over a six-second toast. Reported as
+          // three Design Loop cards stuck that way.
+          void Promise.resolve(onRunAgent(card.id, card.movementId)).then((dispatched) => {
+            if (dispatched !== false) return;
+            setBusy((s) => { if (!(card.id in s)) return s; const next = { ...s }; delete next[card.id]; return next; });
+            say?.(`${card.title} was not sent — nothing is rebuilding. See the message above for why.`);
+          }).catch(() => {
+            // The dispatch threw. Same rule: do not leave a tile claiming progress.
+            setBusy((s) => { if (!(card.id in s)) return s; const next = { ...s }; delete next[card.id]; return next; });
+            say?.(`${card.title} was not sent — the request failed before it started.`);
+          });
         }
       : undefined,
     regenerating: (artifactId: string) => artifactId in busy,

@@ -98,7 +98,10 @@ interface FlowShellProps {
   onComment?: (input: { fieldKey: string; movementId: string; title: string; text?: string; resolveId?: string }) => Promise<void>;
   onOpenSetup: () => void;
   onOpenCopilot: () => void;
-  onRunAgent: (agentId: string, phaseId?: string) => void;
+  /** Runs an agent. Resolves FALSE when a guard refused to dispatch (not signed in,
+   *  read-only, AI not connected) so a caller never shows progress for a run that
+   *  never started — see useArtifactRegen. */
+  onRunAgent: (agentId: string, phaseId?: string) => void | Promise<boolean | void>;
   onSaveInputs: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string }; extraInputs?: Record<string, Record<string, string>> }) => Promise<void>;
   /** Rename a person across the roster + contact bindings (People page). */
   onRenamePerson?: (oldName: string, newName: string) => Promise<void>;

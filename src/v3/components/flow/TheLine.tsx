@@ -109,7 +109,7 @@ interface TheLineProps {
    * it. Never touches a submission already on the record. Omitted → no close control. */
   onCloseLink?: (who: string) => Promise<void>;
   onScheduleFollowUp?: (movementId: string, who: string, date: string) => Promise<void>;
-  onRunAgent?: (agentId: string, phaseId?: string) => void;
+  onRunAgent?: (agentId: string, phaseId?: string) => void | Promise<boolean | void>;
   /** Record a movement's gate — demonstrated. Reopen — evidence changed.
    * Classic's own handlers; the parent re-checks criteria at write time. */
   onRecordGate?: (movementId: string) => Promise<void>;
