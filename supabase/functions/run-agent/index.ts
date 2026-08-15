@@ -2363,7 +2363,19 @@ const UPSTREAM_ARTIFACT_DEPS: Record<string, readonly string[]> = {
   prototypePack: ["agenticBlueprint", "experienceDesign"],
   // prototypeBuild also consumes experienceDesign — carried by upstreamDesign
   // (theme/screens-trimmed), so it's not duplicated here.
-  prototypeBuild: ["prototypePack", "agenticBlueprint", "domainOntology"],
+  //
+  // `prototypePack` REMOVED 2026-08-15. The pack was a SPECIFICATION of how to build
+  // what the assembler already builds, and it was retired from the methodology — so
+  // nothing generates one any more. This line still required it, and the consequence
+  // was silent: the generator ran, produced a complete result (html, screens,
+  // entryScreen, seededEntities — all of it on the run row), the run wrote `complete`
+  // with no error, and the document was never persisted because an upstream it
+  // depends on does not exist. Observed on Laila New: run complete in 68s, programme
+  // row written, and no `prototype*` key in the blob at all.
+  //
+  // The build's real inputs are the blueprint, the ontology and the experience design
+  // (via upstreamDesign). None of them is the pack.
+  prototypeBuild: ["agenticBlueprint", "domainOntology"],
   demoScripts: ["experienceDesign", "agenticBlueprint", "domainOntology"],
   hardeningPlan: ["agenticBlueprint"],
   evalSuite: ["agenticBlueprint", "hardeningPlan"],
