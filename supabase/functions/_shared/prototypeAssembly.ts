@@ -67,7 +67,30 @@ function renderCell(role: ValueRole | undefined, value: unknown): string {
 
 export interface AssembledPrototype { html: string; fabric: Fabric; regionCount: number; }
 
-export function assemblePrototype(ontology: Record<string, unknown>, atlas: Record<string, unknown>): AssembledPrototype {
+/**
+ * THE OPERATOR'S NAVIGATION, when they have chosen one.
+ *
+ * `navOrder` is DERIVED — it ranks entities by how central the graph says they are,
+ * which is a decent guess and is nobody's decision. Experience Design now asks the
+ * operator directly: which entities get a parent screen? When they have answered,
+ * that answer IS the menu, in their order. When they have not, the derived order
+ * stands exactly as before, so a programme nobody has curated still assembles.
+ *
+ * Only entities the ontology actually holds survive — a stale name left over from a
+ * regenerated ontology must not mint a menu item pointing at nothing.
+ */
+export function navigationFor(
+  chosen: readonly string[] | undefined,
+  derived: readonly string[],
+  known: readonly string[],
+): string[] {
+  const set = new Set(known);
+  const picked = (chosen ?? []).map((n) => n.trim()).filter((n) => n && set.has(n));
+  const deduped = [...new Set(picked)];
+  return deduped.length ? deduped : [...derived];
+}
+
+export function assemblePrototype(ontology: Record<string, unknown>, atlas: Record<string, unknown>, parentEntities?: readonly string[]): AssembledPrototype {
   const fabric = deriveFabric(ontology, atlas);
   const roles = deriveRoles(ontology);
   const seed = generateSeed(ontology, fabric.version);
@@ -85,7 +108,10 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
   // shape, so it comes from the graph: roots first, each entity's children
   // beneath it, depth-first.
   const graph = fabric.graph;
-  const ordered = graph.navOrder.filter((n) => names.includes(n));
+  // The menu: the operator's chosen parent entities when they have chosen, else the
+  // derived order. Everything else still exists — it appears inside the detail of
+  // whatever owns it, which is what the related-collection regions below render.
+  const ordered = navigationFor(parentEntities, graph.navOrder.filter((n) => names.includes(n)), names);
   const es = new Map(names.map((n) => [n, slug(n)]));
   let regionCount = 0;
   const region = (id: string, inner: string) => { regionCount += 1; return `<div data-fabric-id="${esc(id)}">${inner}</div>`; };

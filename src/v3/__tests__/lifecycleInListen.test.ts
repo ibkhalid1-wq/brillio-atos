@@ -156,13 +156,20 @@ describe("the confirmation writes through the path a schema writes through", () 
       .not.toContain("commits.commitDictionary(csv, null)");
   });
 
-  it("Experience Design no longer authors workflow machines", () => {
+  it("Experience Design authors neither workflow machines nor screens — and drops neither", () => {
     const ed = require("node:fs").readFileSync(
       require("node:path").resolve(__dirname, "../components/flow/studio/ExperienceDesignStudio.tsx"), "utf8") as string;
-    // MUTATION: restore the card → RED.
+    // MUTATION: restore either editor → RED.
     expect(ed).not.toContain('EdCard label="Workflow machines"');
-    expect(ed, "the field must stay on the document — removal is from the STUDIO, not the record")
-      .toContain("workflowMachines");
+    expect(ed, "the screen designer is back").not.toContain("function ScreenDesigner");
+    // The point was never the comment that used to satisfy this — it is that removal
+    // is from the STUDIO, not the record. The studio must patch by SPREADING the
+    // document, so `workflowMachines`, `screens` and everything else it no longer
+    // authors survive untouched. 2026-08-13: this used to grep for the word
+    // `workflowMachines` in a comment, and went red on a rewrite that changed nothing
+    // about the property.
+    expect(ed, "the studio replaces the document instead of extending it")
+      .toContain("onChange({ ...doc,");
   });
 });
 
