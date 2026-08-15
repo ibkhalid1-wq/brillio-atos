@@ -35,7 +35,7 @@
  * end to end without a model call, which is the only way any of it can be
  * guarded.
  */
-import { assemblePrototype, parentEntitiesFor } from "./prototypeAssembly.ts";
+import { assemblePrototype, paletteFor, parentEntitiesFor } from "./prototypeAssembly.ts";
 import { generateSeed } from "./seedData.ts";
 
 /** The assembled build a refine starts from, plus everything a refine must preserve. */
@@ -201,11 +201,20 @@ export function prototypeBaselineFor(
   ontology: unknown,
   atlas: unknown,
   experienceDesign?: unknown,
+  /** The programme's other stored inputs. They must be the SAME ones the studio
+   *  and the stakeholder's link assemble with: this baseline is what a refine is
+   *  checked against, and a baseline missing an input the studio had would
+   *  reject the operator's own build for structure it never lost. */
+  inputs: { vocabulary?: unknown; blueprint?: unknown } = {},
 ): PrototypeBaseline | null {
   if (!isRecord(ontology) || !isRecord(atlas)) return null;
   try {
     const parents = parentEntitiesFor(experienceDesign);
-    const { html, fabric, regionCount } = assemblePrototype(ontology, atlas, parents);
+    const { html, fabric, regionCount } = assemblePrototype(ontology, atlas, parents, {
+      vocabulary: inputs.vocabulary,
+      theme: paletteFor(experienceDesign),
+      blueprint: inputs.blueprint,
+    });
     if (!regionCount) return null;
     const seed = generateSeed(ontology, fabric.version);
     const text = documentText(html);

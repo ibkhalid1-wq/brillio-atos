@@ -66,14 +66,123 @@ export const MERIDIAN_TOKENS: PrototypeTheme = {
   fontDisplay: '"Outfit", "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
 };
 
-/** Merge a partial (governed) theme over the defaults — absent/blank keys keep
- * the Meridian default, so a sparse `experienceDesign.theme` still yields a
- * complete, coherent token set. */
+/**
+ * ── A CLIENT'S PALETTE IS AN INPUT, AND AN INPUT IS UNTRUSTED ────────────────
+ *
+ * The palette arrives on the programme (`experienceDesign.theme`) — written by
+ * a generator or typed by an operator — and is interpolated straight into a
+ * `:root{…}` block inside the document's one `<style>` element. A value holding
+ * `}` closes that block early and everything after it is markup the browser
+ * reads as CSS; a value holding `</style>` ends the element. So each token is
+ * checked against the SHAPE ITS SLOT ACCEPTS, and a value that does not fit its
+ * slot keeps the Meridian default rather than being escaped into something
+ * plausible: a half-honoured brand colour is a worse answer than the house one.
+ *
+ * Colours are hex or rgb()/rgba() because the chrome below is DERIVED from the
+ * brand's luminance — a colour the assembler cannot read is a colour it cannot
+ * pair text against, and it would ship an unreadable sidebar instead of saying
+ * so.
+ */
+const COLOR_HEX = /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+const COLOR_RGB = /^rgba?\(\s*\d{1,3}(?:\.\d+)?\s*[, ]\s*\d{1,3}(?:\.\d+)?\s*[, ]\s*\d{1,3}(?:\.\d+)?\s*(?:[,/]\s*(?:\d*\.?\d+%?)\s*)?\)$/i;
+/** A font stack: family names, quotes, commas, the generic keywords. Nothing
+ *  that can carry a declaration, a comment or a tag. */
+const FONT_STACK = /^[A-Za-z0-9 ,'"()._-]+$/;
+
+export function isColorToken(value: unknown): boolean {
+  const v = String(value ?? "").trim();
+  return COLOR_HEX.test(v) || COLOR_RGB.test(v);
+}
+
+/** A colour's three channels, 0–255 — or null when it is not one this module
+ *  can read (which is the same as "cannot be paired", see above). */
+function channelsOf(value: string): [number, number, number] | null {
+  const v = value.trim();
+  if (COLOR_HEX.test(v)) {
+    const h = v.slice(1);
+    const full = h.length <= 4 ? h.slice(0, 3).split("").map((c) => c + c).join("") : h.slice(0, 6);
+    return [0, 2, 4].map((i) => parseInt(full.slice(i, i + 2), 16)) as [number, number, number];
+  }
+  if (COLOR_RGB.test(v)) {
+    const nums = v.replace(/^rgba?\(|\)$/gi, "").split(/[, /]+/).filter(Boolean).slice(0, 3).map(Number);
+    return nums.length === 3 && nums.every((n) => Number.isFinite(n)) ? [nums[0], nums[1], nums[2]] as [number, number, number] : null;
+  }
+  return null;
+}
+
+/** WCAG relative luminance. Null for a colour this module cannot read. */
+export function relativeLuminance(color: string): number | null {
+  const ch = channelsOf(color);
+  if (!ch) return null;
+  const lin = ch.map((c) => {
+    const s = c / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
+}
+
+/** WCAG contrast ratio between two colours (1–21). Null if either is unreadable. */
+export function contrastRatio(a: string, b: string): number | null {
+  const la = relativeLuminance(a); const lb = relativeLuminance(b);
+  if (la === null || lb === null) return null;
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
+/** `a` moved `t` of the way towards `b`, as hex. Pure integer arithmetic — the
+ *  same palette always produces the same chrome, byte for byte. */
+function mix(a: string, b: string, t: number): string {
+  const ca = channelsOf(a); const cb = channelsOf(b);
+  if (!ca || !cb) return a;
+  const hex = (n: number) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, "0");
+  return `#${ca.map((c, i) => hex(c + (cb[i] - c) * t)).join("")}`;
+}
+
+/**
+ * THE CHROME THE BRAND HAS TO CARRY.
+ *
+ * The sidebar is painted in the brand colour and its type used to be five fixed
+ * tints of lilac chosen for ONE brand — the house indigo. Accepting a client's
+ * palette while keeping those makes the re-skin a trap: a client whose brand is
+ * yellow gets pale lilac navigation on it and the demo that was meant to land
+ * as their product lands as unreadable.
+ *
+ * So what sits ON the brand is derived from the brand: whichever of white and
+ * the palette's own ink contrasts more with it, then two steps back towards the
+ * brand for secondary and tertiary type, and a mark that reads at UI-component
+ * contrast. `--m-brand-strong` (the primary button's hover) leans the brand
+ * TOWARDS its own text colour, so it lightens on a dark brand and darkens on a
+ * light one without either case being special.
+ */
+export interface BrandChrome { onBrand: string; onBrandDim: string; onBrandMute: string; brandMark: string; brandStrong: string }
+export function brandChrome(brand: string, ink: string): BrandChrome {
+  const white = "#ffffff";
+  const toWhite = contrastRatio(brand, white) ?? 0;
+  const toInk = contrastRatio(brand, ink) ?? 0;
+  const onBrand = toWhite >= toInk ? white : ink;
+  return {
+    onBrand,
+    onBrandDim: mix(onBrand, brand, 0.14),
+    onBrandMute: mix(onBrand, brand, 0.34),
+    brandMark: mix(onBrand, brand, 0.24),
+    brandStrong: mix(brand, onBrand, 0.12),
+  };
+}
+
+/** Merge a partial (governed) theme over the defaults — absent/blank keys, and
+ * any value that does not fit its slot, keep the Meridian default, so a sparse
+ * (or hostile) `experienceDesign.theme` still yields a complete, coherent and
+ * safely-interpolatable token set. */
 export function resolveTheme(theme?: Partial<PrototypeTheme> | null): PrototypeTheme {
   const t = theme || {};
+  const fits = (k: keyof PrototypeTheme, v: unknown): boolean => {
+    if (k === "radius") return typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 64;
+    if (k === "fontSans" || k === "fontDisplay") return typeof v === "string" && FONT_STACK.test(v);
+    return isColorToken(v);
+  };
   const pick = <K extends keyof PrototypeTheme>(k: K): PrototypeTheme[K] => {
     const v = t[k];
-    return (v === undefined || v === null || v === "" ? MERIDIAN_TOKENS[k] : v) as PrototypeTheme[K];
+    if (v === undefined || v === null || v === "") return MERIDIAN_TOKENS[k];
+    return (fits(k, v) ? v : MERIDIAN_TOKENS[k]) as PrototypeTheme[K];
   };
   return {
     brand: pick("brand"), brandSoft: pick("brandSoft"), accent: pick("accent"),
@@ -90,8 +199,11 @@ export function resolveTheme(theme?: Partial<PrototypeTheme> | null): PrototypeT
 export function meridianRootVars(theme?: Partial<PrototypeTheme> | null): string {
   const t = resolveTheme(theme);
   const r = t.radius;
+  const c = brandChrome(t.brand, t.ink);
   return `:root{
   --m-brand:${t.brand};--m-brand-soft:${t.brandSoft};--m-accent:${t.accent};
+  --m-brand-strong:${c.brandStrong};--m-brand-mark:${c.brandMark};
+  --m-on-brand:${c.onBrand};--m-on-brand-dim:${c.onBrandDim};--m-on-brand-mute:${c.onBrandMute};
   --m-ink:${t.ink};--m-ink-soft:${t.inkSoft};--m-muted:${t.muted};
   --m-bg:${t.bg};--m-surface:${t.surface};--m-surface-2:${t.surface2};--m-line:${t.line};
   --m-positive:${t.positive};--m-warn:${t.warn};--m-danger:${t.danger};
@@ -120,17 +232,17 @@ a{color:var(--m-brand);text-decoration:none}
 :focus-visible{outline:none;box-shadow:var(--m-ring)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 
-/* App shell: fixed sidebar + scrolling main */
+/* App shell. Everything painted ON the brand reads a brand-derived token. */
 .m-app{display:grid;grid-template-columns:244px 1fr;min-height:100vh}
-.m-side{background:var(--m-brand);color:#f3f1fa;display:flex;flex-direction:column;gap:var(--m-sp-2);padding:var(--m-sp-5) var(--m-sp-3);position:sticky;top:0;height:100vh;overflow-y:auto}
-.m-brand{display:flex;align-items:center;gap:9px;font-family:var(--m-font-display);font-weight:700;font-size:15px;padding:0 var(--m-sp-2) var(--m-sp-3)}
-.m-brand-dot{width:9px;height:9px;border-radius:var(--m-r-pill);background:#b3a6f7;flex:none;box-shadow:0 0 0 3px rgba(255,255,255,.12)}
+.m-side{background:var(--m-brand);color:var(--m-on-brand-dim);display:flex;flex-direction:column;gap:var(--m-sp-2);padding:var(--m-sp-5) var(--m-sp-3);position:sticky;top:0;height:100vh;overflow-y:auto}
+.m-brand{display:flex;align-items:center;gap:9px;font-family:var(--m-font-display);font-weight:700;font-size:15px;padding:0 var(--m-sp-2) var(--m-sp-3);color:var(--m-on-brand)}
+.m-brand-dot{width:9px;height:9px;border-radius:var(--m-r-pill);background:var(--m-brand-mark);flex:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--m-on-brand) 14%,transparent)}
 .m-nav{display:flex;flex-direction:column;gap:2px;margin-top:var(--m-sp-2)}
-.m-nav-sec{font-size:9.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#948dbb;padding:var(--m-sp-3) var(--m-sp-2) var(--m-sp-1)}
-.m-nav-item{display:flex;align-items:center;gap:10px;padding:8px var(--m-sp-2);border-radius:var(--m-r-sm);color:#cfc9e6;font-size:13px;font-weight:500;cursor:pointer;border-left:2px solid transparent;transition:background var(--m-dur) var(--m-ease),color var(--m-dur)}
-.m-nav-item:hover{background:rgba(255,255,255,.06);color:#f3f1fa}
-.m-nav-item.is-active{background:rgba(255,255,255,.09);color:#fff;border-left-color:#b3a6f7}
-.m-nav-count{margin-left:auto;font-size:11px;font-weight:600;color:#948dbb}
+.m-nav-sec{font-size:9.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--m-on-brand-mute);padding:var(--m-sp-3) var(--m-sp-2) var(--m-sp-1)}
+.m-nav-item{display:flex;align-items:center;gap:10px;padding:8px var(--m-sp-2);border-radius:var(--m-r-sm);color:var(--m-on-brand-dim);font-size:13px;font-weight:500;cursor:pointer;border-left:2px solid transparent;transition:background var(--m-dur) var(--m-ease),color var(--m-dur)}
+.m-nav-item:hover{background:color-mix(in srgb,var(--m-on-brand) 7%,transparent);color:var(--m-on-brand)}
+.m-nav-item.is-active{background:color-mix(in srgb,var(--m-on-brand) 11%,transparent);color:var(--m-on-brand);border-left-color:var(--m-brand-mark)}
+.m-nav-count{margin-left:auto;font-size:11px;font-weight:600;color:var(--m-on-brand-mute)}
 /* Nested navigation: a child entity sits under its parent, and a branch collapses.
    A tree of 30+ entities that cannot be closed is as unusable as a flat list of
    30+ entities, so every branch is a native <details> — keyboard-operable and
@@ -140,11 +252,11 @@ a{color:var(--m-brand);text-decoration:none}
 .m-nav-row::-webkit-details-marker{display:none}
 .m-nav-row::before{content:"";flex:none;width:0;height:0;margin:0 3px 0 4px;border-left:4px solid transparent;border-top:4px solid transparent;border-bottom:4px solid transparent}
 .m-nav-group>summary{cursor:pointer;border-radius:var(--m-r-sm)}
-.m-nav-group>summary::before{border-left-color:#948dbb;transition:transform var(--m-dur) var(--m-ease)}
+.m-nav-group>summary::before{border-left-color:var(--m-on-brand-mute);transition:transform var(--m-dur) var(--m-ease)}
 .m-nav-group[open]>summary::before{transform:rotate(90deg)}
 .m-nav-group>summary:focus-visible{box-shadow:var(--m-ring)}
 .m-nav-row>.m-nav-item{flex:1;min-width:0}
-.m-nav-sub{margin-left:11px;padding-left:5px;border-left:1px solid rgba(255,255,255,.14)}
+.m-nav-sub{margin-left:11px;padding-left:5px;border-left:1px solid color-mix(in srgb,var(--m-on-brand) 16%,transparent)}
 .m-main{min-width:0;padding:var(--m-sp-6) var(--m-sp-8)}
 
 /* Page header */
@@ -158,8 +270,8 @@ a{color:var(--m-brand);text-decoration:none}
 /* Buttons */
 .m-btn{display:inline-flex;align-items:center;gap:7px;font:inherit;font-size:13px;font-weight:600;padding:8px 14px;border-radius:var(--m-r-sm);border:1px solid transparent;cursor:pointer;transition:background var(--m-dur) var(--m-ease),box-shadow var(--m-dur),transform 60ms}
 .m-btn:active{transform:translateY(.5px)}
-.m-btn--primary{background:var(--m-brand);color:#fff}
-.m-btn--primary:hover{background:#2d2159;box-shadow:var(--m-shadow-sm)}
+.m-btn--primary{background:var(--m-brand);color:var(--m-on-brand)}
+.m-btn--primary:hover{background:var(--m-brand-strong);box-shadow:var(--m-shadow-sm)}
 .m-btn--secondary{background:var(--m-surface);color:var(--m-ink);border-color:var(--m-line)}
 .m-btn--secondary:hover{border-color:color-mix(in srgb,var(--m-brand) 45%,var(--m-line));box-shadow:var(--m-shadow-sm)}
 .m-btn--ghost{background:transparent;color:var(--m-brand)}
@@ -278,6 +390,23 @@ a{color:var(--m-brand);text-decoration:none}
 .m-banner{display:flex;align-items:center;gap:10px;padding:11px 14px;border-radius:var(--m-r-md);font-size:13px}
 .m-banner--error{color:var(--m-danger);background:color-mix(in srgb,var(--m-danger) 7%,transparent);border:1px solid color-mix(in srgb,var(--m-danger) 30%,transparent)}
 .m-toast{position:fixed;right:20px;bottom:20px;background:var(--m-ink);color:#fff;padding:12px 16px;border-radius:var(--m-r-md);box-shadow:var(--m-shadow-lg);font-size:13px;font-weight:500}
+
+/* THE WORKBENCH — a role's own screen; a step is a sentence, not a row. */
+.m-lanes{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.m-steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:12px;font-size:13px}
+.m-step{padding-left:2px}
+.m-step-a{color:var(--m-ink)}
+/* A name with nowhere to go: a tag, never a control. */
+.m-chip--flat{cursor:default;background:var(--m-surface-2);color:var(--m-muted);border-color:var(--m-line)}
+.m-chip--flat:hover{border-color:var(--m-line)}
+
+/* AGENT ACTIVITY — the blueprint, on the record it acts on. */
+.m-agents{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:14px}
+.m-agent{border:1px solid var(--m-line);border-radius:var(--m-r-md);padding:12px 14px;background:var(--m-surface-2)}
+.m-agent-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.m-agent-n{font-weight:700;font-size:14px}
+.m-agent-p{margin-top:5px;font-size:13px;color:var(--m-ink-soft)}
+.m-agent-gate{margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 
 /* Detail definition list */
 .m-dl{display:grid;grid-template-columns:auto 1fr;gap:10px 18px;font-size:13.5px}

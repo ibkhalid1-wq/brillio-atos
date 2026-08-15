@@ -9,7 +9,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { asArray, asRecord, asStrings, asText, type StudioProps } from "./StudioKit";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
-import { assemblePrototype } from "@shared/prototypeAssembly.ts";
+import { assemblePrototype, paletteFor } from "@shared/prototypeAssembly.ts";
 import { experienceParentEntities } from "./ExperienceDesignStudio";
 import { buildPrototypeProject, downloadPrototypeZip, importPrototypeProject, projectSlug } from "./prototypeExport";
 import PrototypeCommandBar from "@/v3/components/flow/PrototypeCommandBar";
@@ -63,12 +63,19 @@ export default function PrototypeStudio({ doc, onChange, program, onRefineProtot
       if (!ontology || !atlas) return null;
       // The menu is the operator's call, taken in Experience Design. Read through the
       // ONE definition so a toggle there and a menu item here cannot disagree.
-      const parents = experienceParentEntities(readArtifactDoc(program, "experienceDesign"));
+      const design = readArtifactDoc(program, "experienceDesign");
+      const parents = experienceParentEntities(design);
       // The stored value vocabulary — one model call per ontology change, read
       // here as data so the rebuild stays deterministic. Absent on most
       // programmes, and absent means the build is exactly what it was.
       const vocabulary = readArtifactDoc(program, "prototypeValueVocabulary");
-      return assemblePrototype(ontology, atlas, parents, { vocabulary }).html;
+      // …and the client's palette, from the same document, through the same one
+      // definition the export and the stakeholder's link read it by.
+      return assemblePrototype(ontology, atlas, parents, {
+        vocabulary,
+        theme: paletteFor(design),
+        blueprint: readArtifactDoc(program, "agenticBlueprint"),
+      }).html;
     } catch { return null; }
   }, [program]);
   const [view, setView] = useState<"fabric" | "build">("fabric");
@@ -162,7 +169,7 @@ export default function PrototypeStudio({ doc, onChange, program, onRefineProtot
               title: asText(doc.title),
               programName: program?.name,
               screens,
-              theme: program ? asRecord(readArtifactDoc(program, "experienceDesign")?.theme ?? {}) : null,
+              theme: program ? paletteFor(readArtifactDoc(program, "experienceDesign")) : null,
               pack: program ? readArtifactDoc(program, "prototypePack") : null,
             });
             await downloadPrototypeZip(project, projectSlug(program?.name));

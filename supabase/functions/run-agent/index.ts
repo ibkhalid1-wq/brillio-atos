@@ -2276,7 +2276,14 @@ function getCurrentPhaseScope(programData: ProgramState, phaseId: string): strin
  *  build the model is shown and the build its answer is checked against are the
  *  same document even though they are computed at two different moments in the run. */
 function prototypeBaselineOf(inner: Record<string, unknown>): PrototypeBaseline | null {
-  const baseline = prototypeBaselineFor(inner.domainOntology, inner.currentStateAtlas, inner.experienceDesign);
+  const baseline = prototypeBaselineFor(inner.domainOntology, inner.currentStateAtlas, inner.experienceDesign, {
+    // The same stored inputs the studio and the stakeholder's link assemble
+    // with. A baseline missing one of them is a different application from the
+    // one the operator is looking at, and the refine post-condition would
+    // measure the returned document against a build nobody has seen.
+    vocabulary: inner.prototypeValueVocabulary,
+    blueprint: inner.agenticBlueprint,
+  });
   if (!baseline) return null;
   // The skeleton is re-derived every run; the SKIN the operator already approved
   // is carried forward off the stored build, so the loop accumulates instead of
