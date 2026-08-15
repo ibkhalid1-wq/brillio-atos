@@ -64,7 +64,11 @@ export default function PrototypeStudio({ doc, onChange, program, onRefineProtot
       // The menu is the operator's call, taken in Experience Design. Read through the
       // ONE definition so a toggle there and a menu item here cannot disagree.
       const parents = experienceParentEntities(readArtifactDoc(program, "experienceDesign"));
-      return assemblePrototype(ontology, atlas, parents).html;
+      // The stored value vocabulary — one model call per ontology change, read
+      // here as data so the rebuild stays deterministic. Absent on most
+      // programmes, and absent means the build is exactly what it was.
+      const vocabulary = readArtifactDoc(program, "prototypeValueVocabulary");
+      return assemblePrototype(ontology, atlas, parents, { vocabulary }).html;
     } catch { return null; }
   }, [program]);
   const [view, setView] = useState<"fabric" | "build">("fabric");

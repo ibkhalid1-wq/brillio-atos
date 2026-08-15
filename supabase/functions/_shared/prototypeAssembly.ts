@@ -714,10 +714,19 @@ export function parentEntitiesFor(doc: unknown): string[] {
   return legacy;
 }
 
-export function assemblePrototype(ontology: Record<string, unknown>, atlas: Record<string, unknown>, parentEntities?: readonly string[]): AssembledPrototype {
+/**
+ * The programme's stored inputs that are NOT the ontology or the atlas. One
+ * option today: the value vocabulary, a `{ "Entity.attribute": [values] }`
+ * artifact produced by a single model call per ontology change and consumed
+ * deterministically by the seeder (see `valueVocabulary.ts`). Passing it changes
+ * what the category and status columns SAY; omitting it changes nothing at all.
+ */
+export interface AssemblyOptions { vocabulary?: unknown }
+
+export function assemblePrototype(ontology: Record<string, unknown>, atlas: Record<string, unknown>, parentEntities?: readonly string[], options: AssemblyOptions = {}): AssembledPrototype {
   const fabric = deriveFabric(ontology, atlas);
   const roles = deriveRoles(ontology);
-  const seed = generateSeed(ontology, fabric.version);
+  const seed = generateSeed(ontology, fabric.version, { vocabulary: options.vocabulary });
   const roleOf = new Map<string, ValueRole>(roles.attributeRoles.map((r) => [`${r.entity} ${r.attribute}`, r.role] as const));
   /** What a reference-typed attribute POINTS AT, as the ontology itself
    *  answered it (`deriveAttributeReferences`). The form's pickers are
