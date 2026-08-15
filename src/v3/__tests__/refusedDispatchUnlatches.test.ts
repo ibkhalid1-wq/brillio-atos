@@ -36,12 +36,19 @@ const CARD = { id: "architecture-strategy", movementId: "envision", title: "Arch
 const PROGRAM = { id: "p1", rawData: { data: {} } } as never;
 
 /** Mount the hook and hand back its API plus what it said. */
-function mount(onRunAgent: (a: string, p?: string) => void | Promise<boolean | void>) {
-    const said: string[] = [];
+function mount(
+  onRunAgent: (a: string, p?: string) => void | Promise<boolean | void>,
+  running: ReadonlySet<string> = new Set<string>(),
+) {
+  const said: string[] = [];
   let api!: ArtifactRegen;
-  const Probe = () => { api = useArtifactRegen(PROGRAM, onRunAgent, (m) => { said.push(m); }); return null; };
-  act(() => { root.render(createElement(Probe)); });
-  return { get api() { return api; }, said };
+  let set = running;
+  const Probe = () => { api = useArtifactRegen(PROGRAM, onRunAgent, (m) => { said.push(m); }, set); return null; };
+  const render = () => act(() => { root.render(createElement(Probe)); });
+  render();
+  /** Re-render with a new running set — the backend's view moving on. */
+  const setRunning = (next: ReadonlySet<string>) => { set = next; render(); };
+  return { get api() { return api; }, said, setRunning };
 }
 
 const flush = async () => { await act(async () => { await Promise.resolve(); await Promise.resolve(); }); };
@@ -102,6 +109,44 @@ describe("a dispatch that went through", () => {
     act(() => { h.api.regenerate!(CARD as never); });
     expect(h.api.regenerating(CARD.id)).toBe(true);   // latched with the promise still open
     act(() => { release(true); });
+    await flush();
+    expect(h.api.regenerating(CARD.id)).toBe(true);
+  });
+});
+
+describe("a run that finishes without changing anything", () => {
+  it("still clears the tile — completion is the signal, not a document diff", async () => {
+    // THE REPORTED BUG. A successful regeneration over a stable ontology emits a
+    // byte-identical document. Clearing on document-change alone left the tile saying
+    // "rebuilding…" while `adam_agent_runs` read `complete`, three times over.
+    // MUTATION: drop the `!running && st.seen` branch → true, the bug is back.
+    const h = mount(async () => true);
+    act(() => { h.api.regenerate!(CARD as never); });
+    await flush();
+    h.setRunning(new Set([CARD.id]));            // backend registers the run
+    expect(h.api.regenerating(CARD.id), "the run never registered — the test proves nothing").toBe(true);
+    h.setRunning(new Set<string>());             // …and it completes
+    expect(h.api.regenerating(CARD.id), "a completed run left the tile rebuilding").toBe(false);
+  });
+
+  it("does not clear in the window between dispatch and the backend registering it", async () => {
+    // The agent is absent from the running set for a moment after dispatch. Treating
+    // that absence as completion would unlatch instantly and every rebuild would look
+    // like it finished before it started — which is why absence only counts once
+    // presence has been SEEN.
+    const h = mount(async () => true, new Set<string>());
+    act(() => { h.api.regenerate!(CARD as never); });
+    await flush();
+    expect(h.api.regenerating(CARD.id)).toBe(true);
+    h.setRunning(new Set<string>());             // still not registered
+    expect(h.api.regenerating(CARD.id)).toBe(true);
+  });
+
+  it("still clears on a document change, for a run the client never saw running", async () => {
+    // The secondary signal, kept: a run fast enough to finish between two polls never
+    // appears in the running set at all.
+    const h = mount(async () => true);
+    act(() => { h.api.regenerate!(CARD as never); });
     await flush();
     expect(h.api.regenerating(CARD.id)).toBe(true);
   });

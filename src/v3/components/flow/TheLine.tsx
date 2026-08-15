@@ -110,6 +110,8 @@ interface TheLineProps {
   onCloseLink?: (who: string) => Promise<void>;
   onScheduleFollowUp?: (movementId: string, who: string, date: string) => Promise<void>;
   onRunAgent?: (agentId: string, phaseId?: string) => void | Promise<boolean | void>;
+  /** Agent ids the backend reports as running — how a rebuild knows it finished. */
+  runningAgentIds?: ReadonlySet<string>;
   /** Record a movement's gate — demonstrated. Reopen — evidence changed.
    * Classic's own handlers; the parent re-checks criteria at write time. */
   onRecordGate?: (movementId: string) => Promise<void>;
@@ -397,7 +399,7 @@ function packFor(program: ProgramSummary, who: string, movementId: "frame" | "li
   return shown.find(linkIsOpen) ?? shown[shown.length - 1];
 }
 
-export default function TheLine({ program, onOpenInbox, onSaveInputs, onRenamePerson, onRenameRole, onMintFollowUp, onMintReview, onCloseLink, onScheduleFollowUp, onRunAgent, onRecordGate, onReopenGate, onSendForApproval, onDesignRound }: TheLineProps) {
+export default function TheLine({ program, onOpenInbox, onSaveInputs, onRenamePerson, onRenameRole, onMintFollowUp, onMintReview, onCloseLink, onScheduleFollowUp, onRunAgent, runningAgentIds, onRecordGate, onReopenGate, onSendForApproval, onDesignRound }: TheLineProps) {
   const model = useMemo(() => buildLineModel(program), [program]);
   // The ONE in-browser ledger read every surface here shares (read-only migrate).
   const ledger = useProgramLedger(program);
@@ -885,7 +887,7 @@ export default function TheLine({ program, onOpenInbox, onSaveInputs, onRenamePe
   const { regenerate, regenerating, regeneratingIds } = useArtifactRegen(program, onRunAgent, (message) => {
     setNote(message);
     window.setTimeout(() => setNote(null), 6000);
-  });
+  }, runningAgentIds);
 
   // First generation of an artifact whose upstream inputs are ready. Same
   // dispatch as regenerate; cleared implicitly when the document lands and the

@@ -955,7 +955,7 @@ export default function FlowShell(props: FlowShellProps) {
             onRenamePerson={props.onRenamePerson} onRenameRole={props.onRenameRole}
             onMintFollowUp={props.onMintFollowUp} onMintReview={props.onMintReview}
             onCloseLink={props.onCloseLink} onScheduleFollowUp={props.onScheduleFollowUp}
-            onRunAgent={props.onRunAgent}
+            onRunAgent={props.onRunAgent} runningAgentIds={props.runningAgentIds}
             onRecordGate={props.onRecordGate} onReopenGate={props.onReopenGate}
             onSendForApproval={props.onSendForApproval} onDesignRound={props.onDesignRound} />
         ) : view === "people" ? (
