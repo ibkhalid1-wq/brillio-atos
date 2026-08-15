@@ -123,7 +123,18 @@ describe("an N:1 renders a LINK to the parent", () => {
       const parent = n.source.relation?.[0] ?? "";
       const r = regionHtml(n.id);
       expect(r, `nav ${n.id} has no rendering`).toBeTruthy();
-      expect(r, `nav ${n.id} does not navigate`).toMatch(/onclick="show\('detail-/);
+      // THE PROPERTY, NOT THE SPELLING. This used to pin the literal
+      // `onclick="show('detail-…')"`, which broke the day the application
+      // learned to address a RECORD rather than a screen — and would have gone
+      // on passing if the link had kept the call and lost the destination.
+      // What must be true is that the control goes to an address owned by the
+      // parent entity: its record, or its list when this one names no parent.
+      const el = doc.querySelector(`[data-fabric-id="${n.id}"]`)!;
+      const control = el.querySelector("button,a");
+      expect(control, `nav ${n.id} renders no control`).toBeTruthy();
+      const target = control!.getAttribute("onclick") ?? control!.getAttribute("href") ?? "";
+      const parentSlug = parent.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      expect(target, `nav ${n.id} does not navigate to ${parent}`).toMatch(new RegExp(`#${parentSlug}(/|['"]|$)`));
       expect(r).toContain(parent);
     }
   });

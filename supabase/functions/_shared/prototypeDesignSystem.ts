@@ -206,6 +206,20 @@ a{color:var(--m-brand);text-decoration:none}
 .m-pagination{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-top:1px solid var(--m-line);font-size:12.5px;color:var(--m-muted)}
 .m-pagination .m-btn{padding:4px 10px}
 
+/* The list screen's own toolbar: a filter that filters, and a view switch that
+   is only ever rendered where there is something to switch to. */
+.m-search{width:230px;flex:none}
+.m-toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+
+/* BOARD VIEW — a lane per value of the entity's status attribute. Offered only
+   where the ontology declares one, so no screen carries a switch to nothing. */
+.m-board{display:flex;gap:14px;align-items:flex-start;overflow-x:auto;padding-bottom:6px}
+.m-board-col{flex:0 0 248px;background:var(--m-surface-2);border:1px solid var(--m-line);border-radius:var(--m-r-lg);padding:12px}
+.m-board-h{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--m-muted)}
+.m-board-card{display:block;width:100%;text-align:left;font:inherit;cursor:pointer;background:var(--m-surface);border:1px solid var(--m-line);border-radius:var(--m-r-md);padding:10px 12px;margin-bottom:8px}
+.m-board-card:hover{border-color:color-mix(in srgb,var(--m-brand) 40%,transparent);box-shadow:var(--m-shadow-sm)}
+.m-board-more{font-size:12px;color:var(--m-muted);padding:2px}
+
 /* Tabs / segmented */
 .m-tabs{display:flex;gap:3px;padding:4px;background:var(--m-surface-2);border:1px solid var(--m-line);border-radius:var(--m-r-md);width:max-content}
 .m-tab{font:inherit;font-size:13px;font-weight:600;color:var(--m-muted);background:none;border:none;padding:7px 13px;border-radius:var(--m-r-sm);cursor:pointer;transition:background var(--m-dur),color var(--m-dur)}
