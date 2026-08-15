@@ -9179,3 +9179,16 @@ body { text-rendering: optimizeLegibility; }
 .v3bp-btn.primary{background:var(--v3-accent-2);border-color:var(--v3-accent-2);color:#fff}
 .v3bp-btn:disabled{opacity:.5;cursor:not-allowed}
 .v3bp-btn:focus-visible,.v3bp-decide-in:focus-visible{outline:2px solid var(--v3-accent-2);outline-offset:2px}
+
+/* The blueprint's reference drawer — one door over what used to be eight peers of
+   the roster. Styled as a quiet boundary, not a card: it must not compete with the
+   decision strip above it. */
+.v3fs-bp-rest{margin-top:18px;border-top:1px solid var(--v3-border);padding-top:14px}
+.v3fs-bp-rest-h{cursor:pointer;font-size:12px;font-weight:600;color:var(--v3-text-secondary);
+  list-style:none;display:flex;align-items:center;gap:7px}
+.v3fs-bp-rest-h::-webkit-details-marker{display:none}
+.v3fs-bp-rest-h::before{content:"▸";color:var(--v3-text-muted);font-size:10px}
+.v3fs-bp-rest[open] .v3fs-bp-rest-h::before{content:"▾"}
+.v3fs-bp-rest-h:hover{color:var(--v3-text)}
+.v3fs-bp-rest-h:focus-visible{outline:2px solid var(--v3-accent-2);outline-offset:3px;border-radius:4px}
+.v3fs-bp-rest-b{margin-top:12px;display:flex;flex-direction:column;gap:8px}
