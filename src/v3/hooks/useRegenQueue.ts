@@ -22,7 +22,9 @@ export function useRegenQueue(opts: {
   /** Agent ids the backend reports as queued/running/paused. */
   runningAgentIds: Set<string>;
   /** Fire an agent run (fire-and-forget). */
-  runAgent: (agentId: string, phaseId: string) => void;
+  /** Resolves FALSE when a guard refused to dispatch. The queue must drop such an
+   *  item rather than wait for a "running" that will never come. */
+  runAgent: (agentId: string, phaseId: string) => void | Promise<boolean | void>;
   /** Position of an agent in the methodology's generate order — lower runs first. */
   orderIndex: (agentId: string) => number;
 }) {
@@ -64,9 +66,20 @@ export function useRegenQueue(opts: {
     if (!queue.length || runningAgentIds.size > 0 || dispatching.current) return;
     const next = queue[0];
     dispatching.current = true;
-    runAgent(next.agentId, next.phaseId);
-    // Fallback: if the run never registers as running, release the guard so the
-    // queue can't wedge permanently.
+    // A REFUSED DISPATCH LEAVES THE QUEUE. An item only used to come off when the
+    // backend reported it RUNNING — so when a guard turned the run away (not signed
+    // in, read-only, AI not connected) it never started, never left, and the 8-second
+    // fallback below re-dispatched it every 8 seconds for ever. The status bar read
+    // "Regenerating N artifacts" permanently and the tiles read "rebuilding…".
+    // Reported against Experience Design and Agentify.
+    const drop = () => setQueue((c) => c.filter((q) => q.agentId !== next.agentId));
+    void Promise.resolve(runAgent(next.agentId, next.phaseId))
+      .then((dispatched) => { if (dispatched === false) drop(); })
+      .catch(drop)                       // threw before starting — same rule
+      .finally(() => { dispatching.current = false; });
+    // Fallback: if the run never registers as running AND never resolved, release the
+    // guard so the queue can't wedge. It re-triggers this effect, which is correct for
+    // a slow start and harmless for a refusal, which has already been dropped.
     const t = window.setTimeout(() => { dispatching.current = false; setQueue((c) => [...c]); }, 8000);
     return () => window.clearTimeout(t);
   }, [queue, runningAgentIds, runAgent]);

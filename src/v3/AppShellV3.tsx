@@ -1335,9 +1335,13 @@ export default function AppShellV3() {
   // Single shared run-agent handler for every surface (Cycle 7 dedup). Surfaces
   // may pass an explicit phaseId; otherwise we fall back to the active phase,
   // then the "program"-level bucket.
+  // RETURNS the promise rather than voiding it. `runProgramAgent` resolves false when
+  // a guard refused to dispatch, and this is the wrapper the regen QUEUE runs through
+  // — with the answer thrown away, a refused item never left the queue and the
+  // processor re-dispatched it every 8 seconds for ever. See useRegenQueue.
   const handleRunAgent = useCallback(
     (agentId: string, phaseId?: string, guidance?: string) =>
-      void runProgramAgent({
+      runProgramAgent({
         agentId,
         phaseId: phaseId || activePhaseId || "program",
         triggeredBy: "user",
