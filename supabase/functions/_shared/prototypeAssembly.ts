@@ -106,6 +106,39 @@ export function curatedNavigation(
   return [...new Set((chosen ?? []).map((n) => n.trim()).filter((n) => n && set.has(n)))];
 }
 
+/**
+ * THE OPERATOR'S CHOICE, READ OFF THE EXPERIENCE DESIGN — the one definition,
+ * reached from both runtimes.
+ *
+ * The operator answers "which entities get a parent screen?" once, in Experience
+ * Design, and `parentEntities` is the whole of that answer. Every surface that
+ * assembles a prototype must read it the same way or they assemble different
+ * applications: the studio's preview, the stakeholder's link, and the build the
+ * refine agent is handed as its baseline. It lives here — in the module the
+ * choice is spent in, importable from Deno by path and from the client by alias —
+ * so there is no second reading to keep in step.
+ *
+ * Order matters: it IS the menu order, so a stored choice keeps its order. The
+ * fallback reads the legacy `screens` array's entities, so a document authored in
+ * the old screen designer still names its navigation.
+ */
+export function parentEntitiesFor(doc: unknown): string[] {
+  const d = (typeof doc === "object" && doc !== null && !Array.isArray(doc)) ? doc as Record<string, unknown> : {};
+  const text = (v: unknown) => (typeof v === "string" ? v : v == null ? "" : String(v));
+  const chosen = (Array.isArray(d.parentEntities) ? d.parentEntities : []).map((v) => text(v).trim()).filter(Boolean);
+  if (chosen.length) return [...new Set(chosen)];
+  const legacy: string[] = [];
+  for (const screen of (Array.isArray(d.screens) ? d.screens : [])) {
+    if (typeof screen !== "object" || screen === null) continue;
+    const entities = (screen as Record<string, unknown>).entities;
+    for (const e of (Array.isArray(entities) ? entities : [])) {
+      const t = text(e).trim();
+      if (t && !legacy.includes(t)) legacy.push(t);
+    }
+  }
+  return legacy;
+}
+
 export function assemblePrototype(ontology: Record<string, unknown>, atlas: Record<string, unknown>, parentEntities?: readonly string[]): AssembledPrototype {
   const fabric = deriveFabric(ontology, atlas);
   const roles = deriveRoles(ontology);

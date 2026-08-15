@@ -20,9 +20,10 @@
 import { useMemo } from "react";
 import type { ProgramSummary } from "@/new/types";
 import {
-  asArray, asRecord, asText, asStrings, useStudioLocked, Section, EmptyState, type StudioProps,
+  asArray, asRecord, asText, useStudioLocked, Section, EmptyState, type StudioProps,
 } from "./StudioKit";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
+import { parentEntitiesFor } from "@shared/prototypeAssembly.ts";
 
 /** One entity as this surface needs it: what it is, and what hangs off it. */
 export interface EntityChoice {
@@ -45,14 +46,12 @@ export interface EntityChoice {
  * array's entities, so a document authored in the old designer still has navigation.
  */
 export function experienceParentEntities(doc: Record<string, unknown> | null | undefined): string[] {
-  const d = asRecord(doc);
-  const chosen = asStrings(d.parentEntities).map((s) => s.trim()).filter(Boolean);
-  if (chosen.length) return [...new Set(chosen)];
-  const legacy: string[] = [];
-  for (const screen of asArray(d.screens).map(asRecord)) {
-    for (const e of asStrings(screen.entities)) { const t = e.trim(); if (t && !legacy.includes(t)) legacy.push(t); }
-  }
-  return legacy;
+  // Delegated, not duplicated. The edge assembles the same prototype (the
+  // stakeholder's link, and the baseline the refine agent restyles) and cannot
+  // import from `src/v3`, so the reading lives in the shared assembly module and
+  // both runtimes call it. A second copy here is how the studio's menu and the
+  // built application would quietly stop agreeing.
+  return parentEntitiesFor(doc);
 }
 
 /** Every entity the ontology holds, with its relations resolved both ways. */
