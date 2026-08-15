@@ -971,7 +971,12 @@ export function gateChecklist(program: ProgramSummary, movement: PhaseDefinition
     // existing is not a person approving.
     items.push(
       { id: "design", label: "Experience design on record", done: Boolean(inner.experienceDesign), why: inner.experienceDesign ? "screens + flows on record" : undefined },
-      { id: "prototype-built", label: "Prototype built and ready to show", done: Boolean(inner.prototypeBuild || inner.prototypePack), why: (inner.prototypeBuild || inner.prototypePack) ? "runnable prototype assembled from the design" : undefined },
+      // A SPECIFICATION IS NOT A BUILD. This accepted either, so a programme holding
+      // only `prototypePack` — scaffold, slices, stubbing, a document telling somebody
+      // how to build it — ticked "Prototype built and ready to show" with nothing to
+      // show. The pack was retired 2026-08-15; the honest consequence is that such a
+      // programme now reads as not-built, which it is.
+      { id: "prototype-built", label: "Prototype built and ready to show", done: Boolean(inner.prototypeBuild), why: inner.prototypeBuild ? "runnable prototype assembled from the design" : undefined },
     );
   } else if (movement.id === "show") {
     const tour = demoAcceptance(program);

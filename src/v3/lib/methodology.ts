@@ -1354,10 +1354,18 @@ export const ATOS_FLOW: MethodologyDefinition = {
       id: "envision",
       displayName: "Envision",
       description: "The delivery team's build studio: from the Atlas, candidate architectures with trade-offs; one steering conversation picks the direction; the team designs the experience, compiles the Agentic Blueprint, and BUILDS a clickable prototype. Clients validate it in Show.",
-      requiredArtifacts: ["architecture-strategy", "experience-design", "agentic-blueprint", "prototype-pack", "prototype-build"],
+      // `prototype-pack` RETIRED 2026-08-15. It was a SPECIFICATION — scaffold,
+      // build slices, seed scenarios, stubbing — telling somebody how to build what
+      // `assemblePrototype` already builds deterministically from the ontology, the
+      // atlas and the operator's parent-screen choices. Two artifacts described the
+      // same thing (they even shared a label, "The working build"), and only one of
+      // them was the working build. Nothing is deleted: a programme that HAS a pack
+      // keeps the document and its studio still opens it — this movement simply no
+      // longer requires or generates one.
+      requiredArtifacts: ["architecture-strategy", "experience-design", "agentic-blueprint", "prototype-build"],
       mandatoryExitCriteriaTemplates: ["Architecture direction chosen", "Agentic blueprint accepted", "Prototype built"],
       entryGuards: ["Current-State Atlas synthesised"],
-      recommendedAgents: ["architecture-strategy", "experience-design", "agentic-blueprint", "prototype-pack", "prototype-build"],
+      recommendedAgents: ["architecture-strategy", "experience-design", "agentic-blueprint", "prototype-build"],
       typicalDurationWeeks: { min: 1, max: 2 },
       dynamicSchema: true,
       movement: {

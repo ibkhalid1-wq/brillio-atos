@@ -22,10 +22,11 @@
  *
  * Two divergences are intentional and safe, listed explicitly below so a NEW
  * divergence fails while these stay green:
- *  - demo-scripts gates on the prototype (a client UX choice: Validation is
- *    where clients meet the BUILT prototype). Stricter than the edge, which can
- *    write demo scripts off the blueprint — stricter can only DELAY the offer,
- *    never offer too early, so it cannot mislead.
+ *  - demo-scripts gates on the BUILT prototype (a client UX choice: Validation is
+ *    where clients meet it). Stricter than the edge, which can write demo scripts
+ *    off the blueprint, and — since `prototype-pack` was retired — off a
+ *    specification too. Stricter can only DELAY the offer, never offer too early,
+ *    so it cannot mislead. The edge dep map is owed the same change.
  *  - runbook / benefits-tracker / optimization-backlog have no edge
  *    UPSTREAM_ARTIFACT_DEPS entry (they route to a generic phase agent); the
  *    Line gates them on the blueprint as a methodological proxy.
@@ -68,7 +69,15 @@ const EDGE_UNMAPPED = new Set(["runbook", "benefits-tracker", "optimization-back
 // Intentional client-stricter gates: { clientArtifactId: the prereq group that
 // diverges }. Safe because stricter only delays the offer. Reviewed here.
 const CLIENT_STRICTER: Record<string, string[]> = {
-  "demo-scripts": ["prototype-build", "prototype-pack"],
+  // 2026-08-15: was ["prototype-build", "prototype-pack"]. `prototype-pack` — a
+  // SPECIFICATION of how to build — was retired from the methodology, so the client
+  // gate now requires the BUILD itself. This widens the divergence rather than
+  // closing it: the edge's UPSTREAM_ARTIFACT_DEPS still lists the pack upstream of
+  // demo-scripts and does NOT list the build, so on the server a demo can still be
+  // written off a specification with nothing built. Stricter on the client can only
+  // delay the offer, never make it too early, so this is safe — and it is debt:
+  // run-agent's dep map should name `prototype-build`, which needs a deploy.
+  "demo-scripts": ["prototype-build"],
 };
 
 const fieldKey = (id: string): string | undefined => FORMAL_ARTIFACT_FIELD_KEYS[id];

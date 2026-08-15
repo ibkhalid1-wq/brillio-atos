@@ -334,6 +334,13 @@ assert on the running board, and put the number in the commit.
   both owners' links.
 - **Redirect.** The action and the referral row still render, but nothing creates one
   any more: reassigning does the same thing in one step.
+- **`prototype-pack`.** Retired from the methodology 2026-08-15 — it was a
+  specification of how to build what `assemblePrototype` already builds. Nothing is
+  deleted: an existing `prototypePack` document still opens in its studio. **Owed:**
+  `run-agent`'s `UPSTREAM_ARTIFACT_DEPS` still lists the pack upstream of
+  `demo-scripts` and does not list `prototype-build`, so the SERVER can still write a
+  demo off a specification. The client gate is stricter (it requires the build), which
+  can only delay an offer — but the edge map needs the same change and a deploy.
 - **`llmReplay`** is delivered and unwired.
 
 ## Operational notes
