@@ -8,12 +8,14 @@
  * mount passed no `onRegenerate`. The only offer was a link to a different page.
  *
  * The subtle half is the in-flight flag, and it is the reason this is a hook rather
- * than a copied five lines. `onRunAgent` is fire-and-forget: nothing resolves, so a
- * naive boolean is a write-only latch that reads "Generating…" for ever. The flag
- * stores the document AS IT WAS at dispatch and clears when that document CHANGES,
- * which is the only observable event meaning the run came back. A run that returns a
- * byte-identical document leaves the flag set until the next change — the honest
- * failure mode, quiet rather than wrong.
+ * than a copied five lines. It clears on THREE signals, in order of authority:
+ * the dispatch was refused (nothing started), the agent left the backend's running
+ * set (it finished), or the document changed (it finished and produced something).
+ *
+ * It used to clear on the last of those alone, and that was wrong in the ordinary
+ * case: a successful regeneration over a stable ontology emits a byte-identical
+ * document, so the tile said "rebuilding…" for ever while the run table read
+ * `complete`. See the effect below.
  */
 import { useEffect, useState } from "react";
 import type { ProgramSummary } from "@/new/types";
@@ -38,27 +40,57 @@ export function useArtifactRegen(
   /** The surface's own way of saying what just happened — a board toast, a row
    *  note, or nothing. The hook never renders. */
   say?: (message: string) => void,
+  /** Agent ids the backend reports as running. THE primary clear signal — see the
+   *  effect below. Optional: without it the hook falls back to document-change
+   *  detection alone, which is what it did before and what was not enough. */
+  runningAgentIds?: ReadonlySet<string>,
 ): ArtifactRegen {
-  const [busy, setBusy] = useState<Record<string, string>>({});
+  /** doc = the document as it was at dispatch; seen = we have observed this agent in
+   *  the backend's running set, so its DISAPPEARANCE means it finished. */
+  const [busy, setBusy] = useState<Record<string, { doc: string; seen: boolean }>>({});
 
+  /**
+   * A RUN THAT FINISHES CLEARS THE LATCH — even when it changed nothing.
+   *
+   * This used to clear on one signal only: the artifact's document CHANGING. That is
+   * true of a regeneration that produces new content and false of one that does not,
+   * and "does not" is the common case on a stable ontology — the agent runs, succeeds,
+   * and emits a byte-identical document. The tile then said "rebuilding…" for ever.
+   * Reported three times (Architecture Strategy, Experience Design, Agentify); the run
+   * table showed every one of them `complete` with no error while the board still
+   * claimed they were building. I had written the old behaviour up as "the honest
+   * failure mode, quiet rather than wrong". It was neither.
+   *
+   * So completion is the primary signal, and it is already on the client:
+   * `runningAgentIds` comes from `adam_agent_runs`. The `seen` flag is what makes it
+   * safe — an agent is not in that set for the moment between dispatch and the backend
+   * registering it, so we only treat ABSENCE as completion once we have seen PRESENCE.
+   * Document change stays as a secondary, for a run so fast the client never observed
+   * it running.
+   */
   useEffect(() => {
     setBusy((current) => {
       const ids = Object.keys(current);
       if (!ids.length) return current;
-      const landed = ids.filter((id) => (artifactDocument(program, id) ?? "") !== current[id]);
-      if (!landed.length) return current;
       const next = { ...current };
-      for (const id of landed) delete next[id];
-      return next;
+      let touched = false;
+      for (const id of ids) {
+        const st = current[id];
+        const running = runningAgentIds?.has(id) ?? false;
+        if (running && !st.seen) { next[id] = { ...st, seen: true }; touched = true; continue; }
+        if (!running && st.seen) { delete next[id]; touched = true; continue; }   // finished
+        if ((artifactDocument(program, id) ?? "") !== st.doc) { delete next[id]; touched = true; }
+      }
+      return touched ? next : current;
     });
-  }, [program]);
+  }, [program, runningAgentIds]);
 
   return {
     regenerate: onRunAgent
       ? (card: ArtifactCardModel) => {
           // Latch FIRST, so the tile answers the click immediately — a rebuild that
           // waits for the whole agent run before acknowledging is a dead button.
-          setBusy((s) => ({ ...s, [card.id]: artifactDocument(program, card.id) ?? "" }));
+          setBusy((s) => ({ ...s, [card.id]: { doc: artifactDocument(program, card.id) ?? "", seen: false } }));
           say?.(`Regenerating ${card.title} from the record — it refreshes when it lands.`);
           // …and UNLATCH if the dispatch was refused. `onRunAgent` resolves false when
           // a guard turned it away (not signed in, read-only, AI not connected). It

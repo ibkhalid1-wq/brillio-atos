@@ -465,11 +465,20 @@ describe("a busy flag that nothing clears is a lie", () => {
   const regen = SRC("useArtifactRegen.ts");
   const line = SRC("TheLine.tsx");
 
-  it("stores the document as it was, and clears when it changes", () => {
+  it("clears on RUN COMPLETION first, and on a document change second", () => {
+    // 2026-08-15: this asserted only the document-change path, and that path alone
+    // was the bug — a successful regeneration over a stable ontology emits a
+    // byte-identical document, so the tile said "rebuilding…" while the run table
+    // read `complete`. Completion is the primary signal now; the diff is the backstop
+    // for a run finishing between two polls.
     // MUTATION: revert to `Record<string, boolean>` with `true` → RED.
-    expect(regen).toContain("useState<Record<string, string>>({})");
+    expect(regen).toContain("useState<Record<string, { doc: string; seen: boolean }>>({})");
     expect(regen).toContain("artifactDocument(program, card.id) ?? \"\"");
-    expect(regen).toContain('(artifactDocument(program, id) ?? "") !== current[id]');
+    expect(regen, "the completion signal is gone").toContain("if (!running && st.seen)");
+    expect(regen, "the document-change backstop is gone")
+      .toContain('(artifactDocument(program, id) ?? "") !== st.doc');
+    // `seen` is what makes absence mean "finished" rather than "not started yet".
+    expect(regen).toContain("if (running && !st.seen)");
   });
 
   it("children still receive booleans — the snapshot is bookkeeping, not their business", () => {
