@@ -38,16 +38,20 @@ const STATION_SECTIONS: Record<string, Array<{ key: string; label: string; count
   "architecture-strategy": [
     { key: "candidates", label: "options", count: true }, { key: "recommendation", label: "choice" },
   ],
+  // A TILE'S PILLS SHOULD SAY WHAT ITS SURFACE SAYS. These listed the sections each
+  // studio used to author, and both studios changed underneath them: Experience
+  // Design advertised "12 screens · 11 flows · 2 state machines" for editors that no
+  // longer exist, and the Blueprint printed seven pills of the reference material now
+  // folded behind one door — the same flat sprawl the page was just relieved of.
+  // Each now leads with the decision the surface actually holds.
   "experience-design": [
-    { key: "designIntent", label: "intent" }, { key: "theme", label: "theme" },
-    { key: "screens", label: "screens", count: true }, { key: "flows", label: "flows", count: true },
-    { key: "workflowMachines", label: "state machines", count: true },
+    { key: "parentEntities", label: "parent screens", count: true },
+    { key: "screens", label: "legacy screens", count: true },
   ],
   "agentic-blueprint": [
-    { key: "agents", label: "agents", count: true }, { key: "journeys", label: "journeys", count: true },
-    { key: "orchestration", label: "orchestration" }, { key: "dataContracts", label: "data contracts", count: true },
-    { key: "hitlPoints", label: "HITL points", count: true }, { key: "evalPlan", label: "evals" },
-    { key: "buildSequence", label: "build order" },
+    { key: "agents", label: "agents", count: true },
+    { key: "hitlPoints", label: "gated by a human", count: true },
+    { key: "buildSequence", label: "build slices", count: true },
   ],
   "prototype-build": [{ key: "screens", label: "screens", count: true }],
 };
@@ -297,7 +301,14 @@ export function buildLineModel(program: ProgramSummary): LineModel {
   const onto = card("domain-ontology");
   const atlas = card("current-state-atlas");
   const agentify = card("agentify");
-  const proto = card("prototype-build")?.present ? card("prototype-build") : card("prototype-pack");
+  // The fallback to `prototype-pack` died with the pack (2026-08-15). It existed to
+  // show a specification when no build existed — and once the pack left the movement
+  // its card stopped existing too, so `proto` became undefined, the station had NO
+  // CARD, and `canGenerate` (which requires one) read false. The tile then said
+  // "upstream not ready" on a programme whose upstream was entirely ready: the
+  // Agentic Blueprint is present, the build simply has not been made. Reported from
+  // the board as "Prototype — not built yet · upstream not ready".
+  const proto = card("prototype-build");
   const demoCard = card("demo-scripts");
 
   const frameGate = gateItems(program, "frame");
