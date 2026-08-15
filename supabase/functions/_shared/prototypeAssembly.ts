@@ -12,7 +12,7 @@
  */
 import { deriveFabric, type Fabric } from "./fabric.ts";
 import { deriveRoles, type ValueRole } from "./semanticRoles.ts";
-import { generateSeed, type SeedRecord } from "./seedData.ts";
+import { generateSeed, type SeedAssumption, type SeedRecord } from "./seedData.ts";
 import { meridianStylesheet } from "./prototypeDesignSystem.ts";
 
 const esc = (s: unknown) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
@@ -163,6 +163,51 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
   };
   const headFor = (name: string, c: string) => (c === "_display" ? name : humanizeField(c));
 
+  /**
+   * WHICH DECLARED ASSUMPTION PRODUCED THIS HOLE.
+   *
+   * `generateSeed` already writes down every cardinality and optionality it had
+   * to guess, each with the Listen question that settles it. The assumption is
+   * addressed by its relation PAIR, not by rebuilding the prose subject line —
+   * a lookup keyed on a rendered sentence is the string-guess this codebase has
+   * already had to rescue the join key from.
+   *
+   * An entity with no relation at all still declares itself (`orphan-entity`),
+   * which is the right citation for a whole list that came out empty.
+   */
+  const assumptionFor = (parent: string | undefined, entity: string): SeedAssumption | undefined => {
+    const forPair = seed.assumptions.filter((a) => a.pair && a.pair[0] === parent && a.pair[1] === entity);
+    // The fan-out is the one that decided HOW MANY, so it is the one that
+    // explains a zero; optionality is the fallback when the relation declared
+    // no fan-out at all (a 1:1, or an undeclared cardinality).
+    return forPair.find((a) => a.kind === "fan-out") ?? forPair[0]
+      ?? seed.assumptions.find((a) => a.kind === "orphan-entity" && a.subject === entity);
+  };
+
+  /**
+   * AN EMPTY STATE THAT TEACHES. "No X yet" is the weakest state a screen has,
+   * and the generator was throwing away the one thing that makes it useful: the
+   * zero is not a finding, it is a guess the seeder declared out loud. So the
+   * assumption is printed with the hole, and the Listen question with it — a
+   * miss stays visible, and the emptiest section on the page becomes the one
+   * that collects evidence.
+   *
+   * When nothing in the run accounts for the gap, THAT is what it says. Silence
+   * about a missing assumption would be the same defect one level up.
+   */
+  const emptyState = (title: string, a: SeedAssumption | undefined): string =>
+    `<div class="m-empty"><div class="m-empty-t">${esc(title)}</div><div class="m-assumed">`
+    + (a
+      ? `<span class="m-assumed-k">Assumed</span> ${esc(a.assumed)} — one of this run's declared assumptions.`
+        + `<span class="m-assumed-q">${esc(a.listenQuestion)} Confirm in Listen.</span>`
+      : `<span class="m-assumed-k">Undeclared</span> no assumption in this run accounts for the gap.`
+        + `<span class="m-assumed-q">Why is there nothing here? Confirm in Listen.</span>`)
+    + `</div></div>`;
+
+  /** The parent the seeder actually fanned this entity out from — its first
+   *  relation edge, read off the graph rather than guessed from a name. */
+  const seedParentOf = (name: string) => graph.edges.find((e) => e.child === name)?.parent;
+
   /** One row of an entity's table — the same cell rules wherever it appears. */
   const rowCells = (name: string, cols: string[], r: Record<string, unknown>, s: string, withAction: boolean): string =>
     cols.map((c, i) => i === 0
@@ -183,7 +228,7 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
     const table = rows.length
       ? `<div class="m-table-wrap"><table class="m-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`
         + `<div class="m-pagination"><span>1–${Math.min(24, rows.length)} of ${rows.length}</span><span style="display:flex;gap:8px"><button class="m-btn m-btn--secondary">Prev</button><button class="m-btn m-btn--secondary">Next</button></span></div></div>`
-      : `<div class="m-card"><div class="m-empty"><div class="m-empty-t">No ${esc(name)} records yet</div>Create the first one to get started.</div></div>`;
+      : `<div class="m-card">${emptyState(`No ${name} records yet`, assumptionFor(seedParentOf(name), name))}</div>`;
     return `<section class="m-screen" data-screen="list-${s}" hidden>
       <header class="m-page-h"><div><div class="m-eyebrow">${esc(name)}</div><h1 class="m-title">${esc(name)}</h1><p class="m-sub">${rows.length} record${rows.length === 1 ? "" : "s"} · synthetic seed data</p></div>
       <div style="display:flex;gap:10px"><button class="m-btn m-btn--secondary">Filter</button><button class="m-btn m-btn--primary" onclick="show('form-${s}')">New ${esc(name)}</button></div></header>
@@ -239,7 +284,7 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
     // A collection is now a real table headed the way that entity's own list
     // screen heads it (`leadColumnsFor`, the one definition), so the prototype
     // says what the ontology said.
-    const children = childRegions.map((n) => {
+    const renderChild = (n: (typeof childRegions)[number]): string => {
       const childName = childNameOf(n);
       if (!childName) return region(n.id, "");
       const cs = es.get(childName)!;
@@ -260,7 +305,7 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
         // state says so rather than presenting the guess as a finding.
         const chips = shownRows.length
           ? `<div class="m-chips">${shownRows.map((c) => `<span class="m-chip">${esc(displayNameOf(childName, c))}</span>`).join("")}</div>`
-          : `<div class="m-empty"><div class="m-empty-t">No ${esc(childName)} linked</div>Membership is synthetic and its fan-out assumed — see the run's assumptions.</div>`;
+          : emptyState(`No ${childName} linked`, assumptionFor(name, childName));
         return region(n.id, `<section class="m-card" style="margin-top:16px">${head}${chips}</section>`);
       }
       // `collection` (1:N, and the default for an undeclared cardinality).
@@ -271,9 +316,40 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
           + (all.length > shownRows.length
             ? `<div class="m-card-f"><button class="m-btn m-btn--secondary m-btn--sm" onclick="show('list-${cs}')">View all ${all.length} ${esc(childName)} →</button></div>`
             : "")
-        : `<div class="m-empty"><div class="m-empty-t">No ${esc(childName)} yet</div></div>`;
+        : emptyState(`No ${childName} yet`, assumptionFor(name, childName));
       return region(n.id, `<section class="m-card" style="margin-top:16px">${head}${table}</section>`);
-    }).join("");
+    };
+
+    // THE PAGE HAS A BUDGET. A detail page carried thirteen child sections on a
+    // reviewed CRM build — past roughly five it is a wall, and the relation that
+    // matters is somewhere in it. So the sections are ORDERED by how much of the
+    // ontology hangs off each child (`subtreeSize`, already on the graph node —
+    // a child that owns half the model outranks a leaf), and only the leading
+    // few stand open.
+    //
+    // The rest are COLLAPSED, NEVER DROPPED: they stay in the document, still
+    // carrying their `data-fabric-id`, so the fabric→DOM fidelity guard finds
+    // every node and a delta still resolves to the region it touches. Dropping
+    // them would trade one honest wall for a silent omission, which is the
+    // failure this whole track exists to stop.
+    //
+    // Ties break on fan-in and then on ontology order — never on array position,
+    // so the same ontology always opens the same sections.
+    const CHILD_SECTIONS_OPEN = 5;
+    const weightOf = (n: (typeof childRegions)[number]): [number, number, number] => {
+      const cn = childNameOf(n);
+      const g = cn ? graph.byName[cn] : undefined;
+      return [-(g?.subtreeSize ?? 1), -(g?.fanIn ?? 0), cn ? graph.entities.indexOf(cn) : Number.MAX_SAFE_INTEGER];
+    };
+    const byWeight = [...childRegions].sort((a, b) => {
+      const [as, af, ai] = weightOf(a); const [bs, bf, bi] = weightOf(b);
+      return as - bs || af - bf || ai - bi;
+    });
+    const open = byWeight.slice(0, CHILD_SECTIONS_OPEN).map(renderChild).join("");
+    const rest = byWeight.slice(CHILD_SECTIONS_OPEN);
+    const children = open + (rest.length
+      ? `<details class="m-more"><summary>+${rest.length} more related</summary>${rest.map(renderChild).join("")}</details>`
+      : "");
 
     // THE PARENT REFERENCES — an N:1 must produce a LINK.
     //

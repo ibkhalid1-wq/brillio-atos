@@ -28,6 +28,19 @@ export interface SeedAssumption {
   subject: string;
   assumed: string;
   listenQuestion: string;
+  /**
+   * WHICH RELATION THIS ASSUMPTION IS ABOUT, as the pair of entity names in the
+   * graph's normalised direction — present on every assumption a relation
+   * produced, absent on the ones about a single entity.
+   *
+   * `subject` is prose for a person to read (`"Account → Escalation"`,
+   * `"Campaign↔Account"`, and the optionality one carries the cardinality in
+   * brackets as well). A consumer that wants to show a record's empty section
+   * the assumption that produced it would have to rebuild that sentence and
+   * hope it matches — the same string-guessed lookup the join key already had
+   * to be rescued from. The pair is the address; the sentence stays prose.
+   */
+  pair?: [string, string];
 }
 /**
  * ONE LINK of a many-to-many. A junction owns no FK on either side, so its rows
@@ -139,9 +152,9 @@ export function generateSeed(ontology: Record<string, unknown>, version: string,
   for (const e of edges) {
     const { parent, child, cardinality: card, relation: verb } = e;
     // optionality is absent on every relation — assume child-optional/parent-optional
-    assumptions.push({ kind: "optionality", subject: `${parent} → ${child} [${card}]`, assumed: "child-optional, parent-optional (default)", listenQuestion: `Must every ${child} have a ${parent}? Can a ${parent} have zero ${child}?` });
-    if (card.endsWith(":N")) assumptions.push({ kind: "fan-out", subject: `${parent} → ${child}`, assumed: `0–${maxFanOut} per ${parent}`, listenQuestion: `Realistic count of ${child} per ${parent}?` });
-    if (verb && verb.toLowerCase() === "produces") assumptions.push({ kind: "relation-verb", subject: `${parent} → ${child}`, assumed: 'generic verb "produces" treated as parent→child FK', listenQuestion: `Is ${parent}→${child} a composition, a reference, or a lifecycle transition?` });
+    assumptions.push({ kind: "optionality", subject: `${parent} → ${child} [${card}]`, pair: [parent, child], assumed: "child-optional, parent-optional (default)", listenQuestion: `Must every ${child} have a ${parent}? Can a ${parent} have zero ${child}?` });
+    if (card.endsWith(":N")) assumptions.push({ kind: "fan-out", subject: `${parent} → ${child}`, pair: [parent, child], assumed: `0–${maxFanOut} per ${parent}`, listenQuestion: `Realistic count of ${child} per ${parent}?` });
+    if (verb && verb.toLowerCase() === "produces") assumptions.push({ kind: "relation-verb", subject: `${parent} → ${child}`, pair: [parent, child], assumed: 'generic verb "produces" treated as parent→child FK', listenQuestion: `Is ${parent}→${child} a composition, a reference, or a lifecycle transition?` });
   }
   // An entity with NO name-like attribute has no way to introduce one of its
   // records to a person: the display name gets taken from whichever attribute
@@ -273,7 +286,7 @@ export function generateSeed(ontology: Record<string, unknown>, version: string,
     junctionLinks[key] = links;
     // The assumption now says what WAS generated — the miss it used to declare
     // no longer exists, and the fan-out it guessed at is still a Listen question.
-    assumptions.push({ kind: "fan-out", subject: `${j.from}↔${j.to}`,
+    assumptions.push({ kind: "fan-out", subject: `${j.from}↔${j.to}`, pair: [j.from, j.to],
       assumed: `synthetic membership: 0–${perRow} ${j.to} per ${j.from} (${links.length} link${links.length === 1 ? "" : "s"})`,
       listenQuestion: `Is ${j.from}↔${j.to} a true many-to-many needing a join table, and how many ${j.to} does a ${j.from} really carry?` });
   }
