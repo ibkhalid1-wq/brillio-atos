@@ -32,7 +32,11 @@ const SECTION_COPILOT_LABEL: Record<string, string> = {
 };
 const SECTION_COPILOT_PLACEHOLDER: Record<string, string> = {
   "architecture-strategy": "e.g. “add a resilience-first option”, “score cost lower on the hub”, “tighten the recommendation rationale”",
-  "experience-design": "e.g. “add a bulk-approve screen”, “make the theme warmer”, “mark the pricing step to agentify”",
+  // Three examples, none of which this surface can do any more: it stopped authoring
+  // screens and the theme when it became the parent-entity decision, and the
+  // agentify call was never its to make. A placeholder is an offer — these offered
+  // work the studio would silently ignore. Same staleness the tile's pills carried.
+  "experience-design": "e.g. “give Contract its own screen”, “Territory belongs under Account, not in the menu”, “put Opportunity first”",
   "agentic-blueprint": "e.g. “add a human-in-the-loop gate before contract send”, “split the pricing agent in two”",
 };
 /**

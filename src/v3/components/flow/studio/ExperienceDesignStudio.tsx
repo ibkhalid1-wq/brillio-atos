@@ -107,6 +107,15 @@ export default function ExperienceDesignStudio({ doc, onChange, program }: Studi
   // and one that is only ever a child usually belongs inside its parent's detail.
   const suggested = (e: EntityChoice) => !e.parents.length && e.related.length > 0;
 
+  /** The entities that will appear INSIDE this one's detail: the ones it owns which
+   *  do not have a screen of their own. Recomputed per render off `chosenSet`, so
+   *  toggling a child moves it out of its parent's list in the same click. */
+  const byName = new Map(entities.map((x) => [x.name, x] as const));
+  const childrenOf = (e: EntityChoice): string[] =>
+    entities.filter((x) => x.parents.includes(e.name) && !chosenSet.has(x.name)).map((x) => x.name)
+      .concat(e.related.filter((r) => !chosenSet.has(r) && !byName.get(r)?.parents.includes(e.name)))
+      .filter((n, i, a) => a.indexOf(n) === i).sort();
+
   return (
     <div className="v3ed">
       <Section label="Parent screens"
@@ -140,6 +149,21 @@ export default function ExperienceDesignStudio({ doc, onChange, program }: Studi
                     {e.related.length ? <> · shows <b>{e.related.length}</b> related: {e.related.slice(0, 4).join(", ")}{e.related.length > 4 ? ` +${e.related.length - 4}` : ""}</> : <> · no related entities</>}
                     {e.parents.length ? <> · sits under {e.parents.slice(0, 3).join(", ")}</> : null}
                   </span>
+                  {/* WHAT ACTUALLY LANDS INSIDE THIS SCREEN. `related` is everything
+                      this entity points at; the ones that get their OWN menu item are
+                      not inside it, they are beside it. So the list an operator needs
+                      is the children that are NOT parent screens — those are the ones
+                      that appear in this detail page and nowhere else. Toggling a
+                      child ON moves it out of this list and into the menu, which is
+                      the trade the whole surface exists to make visible. */}
+                  {on && childrenOf(e).length ? (
+                    <span className="v3ed-children">
+                      <span className="v3ed-children-k">inside it</span>
+                      {childrenOf(e).join(" · ")}
+                    </span>
+                  ) : on ? (
+                    <span className="v3ed-children"><span className="v3ed-children-k">inside it</span>nothing — every entity it owns has its own screen</span>
+                  ) : null}
                 </span>
               </li>
             );

@@ -12,6 +12,8 @@
  * item is the whole feature failing quietly.
  */
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { experienceParentEntities, readEntityChoices } from "@/v3/components/flow/studio/ExperienceDesignStudio";
 import { navigationFor } from "@shared/prototypeAssembly.ts";
 
@@ -114,5 +116,24 @@ describe("the menu the prototype builds", () => {
   it("falls back rather than returning an empty menu when every choice is stale", () => {
     // The alternative is a prototype with no navigation at all.
     expect(navigationFor(["Retired", "Gone"], DERIVED, KNOWN)).toEqual(DERIVED);
+  });
+});
+
+describe("the surface does not offer work it cannot do", () => {
+  it("the Copilot examples name the decision this studio actually holds", () => {
+    // It suggested "add a bulk-approve screen", "make the theme warmer" and "mark the
+    // pricing step to agentify" — screens and theme were removed with the designer,
+    // and the agentify call was never this surface's to make. A placeholder is an
+    // offer; these offered work the studio would silently ignore.
+    const src = readFileSync(resolve(__dirname, "../components/flow/studio/FlowArtifactStudio.tsx"), "utf8");
+    const line = src.split("\n").find((l) => l.includes('"experience-design": "e.g.')) ?? "";
+    expect(line, "the placeholder is gone — move or drop this guard").toBeTruthy();
+    for (const dead of ["screen”", "theme", "agentify"]) {
+      // "screen" alone is fine — "its own screen" is exactly the decision. The DEAD
+      // phrasings are the ones naming the removed editors.
+      if (dead === "screen”") continue;
+      expect(line, `the placeholder still offers ${dead}`).not.toContain(dead);
+    }
+    expect(line, "it should name entities, which is what the toggles are about").toMatch(/menu|screen/);
   });
 });
