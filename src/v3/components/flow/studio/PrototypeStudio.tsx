@@ -115,7 +115,11 @@ export default function PrototypeStudio({ doc, onChange, program, onRefineProtot
             labels that did nothing. Navigation lives inside the running prototype. */}
         <div className="v3fs-proto-modes" role="group" aria-label="Prototype mode">
           <button type="button" className={mode === "preview" ? "on" : ""} onClick={() => setMode("preview")}>▶ Run it</button>
-          {html ? <button type="button" className={mode === "edit" ? "on" : ""} onClick={() => setMode("edit")}>✎ Experience Designer</button> : null}
+          {/* NOT the Experience Design surface. This edits the built prototype's HTML
+              in place; Experience Design is the entity → parent-screen decision, a
+              different artifact entirely. The label collided from the day that studio
+              was rewritten, and an operator clicking it here expected the toggles. */}
+          {html ? <button type="button" className={mode === "edit" ? "on" : ""} title="Edit this build's screens and markup in place — the assembled prototype is regenerated, so edits belong on the refined build" onClick={() => setMode("edit")}>✎ Edit this build</button> : null}
           {/* Fabric vs refined build — the fabric assembly is the deterministic
               default (0 model tokens for structure); the model-refined build is
               the layer on top, reachable when it exists. */}
@@ -123,6 +127,16 @@ export default function PrototypeStudio({ doc, onChange, program, onRefineProtot
             <button type="button" className={effectiveView === "fabric" ? "on" : ""} title="Deterministic assembly from the ontology + atlas — fabric → semantic roles → Meridian → seed data" onClick={() => { setView("fabric"); setMode("preview"); }}>◇ Assembled (fabric)</button>
             <button type="button" className={effectiveView === "build" ? "on" : ""} title="The model-refined build stored on the record — an internal working layer. Stakeholders on a Show link always get the assembled (fabric) prototype; this one never leaves the app." onClick={() => setView("build")}>✦ Refined build</button>
           </>) : null}
+          {/* TAKE IT ELSEWHERE — one door over four transfer controls.
+              Eight buttons sat in one row at equal weight: three that change what you
+              are LOOKING AT (run it, assembled, refined) and five that move the thing
+              somewhere else. Only the first group is part of reviewing a prototype;
+              the rest are what you do once you have decided. Same treatment as the
+              blueprint's reference sections, for the same reason. */}
+        </div>
+        <details className="v3fs-pt-transfer">
+          <summary>Take it elsewhere — open, download, import</summary>
+          <div className="v3fs-pt-transfer-b">
           {/* Open the running prototype in a real browser tab (its own URL), so it
               can be walked full-screen, shared, or opened on another device. */}
           <button type="button" title="Open the running prototype in a new browser tab" onClick={() => openPrototypeInBrowser(mode === "edit" ? draft : shown)}>↗ Open in browser</button>
@@ -155,7 +169,8 @@ export default function PrototypeStudio({ doc, onChange, program, onRefineProtot
           <input ref={importRef} type="file" accept=".zip,.html,.htm"
             style={{ position: "fixed", top: "-9999px", left: "-9999px", opacity: 0, pointerEvents: "none" }}
             onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void onImportFile(f); }} />
-        </div>
+          </div>
+        </details>
       </div>
 
       {/* Refine & polish command bar — the delivery team refines the build in

@@ -9194,3 +9194,16 @@ body { text-rendering: optimizeLegibility; }
 .v3fs-bp-rest-b{margin-top:12px;display:flex;flex-direction:column;gap:8px}
 .v3ed-children{font-size:11px;color:var(--v3-text-secondary);line-height:1.5;display:flex;gap:7px;flex-wrap:wrap}
 .v3ed-children-k{font-size:9.5px;font-weight:700;letter-spacing:.055em;text-transform:uppercase;color:var(--v3-text-muted)}
+
+/* The prototype's transfer controls, behind one door. They move the thing
+   somewhere else; the buttons beside them change what you are looking at. Only
+   the second group belongs in the review row. */
+.v3fs-pt-transfer{margin-left:auto}
+.v3fs-pt-transfer>summary{cursor:pointer;font-size:11.5px;font-weight:600;color:var(--v3-text-secondary);
+  list-style:none;display:inline-flex;align-items:center;gap:6px;padding:4px 2px}
+.v3fs-pt-transfer>summary::-webkit-details-marker{display:none}
+.v3fs-pt-transfer>summary::before{content:"▸";color:var(--v3-text-muted);font-size:10px}
+.v3fs-pt-transfer[open]>summary::before{content:"▾"}
+.v3fs-pt-transfer>summary:hover{color:var(--v3-text)}
+.v3fs-pt-transfer>summary:focus-visible{outline:2px solid var(--v3-accent-2);outline-offset:3px;border-radius:4px}
+.v3fs-pt-transfer-b{display:flex;flex-wrap:wrap;gap:8px;padding:9px 0 2px}
