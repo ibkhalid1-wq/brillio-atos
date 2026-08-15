@@ -37,7 +37,11 @@ const NOT_IMPLEMENTED = /^not implemented/i;
 
 export function loadPrototype(
   html: string,
-  context: { entities?: readonly string[]; gaps?: readonly string[] } = {},
+  /** `url` is how a DEEP LINK is tested: the assembled build routes off
+   *  `location.hash`, so "opening #account/account-0002 restores that view" can
+   *  only be asked of a document that was loaded AT that address. Setting the
+   *  hash after load exercises the Back button, which is a different claim. */
+  context: { entities?: readonly string[]; gaps?: readonly string[]; url?: string } = {},
 ): LoadedPrototype {
   const consoleErrors: string[] = [];
   const notImplemented: string[] = [];
@@ -58,7 +62,7 @@ export function loadPrototype(
   virtualConsole.on("error", (...args: unknown[]) => record(args.map((a) => String(a)).join(" ")));
 
   const dom = new JSDOM(html, {
-    url: "https://prototype.test/",
+    url: context.url ?? "https://prototype.test/",
     runScripts: "dangerously",   // the page's script is the thing under test
     pretendToBeVisual: true,     // requestAnimationFrame, for pages that use it
     virtualConsole,

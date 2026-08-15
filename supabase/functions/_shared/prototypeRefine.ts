@@ -61,8 +61,24 @@ export interface PrototypeBaseline {
  * 60KB), and a document the model cannot finish comes back truncated, which
  * fails the post-condition and wastes the whole run. Below this the model gets
  * the document; above it, the stylesheet alone.
+ *
+ * WHY THIS MOVED FROM 40,000. The assembled document is no longer markup with
+ * values baked into it: it carries a stylesheet AND a client renderer that
+ * together are a fixed ~29KB floor before a single entity is added, because the
+ * prototype is now a working application rather than pictures of one. At 40,000
+ * even a TWO-ENTITY build (47KB) fell over the line, so the threshold had
+ * stopped being a threshold — every build took the stylesheet path and document
+ * mode was dead code. The ceiling itself has not moved; this sits under it with
+ * less room than before, and the failure mode is unchanged and safe: a
+ * truncated answer fails the post-condition and the assembled build is kept.
+ *
+ * The right fix is smaller than this number: the renderer and the data island
+ * are exactly the two things the contract FORBIDS the model to change, so
+ * neither needs to be in the document it is asked to return. Eliding them on
+ * the way out and restoring them on the way back would take ~17KB off both
+ * sides and make the guarantee structural instead of asked-for.
  */
-export const DOCUMENT_REFINE_BUDGET = 40_000;
+export const DOCUMENT_REFINE_BUDGET = 52_000;
 
 const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);

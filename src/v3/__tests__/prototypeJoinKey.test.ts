@@ -161,7 +161,11 @@ describe("the parent link resolves through the same key", () => {
     expect(nav, "the fixture stopped producing the parent nav").toBeTruthy();
     const el = regionEl(nav!.id);
     expect(el, "the parent nav renders nothing").toBeTruthy();
-    expect(el!.querySelector("button")?.getAttribute("onclick")).toBe("show('detail-alliance-partner')");
+    // The link goes to THAT PARTNER, not to whichever partner the entity
+    // showcases — so the assertion is the address it carries, with the record
+    // in it, rather than the old screen-level call it used to be pinned to.
+    const onclick = el!.querySelector("button")?.getAttribute("onclick") ?? "";
+    expect(onclick, "the parent link carries no record address").toMatch(/#alliance-partner\/alliance-partner-\d+/);
     const value = el!.querySelector(".m-linkcard-v")?.textContent ?? "";
     expect(value, "the parent link resolved to nothing").not.toBe("—");
     expect(value.length).toBeGreaterThan(0);

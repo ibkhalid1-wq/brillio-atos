@@ -117,7 +117,14 @@ interface EmptyCite { a: string; q: string }
 /** Which columns a table shows: their index in the entity's `cols`, the heading
  *  a person reads, and the semantic role that picks the cell component. */
 interface ColumnSpec { ix: number[]; head: string[]; role: number[] }
-interface ListSpec extends ColumnSpec { region: string; emptyTitle: string; cite: EmptyCite | null }
+interface ListSpec extends ColumnSpec {
+  region: string; emptyTitle: string; cite: EmptyCite | null;
+  /** Column index of the entity's STATUS attribute, -1 when it declares none.
+   *  It is what decides whether this list is offered a board view at all: an
+   *  entity with no status gets no switch, because a board with one nameless
+   *  lane is a zero-value affordance. */
+  status: number;
+}
 interface SummarySpec extends ColumnSpec { region: string; row: number }
 interface NavSpec { region: string; entity: string; slug: string; fk: number }
 interface KidSpec extends ColumnSpec {
@@ -175,6 +182,8 @@ interface PrototypeModel {
   data: Record<string, SeedTable>;
   links: Record<string, Array<[string, string]>>;
   screens: ScreenSpec[];
+  /** The entity slug the application opens on when the URL names none. */
+  first: string;
 }
 
 /**
@@ -190,7 +199,32 @@ interface PrototypeModel {
  * is a difference between the fabric and the DOM — which is what the fidelity
  * guard reads.
  *
- * `Q` is a single quote. The renderer emits `onclick="show('detail-x')"`, and
+ * ── THE CONTROLS EITHER WORK OR THEY ARE NOT THERE ───────────────────────────
+ *
+ * A reviewed CRM build shipped 165 buttons that did nothing: Filter, Prev,
+ * Next, Delete, and a Save that did not even return to the list. "Open" on row
+ * 12 showed row 1, because one static detail per entity was all there was. A
+ * control that is drawn and does nothing is worse than an absent one — it is
+ * the demo asserting a capability the record does not contain, and the client
+ * validating it.
+ *
+ * So the seed is now the application's STATE, not its decoration:
+ *
+ *   - every table row addresses ITS OWN record, and the URL says which one
+ *     (`#account/account-0002`), so a demo moment is linkable and Back works;
+ *   - Filter filters, the column heads sort, Prev/Next page, Save appends or
+ *     updates a visible row and returns to the list, Delete removes with an
+ *     Undo that puts the row back where it was;
+ *   - and where a control still could not work it was REMOVED. The "Filter"
+ *     button that opened nothing is now the filter field itself.
+ *
+ * Mutations are in-memory and per-session: `t.ix` is the live row order, so a
+ * delete is a splice and an append is an unshift, and every region that counts
+ * or lists that entity — child collections on other entities' details included
+ * — reads the same list. The served bytes never move, so the build stays
+ * byte-identical for the same ontology.
+ *
+ * `Q` is a single quote. The renderer emits `onclick="go('#account/…')"`, and
  * spelling that with escapes inside a nested template literal is how a stray
  * backslash silently terminates a string and takes the whole page's script with
  * it.
@@ -215,6 +249,16 @@ function mCell(R,ri,v){
   var el=document.getElementById("m-seed");
   if(!el)return;
   var M=JSON.parse(el.textContent||"{}"),R=M.roles||[],D=M.data||{},L=M.links||{};
+  // 20 rows a page. The seeder gives a root entity 24 rows FOR THIS REASON —
+  // "> page size (20) → a second page" is written into its own defaults — so a
+  // pager set to 24 would put every root table on exactly one page and the
+  // control would be honest and useless at the same time.
+  var SCREENS=M.screens||[],SC={},HOME=M.first||"",PAGE=20,i;
+  for(i=0;i<SCREENS.length;i++)SC[SCREENS[i].slug]=SCREENS[i];
+  // ONE STATE OBJECT PER SCREEN — the page, the filter, the sort, the view, and
+  // which record its detail is showing. Keyed by entity slug, never by index.
+  var S={},FORM={},UNDO=null,HASH="";
+  function st(sl){return S[sl]||(S[sl]={page:0,q:"",view:"table",sort:-1,dir:1,rec:-1})}
   // The three column encodings, undone. A column is decoded once, the first
   // time a region asks for it, and kept — a build with 33 entities renders 99
   // screens off a handful of them.
@@ -223,14 +267,37 @@ function mCell(R,ri,v){
     if(!t.v)t.v=[];
     if(t.v[i])return t.v[i];
     var e=t.c[i],out=[],k;
-    if(Object.prototype.toString.call(e)==="[object Array]")out=e;
+    if(Object.prototype.toString.call(e)==="[object Array]")out=e.slice(0);
     else if(e&&e.p!==undefined){for(k=0;k<e.s.length;k++)out.push(e.p+e.s[k])}
     else if(e){for(k=0;k<e.x.length;k++)out.push(e.u[e.x[k]])}
     t.v[i]=out;
     return out;
   }
-  function at(t,ri,i){var c=col(t,i);return c?c[ri]:null}
+  // THE LIVE ROWS, as physical row indexes. Everything that lists or counts this
+  // entity reads this one array, so a delete on the detail page is also gone
+  // from the list, from the child collection on its parent, and from the count
+  // badge — a record removed in one place and still present in another is the
+  // same lie the dead buttons were.
+  function live(t){if(!t.ix){t.ix=[];for(var k=0;k<t.n;k++)t.ix.push(k)}return t.ix}
+  // A row index at or past the seeded count is one this session ADDED; its
+  // values live in t.add. Physical indexes are never reused, so a delete cannot
+  // renumber the rows a link already points at.
+  function at(t,ri,i){
+    if(i<0||ri<0)return null;
+    if(ri>=t.n){var a=(t.add||[])[ri-t.n];var v=a?a[i]:null;return v===undefined?null:v}
+    var c=col(t,i);return c?c[ri]:null;
+  }
+  function setAt(t,ri,i,v){
+    if(i<0||ri<0)return;
+    if(ri>=t.n){var a=(t.add||[])[ri-t.n];if(a)a[i]=v;return}
+    var c=col(t,i);if(c)c[ri]=v;
+  }
   function nameOf(t,ri){var v=at(t,ri,t.t);if(typeof v==="string"&&v)return v;var d=at(t,ri,t.d);return String(d==null?at(t,ri,0):d)}
+  function rowOf(t,id){var ix=live(t),k;for(k=0;k<ix.length;k++)if(String(at(t,ix[k],0))===String(id))return ix[k];return -1}
+  // A RECORD'S ADDRESS. The id is percent-encoded so it survives both the URL
+  // and the single-quoted JavaScript string the attribute carries it in.
+  function href(sl,id){return "#"+sl+"/"+encodeURIComponent(String(id)).replace(/'/g,"%27")}
+  function act(h){return "go("+Q+h+Q+")"}
   // THE REGIONS, INDEXED ONCE. Written as an attribute-PRESENCE selector and a
   // getAttribute — never as the text of a fabric-id assignment. Every reader of
   // a prototype (the refine post-condition, the region-count guard) harvests
@@ -250,13 +317,21 @@ function mCell(R,ri,v){
         out+='<td><div class="m-cell-main">'+mEsc(lead)+'</div><div class="m-cell-sub">'+mEsc(id)+"</div></td>";
       }else out+="<td>"+mCell(R,spec.role[i],v)+"</td>";
     }
-    if(action)out+='<td class="m-row-actions"><button class="m-btn m-btn--secondary m-btn--sm" onclick="show('+Q+"detail-"+slug+Q+')">Open</button></td>';
+    // OPEN THIS ROW, not the one the entity happens to showcase.
+    if(action)out+='<td class="m-row-actions"><button class="m-btn m-btn--secondary m-btn--sm" onclick="'+act(href(slug,id))+'">Open</button></td>';
     return out;
   }
-  function heads(spec,sortable){
-    var out="";
-    for(var i=0;i<spec.head.length;i++)
-      out+=sortable?'<th class="m-th-sort'+(i===0?" is-desc":"")+'">'+mEsc(spec.head[i])+"</th>":"<th>"+mEsc(spec.head[i])+"</th>";
+  // A column head SORTS. It used to be painted with a descending arrow on the
+  // first column and no handler anywhere — a stated sort order that was not one.
+  function heads(spec,sl){
+    var out="",s=sl?st(sl):null;
+    for(var i=0;i<spec.head.length;i++){
+      var ci=spec.ix[i];
+      if(sl&&ci>=0){
+        var on=s.sort===ci;
+        out+='<th class="m-th-sort'+(on?(s.dir<0?" is-desc":" is-asc"):"")+'" onclick="sortBy('+Q+sl+Q+","+i+')">'+mEsc(spec.head[i])+"</th>";
+      }else out+="<th>"+mEsc(spec.head[i])+"</th>";
+    }
     return out;
   }
   function empty(title,cite){
@@ -268,64 +343,303 @@ function mCell(R,ri,v){
           +'<span class="m-assumed-q">Why is there nothing here? Confirm in Listen.</span>')
       +"</div></div>";
   }
-  function renderList(sc){
-    var t=D[sc.entity],spec=sc.list,total=t?t.n:0;
-    if(!total){fill(spec.region,'<div class="m-card">'+empty(spec.emptyTitle,spec.cite)+"</div>");return}
-    var flagged={};for(var i=0;i<t.f.length;i++)flagged[t.f[i]]=1;
-    var body="",n=total<24?total:24;
-    for(var r=0;r<n;r++)body+="<tr"+(flagged[r]?' class="is-flagged"':"")+">"+cells(t,spec,r,sc.slug,true)+"</tr>";
-    fill(spec.region,'<div class="m-table-wrap"><table class="m-table"><thead><tr>'+heads(spec,true)
-      +'<th style="text-align:right">Actions</th></tr></thead><tbody>'+body+"</tbody></table>"
-      +'<div class="m-pagination"><span>1–'+n+" of "+total+'</span><span style="display:flex;gap:8px">'
-      +'<button class="m-btn m-btn--secondary">Prev</button><button class="m-btn m-btn--secondary">Next</button></span></div></div>');
+  // WHICH ROWS THIS LIST IS SHOWING — the live rows, through the filter, in the
+  // sort order. One definition, so the pager, the board and the footer count
+  // can never disagree about what "these records" means.
+  function rowsFor(sc){
+    var t=D[sc.entity],spec=sc.list,s=st(sc.slug),ix=live(t),out=[],i,j;
+    if(s.q){
+      var qq=s.q.toLowerCase();
+      for(i=0;i<ix.length;i++){
+        var hit=false,idv=at(t,ix[i],0);
+        if(idv!=null&&String(idv).toLowerCase().indexOf(qq)>=0)hit=true;
+        for(j=0;!hit&&j<spec.ix.length;j++){
+          var cv=at(t,ix[i],spec.ix[j]);
+          if(cv!=null&&String(cv).toLowerCase().indexOf(qq)>=0)hit=true;
+        }
+        if(hit)out.push(ix[i]);
+      }
+    }else out=ix.slice(0);
+    if(s.sort>=0){
+      out.sort(function(a,b){
+        var x=at(t,a,s.sort),y=at(t,b,s.sort);
+        if(x==null&&y==null)return 0;
+        if(x==null)return 1;
+        if(y==null)return -1;
+        if(typeof x==="number"&&typeof y==="number")return (x-y)*s.dir;
+        var sx=String(x),sy=String(y);
+        return (sx<sy?-1:sx>sy?1:0)*s.dir;
+      });
+    }
+    return out;
   }
-  function renderNav(nv,st,sri){
-    var t=D[nv.entity];if(!t){fill(nv.region,"");return}
-    var pid=at(st,sri,nv.fk),label="—";
-    if(pid!=null)for(var i=0;i<t.n;i++)if(String(at(t,i,0))===String(pid)){label=nameOf(t,i);break}
-    fill(nv.region,'<button class="m-linkcard" onclick="show('+Q+"detail-"+nv.slug+Q+')">'
-      +'<span class="m-linkcard-k">'+mEsc(nv.entity)+"</span>"
-      +'<span class="m-linkcard-v">'+mEsc(label)+'</span><span class="m-linkcard-go">→</span></button>');
+  function board(sc,rows){
+    var t=D[sc.entity],ci=sc.list.status,order=[],by={},i,v;
+    for(i=0;i<rows.length;i++){
+      v=at(t,rows[i],ci);v=(v==null||v==="")?"Unset":String(v);
+      if(!by[v]){by[v]=[];order.push(v)}
+      by[v].push(rows[i]);
+    }
+    order.sort();
+    var out='<div class="m-board">';
+    for(i=0;i<order.length;i++){
+      var lane=by[order[i]],cards="",k;
+      for(k=0;k<lane.length&&k<12;k++){
+        var id=at(t,lane[k],0);
+        cards+='<button class="m-board-card" onclick="'+act(href(sc.slug,id))+'">'
+          +'<div class="m-cell-main">'+mEsc(nameOf(t,lane[k]))+"</div>"
+          +'<div class="m-cell-sub">'+mEsc(id)+"</div></button>";
+      }
+      if(lane.length>12)cards+='<div class="m-board-more">+'+(lane.length-12)+" more</div>";
+      out+='<div class="m-board-col"><div class="m-board-h"><span>'+mEsc(order[i])+'</span><span class="m-badge">'+lane.length+"</span></div>"+cards+"</div>";
+    }
+    return out+"</div>";
+  }
+  function renderList(sc){
+    var t=D[sc.entity],spec=sc.list,s=st(sc.slug);
+    if(!t||!live(t).length){fill(spec.region,'<div class="m-card">'+empty(spec.emptyTitle,spec.cite)+"</div>");return}
+    var all=live(t),rows=rowsFor(sc),i,r;
+    if(!rows.length){
+      fill(spec.region,'<div class="m-card"><div class="m-empty"><div class="m-empty-t">No '+mEsc(sc.entity)+" matches "+Q+mEsc(s.q)+Q+'</div>'
+        +'<div class="m-assumed">'+all.length+" record"+(all.length===1?"":"s")+' in this build. '
+        +'<button class="m-btn m-btn--secondary m-btn--sm" onclick="setFilter('+Q+sc.slug+Q+","+Q+Q+')">Clear filter</button></div></div></div>');
+      return;
+    }
+    if(s.view==="board"&&spec.status>=0){fill(spec.region,board(sc,rows));return}
+    if(s.page*PAGE>=rows.length)s.page=0;
+    var start=s.page*PAGE,end=start+PAGE;if(end>rows.length)end=rows.length;
+    var flagged={};for(i=0;i<t.f.length;i++)flagged[t.f[i]]=1;
+    var body="";
+    for(r=start;r<end;r++)body+="<tr"+(flagged[rows[r]]?' class="is-flagged"':"")+">"+cells(t,spec,rows[r],sc.slug,true)+"</tr>";
+    fill(spec.region,'<div class="m-table-wrap"><table class="m-table"><thead><tr>'+heads(spec,sc.slug)
+      +'<th style="text-align:right">Actions</th></tr></thead><tbody>'+body+"</tbody></table>"
+      +'<div class="m-pagination"><span>'+(start+1)+"–"+end+" of "+rows.length
+      +(rows.length===all.length?"":" (filtered from "+all.length+")")+'</span><span style="display:flex;gap:8px">'
+      +'<button class="m-btn m-btn--secondary" onclick="pageBy('+Q+sc.slug+Q+',-1)"'+(s.page<=0?" disabled":"")+">Prev</button>"
+      +'<button class="m-btn m-btn--secondary" onclick="pageBy('+Q+sc.slug+Q+',1)"'+(end>=rows.length?" disabled":"")+">Next</button></span></div></div>");
+  }
+  // THE PARENT LINK GOES TO THE PARENT RECORD. It used to name the parent
+  // ENTITY and open whichever record that entity showcases, which on any row
+  // but one is a link to the wrong record.
+  function renderNav(nv,t,sri){
+    var pt=D[nv.entity];if(!pt){fill(nv.region,"");return}
+    var pid=at(t,sri,nv.fk),pri=pid==null?-1:rowOf(pt,pid);
+    var k='<span class="m-linkcard-k">'+mEsc(nv.entity)+"</span>";
+    // WHERE THIS RECORD NAMES NO PARENT, the card says so and still goes
+    // somewhere true: the parent entity's own list. It used to render a button
+    // labelled "—" that opened whichever record that entity showcases — a
+    // control that both stated nothing and went to the wrong place. A
+    // many-to-many reaches here by construction (neither side owns a key), so
+    // this is not an edge case.
+    if(pri<0){
+      fill(nv.region,'<button class="m-linkcard" onclick="go('+Q+"#"+nv.slug+Q+')">'+k
+        +'<span class="m-linkcard-v">— none named; browse '+mEsc(nv.entity)+'</span><span class="m-linkcard-go">→</span></button>');
+      return;
+    }
+    fill(nv.region,'<button class="m-linkcard" onclick="'+act(href(nv.slug,at(pt,pri,0)))+'">'+k
+      +'<span class="m-linkcard-v">'+mEsc(nameOf(pt,pri))+'</span><span class="m-linkcard-go">→</span></button>');
   }
   function renderKid(kd,recId){
     var t=D[kd.entity];if(!t){fill(kd.region,"");return}
-    var all=[],i,r;
+    var all=[],ix=live(t),i,r;
     if(kd.multi){
       var linked={},ls=L[kd.junction]||[];
       for(i=0;i<ls.length;i++)if(ls[i][0]===recId)linked[ls[i][1]]=1;
-      for(r=0;r<t.n;r++)if(linked[String(at(t,r,0))])all.push(r);
+      for(r=0;r<ix.length;r++)if(linked[String(at(t,ix[r],0))])all.push(ix[r]);
     }else if(kd.fk>=0){
-      for(r=0;r<t.n;r++)if(String(at(t,r,kd.fk))===recId)all.push(r);
+      for(r=0;r<ix.length;r++)if(String(at(t,ix[r],kd.fk))===recId)all.push(ix[r]);
     }
     var shown=all.slice(0,5),inner;
     var head='<div class="m-card-h"><div class="m-card-t">'+mEsc(kd.entity)+'</div><span class="m-badge">'+all.length+"</span></div>";
     if(kd.multi){
       if(shown.length){
-        var chips="";for(i=0;i<shown.length;i++)chips+='<span class="m-chip">'+mEsc(nameOf(t,shown[i]))+"</span>";
+        var chips="";
+        for(i=0;i<shown.length;i++)
+          chips+='<button class="m-chip" onclick="'+act(href(kd.slug,at(t,shown[i],0)))+'">'+mEsc(nameOf(t,shown[i]))+"</button>";
         inner='<div class="m-chips">'+chips+"</div>";
       }else inner=empty(kd.emptyTitle,kd.cite);
     }else if(shown.length){
       var body="";for(i=0;i<shown.length;i++)body+="<tr>"+cells(t,kd,shown[i],kd.slug,false)+"</tr>";
-      inner='<div class="m-table-wrap"><table class="m-table"><thead><tr>'+heads(kd,false)+"</tr></thead><tbody>"+body+"</tbody></table></div>"
+      inner='<div class="m-table-wrap"><table class="m-table"><thead><tr>'+heads(kd,"")+"</tr></thead><tbody>"+body+"</tbody></table></div>"
         +(all.length>shown.length
-          ?'<div class="m-card-f"><button class="m-btn m-btn--secondary m-btn--sm" onclick="show('+Q+"list-"+kd.slug+Q+')">View all '+all.length+" "+mEsc(kd.entity)+" →</button></div>"
+          ?'<div class="m-card-f"><button class="m-btn m-btn--secondary m-btn--sm" onclick="go('+Q+"#"+kd.slug+Q+')">View all '+all.length+" "+mEsc(kd.entity)+" →</button></div>"
           :"");
     }else inner=empty(kd.emptyTitle,kd.cite);
     fill(kd.region,'<section class="m-card" style="margin-top:16px">'+head+inner+"</section>");
   }
+  /** WHICH RECORD THIS DETAIL IS SHOWING: the one the URL named, else the
+   *  entity's showcase, else whatever is still there after a delete. */
+  function detailRow(sc){
+    var t=D[sc.entity],ix=live(t),s=st(sc.slug);
+    if(s.rec>=0&&ix.indexOf(s.rec)>=0)return s.rec;
+    var d=sc.detail?sc.detail.summary.row:-1;
+    if(d>=0&&ix.indexOf(d)>=0)return d;
+    return ix.length?ix[0]:-1;
+  }
   function renderDetail(sc){
     var d=sc.detail;if(!d)return;
     var t=D[sc.entity];if(!t)return;
-    var ri=d.summary.row;if(ri<0||ri>=t.n)return;
+    var ri=detailRow(sc);if(ri<0)return;
+    st(sc.slug).rec=ri;
     var dl="",i;
     for(i=0;i<d.summary.ix.length;i++)
       dl+="<div><dt>"+mEsc(d.summary.head[i])+"</dt><dd>"+mCell(R,d.summary.role[i],at(t,ri,d.summary.ix[i]))+"</dd></div>";
     fill(d.summary.region,'<section class="m-card"><div class="m-card-t" style="margin-bottom:14px">Details</div><dl class="m-dl">'+dl+"</dl></section>");
+    // The heading names the record on screen. It was baked once, from the
+    // showcase record, so every other record wore somebody else's name.
+    var nm=nameOf(t,ri),h1=document.querySelector('[data-headline="'+sc.slug+'"]'),cr=document.querySelector('[data-crumb="'+sc.slug+'"]');
+    if(h1)h1.textContent=nm;
+    if(cr)cr.textContent=nm;
     for(i=0;i<d.navs.length;i++)renderNav(d.navs[i],t,ri);
     for(i=0;i<d.kids.length;i++)renderKid(d.kids[i],String(at(t,ri,0)));
   }
-  var screens=M.screens||[];
-  for(var i=0;i<screens.length;i++){renderList(screens[i]);renderDetail(screens[i])}
+  // ── the form: a record in, a record out ────────────────────────────────────
+  function formHost(sl){return document.querySelector('[data-form="'+sl+'"]')}
+  function renderForm(sc,ri){
+    var sl=sc.slug,t=D[sc.entity],host=formHost(sl);
+    FORM[sl]=ri;
+    if(!host)return;
+    var ctrls=host.querySelectorAll("[data-f]"),i;
+    for(i=0;i<ctrls.length;i++){
+      var c=ctrls[i],ci=t?t.cols.indexOf(c.getAttribute("data-f")):-1;
+      var v=ri>=0&&t?at(t,ri,ci):null;
+      if(c.type==="checkbox")c.checked=!!v;else c.value=v==null?"":String(v);
+    }
+    var ttl=document.querySelector('[data-form-title="'+sl+'"]'),cb=document.querySelector('[data-form-crumb="'+sl+'"]');
+    var nm=ri>=0&&t?nameOf(t,ri):"";
+    if(ttl)ttl.textContent=ri>=0?"Edit "+nm:"New "+sc.entity;
+    if(cb)cb.textContent=ri>=0?nm:"New";
+  }
+  function addRow(t,sc,vals){
+    if(!t.add)t.add=[];
+    var row=[],ci;
+    for(ci=0;ci<t.cols.length;ci++){var k=t.cols[ci];row[ci]=Object.prototype.hasOwnProperty.call(vals,k)?vals[k]:null}
+    var ri=t.n+t.add.length;
+    row[0]=sc.slug+"-new-"+(t.add.length+1);
+    if(t.t>=0&&!row[t.t])row[t.t]="New "+sc.entity;
+    if(t.d>=0&&!row[t.d])row[t.d]=(t.t>=0?row[t.t]:null)||("New "+sc.entity);
+    t.add.push(row);
+    live(t).unshift(ri);   // at the top, so the row a person just saved is one they can see
+    return ri;
+  }
+  function saveRec(sl){
+    var sc=SC[sl];if(!sc)return;
+    var t=D[sc.entity],host=formHost(sl);if(!t||!host)return;
+    var ctrls=host.querySelectorAll("[data-f]"),vals={},i;
+    for(i=0;i<ctrls.length;i++){var c=ctrls[i];vals[c.getAttribute("data-f")]=c.type==="checkbox"?!!c.checked:c.value}
+    var ri=FORM[sl];if(ri==null)ri=-1;
+    if(ri>=0){for(var k in vals)if(Object.prototype.hasOwnProperty.call(vals,k))setAt(t,ri,t.cols.indexOf(k),vals[k])}
+    else ri=addRow(t,sc,vals);
+    FORM[sl]=-1;
+    st(sl).q="";st(sl).page=0;st(sl).rec=ri;
+    var inp=document.querySelector('[data-search="'+sl+'"]');if(inp)inp.value="";
+    renderAll();
+    go("#"+sl);   // Save returns to the list, which is where the new row is
+  }
+  function editRec(sl){
+    var sc=SC[sl];if(!sc)return;
+    var t=D[sc.entity];if(!t)return;
+    var ri=detailRow(sc);if(ri<0)return;
+    go(href(sl,at(t,ri,0))+"/edit");
+  }
+  function delRec(sl){
+    var sc=SC[sl];if(!sc)return;
+    var t=D[sc.entity];if(!t)return;
+    var ri=detailRow(sc),ix=live(t),k=ix.indexOf(ri);
+    if(k<0)return;
+    UNDO={t:t,row:ri,at:k,slug:sl,name:nameOf(t,ri)};
+    ix.splice(k,1);
+    st(sl).rec=-1;
+    renderAll();
+    toast("Deleted "+UNDO.name);
+    go("#"+sl);
+  }
+  function undoDel(){
+    if(!UNDO)return;
+    var u=UNDO;UNDO=null;
+    live(u.t).splice(u.at,0,u.row);
+    st(u.slug).rec=u.row;
+    hideToast();
+    renderAll();
+    go(href(u.slug,at(u.t,u.row,0)));
+  }
+  function toast(msg){
+    var el2=document.getElementById("m-toast");
+    if(!el2){el2=document.createElement("div");el2.id="m-toast";el2.className="m-toast";document.body.appendChild(el2)}
+    el2.innerHTML=mEsc(msg)+' <button class="m-btn m-btn--sm" style="background:transparent;color:#fff;border-color:rgba(255,255,255,.4)" onclick="undoDel()">Undo</button>';
+    el2.hidden=false;
+  }
+  function hideToast(){var el2=document.getElementById("m-toast");if(el2)el2.hidden=true}
+  // ── the pickers: a relation-typed field is a choice, not free text ─────────
+  function fillPickers(){
+    var sels=document.querySelectorAll("select[data-fk]"),i,r;
+    for(i=0;i<sels.length;i++){
+      var s2=sels[i],t=D[s2.getAttribute("data-fk")],keep=s2.value;
+      var out='<option value="">— none —</option>';
+      if(t){var ix=live(t);for(r=0;r<ix.length&&r<200;r++)out+='<option value="'+mEsc(at(t,ix[r],0))+'">'+mEsc(nameOf(t,ix[r]))+"</option>"}
+      s2.innerHTML=out;
+      if(keep)s2.value=keep;
+    }
+    // A status field offers the values the data actually holds, rather than a
+    // vocabulary invented in the template.
+    var vs=document.querySelectorAll("select[data-vals]");
+    for(i=0;i<vs.length;i++){
+      var s3=vs[i],host=s3.closest?s3.closest("[data-form]"):null,sc=host?SC[host.getAttribute("data-form")]:null;
+      var t3=sc?D[sc.entity]:null,ci=t3?t3.cols.indexOf(s3.getAttribute("data-f")):-1,seen={},vals=[];
+      if(t3&&ci>=0){
+        var ix3=live(t3);
+        for(r=0;r<ix3.length;r++){var v=at(t3,ix3[r],ci);if(v==null||v==="")continue;v=String(v);if(!seen[v]){seen[v]=1;vals.push(v)}}
+      }
+      vals.sort();
+      var keep3=s3.value,out3='<option value="">— none —</option>';
+      for(r=0;r<vals.length&&r<40;r++)out3+='<option value="'+mEsc(vals[r])+'">'+mEsc(vals[r])+"</option>";
+      s3.innerHTML=out3;
+      if(keep3)s3.value=keep3;
+    }
+  }
+  function renderAll(){for(var k=0;k<SCREENS.length;k++){renderList(SCREENS[k]);renderDetail(SCREENS[k])}fillPickers()}
+  // ── routing: the URL names the screen AND the record ──────────────────────
+  function setFilter(sl,v){
+    var s=st(sl);s.q=v;s.page=0;
+    var inp=document.querySelector('[data-search="'+sl+'"]');
+    if(inp&&inp.value!==v)inp.value=v;
+    renderList(SC[sl]);
+  }
+  function setView(sl,v){
+    var s=st(sl);s.view=v;s.page=0;
+    var tabs=document.querySelectorAll('[data-view="'+sl+'"] .m-tab');
+    for(var k=0;k<tabs.length;k++)tabs[k].className="m-tab"+(tabs[k].getAttribute("data-v")===v?" is-active":"");
+    renderList(SC[sl]);
+  }
+  function pageBy(sl,d){var s=st(sl);s.page=s.page+d;if(s.page<0)s.page=0;renderList(SC[sl])}
+  function sortBy(sl,k){
+    var sc=SC[sl],s=st(sl),ci=sc.list.ix[k];
+    if(ci==null||ci<0)return;
+    if(s.sort===ci)s.dir=-s.dir;else{s.sort=ci;s.dir=1}
+    s.page=0;renderList(sc);
+  }
+  function go(h){HASH=h;try{if(location.hash!==h)location.hash=h}catch(e){}route()}
+  function route(){
+    var h="";
+    try{h=location.hash||""}catch(e){h=""}
+    if(!h)h=HASH;
+    var parts=h.replace(/^#/,"").split("/"),sl=parts[0]&&SC[parts[0]]?parts[0]:HOME,sc=SC[sl];
+    if(!sc)return;
+    if(parts[1]==="new"){renderForm(sc,-1);show("form-"+sl);return}
+    if(parts[1]){
+      var t=D[sc.entity],ri=t?rowOf(t,decodeURIComponent(parts[1])):-1;
+      if(ri>=0){
+        if(parts[2]==="edit"){renderForm(sc,ri);show("form-"+sl);return}
+        st(sl).rec=ri;renderDetail(sc);show("detail-"+sl);return;
+      }
+    }
+    renderList(sc);show("list-"+sl);
+  }
+  window.go=go;window.setFilter=setFilter;window.setView=setView;window.pageBy=pageBy;window.sortBy=sortBy;
+  window.saveRec=saveRec;window.editRec=editRec;window.delRec=delRec;window.undoDel=undoDel;
+  try{window.addEventListener("hashchange",function(){HASH=location.hash;route()})}catch(e){}
+  renderAll();
+  route();
 })();`;
 
 /**
@@ -404,7 +718,13 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
   const fabric = deriveFabric(ontology, atlas);
   const roles = deriveRoles(ontology);
   const seed = generateSeed(ontology, fabric.version);
-  const roleOf = new Map(roles.attributeRoles.map((r) => [`${r.entity} ${r.attribute}`, r.role] as const));
+  const roleOf = new Map<string, ValueRole>(roles.attributeRoles.map((r) => [`${r.entity} ${r.attribute}`, r.role] as const));
+  /** What a reference-typed attribute POINTS AT, as the ontology itself
+   *  answered it (`deriveAttributeReferences`). The form's pickers are
+   *  populated from this and from nothing else — a target guessed from the
+   *  column name is the string-guess the join key already had to be rescued
+   *  from. */
+  const refOf = new Map<string, string | undefined>(roles.attributeRoles.map((r) => [`${r.entity} ${r.attribute}`, r.refEntity] as const));
   const entities = (Array.isArray(ontology.entities) ? ontology.entities : []) as Array<Record<string, unknown>>;
   const names = entities.map((e) => String(e.name ?? "")).filter(Boolean);
   const attrsOf = (name: string) => {
@@ -575,6 +895,15 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
   const listScreen = (name: string): string => {
     const s = es.get(name)!; const rows = seed.records[name] ?? [];
     referenced.add(name);
+    // A BOARD IS OFFERED ONLY WHERE THE ONTOLOGY DECLARES A STATUS.
+    //
+    // The refined path's twelve fabricated dashboards are evidence of real
+    // demand for a pipeline view, and the roles already say which attribute is
+    // the pipeline: `status`. So the toggle is derived, with no model call —
+    // and an entity that has no status attribute gets NO toggle, because a
+    // board of one nameless lane is a control that offers nothing.
+    const statusAttr = attrsOf(name).find((a) => roleOf.get(`${name} ${a}`) === "status");
+    const statusIx = statusAttr ? columnIndex(name, statusAttr) : -1;
     screenSpecs.push({
       entity: name,
       slug: s,
@@ -583,12 +912,18 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
         ...columnSpec(name, leadColumnsFor(name, 5)),
         emptyTitle: `No ${name} records yet`,
         cite: citeOf(assumptionFor(seedParentOf(name), name)),
+        status: statusIx,
       },
       detail: null,
     });
+    // The "Filter" BUTTON is gone. It opened nothing, and the honest version of
+    // it is the field itself — a control that filters as it is typed into.
+    const toggle = statusIx >= 0
+      ? `<div class="m-tabs" data-view="${s}"><button class="m-tab is-active" data-v="table" onclick="setView('${s}','table')">Table</button><button class="m-tab" data-v="board" onclick="setView('${s}','board')">Board</button></div>`
+      : "";
     return `<section class="m-screen" data-screen="list-${s}" hidden>
       <header class="m-page-h"><div><div class="m-eyebrow">${esc(name)}</div><h1 class="m-title">${esc(name)}</h1><p class="m-sub">${rows.length} record${rows.length === 1 ? "" : "s"} · synthetic seed data</p></div>
-      <div style="display:flex;gap:10px"><button class="m-btn m-btn--secondary">Filter</button><button class="m-btn m-btn--primary" onclick="show('form-${s}')">New ${esc(name)}</button></div></header>
+      <div class="m-toolbar">${toggle}<input class="m-input m-search" type="search" data-search="${s}" aria-label="Filter ${esc(name)}" placeholder="Filter ${esc(name)}" oninput="setFilter('${s}',this.value)" /><button class="m-btn m-btn--primary" onclick="go('#${s}/new')">New ${esc(name)}</button></div></header>
       ${slot(`screen:${s}:list`)}</section>`;
   };
 
@@ -733,30 +1068,58 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
         kids,
       };
     }
+    // The crumb is a real link to a real address (`#account`), so Back works and
+    // the browser can show where it goes. The heading and the crumb tail carry
+    // the SHOWCASE record in the served bytes — the refine post-condition reads
+    // that text — and the renderer rewrites both to whichever record the URL
+    // named, because a detail page headed with somebody else's name is the
+    // "Open on row 12 shows row 1" defect wearing a different hat.
     return `<section class="m-screen" data-screen="detail-${s}" hidden>
-      <div class="m-crumbs"><a href="#" onclick="show('list-${s}')">${esc(name)}</a> / <span>${esc(headline)}</span></div>
-      <header class="m-page-h"><div><div class="m-eyebrow">${esc(name)}</div><h1 class="m-title">${esc(headline)}</h1></div>
-      <div style="display:flex;gap:10px"><button class="m-btn m-btn--secondary" onclick="show('form-${s}')">Edit</button><button class="m-btn m-btn--danger">Delete</button></div></header>
+      <div class="m-crumbs"><a href="#${s}">${esc(name)}</a> / <span data-crumb="${s}">${esc(headline)}</span></div>
+      <header class="m-page-h"><div><div class="m-eyebrow">${esc(name)}</div><h1 class="m-title" data-headline="${s}">${esc(headline)}</h1></div>
+      <div style="display:flex;gap:10px"><button class="m-btn m-btn--secondary" onclick="editRec('${s}')">Edit</button><button class="m-btn m-btn--danger" onclick="delRec('${s}')">Delete</button></div></header>
       ${slot(`region:${s}:summary`)}
       ${parentBand}
       ${children}</section>`;
   };
 
   // ── one form per entity ──
+  //
+  // A RELATION-TYPED FIELD IS A CHOICE, NOT FREE TEXT. "New Partner" rendered
+  // Account as an empty text box: the one place the ontology's relations should
+  // constrain what a person can enter, and they did not. Any field the roles
+  // read as `parent-ref` or `cross-ref` now renders a `<select>`, and the
+  // renderer fills it with the referenced entity's own display names.
+  //
+  // The TARGET comes from the ontology — `refEntity`, which `deriveRoles` sets
+  // when the attribute's name IS an entity of this ontology — never from a
+  // convention rebuilt out of the column name. Where the role says "reference"
+  // and nothing says to what, the field stays a text box AND SAYS SO: a miss
+  // that renders as an ordinary input is a miss nobody can see.
   const formScreen = (name: string): string => {
     const s = es.get(name)!; const attrs = attrsOf(name);
     const fields = attrs.map((a) => {
-      const role = roleOf.get(`${name} ${a}`);
+      const key = `${name} ${a}`;
+      const role = roleOf.get(key);
       const req = role === "identifier" || role === "title" ? ` <span class="m-req">*</span>` : "";
-      const input = role === "status" ? `<select class="m-select"><option>Open</option><option>In progress</option><option>Closed</option></select>`
-        : role === "boolean" ? `<label class="m-checkbox"><input type="checkbox" /> ${esc(humanizeField(a))}</label>`
-          : `<input class="m-input" placeholder="${esc(humanizeField(a))}" />`;
-      return region(`field:${s}:${slug(a)}`, `<div class="m-field"><label class="m-label">${esc(humanizeField(a))}${req}</label>${input}</div>`);
+      const isRef = role === "parent-ref" || role === "cross-ref";
+      const target = isRef ? refOf.get(key) : undefined;
+      const picker = target && names.includes(target) && (seed.records[target] ?? []).length ? target : undefined;
+      if (picker) referenced.add(picker);
+      const label = esc(humanizeField(a));
+      const input = picker ? `<select class="m-select" data-f="${esc(a)}" data-fk="${esc(picker)}"></select>`
+        : role === "status" ? `<select class="m-select" data-f="${esc(a)}" data-vals="1"></select>`
+          : role === "boolean" ? `<label class="m-checkbox"><input type="checkbox" data-f="${esc(a)}" /> ${label}</label>`
+            : `<input class="m-input" data-f="${esc(a)}" placeholder="${label}" />`;
+      const gap = isRef && !picker
+        ? `<div class="m-help">Reads as a reference, but the ontology names no entity for it — so this stays free text. Which record should it point at? Confirm in Listen.</div>`
+        : "";
+      return region(`field:${s}:${slug(a)}`, `<div class="m-field"><label class="m-label">${label}${req}</label>${input}${gap}</div>`);
     }).join("");
     return `<section class="m-screen" data-screen="form-${s}" hidden>
-      <div class="m-crumbs"><a href="#" onclick="show('list-${s}')">${esc(name)}</a> / <span>New</span></div>
-      <header class="m-page-h"><div><div class="m-eyebrow">${esc(name)}</div><h1 class="m-title">New ${esc(name)}</h1></div></header>
-      <section class="m-card" style="max-width:620px">${fields}<div class="m-form-actions"><button class="m-btn m-btn--ghost" onclick="show('list-${s}')">Cancel</button><button class="m-btn m-btn--primary">Save</button></div></section></section>`;
+      <div class="m-crumbs"><a href="#${s}">${esc(name)}</a> / <span data-form-crumb="${s}">New</span></div>
+      <header class="m-page-h"><div><div class="m-eyebrow">${esc(name)}</div><h1 class="m-title" data-form-title="${s}">New ${esc(name)}</h1></div></header>
+      <section class="m-card" style="max-width:620px" data-form="${s}">${fields}<div class="m-form-actions"><button class="m-btn m-btn--ghost" onclick="go('#${s}')">Cancel</button><button class="m-btn m-btn--primary" onclick="saveRec('${s}')">Save</button></div></section></section>`;
   };
 
   // ── navigation: the spine, then the whole tree ──
@@ -782,7 +1145,7 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
   // When they have NOT: the derived spine and tree, unchanged.
   const lead = curated.length ? ordered[0] : (graph.spine[0] ?? ordered[0]);
   const navItem = (n: string) =>
-    `<span class="m-nav-item${n === lead ? " is-active" : ""}" data-nav="list-${es.get(n)}" onclick="event.preventDefault();event.stopPropagation();show('list-${es.get(n)}')">${esc(n)}<span class="m-nav-count">${seed.counts[n] ?? 0}</span></span>`;
+    `<span class="m-nav-item${n === lead ? " is-active" : ""}" data-nav="list-${es.get(n)}" onclick="event.preventDefault();event.stopPropagation();go('#${es.get(n)}')">${esc(n)}<span class="m-nav-count">${seed.counts[n] ?? 0}</span></span>`;
   // Every entity keeps exactly ONE home in the tree — its shallowest parent, or
   // the top level when the graph promoted it there — so nothing is listed twice
   // and nothing is orphaned. The other parents are not lost: each still carries
@@ -830,7 +1193,7 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
   for (const n of names) if (referenced.has(n)) data[n] = tables.get(n)!;
   const links: Record<string, Array<[string, string]>> = {};
   for (const key of junctionsUsed) links[key] = (seed.junctionLinks[key] ?? []).map((l) => [l.fromId, l.toId]);
-  const model: PrototypeModel = { roles: roleLegend, data, links, screens: screenSpecs };
+  const model: PrototypeModel = { roles: roleLegend, data, links, screens: screenSpecs, first: es.get(lead) ?? "" };
   // `<` is the ONE character that can end a script block early; escaping it
   // keeps the island valid JSON (a `<` inside a JSON string is just `<`)
   // and unable to close its own element.
@@ -847,7 +1210,7 @@ var m=document.querySelectorAll('.m-nav-item[data-nav="'+id+'"]');
 if(m.length){document.querySelectorAll('.m-nav-item').forEach(function(n){n.classList.remove('is-active')});
 m.forEach(function(n){n.classList.add('is-active');for(var p=n.parentElement;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true})}
 window.scrollTo(0,0)}${PROTOTYPE_RENDERER}
-show('${firstList}')</script>
+if(!document.querySelector('.m-screen:not([hidden])'))show('${firstList}')</script>
 </body></html>`;
   return { html, fabric, regionCount };
 }
