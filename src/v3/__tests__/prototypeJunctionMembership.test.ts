@@ -111,12 +111,37 @@ describe("the same ontology gives the same rows", () => {
 
 describe("THE FABRIC DOES NOT MOVE", () => {
   it("holds the versions measured before junction membership existed", () => {
-    // MUTATION 3 → RED. These two hashes were taken on the tree before this
-    // change. If either moves, the fabric moved with the seed — and every
-    // prototype's values re-roll for a structural derivation that did not
-    // change. Update them only when the FABRIC is deliberately changed.
-    expect(deriveFabric(ontology, {}).version).toBe("56915c24");
+    // MUTATION 3 → RED. These hashes are the tripwire on ACCIDENTAL fabric
+    // drift: the seed is keyed by the fabric version, so a fabric that shifts
+    // re-rolls every value in every prototype. Update them only when the FABRIC
+    // is deliberately changed — and say why, here.
+    //
+    // MOVED ONCE, DELIBERATELY: 56915c24 → 4f0d00ea. `link()` in deriveFabric
+    // used to push a parent-ref for every pair, junctions included, so this
+    // fixture's Campaign↔Alliance Partner many-to-many minted a
+    // `nav:alliance-partner:campaign` alongside its `multi-select` region and
+    // the build claimed a single parent for a relation that has none. Removing
+    // that node removes it from the fabric, and from `screen:alliance-partner`'s
+    // children — so the version moves, for ONTOLOGIES THAT DECLARE A JUNCTION
+    // and for no others.
+    expect(deriveFabric(ontology, {}).version).toBe("4f0d00ea");
+    // The proof of that scoping, on a real committed ontology: this one
+    // declares no many-to-many, and its version is the same byte string it was
+    // before either change.
     expect(deriveFabric(snap("domain-ontology.json"), snap("current-state-atlas.json")).version).toBe("861c45fe");
+  });
+
+  it("mints no parent-ref for the junction — the seed's other half of the same claim", () => {
+    // The membership above is what the many-to-many IS. This is what it is NOT:
+    // the same pair must not also appear as somebody's one parent. Asserted
+    // here as well as in prototypeRelationRoles because this file owns the
+    // fixture whose version the pin above records.
+    const pairs = new Set(fabric.graph.junctions.flatMap((j) => [`${j.from}>${j.to}`, `${j.to}>${j.from}`]));
+    expect(pairs.size, "the fixture stopped declaring a junction").toBeGreaterThan(0);
+    const navs = fabric.nodes.filter((n) => n.kind === "nav");
+    expect(navs.length, "the fixture stopped producing parent-refs at all").toBeGreaterThan(0);
+    const wrong = navs.filter((n) => pairs.has(`${n.source.relation?.[0]}>${n.source.relation?.[1]}`)).map((n) => n.id);
+    expect(wrong, `a many-to-many minted a parent-ref:\n${wrong.join("\n")}`).toEqual([]);
   });
 
   it("is independent of how much seed there is", () => {
