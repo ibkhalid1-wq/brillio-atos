@@ -7652,10 +7652,37 @@ function reconcileVotedOntology(
     const base = Array.isArray(drafted) ? [...drafted] : [];
     const packed = cls ? packAttributesByClass?.get(cls) : undefined;
     if (!packed) return base;
-    const have = new Set(base.map((a) => ontologyNameKey(isRecord(a) ? a.name : a)).filter(Boolean));
+    const byKey = new Map(packed.attributes.map((a) => [ontologyNameKey(a.name), a] as const));
+    /**
+     * A NAME COLLISION IS NOT A FACT COLLISION.
+     *
+     * The prompt tells a draft to copy the backbone's attributes, and drafts
+     * copy the NAMES — measured on a live regeneration: 72 attributes, and not
+     * one carried a `kind`, a value set or a bound. This merge used to SKIP any
+     * name the draft already held, so every structured fact the packs state was
+     * discarded by the drafts doing exactly what they were asked. An Intent
+     * Score therefore had no bounds to seed inside, and an enum no values.
+     *
+     * So the draft keeps what only it can know — its evidence, its wording —
+     * and the pack fills in what only the standard states. Facts are facts
+     * whoever named the column; a fact the draft DID carry is left alone.
+     */
+    const enriched = base.map((a) => {
+      if (!isRecord(a)) return a;
+      const fact = byKey.get(ontologyNameKey(a.name));
+      if (!fact) return a;
+      return {
+        ...a,
+        ...(a.kind === undefined ? { kind: fact.kind } : {}),
+        ...(a.values === undefined && fact.values ? { values: fact.values } : {}),
+        ...(a.min === undefined && typeof fact.min === "number" ? { min: fact.min } : {}),
+        ...(a.max === undefined && typeof fact.max === "number" ? { max: fact.max } : {}),
+      };
+    });
+    const have = new Set(enriched.map((a) => ontologyNameKey(isRecord(a) ? a.name : a)).filter(Boolean));
     for (const attr of packed.attributes) {
       if (have.has(ontologyNameKey(attr.name))) continue;
-      base.push({
+      enriched.push({
         name: attr.name,
         kind: attr.kind,
         ...(attr.values ? { values: attr.values } : {}),
@@ -7664,7 +7691,7 @@ function reconcileVotedOntology(
         evidence: `${packed.vocabulary} standardBackbone — to confirm`,
       });
     }
-    return base;
+    return enriched;
   };
   /** Place a synthesised core onto one of the programme's declared areas: the
    * first area whose label contains one of the class's hint words. No hint, no

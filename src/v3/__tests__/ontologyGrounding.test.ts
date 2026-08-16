@@ -900,13 +900,26 @@ describe("standard priors and attributes ride the packs", () => {
     expect(attrs.length).toBeGreaterThanOrEqual(6);
   });
 
-  it("a drafted attribute wins its name collision — mandate evidence outranks the pack", () => {
+  it("a drafted attribute keeps its evidence AND gains the standard's facts", () => {
+    // A NAME COLLISION IS NOT A FACT COLLISION. Measured on a live
+    // regeneration: drafts copy the backbone's attribute NAMES (as asked) and
+    // none of its structured facts — 72 attributes, not one with a kind, a
+    // value set or a bound — so skipping a collided name discarded every fact
+    // the packs state.
     const account = (doc.entities as Array<Record<string, unknown>>).find((e) => e.name === "Account")!;
     const attrs = account.attributes as Array<Record<string, unknown>>;
     const name = attrs.filter((a) => a.name === "accountName");
     expect(name).toHaveLength(1);
-    expect(String(name[0].evidence)).toMatch(/sponsor said so/);
+    expect(String(name[0].evidence)).toMatch(/sponsor said so/);   // the draft's own wording stands
+    expect(name[0].kind).toBe("string");                            // …and the standard's fact arrived
     // …and the pack's OTHER attributes still arrive around it.
     expect(attrs.map((a) => a.name)).toContain("health");
+  });
+
+  it("a bounded number carries its bounds onto the entity, drafted or not", () => {
+    const lead = (doc.entities as Array<Record<string, unknown>>).find((e) => e.name === "Lead")!;
+    const score = (lead.attributes as Array<Record<string, unknown>>).find((a) => a.name === "intentScore")!;
+    expect(score.min).toBe(0);
+    expect(score.max).toBe(100);
   });
 });
