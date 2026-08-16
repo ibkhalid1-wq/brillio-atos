@@ -35,7 +35,7 @@ import {
 } from "@shared/prototypeAssembly.ts";
 import { deriveFabric } from "@shared/fabric.ts";
 import { pilotSliceFor } from "@shared/prototypePilot.ts";
-import { prototypeBaselineFor } from "@shared/prototypeRefine.ts";
+import { prototypeBaselineFor, prototypeBaselineOfProgram } from "@shared/prototypeRefine.ts";
 import PrototypeStudio from "@/v3/components/flow/studio/PrototypeStudio";
 import ExperienceDesignStudio, {
   experienceScreenOptions, readScreenFacts,
@@ -496,5 +496,52 @@ describe("the studio takes the decision, and states what the build will do with 
     const el = mount({}, true);
     click(chip(panelFor(el, "Account"), "Owner"));
     expect(wrote).toBeNull();
+  });
+});
+
+/**
+ * LIVE vs AS GENERATED — one build, two moments (2026-08-16, operator direction).
+ *
+ * The studio's preview re-assembled by hand and matched the edge on every input
+ * it listed — and still showed a POORER build than the record held, because two
+ * inputs were missing and both were ones a previous round had already earned:
+ * the accepted screen spec, and the approved skin. That gap is what made
+ * "Fabric vs Refined build" read as a choice between two designs.
+ *
+ * The preview now IS `prototypeBaselineOfProgram` — the function the edge builds
+ * its refine baseline with — so the operator's preview, the stakeholder's link
+ * and the post-condition the model is judged against are the same build by
+ * construction rather than by a matching argument list.
+ */
+describe("the operator's preview carries what previous rounds earned", () => {
+  const stored = (extra: Record<string, unknown>) => ({
+    domainOntology: ontology,
+    currentStateAtlas: atlas,
+    experienceDesign: { parentEntities: [], screenOptions: {} },
+    ...extra,
+  });
+
+  it("the accepted screen spec is drawn — a widget the operator has already seen does not vanish from the preview", () => {
+    const spec = { screens: [{ screen: "list-account", widgets: [{ kind: "stat", entity: "Account" }] }] };
+    const withSpec = prototypeBaselineOfProgram(stored({ prototypeBuild: { screenSpec: spec, html: "" } }))!;
+    const without = prototypeBaselineOfProgram(stored({}))!;
+    expect(withSpec.specAccepted).toBeGreaterThan(0);
+    expect(without.specAccepted).toBe(0);
+    expect(withSpec.html).not.toBe(without.html);
+  });
+
+  it("the approved skin is worn — the preview is not reset to the stock stylesheet", () => {
+    const plain = prototypeBaselineOfProgram(stored({}))!;
+    const reskinned = plain.stylesheet + "\n.m-approved-skin{color:#0b3d2e}";
+    const priorHtml = plain.html.replace(plain.stylesheet, reskinned);
+    const carried = prototypeBaselineOfProgram(stored({ prototypeBuild: { html: priorHtml } }))!;
+    expect(carried.html).toContain(".m-approved-skin");
+  });
+
+  it("a skin that cannot parse is refused, so one bad restyle cannot poison the preview", () => {
+    const plain = prototypeBaselineOfProgram(stored({}))!;
+    const broken = plain.html.replace("box-sizing:border-box", "box-sizing:var(--never-closed");
+    const carried = prototypeBaselineOfProgram(stored({ prototypeBuild: { html: broken } }))!;
+    expect(carried.stylesheet).toBe(plain.stylesheet);
   });
 });

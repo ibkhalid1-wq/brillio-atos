@@ -9,8 +9,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { asArray, asRecord, asStrings, asText, type StudioProps } from "./StudioKit";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
-import { assemblePrototype, paletteFor, screenOptionsFor } from "@shared/prototypeAssembly.ts";
-import { experienceParentEntities } from "./ExperienceDesignStudio";
+import { prototypeBaselineOfProgram } from "@shared/prototypeRefine.ts";
+// The export still names the palette explicitly — a .zip carries its tokens.
+import { paletteFor } from "@shared/prototypeAssembly.ts";
 import { buildPrototypeProject, downloadPrototypeZip, importPrototypeProject, projectSlug } from "./prototypeExport";
 import PrototypeCommandBar from "@/v3/components/flow/PrototypeCommandBar";
 
@@ -58,39 +59,31 @@ export default function PrototypeStudio({ doc, onChange, program, onRefineProtot
   const assembled = useMemo(() => {
     if (!program) return null;
     try {
-      const ontology = readArtifactDoc(program, "domainOntology");
-      const atlas = readArtifactDoc(program, "currentStateAtlas");
-      if (!ontology || !atlas) return null;
-      // The menu is the operator's call, taken in Experience Design. Read through the
-      // ONE definition so a toggle there and a menu item here cannot disagree.
-      const design = readArtifactDoc(program, "experienceDesign");
-      const parents = experienceParentEntities(design);
-      // The stored value vocabulary — one model call per ontology change, read
-      // here as data so the rebuild stays deterministic. Absent on most
-      // programmes, and absent means the build is exactly what it was.
-      const vocabulary = readArtifactDoc(program, "prototypeValueVocabulary");
-      // …and the client's palette, from the same document, through the same one
-      // definition the export and the stakeholder's link read it by.
-      return assemblePrototype(ontology, atlas, parents, {
-        vocabulary,
-        theme: paletteFor(design),
-        // …and what each of those screens leads with: the columns, the related
-        // collections and the opening view the operator chose beside the menu,
-        // read from the same document through the same one definition.
-        screenOptions: screenOptionsFor(design),
-        // The design document itself, for the verbs it authors — read through
-        // the same document the menu and palette come from.
-        experienceDesign: design,
-        blueprint: readArtifactDoc(program, "agenticBlueprint"),
-        // The chrome carries the programme's own name — read from the RECORD
-        // (projectMeta), never the row, because the edge baseline and the
-        // stakeholder's link read the record and the three surfaces must
-        // assemble one identical application.
-        appName: (() => {
-          const pm = (program?.rawData as { data?: { projectMeta?: { name?: unknown } } } | undefined)?.data?.projectMeta;
-          return typeof pm?.name === "string" ? pm.name : undefined;
-        })(),
-      }).html;
+      // ONE DEFINITION OF "the assembled build" — the edge's own.
+      //
+      // This used to re-assemble by hand: ontology, atlas, parents, vocabulary,
+      // theme, screen options, design, blueprint, app name — every input the
+      // edge passes, listed again. It matched on all of them and still showed a
+      // POORER build than the record holds, because two inputs were missing and
+      // both are ones a previous round already earned:
+      //   · the carried SCREEN SPEC — the widgets the model chose and the
+      //     operator has already seen; and
+      //   · the approved SKIN — the stylesheet a previous restyle produced.
+      // So the preview looked like a plainer product than the one on the
+      // record, which is what made "Fabric vs Refined" read as two designs
+      // rather than as live vs as-generated.
+      //
+      // `prototypeBaselineOfProgram` is the function the edge builds its refine
+      // baseline with: it assembles from those same inputs, applies the carried
+      // spec, and re-adopts the approved skin (refusing one whose stylesheet
+      // cannot parse). Calling it here means the operator's preview, the
+      // stakeholder's link and the post-condition the model is judged against
+      // are the same build by construction, not by a matching list of arguments.
+      const inner = (() => {
+        const raw = (program.rawData ?? {}) as Record<string, unknown>;
+        return (typeof raw.data === "object" && raw.data !== null ? raw.data : raw) as Record<string, unknown>;
+      })();
+      return prototypeBaselineOfProgram(inner)?.html ?? null;
     } catch { return null; }
   }, [program]);
   const [view, setView] = useState<"fabric" | "build">("fabric");
@@ -127,9 +120,10 @@ export default function PrototypeStudio({ doc, onChange, program, onRefineProtot
     );
   }
 
-  // What the preview shows: the fabric assembly by default (deterministic,
-  // Meridian-styled), the stored model-refined build behind the toggle. The
-  // editor always edits the STORED build — the assembly has no stored source.
+  // What the preview shows: the LIVE assembly by default — the record as it
+  // stands, which is also what a stakeholder's link renders — and the stored
+  // snapshot behind the toggle. The editor always edits the STORED build: the
+  // live assembly has no stored source to edit.
   const shown = effectiveView === "fabric" && assembled ? assembled : html;
   const source = mode === "edit" ? draft : shown;
   const dirty = draft !== html;
@@ -146,12 +140,19 @@ export default function PrototypeStudio({ doc, onChange, program, onRefineProtot
               different artifact entirely. The label collided from the day that studio
               was rewritten, and an operator clicking it here expected the toggles. */}
           {html ? <button type="button" className={mode === "edit" ? "on" : ""} title="Edit this build's screens and markup in place — the assembled prototype is regenerated, so edits belong on the refined build" onClick={() => setMode("edit")}>✎ Edit this build</button> : null}
-          {/* Fabric vs refined build — the fabric assembly is the deterministic
+          {/* LIVE vs AS GENERATED — not two designs, one freshness comparison.
+              Both now assemble from the same inputs, carry the same accepted
+              screen spec and wear the same approved skin; Live is rebuilt from
+              the record on every render, while the stored build is the snapshot
+              its "Generated …" stamp names. The old labels (Fabric / Refined
+              build) described how each was produced, which read as a choice
+              between two products.
+              The fabric assembly is the deterministic
               default (0 model tokens for structure); the model-refined build is
               the layer on top, reachable when it exists. */}
           {assembled && html ? (<>
-            <button type="button" className={effectiveView === "fabric" ? "on" : ""} title="Deterministic assembly from the ontology + atlas — fabric → semantic roles → Meridian → seed data" onClick={() => { setView("fabric"); setMode("preview"); }}>◇ Assembled (fabric)</button>
-            <button type="button" className={effectiveView === "build" ? "on" : ""} title="The model-refined build stored on the record — an internal working layer. Stakeholders on a Show link always get the assembled (fabric) prototype; this one never leaves the app." onClick={() => setView("build")}>✦ Refined build</button>
+            <button type="button" className={effectiveView === "fabric" ? "on" : ""} title="Assembled from the record as it stands right now — the current ontology, atlas and design, wearing the approved skin and carrying the widgets a previous round accepted. This is what a stakeholder opens on their link." onClick={() => { setView("fabric"); setMode("preview"); }}>◇ Live</button>
+            <button type="button" className={effectiveView === "build" ? "on" : ""} title="The build stored on the record, exactly as it was generated — a snapshot. It is what the editor edits and what Export downloads; compare it with Live to see what has moved since." onClick={() => setView("build")}>✦ As generated</button>
           </>) : null}
           {/* TAKE IT ELSEWHERE — one door over four transfer controls.
               Eight buttons sat in one row at equal weight: three that change what you

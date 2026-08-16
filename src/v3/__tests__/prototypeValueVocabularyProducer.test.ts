@@ -375,8 +375,16 @@ describe("the producer is wired into the edge function, not merely written", () 
 
   it("the studio and the stakeholder's pilot read the key the producer writes", () => {
     // The consumers were already there; what was missing was a writer. Pin that
-    // all three now name the same field.
-    expect(read("src/v3/components/flow/studio/PrototypeStudio.tsx")).toContain(VOCABULARY_FIELD_KEY);
+    // all of them name the same field.
+    //
+    // The studio no longer spells the key itself: its preview IS
+    // prototypeBaselineOfProgram, the same builder the edge assembles its
+    // refine baseline with, so it inherits the vocabulary — along with the
+    // carried screen spec and the approved skin — rather than re-listing the
+    // inputs and drifting from the edge one field at a time. Pin the call, and
+    // pin the key on the builder that makes it.
+    expect(read("src/v3/components/flow/studio/PrototypeStudio.tsx")).toContain("prototypeBaselineOfProgram");
+    expect(read("supabase/functions/_shared/prototypeRefine.ts")).toContain(VOCABULARY_FIELD_KEY);
     expect(read("supabase/functions/_shared/prototypePilot.ts")).toContain(VOCABULARY_FIELD_KEY);
   });
 });
