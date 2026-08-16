@@ -12030,9 +12030,21 @@ Deno.serve(async (req) => {
           });
         }
 
-        // The blueprint's track plan lands as its own Tier-2 decision — the
-        // Tracks board adopts workstreams only through a human confirm, and
-        // the payload is normalised here so the client merge stays dumb.
+        // The blueprint's track plan is ADOPTED, not proposed.
+        //
+        // It used to arrive as a Tier-2 decision. Its own recommendation said
+        // what that was worth — "proposal — reversible, tracks merge
+        // additively" — and its blocking line said what declining costs: "The
+        // Tracks board stays empty until a plan is adopted." So the card asked
+        // the operator to confirm the build plan of the blueprint they had just
+        // asked for, and until they did, a surface of the product stayed blank.
+        // Three identical copies were sitting on one live programme, one per
+        // regeneration (operator direction, 2026-08-16 — the same call as
+        // regeneration applying directly).
+        //
+        // The merge is the CONFIRM PATH'S, moved here unchanged: a track that
+        // already exists refreshes its metadata from the better generation and
+        // KEEPS its show/refine record, new tracks append, nothing is erased.
         if (request.agentId === "agentic-blueprint" && Array.isArray((result as Record<string, unknown>).tracks)) {
           const proposedRaw = ((result as Record<string, unknown>).tracks as unknown[]).filter(isRecord).slice(0, 12);
           const now = new Date().toISOString();
@@ -12053,33 +12065,39 @@ Deno.serve(async (req) => {
             createdAt: now,
             showPasses: [],
           }));
-          // Only propose tracks the board hasn't already adopted — without this
-          // dedup a re-run re-queues the SAME plan, and "Adopt the track plan"
-          // merges tracks that are already there, so the click does nothing
-          // visible and the card keeps coming back.
+          // Which of these the board did NOT already hold — the attestation
+          // says "adopted 3 tracks" or "refreshed 3, no new workstream", and a
+          // re-run that changes nothing should read as exactly that.
           const adoptedTrackIds = (() => {
             const inner = getInnerProgramData(nextProgramData);
             const rows = Array.isArray(inner.tracks) ? (inner.tracks as JsonValue[]).filter(isRecord) : [];
             return new Set(rows.map((t) => String(t.id ?? "")));
           })();
           const newTracks = tracks.filter((t) => !adoptedTrackIds.has(t.id));
-          if (newTracks.length) {
-            nextProgramData = queueFlowDecision(nextProgramData, {
-              tier: 2,
-              agentId: request.agentId,
-              movementId: request.phaseId || "envision",
-              title: "Adopt the track plan",
-              summary: `${newTracks.length} build track${newTracks.length === 1 ? "" : "s"} proposed: ${newTracks.map((t) => t.name).slice(0, 4).join(", ")}${newTracks.length > 4 ? "…" : ""}.`,
-              blocking: "The Tracks board stays empty until a plan is adopted.",
-              recommendation: {
-                action: "Adopt the track plan",
-                rationale: "Each track is a demoable workstream over the shared data model; acceptance is earned through the show/refine loop, at least two cycles.",
-                band: "proposal — reversible, tracks merge additively",
-              } as JsonValue,
-              // Carry the full plan so already-adopted tracks still refresh their
-              // metadata on confirm, while the summary counts only what's new.
-              payload: { tracks: tracks as unknown as JsonValue } as JsonValue,
+          if (tracks.length) {
+            nextProgramData = updateInnerProgramData(nextProgramData, (inner) => {
+              const current = Array.isArray(inner.tracks) ? (inner.tracks as JsonValue[]).filter(isRecord) : [];
+              const incomingById = new Map(tracks.map((t) => [t.id, t] as const));
+              const refreshed = current.map((track) => {
+                const incoming = incomingById.get(String(track.id ?? ""));
+                if (!incoming) return track;
+                incomingById.delete(String(track.id ?? ""));
+                // Metadata is corrected; the demonstration record is not touched.
+                return { ...track, name: incoming.name, goal: incoming.goal, slices: incoming.slices, dependsOn: incoming.dependsOn, leadStakeholder: incoming.leadStakeholder };
+              });
+              return { ...inner, tracks: [...refreshed, ...incomingById.values()].slice(-24) as unknown as JsonValue };
             });
+            if (isFlowProgramme(nextProgramData)) {
+              nextProgramData = appendFlowAttestation(nextProgramData, {
+                agentId: request.agentId,
+                phaseId: request.phaseId || "envision",
+                tier: 2,
+                action: newTracks.length
+                  ? `Adopted ${newTracks.length} build track${newTracks.length === 1 ? "" : "s"} from the blueprint: ${newTracks.map((t) => t.name).slice(0, 4).join(", ")}${newTracks.length > 4 ? "…" : ""}`
+                  : `Refreshed ${tracks.length} build track${tracks.length === 1 ? "" : "s"} from the blueprint — no new workstream`,
+                detail: (outputSummary || "").slice(0, 160),
+              });
+            }
           }
         }
       }
