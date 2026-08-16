@@ -204,9 +204,21 @@ interface KidSpec extends ColumnSpec {
   /** The ontology has not confirmed this relation's cardinality, so the section
    *  renders as a list AND says so. See `relationshipRolesFor`. */
   provisional?: boolean;
-  /** Does this entity have a LIST screen? A reachable-only entity has just a
-   *  detail, so "View all N" would navigate nowhere. Drilling into one record
-   *  still works — that is the whole point of the closure. */
+  /**
+   * Does this entity have a LIST screen? A reachable-only entity has just a
+   * detail, so "View all N" would navigate nowhere.
+   *
+   * DRILLING INTO ONE RECORD ALWAYS WORKS, and that is the whole point of the
+   * closure — every entity reachable from the menu has a detail screen, only
+   * the LIST is optional. Which is why the row's own Open control is
+   * unconditional while "View all" is gated on this flag. The renderer drew
+   * these rows with the control OFF: from an Account you could see the
+   * Opportunities and not reach one, so a demo walk died two screens in and
+   * everything below the dead row — the Opportunity's own tasks, its contact —
+   * was unreachable inside an application that contained it. It looked
+   * complete, which is why it lasted: the rows were there, the counts were
+   * right, only the way in was missing.
+   */
   listed?: boolean;
   emptyTitle: string; cite: EmptyCite | null;
 }
@@ -626,8 +638,8 @@ function mCell(R,ri,v){
         inner='<div class="m-chips">'+chips+"</div>";
       }else inner=empty(kd.emptyTitle,kd.cite);
     }else if(shown.length){
-      var body="";for(i=0;i<shown.length;i++)body+="<tr>"+cells(t,kd,shown[i],kd.slug,false)+"</tr>";
-      inner='<div class="m-table-wrap"><table class="m-table"><thead><tr>'+heads(kd,"")+"</tr></thead><tbody>"+body+"</tbody></table></div>"
+      var body="";for(i=0;i<shown.length;i++)body+="<tr>"+cells(t,kd,shown[i],kd.slug,true)+"</tr>";
+      inner='<div class="m-table-wrap"><table class="m-table"><thead><tr>'+heads(kd,"")+'<th style="text-align:right">Actions</th></tr></thead><tbody>'+body+"</tbody></table></div>"
         +(all.length>shown.length&&kd.listed
           ?'<div class="m-card-f"><button class="m-btn m-btn--secondary m-btn--sm" onclick="go('+Q+"#"+kd.slug+Q+')">View all '+all.length+" →</button></div>"
           :"");

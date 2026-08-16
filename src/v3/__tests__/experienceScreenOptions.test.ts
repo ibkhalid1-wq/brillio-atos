@@ -168,8 +168,11 @@ describe("a toggle changes the built application", () => {
     const card = chosen.querySelector('[data-fabric-id="region:account:contact"]')!;
     const heads = [...card.querySelectorAll("thead th")].map((th) => (th.textContent ?? "").trim());
     // The FK back to the context is dropped there (the same value down the
-    // column), so what survives of the choice is the rest of it, in order.
-    expect(heads).toEqual(["Contact Name"]);
+    // column), so what survives of the choice is the rest of it, in order —
+    // followed by the Actions column, because a collection row opens the record
+    // it names. Assert the DATA columns and let the way-in be the way-in.
+    expect(heads.filter((h) => h !== "Actions")).toEqual(["Contact Name"]);
+    expect(heads).toContain("Actions");
   });
 
   it("drops a column the ontology no longer holds, and falls back when nothing survives", () => {
