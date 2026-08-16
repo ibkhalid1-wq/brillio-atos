@@ -66,14 +66,123 @@ export const MERIDIAN_TOKENS: PrototypeTheme = {
   fontDisplay: '"Outfit", "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
 };
 
-/** Merge a partial (governed) theme over the defaults — absent/blank keys keep
- * the Meridian default, so a sparse `experienceDesign.theme` still yields a
- * complete, coherent token set. */
+/**
+ * ── A CLIENT'S PALETTE IS AN INPUT, AND AN INPUT IS UNTRUSTED ────────────────
+ *
+ * The palette arrives on the programme (`experienceDesign.theme`) — written by
+ * a generator or typed by an operator — and is interpolated straight into a
+ * `:root{…}` block inside the document's one `<style>` element. A value holding
+ * `}` closes that block early and everything after it is markup the browser
+ * reads as CSS; a value holding `</style>` ends the element. So each token is
+ * checked against the SHAPE ITS SLOT ACCEPTS, and a value that does not fit its
+ * slot keeps the Meridian default rather than being escaped into something
+ * plausible: a half-honoured brand colour is a worse answer than the house one.
+ *
+ * Colours are hex or rgb()/rgba() because the chrome below is DERIVED from the
+ * brand's luminance — a colour the assembler cannot read is a colour it cannot
+ * pair text against, and it would ship an unreadable sidebar instead of saying
+ * so.
+ */
+const COLOR_HEX = /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+const COLOR_RGB = /^rgba?\(\s*\d{1,3}(?:\.\d+)?\s*[, ]\s*\d{1,3}(?:\.\d+)?\s*[, ]\s*\d{1,3}(?:\.\d+)?\s*(?:[,/]\s*(?:\d*\.?\d+%?)\s*)?\)$/i;
+/** A font stack: family names, quotes, commas, the generic keywords. Nothing
+ *  that can carry a declaration, a comment or a tag. */
+const FONT_STACK = /^[A-Za-z0-9 ,'"()._-]+$/;
+
+export function isColorToken(value: unknown): boolean {
+  const v = String(value ?? "").trim();
+  return COLOR_HEX.test(v) || COLOR_RGB.test(v);
+}
+
+/** A colour's three channels, 0–255 — or null when it is not one this module
+ *  can read (which is the same as "cannot be paired", see above). */
+function channelsOf(value: string): [number, number, number] | null {
+  const v = value.trim();
+  if (COLOR_HEX.test(v)) {
+    const h = v.slice(1);
+    const full = h.length <= 4 ? h.slice(0, 3).split("").map((c) => c + c).join("") : h.slice(0, 6);
+    return [0, 2, 4].map((i) => parseInt(full.slice(i, i + 2), 16)) as [number, number, number];
+  }
+  if (COLOR_RGB.test(v)) {
+    const nums = v.replace(/^rgba?\(|\)$/gi, "").split(/[, /]+/).filter(Boolean).slice(0, 3).map(Number);
+    return nums.length === 3 && nums.every((n) => Number.isFinite(n)) ? [nums[0], nums[1], nums[2]] as [number, number, number] : null;
+  }
+  return null;
+}
+
+/** WCAG relative luminance. Null for a colour this module cannot read. */
+export function relativeLuminance(color: string): number | null {
+  const ch = channelsOf(color);
+  if (!ch) return null;
+  const lin = ch.map((c) => {
+    const s = c / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
+}
+
+/** WCAG contrast ratio between two colours (1–21). Null if either is unreadable. */
+export function contrastRatio(a: string, b: string): number | null {
+  const la = relativeLuminance(a); const lb = relativeLuminance(b);
+  if (la === null || lb === null) return null;
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
+/** `a` moved `t` of the way towards `b`, as hex. Pure integer arithmetic — the
+ *  same palette always produces the same chrome, byte for byte. */
+function mix(a: string, b: string, t: number): string {
+  const ca = channelsOf(a); const cb = channelsOf(b);
+  if (!ca || !cb) return a;
+  const hex = (n: number) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, "0");
+  return `#${ca.map((c, i) => hex(c + (cb[i] - c) * t)).join("")}`;
+}
+
+/**
+ * THE CHROME THE BRAND HAS TO CARRY.
+ *
+ * The sidebar is painted in the brand colour and its type used to be five fixed
+ * tints of lilac chosen for ONE brand — the house indigo. Accepting a client's
+ * palette while keeping those makes the re-skin a trap: a client whose brand is
+ * yellow gets pale lilac navigation on it and the demo that was meant to land
+ * as their product lands as unreadable.
+ *
+ * So what sits ON the brand is derived from the brand: whichever of white and
+ * the palette's own ink contrasts more with it, then two steps back towards the
+ * brand for secondary and tertiary type, and a mark that reads at UI-component
+ * contrast. `--m-brand-strong` (the primary button's hover) leans the brand
+ * TOWARDS its own text colour, so it lightens on a dark brand and darkens on a
+ * light one without either case being special.
+ */
+export interface BrandChrome { onBrand: string; onBrandDim: string; onBrandMute: string; brandMark: string; brandStrong: string }
+export function brandChrome(brand: string, ink: string): BrandChrome {
+  const white = "#ffffff";
+  const toWhite = contrastRatio(brand, white) ?? 0;
+  const toInk = contrastRatio(brand, ink) ?? 0;
+  const onBrand = toWhite >= toInk ? white : ink;
+  return {
+    onBrand,
+    onBrandDim: mix(onBrand, brand, 0.14),
+    onBrandMute: mix(onBrand, brand, 0.34),
+    brandMark: mix(onBrand, brand, 0.24),
+    brandStrong: mix(brand, onBrand, 0.12),
+  };
+}
+
+/** Merge a partial (governed) theme over the defaults — absent/blank keys, and
+ * any value that does not fit its slot, keep the Meridian default, so a sparse
+ * (or hostile) `experienceDesign.theme` still yields a complete, coherent and
+ * safely-interpolatable token set. */
 export function resolveTheme(theme?: Partial<PrototypeTheme> | null): PrototypeTheme {
   const t = theme || {};
+  const fits = (k: keyof PrototypeTheme, v: unknown): boolean => {
+    if (k === "radius") return typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 64;
+    if (k === "fontSans" || k === "fontDisplay") return typeof v === "string" && FONT_STACK.test(v);
+    return isColorToken(v);
+  };
   const pick = <K extends keyof PrototypeTheme>(k: K): PrototypeTheme[K] => {
     const v = t[k];
-    return (v === undefined || v === null || v === "" ? MERIDIAN_TOKENS[k] : v) as PrototypeTheme[K];
+    if (v === undefined || v === null || v === "") return MERIDIAN_TOKENS[k];
+    return (fits(k, v) ? v : MERIDIAN_TOKENS[k]) as PrototypeTheme[K];
   };
   return {
     brand: pick("brand"), brandSoft: pick("brandSoft"), accent: pick("accent"),
@@ -90,8 +199,11 @@ export function resolveTheme(theme?: Partial<PrototypeTheme> | null): PrototypeT
 export function meridianRootVars(theme?: Partial<PrototypeTheme> | null): string {
   const t = resolveTheme(theme);
   const r = t.radius;
+  const c = brandChrome(t.brand, t.ink);
   return `:root{
   --m-brand:${t.brand};--m-brand-soft:${t.brandSoft};--m-accent:${t.accent};
+  --m-brand-strong:${c.brandStrong};--m-brand-mark:${c.brandMark};
+  --m-on-brand:${c.onBrand};--m-on-brand-dim:${c.onBrandDim};--m-on-brand-mute:${c.onBrandMute};
   --m-ink:${t.ink};--m-ink-soft:${t.inkSoft};--m-muted:${t.muted};
   --m-bg:${t.bg};--m-surface:${t.surface};--m-surface-2:${t.surface2};--m-line:${t.line};
   --m-positive:${t.positive};--m-warn:${t.warn};--m-danger:${t.danger};
@@ -120,17 +232,17 @@ a{color:var(--m-brand);text-decoration:none}
 :focus-visible{outline:none;box-shadow:var(--m-ring)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 
-/* App shell: fixed sidebar + scrolling main */
+/* App shell. Everything painted ON the brand reads a brand-derived token. */
 .m-app{display:grid;grid-template-columns:244px 1fr;min-height:100vh}
-.m-side{background:var(--m-brand);color:#f3f1fa;display:flex;flex-direction:column;gap:var(--m-sp-2);padding:var(--m-sp-5) var(--m-sp-3);position:sticky;top:0;height:100vh;overflow-y:auto}
-.m-brand{display:flex;align-items:center;gap:9px;font-family:var(--m-font-display);font-weight:700;font-size:15px;padding:0 var(--m-sp-2) var(--m-sp-3)}
-.m-brand-dot{width:9px;height:9px;border-radius:var(--m-r-pill);background:#b3a6f7;flex:none;box-shadow:0 0 0 3px rgba(255,255,255,.12)}
+.m-side{background:var(--m-brand);color:var(--m-on-brand-dim);display:flex;flex-direction:column;gap:var(--m-sp-2);padding:var(--m-sp-5) var(--m-sp-3);position:sticky;top:0;height:100vh;overflow-y:auto}
+.m-brand{display:flex;align-items:center;gap:9px;font-family:var(--m-font-display);font-weight:700;font-size:15px;padding:0 var(--m-sp-2) var(--m-sp-3);color:var(--m-on-brand)}
+.m-brand-dot{width:9px;height:9px;border-radius:var(--m-r-pill);background:var(--m-brand-mark);flex:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--m-on-brand) 14%,transparent)}
 .m-nav{display:flex;flex-direction:column;gap:2px;margin-top:var(--m-sp-2)}
-.m-nav-sec{font-size:9.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#948dbb;padding:var(--m-sp-3) var(--m-sp-2) var(--m-sp-1)}
-.m-nav-item{display:flex;align-items:center;gap:10px;padding:8px var(--m-sp-2);border-radius:var(--m-r-sm);color:#cfc9e6;font-size:13px;font-weight:500;cursor:pointer;border-left:2px solid transparent;transition:background var(--m-dur) var(--m-ease),color var(--m-dur)}
-.m-nav-item:hover{background:rgba(255,255,255,.06);color:#f3f1fa}
-.m-nav-item.is-active{background:rgba(255,255,255,.09);color:#fff;border-left-color:#b3a6f7}
-.m-nav-count{margin-left:auto;font-size:11px;font-weight:600;color:#948dbb}
+.m-nav-sec{font-size:9.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--m-on-brand-mute);padding:var(--m-sp-3) var(--m-sp-2) var(--m-sp-1)}
+.m-nav-item{display:flex;align-items:center;gap:10px;padding:8px var(--m-sp-2);border-radius:var(--m-r-sm);color:var(--m-on-brand-dim);font-size:13px;font-weight:500;cursor:pointer;border-left:2px solid transparent;transition:background var(--m-dur) var(--m-ease),color var(--m-dur)}
+.m-nav-item:hover{background:color-mix(in srgb,var(--m-on-brand) 7%,transparent);color:var(--m-on-brand)}
+.m-nav-item.is-active{background:color-mix(in srgb,var(--m-on-brand) 11%,transparent);color:var(--m-on-brand);border-left-color:var(--m-brand-mark)}
+.m-nav-count{margin-left:auto;font-size:11px;font-weight:600;color:var(--m-on-brand-mute)}
 /* Nested navigation: a child entity sits under its parent, and a branch collapses.
    A tree of 30+ entities that cannot be closed is as unusable as a flat list of
    30+ entities, so every branch is a native <details> — keyboard-operable and
@@ -140,11 +252,11 @@ a{color:var(--m-brand);text-decoration:none}
 .m-nav-row::-webkit-details-marker{display:none}
 .m-nav-row::before{content:"";flex:none;width:0;height:0;margin:0 3px 0 4px;border-left:4px solid transparent;border-top:4px solid transparent;border-bottom:4px solid transparent}
 .m-nav-group>summary{cursor:pointer;border-radius:var(--m-r-sm)}
-.m-nav-group>summary::before{border-left-color:#948dbb;transition:transform var(--m-dur) var(--m-ease)}
+.m-nav-group>summary::before{border-left-color:var(--m-on-brand-mute);transition:transform var(--m-dur) var(--m-ease)}
 .m-nav-group[open]>summary::before{transform:rotate(90deg)}
 .m-nav-group>summary:focus-visible{box-shadow:var(--m-ring)}
 .m-nav-row>.m-nav-item{flex:1;min-width:0}
-.m-nav-sub{margin-left:11px;padding-left:5px;border-left:1px solid rgba(255,255,255,.14)}
+.m-nav-sub{margin-left:11px;padding-left:5px;border-left:1px solid color-mix(in srgb,var(--m-on-brand) 16%,transparent)}
 .m-main{min-width:0;padding:var(--m-sp-6) var(--m-sp-8)}
 
 /* Page header */
@@ -158,8 +270,8 @@ a{color:var(--m-brand);text-decoration:none}
 /* Buttons */
 .m-btn{display:inline-flex;align-items:center;gap:7px;font:inherit;font-size:13px;font-weight:600;padding:8px 14px;border-radius:var(--m-r-sm);border:1px solid transparent;cursor:pointer;transition:background var(--m-dur) var(--m-ease),box-shadow var(--m-dur),transform 60ms}
 .m-btn:active{transform:translateY(.5px)}
-.m-btn--primary{background:var(--m-brand);color:#fff}
-.m-btn--primary:hover{background:#2d2159;box-shadow:var(--m-shadow-sm)}
+.m-btn--primary{background:var(--m-brand);color:var(--m-on-brand)}
+.m-btn--primary:hover{background:var(--m-brand-strong);box-shadow:var(--m-shadow-sm)}
 .m-btn--secondary{background:var(--m-surface);color:var(--m-ink);border-color:var(--m-line)}
 .m-btn--secondary:hover{border-color:color-mix(in srgb,var(--m-brand) 45%,var(--m-line));box-shadow:var(--m-shadow-sm)}
 .m-btn--ghost{background:transparent;color:var(--m-brand)}
@@ -206,6 +318,20 @@ a{color:var(--m-brand);text-decoration:none}
 .m-pagination{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-top:1px solid var(--m-line);font-size:12.5px;color:var(--m-muted)}
 .m-pagination .m-btn{padding:4px 10px}
 
+/* The list screen's own toolbar: a filter that filters, and a view switch that
+   is only ever rendered where there is something to switch to. */
+.m-search{width:230px;flex:none}
+.m-toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+
+/* BOARD VIEW — a lane per value of the entity's status attribute. Offered only
+   where the ontology declares one, so no screen carries a switch to nothing. */
+.m-board{display:flex;gap:14px;align-items:flex-start;overflow-x:auto;padding-bottom:6px}
+.m-board-col{flex:0 0 248px;background:var(--m-surface-2);border:1px solid var(--m-line);border-radius:var(--m-r-lg);padding:12px}
+.m-board-h{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--m-muted)}
+.m-board-card{display:block;width:100%;text-align:left;font:inherit;cursor:pointer;background:var(--m-surface);border:1px solid var(--m-line);border-radius:var(--m-r-md);padding:10px 12px;margin-bottom:8px}
+.m-board-card:hover{border-color:color-mix(in srgb,var(--m-brand) 40%,transparent);box-shadow:var(--m-shadow-sm)}
+.m-board-more{font-size:12px;color:var(--m-muted);padding:2px}
+
 /* Tabs / segmented */
 .m-tabs{display:flex;gap:3px;padding:4px;background:var(--m-surface-2);border:1px solid var(--m-line);border-radius:var(--m-r-md);width:max-content}
 .m-tab{font:inherit;font-size:13px;font-weight:600;color:var(--m-muted);background:none;border:none;padding:7px 13px;border-radius:var(--m-r-sm);cursor:pointer;transition:background var(--m-dur),color var(--m-dur)}
@@ -223,15 +349,102 @@ a{color:var(--m-brand);text-decoration:none}
 .m-dot--good{background:var(--m-positive)}.m-dot--warn{background:var(--m-warn)}.m-dot--risk{background:var(--m-danger)}
 .m-chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--m-brand);background:var(--m-brand-soft);border:1px solid transparent;border-radius:var(--m-r-pill);padding:4px 11px;cursor:pointer}
 .m-chip:hover{border-color:color-mix(in srgb,var(--m-brand) 30%,transparent)}
+/* A many-to-many is a SET, so its members wrap as tags rather than filling a
+   table of owned rows. */
+.m-chips{display:flex;flex-wrap:wrap;gap:8px;padding:2px 0}
+/* A relation whose cardinality nobody has confirmed. Quiet on purpose — it is a
+   caveat on a working section, not an error, and a demo full of alarm colours
+   teaches the viewer to stop reading them. */
+.m-prov{margin-right:auto;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--m-warn);background:color-mix(in srgb,var(--m-warn) 12%,transparent);
+  border:1px solid color-mix(in srgb,var(--m-warn) 32%,transparent);border-radius:var(--m-r-pill);padding:2px 8px}
+/* Parent reference (N:1 / 1:1) — a link to the one record this belongs to.
+   Rendered from the fabric's nav nodes, which had no rendering at all. */
+.m-linkcards{display:flex;flex-wrap:wrap;gap:10px}
+.m-linkcard{display:inline-flex;align-items:baseline;gap:10px;font:inherit;text-align:left;cursor:pointer;
+  background:var(--m-surface-2);border:1px solid var(--m-line);border-radius:var(--m-r-md);padding:10px 14px}
+.m-linkcard:hover{border-color:color-mix(in srgb,var(--m-brand) 40%,transparent);background:var(--m-brand-soft)}
+/* The parent is real but has no screen in this build, so the card states the
+   relation without pretending to navigate. It must not LOOK clickable: a
+   control that does nothing is worse than a plain fact. */
+.m-linkcard.is-flat{cursor:default;background:transparent}
+/* A breadcrumb whose type has no list to return to (a reachable-only entity is
+   drillable but not browsable). It states the type without offering a journey
+   the build cannot make. */
+.m-crumb-flat{color:var(--m-muted)}
+.m-linkcard.is-flat:hover{border-color:var(--m-line);background:transparent}
+.m-linkcard-k{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--m-muted)}
+.m-linkcard-v{font-size:13px;font-weight:600;color:var(--m-ink)}
+.m-linkcard-go{color:var(--m-brand);font-weight:700}
+/* Footer of a collection card — "View all N →" when the inline slice is short. */
+.m-card-f{display:flex;justify-content:flex-end;padding-top:12px}
+/* The TAIL of a detail page's related sections. A record with thirteen child
+   collections is a wall, and the one relation that matters is lost in it — so
+   the biggest few stand open and the rest sit behind one control. Collapsed,
+   never dropped: the sections are still in the document. */
+.m-more{margin-top:20px}
+.m-more>summary{list-style:none;cursor:pointer;display:inline-flex;align-items:center;gap:8px;
+  font-size:13px;font-weight:600;color:var(--m-brand);background:var(--m-surface-2);
+  border:1px solid var(--m-line);border-radius:var(--m-r-pill);padding:7px 15px}
+.m-more>summary::-webkit-details-marker{display:none}
+.m-more>summary:hover{border-color:color-mix(in srgb,var(--m-brand) 40%,transparent);background:var(--m-brand-soft)}
 
 /* Empty / loading / error / toast */
 .m-empty{text-align:center;padding:48px var(--m-sp-4);color:var(--m-muted)}
 .m-empty-t{font-family:var(--m-font-display);font-size:16px;font-weight:600;color:var(--m-ink-soft);margin-bottom:6px}
+/* AN EMPTY STATE CARRIES ITS EVIDENCE. "No X yet" is the weakest screen state
+   there is: it reads as a finding when it is actually a guess the generator
+   declared and wrote down. The assumption behind the hole is printed with it,
+   and the question that settles it, so the emptiest screen is the one that
+   collects the most. */
+.m-assumed{margin:10px auto 0;max-width:56ch;font-size:12.5px;line-height:1.55;color:var(--m-muted)}
+.m-assumed-k{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--m-ink-soft);margin-right:6px}
+.m-assumed-q{display:block;margin-top:5px;color:var(--m-ink-soft);font-style:italic}
 .m-skeleton{background:linear-gradient(90deg,var(--m-surface-2) 25%,color-mix(in srgb,var(--m-line) 60%,var(--m-surface-2)) 37%,var(--m-surface-2) 63%);background-size:400% 100%;animation:m-shimmer 1.4s ease infinite;border-radius:var(--m-r-sm);height:14px}
 @keyframes m-shimmer{0%{background-position:100% 0}100%{background-position:0 0}}
 .m-banner{display:flex;align-items:center;gap:10px;padding:11px 14px;border-radius:var(--m-r-md);font-size:13px}
 .m-banner--error{color:var(--m-danger);background:color-mix(in srgb,var(--m-danger) 7%,transparent);border:1px solid color-mix(in srgb,var(--m-danger) 30%,transparent)}
 .m-toast{position:fixed;right:20px;bottom:20px;background:var(--m-ink);color:#fff;padding:12px 16px;border-radius:var(--m-r-md);box-shadow:var(--m-shadow-lg);font-size:13px;font-weight:500}
+
+/* THE WORKBENCH — a role's own screen; a step is a sentence, not a row. */
+.m-lanes{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.m-steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:12px;font-size:13px}
+.m-step{padding-left:2px}
+.m-step-a{color:var(--m-ink)}
+/* A name with nowhere to go: a tag, never a control. */
+.m-chip--flat{cursor:default;background:var(--m-surface-2);color:var(--m-muted);border-color:var(--m-line)}
+.m-chip--flat:hover{border-color:var(--m-line)}
+
+/* AGENT ACTIVITY — the blueprint, on the record it acts on. */
+.m-agents{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:14px}
+.m-agent{border:1px solid var(--m-line);border-radius:var(--m-r-md);padding:12px 14px;background:var(--m-surface-2)}
+.m-agent-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.m-agent-n{font-weight:700;font-size:14px}
+.m-agent-p{margin-top:5px;font-size:13px;color:var(--m-ink-soft)}
+.m-agent-gate{margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+
+/* SUMMARY BANDS — the numbers a screen leads with, and what they are made of.
+   EVERY RULE HERE IS IN NORMAL FLOW. A build that wrote its own markup put stat
+   cards out of flow over the tables and hid a column on every screen; the cards
+   are laid out like everything else on the page, so the space they occupy is
+   space the table is not in. Nothing below declares position, float, or a
+   negative margin, and nothing may. */
+.m-widgets{display:flex;flex-direction:column;gap:var(--m-sp-4);margin-bottom:var(--m-sp-5)}
+.m-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(184px,1fr));gap:var(--m-sp-3)}
+.m-stat{background:var(--m-surface);border:1px solid var(--m-line);border-radius:var(--m-r-lg);box-shadow:var(--m-shadow-sm);padding:var(--m-sp-4)}
+.m-stat-k{font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--m-muted)}
+.m-stat-v{font-size:26px;font-weight:700;margin-top:6px;font-variant-numeric:tabular-nums}
+.m-stat-n{font-size:11.5px;color:var(--m-muted);margin-top:5px;line-height:1.45}
+.m-charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:var(--m-sp-4)}
+.m-bars{display:flex;flex-direction:column;gap:9px;margin-top:12px}
+.m-bar{display:grid;grid-template-columns:minmax(88px,30%) 1fr auto;align-items:center;gap:10px;font-size:12.5px}
+.m-bar-k{font-weight:600;color:var(--m-ink-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.m-bar-track{background:var(--m-surface-2);border:1px solid var(--m-line);border-radius:var(--m-r-pill);height:10px;overflow:hidden}
+.m-bar-fill{display:block;height:100%;background:var(--m-brand);border-radius:var(--m-r-pill)}
+.m-bar-v{font-variant-numeric:tabular-nums;color:var(--m-muted);font-weight:600}
+/* The label the list itself carries when a band sits above it — so the band is
+   never read as the table's heading. */
+.m-section-h{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--m-muted);margin-bottom:var(--m-sp-3)}
 
 /* Detail definition list */
 .m-dl{display:grid;grid-template-columns:auto 1fr;gap:10px 18px;font-size:13.5px}

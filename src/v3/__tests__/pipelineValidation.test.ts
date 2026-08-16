@@ -125,7 +125,7 @@ describe("[G3] both prototypes Meridian-styled from the SAME table; generic nami
     });
   }
   it('mapping code + Meridian carry zero "laila" (generically named end to end)', () => {
-    for (const f of ["prototypeAssembly.ts", "prototypeDesignSystem.ts", "semanticRoles.ts", "fabric.ts", "seedData.ts", "ontologyGraph.ts"]) {
+    for (const f of ["prototypeAssembly.ts", "prototypeDesignSystem.ts", "semanticRoles.ts", "fabric.ts", "seedData.ts", "ontologyGraph.ts", "prototypeRefine.ts", "valueVocabulary.ts"]) {
       // The cluster lives in the Deno-importable shared layer — ONE copy, imported
       // by the studio (client) and by flow-portal (edge). Read from there, not from
       // src/v3/lib, so this check keeps covering the file that actually runs.
