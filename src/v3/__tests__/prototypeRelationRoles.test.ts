@@ -87,11 +87,26 @@ describe("a 1:N renders as a LIST of the child entity", () => {
     expect(r).not.toContain("Account Id");           // the FK is not a column
   });
 
-  it("carries the true total, and offers the rest", () => {
+  it("carries the true total", () => {
+    // The title used to promise "and offers the rest", asserted behind
+    // `if (badge > 5)` — which NEVER RAN, and hid a real defect while looking
+    // like coverage.
+    //
+    // THE DEFECT IT HID: the seeder's default `maxFanOut` is 5 and the detail
+    // page shows `all.slice(0, 5)`, offering "View all N" only when there are
+    // MORE than five. The two numbers are equal, so on a default build the
+    // overflow branch is unreachable and that control can never render. Raising
+    // the fan-out to 6 was tried and the badge still came back 5, so something
+    // further caps it — recorded here rather than half-fixed, because a seed
+    // change moves every generated build and this one is not yet understood.
+    //
+    // What IS true is asserted; the unreachable claim is not.
     const r = regionHtml(id);
-    const badge = r.match(/<span class="m-badge">(\d+)<\/span>/)?.[1];
-    expect(Number(badge)).toBeGreaterThan(0);
-    if (Number(badge) > 5) expect(r).toMatch(/View all \d+ Opportunity/);
+    const badge = Number(r.match(/<span class="m-badge">(\d+)<\/span>/)?.[1]);
+    expect(badge, "no opportunities reached the card").toBeGreaterThan(0);
+    const rows = [...doc.querySelectorAll(`[data-fabric-id="${id}"] tbody tr`)];
+    expect(rows.length, "the badge and the rendered rows disagree")
+      .toBe(Math.min(badge, 5));
   });
 });
 
@@ -105,11 +120,22 @@ describe("an N:M renders as a SET, distinguishably", () => {
     expect(r).toMatch(/m-chips|m-empty/);
   });
 
-  it("states the gap rather than implying emptiness", () => {
-    // The seeder declares that it generates no junction membership. An empty
-    // table would read as "there are none"; the miss must stay visible.
+  it("shows real membership — the seeder now generates it", () => {
+    // WAS VACUOUS. This asserted the empty state cited an assumption, guarded by
+    // `if (r.includes("m-empty"))` — and once A3 made the seeder materialise
+    // junction membership that precondition became permanently false, so the
+    // test passed while asserting nothing at all. A guard whose body never runs
+    // is worse than a missing one: it reports coverage it does not have.
+    //
+    // The honest assertion for the CURRENT behaviour is that membership is
+    // really there. MUTATION: return [] from the junction seeding → RED.
     const r = regionHtml("region:campaign:account");
-    if (r.includes("m-empty")) expect(r).toMatch(/not generated|assumptions/i);
+    expect(r, "the multi-select region is missing").toBeTruthy();
+    expect(r).toContain("m-chips");
+    const chips = [...doc.querySelectorAll(`[data-fabric-id="region:campaign:account"] .m-chip`)];
+    expect(chips.length, "a many-to-many with no members — A3 regressed").toBeGreaterThan(0);
+    // and the chips name real Account records, not ids or the seed marker
+    expect(chips.every((c) => !/SYNTHETIC|^account-\d+$/i.test((c.textContent || "").trim()))).toBe(true);
   });
 });
 
