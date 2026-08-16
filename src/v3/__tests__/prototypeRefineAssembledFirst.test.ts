@@ -27,7 +27,8 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   attrValuesIn, baselineWithPriorSkin, buildPrototypeRefineBrief,
-  documentText, fabricIdsIn, prototypeBaselineFor, refineModeFor, resolvePrototypeDoc,
+  documentText, fabricIdsIn, prototypeArtifactFor, prototypeBaselineFor, prototypeBaselineOfProgram,
+  refineModeFor, regionIdsIn, resolvePrototypeDoc,
   screenIdsIn, stylesheetIn, withStylesheet, REFINE_CONTRACT, DOCUMENT_REFINE_BUDGET,
 } from "@shared/prototypeRefine.ts";
 import { parentEntitiesFor } from "@shared/prototypeAssembly.ts";
@@ -286,14 +287,123 @@ describe("the stored document, parsed", () => {
   });
 });
 
+// ── the APPLIED path: a programme record and an answer in, a document out ───
+describe("what a prototype-build run actually stores", () => {
+  /**
+   * The whole decision the run performs after the model answers used to live
+   * inside the edge function, where nothing could execute it: the only evidence
+   * that a structure-losing document was ever REJECTED in production was a regex
+   * matching the call in the edge's source text. Compute the result and throw it
+   * away and that regex still matched — the rejection path, the central fix of
+   * "assemble first, then restyle", was unexercised end to end.
+   *
+   * It is now one pure function over the programme record, so these run it.
+   */
+  const record: Record<string, unknown> = { domainOntology: smallOntology, currentStateAtlas: atlas };
+  const derived = prototypeBaselineOfProgram(record)!;
+
+  it("checks the answer against the same build the model was shown", () => {
+    // Re-derived at two moments in one run — the brief before the call, the
+    // post-condition after it. Two different documents and the check would be
+    // measuring the answer against a build nobody saw.
+    expect(prototypeBaselineOfProgram(record)!.html).toBe(derived.html);
+    expect(buildPrototypeRefineBrief(derived, {}).baselineHtml).toBe(derived.html);
+    expect(derived.fabricIds).toEqual([...new Set(fabricIdsIn(derived.html))].sort());
+  });
+
+  it("REJECTS a structure-losing document — the stored artifact is the assembled build", () => {
+    const victim = derived.fabricIds.find((id) => id.startsWith("region:"))!;
+    const losing = derived.html.replace(`data-fabric-id="${victim}"`, 'data-role="detail"');
+    const { doc, source } = prototypeArtifactFor(record, { html: losing, gaps: ["a gap the model wrote"] });
+    expect(source).toBe("assembled");
+    // THE property: the document this run would write to the artifact is the
+    // ASSEMBLY, not the model's — read out of the document, byte for byte.
+    expect(String(doc.html)).toBe(derived.html);
+    expect([...new Set(fabricIdsIn(String(doc.html)))].sort()).toEqual(derived.fabricIds);
+    const shown = documentText(String(doc.html));
+    expect(derived.seedValues.filter((v) => !shown.nodes.has(v) && !shown.flat.includes(v))).toEqual([]);
+    // …and the refusal reaches the operator, alongside the model's own gaps.
+    const gaps = (doc.gaps as string[]).join(" ");
+    expect(gaps).toContain("a gap the model wrote");
+    expect(gaps).toContain(victim);
+    expect((doc._prototypeStructure as Record<string, unknown>).source).toBe("assembled");
+  });
+
+  it("KEEPS a presentation-only document — the stored artifact is the model's", () => {
+    const { doc, source } = prototypeArtifactFor(record, { html: restyledDocument(derived.html) });
+    expect(source).toBe("refined");
+    expect(String(doc.html)).not.toBe(derived.html);
+    expect(String(doc.html)).toContain("m-card--soft");
+    expect([...new Set(fabricIdsIn(String(doc.html)))].sort()).toEqual(derived.fabricIds);
+    expect([...new Set(screenIdsIn(String(doc.html)))].sort()).toEqual(derived.screenIds);
+    expect((doc._prototypeStructure as Record<string, unknown>).source).toBe("refined");
+  });
+
+  it("keeps a restyle, and stores the skin in the document rather than beside it", () => {
+    const { doc, source } = prototypeArtifactFor(record, { styleCss: ".m-card{outline:2px solid #0f766e}" });
+    expect(source).toBe("restyled");
+    expect(stylesheetIn(String(doc.html))).toContain("#0f766e");
+    expect(doc.styleCss).toBeUndefined();
+    expect([...new Set(fabricIdsIn(String(doc.html)))].sort()).toEqual(derived.fabricIds);
+  });
+
+  it("measures the answer against the operator's CURRENT build, not a stock one", () => {
+    // The skin approved last round and the screen spec last round accepted are
+    // both part of the build a new answer is judged against — and part of the
+    // build a rejected answer falls back to. Assembled fresh each run, so
+    // without them the operator gets back a build they last saw in round one.
+    const approved = withStylesheet(small.html, ".m-card{outline:3px solid #123456}");
+    const spec = { screens: [{ screen: "list-account", widgets: [{ kind: "stat", entity: "Account" }] }] };
+    const round2 = { ...record, prototypeBuild: { html: approved, screenSpec: spec } };
+    const { doc, source } = prototypeArtifactFor(round2, { html: "<html><body>a free-form rewrite</body></html>" });
+    expect(source).toBe("assembled");
+    expect(String(doc.html)).toContain("#123456");
+    expect(regionIdsIn(String(doc.html)).some((r) => r.startsWith("widget:"))).toBe(true);
+    // …and neither is what a stock derivation gives, or the two assertions above
+    // would pass on a build that carried nothing forward.
+    expect(derived.html).not.toContain("#123456");
+    expect(regionIdsIn(derived.html).some((r) => r.startsWith("widget:"))).toBe(false);
+  });
+
+  it("assembles with the programme's own value vocabulary, and guards those values", () => {
+    // A baseline seeded without the vocabulary shows different strings from the
+    // build the operator is looking at, so almost none of the guarded set would
+    // survive and the post-condition would quietly shrink to guarding nothing.
+    const vocab = { "Account.region": ["Nordics", "Iberia"] };
+    const withVocabRecord = { ...record, prototypeValueVocabulary: vocab };
+    const withVocab = prototypeBaselineOfProgram(withVocabRecord)!;
+    expect(withVocab.seedValues).toContain("Nordics");
+    expect(derived.seedValues).not.toContain("Nordics");
+    // …so a document that dropped the client's own value is refused on that ground.
+    const dropped = withVocab.html.split("Nordics").join("Region A");
+    const { source, verdict } = prototypeArtifactFor(withVocabRecord, { html: dropped });
+    expect(source).toBe("assembled");
+    expect(verdict!.droppedSeedValues).toContain("Nordics");
+  });
+
+  it("leaves the answer untouched when the record cannot assemble at all", () => {
+    const answer = { html: "<html><body>free-form</body></html>", gaps: [] };
+    const { doc, source, baseline } = prototypeArtifactFor({ currentStateAtlas: atlas }, answer);
+    expect(source).toBe("unassembled");
+    expect(baseline).toBeNull();
+    expect(doc).toBe(answer);
+  });
+});
+
 // ── the edge is wired to all of it ─────────────────────────────────────────
 describe("the build agent is handed the assembled build, both ways", () => {
-  it("assembles before the call and checks after it", () => {
-    // Two call sites, and they must be the SAME derivation or the document the
-    // model was shown is not the document its answer is checked against.
-    expect((EDGE.match(/prototypeBaselineOf\(/g) || []).length).toBeGreaterThanOrEqual(3);
+  it("assembles before the call, and STORES what the decision returned", () => {
+    // The one claim vitest cannot execute: the edge is Deno and cannot be
+    // imported here. So it is read — but the call is no longer the claim. The
+    // previous version of this assertion matched the post-condition CALL, and a
+    // mutation that computed the result and discarded it stayed green while a
+    // structure-losing document shipped. What is pinned now is the ASSIGNMENT,
+    // and that the edge derives no second baseline and takes no second decision
+    // of its own; what those do is exercised for real in the block above.
+    expect(EDGE).toMatch(/formalResult\s*=\s*prototypeArtifactFor\(/);
     expect(EDGE).toMatch(/buildPrototypeRefineBrief\(\s*prototypeBaseline\s*,/);
-    expect(EDGE).toMatch(/resolvePrototypeDoc\(formalResult,\s*baseline\)/);
+    expect(EDGE).not.toMatch(/\bprototypeBaselineFor\(/);
+    expect(EDGE).not.toMatch(/\bresolvePrototypeDoc\(/);
   });
 
   it("the prompt carries the shared contract, not a paraphrase of it", () => {
