@@ -49,7 +49,8 @@
  * convergence the ledger does not have.
  */
 import { generatedStamp } from "@/v3/lib/whenGenerated";
-import { useMemo, useState, type ReactNode } from "react";
+import { prototypeBaselineOfProgram } from "@shared/prototypeRefine.ts";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ProgramSummary } from "@/new/types";
 import type { LineBand, LineStation } from "@/v3/lib/lineModel";
 import type { ArtifactCardModel } from "@/v3/components/flow/flowShellData";
@@ -212,6 +213,153 @@ function OperatorTile({ station, role, owned, onOpen, onRegen, onGenerate, regen
         </span>
       </div>
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * THE PROTOTYPE — a screen, not a tile
+ * ------------------------------------------------------------------ */
+
+/**
+ * THE ONE ARTIFACT YOU CAN LOOK AT, SHOWN.
+ *
+ * The prototype sat as the fourth tile in a row of four: same size, same
+ * treatment, same "decided, on record" line as three documents you read. But it
+ * is not a document — it is the running application the other three exist to
+ * produce, and it is what everybody in the room actually points at. A tile
+ * saying "decided" tells you the file is present; only the screen tells you
+ * whether the thing is any good.
+ *
+ * So it gets its own band, and the band draws the build. `prototypeBaselineOfProgram`
+ * is the same function the studio previews with and the edge assembles its refine
+ * baseline from, so the screen here IS the one behind the tile — carrying the
+ * accepted screen spec and the approved skin — and cannot drift into a third
+ * rendering of the same programme.
+ */
+/** The viewport the stage DRAWS at, before it is scaled to the board's column —
+ *  a real desktop, so the preview shows the proportions the design was made for. */
+const STAGE_W = 1280;
+const STAGE_H = 680;
+
+function PrototypeStage({ station, program, onOpen, onRegen, onGenerate, regenerating, generating }: {
+  station: LineStation; program: ProgramSummary;
+  onOpen: Props["onOpen"]; onRegen?: Props["onRegen"]; onGenerate?: Props["onGenerate"];
+  regenerating: boolean; generating: boolean;
+}) {
+  const present = !!station.card?.present;
+  const canGen = !present && !!station.canGenerate && !!station.card && !!onGenerate;
+  const evidenceMoved = present && station.needsRefresh;
+  const stamp = present ? generatedStamp(station.card?.generatedAt) : null;
+
+  // The live assembly, off the programme's own record. Not the stored build:
+  // the stored one is a snapshot, and a board is where you come to see where
+  // things STAND. The studio's toggle is where the two are compared.
+  const html = useMemo(() => {
+    try {
+      const raw = (program.rawData ?? {}) as Record<string, unknown>;
+      const inner = (typeof raw.data === "object" && raw.data !== null ? raw.data : raw) as Record<string, unknown>;
+      return prototypeBaselineOfProgram(inner)?.html ?? null;
+    } catch { return null; }
+  }, [program]);
+
+  // THE SCALE, MEASURED. The stage draws the build at a real desktop viewport
+  // (STAGE_W) and shrinks it to the board's column, so the preview shows the
+  // proportions a stakeholder will see rather than the responsive fallback a
+  // ~600px column triggers. It cannot be done in CSS alone: `100cqw / 1280` is a
+  // length, and `scale()` takes a number — the first attempt silently drew the
+  // frame at native size, overflowing its own container. So the width is
+  // observed and the ratio applied to the frame.
+  const screenRef = useRef<HTMLDivElement | null>(null);
+  const [scale, setScale] = useState(1);
+  useEffect(() => {
+    const el = screenRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const fit = () => setScale(Math.min(1, (el.clientWidth || STAGE_W) / STAGE_W));
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [html]);
+
+  return (
+    <section className="v3dl-stage" aria-label="The prototype">
+      <header className="v3dl-stage-h">
+        <span className="v3dl-stage-t">{station.title}</span>
+        <span className="v3dl-stage-sub">{station.subtitle}</span>
+        <span className="v3dl-stage-state">
+          {present ? (
+            evidenceMoved ? (
+              <span className="v3dl-moved" title="the claims this build rests on have moved — rebuild to re-derive it">
+                <ClaimStatus state="weak" /> evidence moved underneath
+              </span>
+            ) : (
+              <span className="v3dl-decided"><ClaimStatus state="closed" showLabel={false} /> decided, on record</span>
+            )
+          ) : canGen ? (
+            <span className="v3dl-ready"><ClaimStatus state="open" showLabel={false} /> inputs ready — generate</span>
+          ) : (
+            <span className="v3dl-notseeded"><ClaimStatus state="open" showLabel={false} /> upstream not ready</span>
+          )}
+          {stamp ? <span className="v3dl-stage-when" title={stamp.title}>{stamp.label}</span> : null}
+        </span>
+      </header>
+
+      {html ? (
+        // Inert on the board. A prototype you can CLICK is a prototype you can
+        // get lost inside two levels deep on a page that is about the state of
+        // the programme; the studio and the browser tab are where it is walked.
+        // Inert by pointer-events and tab order, NOT by withholding scripts:
+        // the build draws its records from a JSON island through its own client
+        // renderer, so `sandbox=""` gave a stage showing the chrome of an
+        // application with every table empty — the exact "it is a screenshot"
+        // failure the refine post-condition exists to catch, staged by us.
+        // `allow-scripts` without `allow-same-origin` keeps the frame on an
+        // opaque origin, so it can run its renderer and reach nothing here.
+        <div className="v3dl-stage-screen" ref={screenRef}
+          style={{ aspectRatio: `${STAGE_W} / ${STAGE_H}` }}>
+          <iframe className="v3dl-stage-frame" sandbox="allow-scripts" srcDoc={html}
+            title={`${station.title} — first screen`} tabIndex={-1}
+            style={{ width: STAGE_W, height: STAGE_H, transform: `scale(${scale})` }} />
+          <button type="button" className="v3dl-stage-veil" disabled={!present && !canGen}
+            title={present ? "Open the prototype — walk it, refine it, share it" : "Not built yet"}
+            onClick={() => { if (present && station.card) onOpen(station.card); else if (canGen && !generating) onGenerate!(station.card!); }}>
+            <span className="v3dl-stage-veil-l">{present ? "open the prototype" : generating ? "generating…" : "generate it"}</span>
+          </button>
+        </div>
+      ) : (
+        <div className="v3dl-stage-none">
+          <p>
+            {canGen
+              ? "Its inputs are ready — generate it and the application assembles from the ontology, the atlas and the design."
+              : "The prototype assembles from the ontology, the atlas and the Experience Design. It appears here as soon as they are on the record."}
+          </p>
+          {canGen && station.card ? (
+            <button type="button" className="v3dl-mini" disabled={generating}
+              onClick={() => onGenerate!(station.card!)}>{generating ? "generating…" : "generate the prototype"}</button>
+          ) : null}
+        </div>
+      )}
+
+      <div className="v3dl-stage-foot">
+        {present && station.card ? (
+          <button type="button" className="v3dl-mini" onClick={() => onOpen(station.card!)}
+            title="Open the Prototype studio — run it, refine it in plain language, export it">
+            <span aria-hidden="true">▶ </span>open &amp; refine
+          </button>
+        ) : null}
+        {present && onRegen && station.card ? (
+          <button type="button" className="v3dl-mini" disabled={regenerating}
+            onClick={() => onRegen!(station.card!)}
+            aria-label={`Rebuild ${station.title} from the current claims`}
+            title="Rebuild this from the current claims (a decision is re-derived from the claims, not a blob refreshed)">
+            {regenerating ? "rebuilding…" : <><span aria-hidden="true">↻ </span>rebuild from claims</>}
+          </button>
+        ) : null}
+        <span className="v3dl-question" title="A stakeholder can question this decision — it routes to the Design team as a proposal, and never edits the artifact. The capture lives on their link.">
+          <span className="v3dl-question-note">questionable<span aria-hidden="true"> → </span>routes to Design team</span>
+        </span>
+      </div>
+    </section>
   );
 }
 
@@ -632,7 +780,11 @@ function DesignRoundZone({ program, roster, locked, onMintReview, onDesignRound 
 
 export default function DesignLoopZones({ band, program, ledger, roster, onOpen, onRegen, onGenerate, onMintReview, onDesignRound, regenBusy, genBusy }: Props) {
   const stationOf = (id: string) => band.stations.find((s) => s.id === id);
-  const opStations = band.stations.filter((s) => ZONE_OF[s.id]?.zone === "operator");
+  // The prototype is an operator artifact and stays in the operator zone — but
+  // it is the RUNNING APPLICATION, not a document, so it gets the band's own
+  // stage below the documents rather than a fourth identical tile beside them.
+  const opStations = band.stations.filter((s) => ZONE_OF[s.id]?.zone === "operator" && s.id !== "prototype");
+  const prototype = stationOf("prototype");
   const validation = stationOf("validation");
 
   // stakeholder queue: open unknowns owned by a role (not unowned/blocked) — Listen's
@@ -685,6 +837,12 @@ export default function DesignLoopZones({ band, program, ledger, roster, onOpen,
               regenerating={!!(s.card && regenBusy[s.card.id])} generating={!!(s.card && genBusy[s.card.id])} />
           ))}
         </div>
+        {/* …and what those three documents are FOR. */}
+        {prototype ? (
+          <PrototypeStage station={prototype} program={program} onOpen={onOpen} onRegen={onRegen} onGenerate={onGenerate}
+            regenerating={!!(prototype.card && regenBusy[prototype.card.id])}
+            generating={!!(prototype.card && genBusy[prototype.card.id])} />
+        ) : null}
       </section>
 
       {/* ZONE 2 — stakeholders APPROVE it. The round is the zone: N stakeholders

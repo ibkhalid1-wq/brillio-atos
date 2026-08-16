@@ -195,23 +195,35 @@ afterEach(() => {
 // ════════════════════════════════════════════════════════════════════════════
 
 describe("§1 CAPABILITY — every verb the band offered is still reachable", () => {
-  it("CAPABILITY open an operator-built artifact — all FOUR are tiles now, in dependency order", () => {
-    // TWO PAIRS, two to a row (operator direction 2026-08-16):
-    //   shape ▸ experience  — what we are building, and how it is navigated
-    //   agents ▸ build      — what runs it, and the thing itself
-    // This is also generation order — Experience Design gates the Blueprint
-    // (GENERATION_PREREQS), so tiles light up left to right. The 2026-08-15
-    // pairing put the Blueprint tile before the artifact that gates it. Experience
-    // Design used to be an "open Experience Design →" link buried in the joint zone's
-    // right-hand column; it is a tile beside its siblings now, which is also how it is
-    // generated and rebuilt.
+  it("CAPABILITY open an operator-built artifact — three documents as tiles in dependency order, the prototype as its stage", () => {
+    // GENERATION ORDER, so the tiles light up left to right: Experience Design
+    // gates the Blueprint (GENERATION_PREREQS), and the 2026-08-15 pairing had
+    // the Blueprint tile before the artifact that gates it. Experience Design
+    // used to be an "open Experience Design →" link buried in the joint zone's
+    // right-hand column; it is a tile beside its siblings now, which is also how
+    // it is generated and rebuilt.
+    //
+    // THE PROTOTYPE IS NOT ONE OF THE TILES (operator direction 2026-08-16). It
+    // is the running application those three documents exist to produce, and a
+    // 212px box saying "decided, on record" is what you give a thing you READ.
+    // It has the band's own stage below them, which DRAWS the build — so this
+    // case checks the capability (all four openable) across both shapes rather
+    // than counting tiles.
     mountShell(seed());
     const names = [...host.querySelectorAll(".v3dl-tile-n")].map((n) => n.textContent);
-    expect(names).toEqual(["Architecture Strategy", "Experience Design", "Agentic Blueprint", "Prototype"]);
+    expect(names).toEqual(["Architecture Strategy", "Experience Design", "Agentic Blueprint"]);
     for (const title of names as string[]) {
       const open = tile(title)!.querySelector(".v3dl-tile-open") as HTMLButtonElement;
       expect(open.disabled, `${title} cannot be opened`).toBe(false);
     }
+    // …and the fourth, from its stage — still inside the operator zone.
+    const stage = host.querySelector(".v3dl-zone.is-operator .v3dl-stage");
+    expect(stage, "the prototype lost its stage").not.toBeNull();
+    expect(stage!.querySelector(".v3dl-stage-t")?.textContent).toBe("Prototype");
+    const openIt = [...stage!.querySelectorAll("button")]
+      .find((b) => /open/i.test(b.textContent ?? "")) as HTMLButtonElement | undefined;
+    expect(openIt, "the prototype cannot be opened").toBeDefined();
+    expect(openIt!.disabled).toBe(false);
   });
 
   it("CAPABILITY open Experience Design — the joint zone's link is gone, the tile hands over the same card", () => {

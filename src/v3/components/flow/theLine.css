@@ -451,6 +451,51 @@
  * unreachable (TheLine never passed onQuestion) and is gone; the rule went with it. */
 .v3dl-question{margin-left:auto;font-size:10px}
 .v3dl-question-note{color:var(--v3-text-muted);font-style:italic}
+/* ── THE PROTOTYPE STAGE ──────────────────────────────────────────────────────
+   The running application, shown. It was the fourth tile in a row of four: same
+   212px box and the same "decided, on record" line as three documents you READ.
+   It is the thing those three exist to produce and the only one you can judge by
+   looking, so it gets the band's own stage under them — wider, with the build
+   drawn in it, and its own actions. Deliberately NOT a fifth zone: it is still
+   operator-owned work and still sits inside "Operator builds it". */
+.v3dl-stage{display:flex;flex-direction:column;gap:10px;margin-top:2px;padding:12px 13px 10px;
+  border:1px solid color-mix(in srgb,var(--v3-accent-2) 26%,var(--fs-line));border-radius:12px;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--v3-accent-2) 5%,var(--fs-card)) 0%,var(--fs-card) 62%)}
+.v3dl-stage-h{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.v3dl-stage-t{font-size:13.5px;font-weight:700;color:var(--v3-text-primary);letter-spacing:-.005em}
+.v3dl-stage-sub{font-size:11px;color:var(--v3-text-muted);line-height:1.4;flex:1 1 auto;min-width:0}
+.v3dl-stage-state{display:inline-flex;align-items:center;gap:9px;font-size:11px;flex:none}
+.v3dl-stage-when{font-size:10.5px;color:var(--v3-text-muted);letter-spacing:.01em}
+/* The screen. `sandbox=""` and `tabIndex={-1}`: on a board, the prototype is a
+   VIEW of where things stand — walking it belongs in the studio and the browser
+   tab, and a focusable iframe here would swallow the page's tab order. The veil
+   is the real control, and it covers the frame so a stray click lands on it. */
+/* DRAWN AT DESKTOP WIDTH, THEN SCALED. At the band's own ~600px the prototype
+   does what any responsive application does — wraps its table columns and
+   stacks its chrome — so the stage showed a cramped layout nobody designed and
+   nobody will ship. It renders at a real desktop viewport and is scaled to fit,
+   which is what a preview is FOR: the proportions the stakeholder will see.
+   The viewport, the aspect ratio and the scale are all set from STAGE_W/STAGE_H
+   in the component: a `scale()` needs a NUMBER, and `calc(100cqw / 1280)` is a
+   length, so the container-query version silently drew at native size and
+   overflowed. Measured there, applied here. */
+.v3dl-stage-screen{position:relative;border:1px solid var(--fs-line);border-radius:10px;overflow:hidden;
+  background:#fff;box-shadow:var(--v3-shadow-xs)}
+.v3dl-stage-frame{display:block;border:0;background:#fff;pointer-events:none;transform-origin:top left}
+.v3dl-stage-veil{position:absolute;inset:0;width:100%;border:0;cursor:pointer;font:inherit;padding:0;
+  display:flex;align-items:flex-end;justify-content:center;
+  background:linear-gradient(180deg,rgba(17,19,32,0) 55%,rgba(17,19,32,.42) 100%);
+  opacity:0;transition:opacity .16s ease}
+.v3dl-stage-veil:hover,.v3dl-stage-veil:focus-visible{opacity:1}
+.v3dl-stage-veil:focus-visible{outline:2px solid var(--mv);outline-offset:-2px}
+.v3dl-stage-veil:disabled{cursor:default}
+.v3dl-stage-veil-l{margin-bottom:14px;font-size:12px;font-weight:700;color:#fff;letter-spacing:-.005em;
+  background:rgba(17,19,32,.72);border-radius:999px;padding:6px 16px;backdrop-filter:blur(3px)}
+/* Nothing to draw yet — say what it will be built from rather than an empty box. */
+.v3dl-stage-none{display:flex;flex-direction:column;align-items:flex-start;gap:9px;padding:16px 14px;
+  border:1px dashed var(--fs-line);border-radius:10px;background:var(--v3-surface-2)}
+.v3dl-stage-none p{margin:0;font-size:11.5px;line-height:1.55;color:var(--v3-text-muted);max-width:70ch}
+.v3dl-stage-foot{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center}
 /* the goal link — "open Validation" in the stakeholder zone's header */
 .v3dl-goal-open{font:inherit;text-align:left;font-size:11.5px;color:var(--v3-text-secondary);background:none;border:0;padding:0;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
 .v3dl-goal-open:focus-visible{outline:2px solid var(--v3-positive);outline-offset:2px}
