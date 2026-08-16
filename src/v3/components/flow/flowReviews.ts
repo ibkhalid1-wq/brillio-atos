@@ -186,7 +186,7 @@ function projectRelations(program: ProgramSummary, terms: OntologyTerm[]): Ontol
     const to = str(rel.to).trim();
     const relation = str(rel.relation).trim() || "relates to";
     if (!from || !to || !known.has(from.toLowerCase()) || !known.has(to.toLowerCase())) continue;
-    const key = `${from.toLowerCase()} ${relation.toLowerCase()} ${to.toLowerCase()}`;
+    const key = `${from.toLowerCase()}\u0000${relation.toLowerCase()}\u0000${to.toLowerCase()}`;
     if (seen.has(key)) continue;
     seen.add(key);
     out.push({ from, relation, to });

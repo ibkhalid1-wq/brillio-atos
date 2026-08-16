@@ -7706,7 +7706,7 @@ function reconcileVotedOntology(
       const to = local.get(ontologyNameKey(row.to));
       if (!from || !to || from === to) continue;
       const verb = typeof row.relation === "string" ? row.relation.trim().toLowerCase() : "";
-      const dkey = `${from} ${to}`;
+      const dkey = `${from}\u0000${to}`;
       if (seen.has(dkey)) continue;
       seen.add(dkey);
       const rb = relBuckets.get(dkey) ?? { docs: new Set(), verbs: [], from, to };
@@ -7719,7 +7719,7 @@ function reconcileVotedOntology(
   const kept = [...relBuckets.values()].filter((rb) => rb.docs.size >= threshold);
   const byUnordered = new Map<string, typeof kept[number]>();
   for (const rb of kept) {
-    const uk = [rb.from, rb.to].sort(ontologyCompare).join(" ");
+    const uk = [rb.from, rb.to].sort(ontologyCompare).join("\u0000");
     const cur = byUnordered.get(uk);
     if (!cur || rb.docs.size > cur.docs.size
       || (rb.docs.size === cur.docs.size && ontologyCompare(`${rb.from}${rb.to}`, `${cur.from}${cur.to}`) < 0)) {
@@ -7745,7 +7745,7 @@ function reconcileVotedOntology(
       }
       return [{ from: rb.from, relation: verb, to: rb.to, cardinality: "unknown" }];
     })
-    .sort((a, b) => ontologyCompare(`${a.from} ${a.to}`, `${b.from} ${b.to}`));
+    .sort((a, b) => ontologyCompare(`${a.from}\u0000${a.to}`, `${b.from}\u0000${b.to}`));
 
   // Deterministic ASSOCIATION CLOSURE - the prompt's "mandatory closure"
   // doctrine, enforced: every association the packs define between two PRESENT

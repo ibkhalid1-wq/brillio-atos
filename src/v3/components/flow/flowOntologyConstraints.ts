@@ -150,7 +150,7 @@ export function validateOntologyConstraints(doc: Record<string, unknown>): Ontol
       violations.push({ kind: "bad-cardinality", severity: "blocking", relationIndex: index, message: `Relation "${from} → ${to}" has cardinality "${card}" — use side:side over 0/1/N/M (e.g. ${ONTOLOGY_CARDINALITIES.slice(0, 4).join(", ")}) or unknown.` });
     }
     if (from && to) {
-      const edgeKey = `${norm(from)} ${norm(verb)} ${norm(to)}`;
+      const edgeKey = `${norm(from)}\u0000${norm(verb)}\u0000${norm(to)}`;
       const prior = edgeCardinality.get(edgeKey);
       if (prior && prior !== "unknown" && card !== "unknown" && prior !== card) {
         violations.push({ kind: "cardinality-conflict", severity: "blocking", relationIndex: index, message: `"${from} ${verb} ${to}" is declared both ${prior} and ${card} — cardinality must be consistent.` });

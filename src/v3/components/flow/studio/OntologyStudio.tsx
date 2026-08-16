@@ -222,7 +222,7 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
   // A new entity set (fresh generation, or an add/remove/rename) re-opts the
   // graph into auto-arrange — the operator's hand-positioning applied to the
   // PREVIOUS set, not this one.
-  const idKey = ids.join(" ");
+  const idKey = ids.join("\u0000");
   // A relation change re-arranges too (the routes moved with it), but only an
   // entity-set change clears the drag opt-out.
   const layoutKey = idKey + "#" + relations.map((relation) => String(relation.from ?? "") + ">" + String(relation.to ?? "")).join(",") + "~" + ghostIds.join(",");

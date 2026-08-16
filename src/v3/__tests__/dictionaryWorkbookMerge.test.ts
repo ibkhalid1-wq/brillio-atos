@@ -8,7 +8,7 @@
  *  D0  `XLSX.read` was handed the raw ArrayBuffer under `type: "array"`, which means
  *      "array of bytes". SheetJS does not throw on that — it returns a workbook with
  *      ONE sheet called "Sheet1" whose content is the file's own ZIP header read as
- *      text ("PK…"). Measured on the real file: 1 sheet via ArrayBuffer,
+ *      text ("PK\u0003\u0004…"). Measured on the real file: 1 sheet via ArrayBuffer,
  *      12 via Uint8Array. Every xlsx dictionary parsed zero fields.
  *
  *  D1  Header matching was exact equality, so the field column — headed "Field API

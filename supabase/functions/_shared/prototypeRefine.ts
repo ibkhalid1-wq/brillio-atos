@@ -343,8 +343,15 @@ export function prototypeBaselineFor(
  */
 export function baselineWithPriorSkin(baseline: PrototypeBaseline, priorHtml: unknown): PrototypeBaseline {
   if (typeof priorHtml !== "string" || !priorHtml.trim()) return baseline;
+  // Joined on an ESCAPED NUL, not a literal one. The byte is the right
+  // separator — no fabric id can contain it, so ["a","b"] cannot compare equal
+  // to ["a\u0000b"] — but writing it raw made this file BINARY to grep and
+  // ripgrep, which skip it in silence. A reader searching for any symbol in
+  // these 600 lines got no hits and reasonably concluded it was not here; it
+  // cost two searches in one session before the cause was spotted. Same value,
+  // same comparison, ASCII source.
   const ids = [...new Set(fabricIdsIn(priorHtml))].sort();
-  if (ids.length !== baseline.fabricIds.length || ids.join(" ") !== baseline.fabricIds.join(" ")) return baseline;
+  if (ids.length !== baseline.fabricIds.length || ids.join("\u0000") !== baseline.fabricIds.join("\u0000")) return baseline;
   const css = stylesheetIn(priorHtml);
   if (!css.trim() || css === baseline.stylesheet) return baseline;
   return { ...baseline, html: withStylesheet(baseline.html, css), stylesheet: css };
