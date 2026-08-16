@@ -1048,6 +1048,12 @@ export interface EntityScreenOptions {
    *  without one, which is the same rule that decides whether the toggle is
    *  rendered at all. */
   view?: "table" | "board";
+  /** What an EMPTY list of this entity says — the Experience Design's own
+   *  `states.empty` copy for the screen that shows it. The designer already
+   *  wrote the business-language line ("No leads or opportunities. Awaiting
+   *  handoff from Marketing."); before this the assembler discarded it and
+   *  every empty list read the generic "No X records yet". */
+  emptyText?: string;
 }
 
 /**
@@ -1100,7 +1106,24 @@ export function screenOptionsFor(doc: unknown): Record<string, EntityScreenOptio
     // "table" IS the default, so it is stored as nothing — a document that
     // records the default would assemble the same bytes and diff differently.
     if (value.view === "board") opt.view = "board";
+    // The designed (or authored) empty-state line survives re-normalisation:
+    // assemblePrototype runs every caller's options back through this reader,
+    // so a key this loop does not parse is a key the assembly never sees.
+    const emptyText = typeof value.emptyText === "string" ? value.emptyText.trim() : "";
+    if (emptyText && emptyText.length <= 160) opt.emptyText = emptyText;
     if (Object.keys(opt).length) out[entity] = opt;
+  }
+  // THE DESIGNED EMPTY STATES, read off the SAME document's generated screens.
+  // Each ED screen carries per-state copy; its first named entity claims the
+  // `states.empty` line for that entity's list. The operator's screenOptions
+  // (above) win any collision — authored beats generated, as everywhere.
+  for (const screen of (Array.isArray(d.screens) ? d.screens : []).filter(isRecord)) {
+    const states = isRecord(screen.states) ? screen.states : {};
+    const line = typeof states.empty === "string" ? states.empty.trim() : "";
+    if (!line || line.length > 160) continue;
+    const entity = authoredNames(screen.entities)[0];
+    if (!entity || out[entity]?.emptyText) continue;
+    out[entity] = { ...out[entity], emptyText: line };
   }
   return out;
 }
@@ -1726,7 +1749,7 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
         slug: es.get(entity)!,
         status: statusIndexOf(entity),
         ...columnSpec(entity, leadColumnsFor(entity, 4)),
-        emptyTitle: `No ${entity} records yet`,
+        emptyTitle: optionsFor(entity).emptyText ?? `No ${entity} records yet`,
         cite: citeOf(assumptionFor(seedParentOf(entity), entity)),
       });
       return fillSlot(region);
@@ -1813,7 +1836,9 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
       list: {
         region: `screen:${s}:list`,
         ...columnSpec(name, leadColumnsFor(name, SCREEN_BUDGET.listColumns)),
-        emptyTitle: `No ${name} records yet`,
+        // The Experience Design's own empty-state line where one was written —
+        // business language a designer chose — else the generic fallback.
+        emptyTitle: optionsFor(name).emptyText ?? `No ${name} records yet`,
         cite: citeOf(assumptionFor(seedParentOf(name), name)),
         status: statusIx,
         ...(board ? { view: "board" as const } : {}),

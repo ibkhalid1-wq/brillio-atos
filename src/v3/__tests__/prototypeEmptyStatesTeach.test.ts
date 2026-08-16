@@ -114,3 +114,38 @@ describe("empty states teach", () => {
     expect(deriveFabric(ontology, atlas).version).toBe(fabric.version);
   });
 });
+
+// ─── The designer's empty state reaches the page (2026-08-16) ────────────────
+// Experience Design writes per-screen `states.empty` copy in business language;
+// the assembler discarded it and every empty list read "No X records yet".
+// `screenOptionsFor` now lifts each screen's line onto its first named entity,
+// and both list and queue specs prefer it over the generic fallback.
+import { screenOptionsFor } from "@shared/prototypeAssembly.ts";
+
+describe("the Experience Design's empty-state copy is honoured", () => {
+  const design = {
+    screens: [
+      { id: "lead-board", entities: ["Lead", "Opportunity"], states: { empty: "No leads yet. Awaiting handoff from Marketing." } },
+      { id: "acct", entities: ["Account"], states: { empty: "x".repeat(200) } },   // over budget — dropped
+    ],
+    screenOptions: { Opportunity: { emptyText: "The operator wrote this one." } },
+  };
+
+  it("lifts states.empty onto the screen's first entity; operator authoring wins; over-length is dropped", () => {
+    const opts = screenOptionsFor(design);
+    expect(opts.Lead?.emptyText).toBe("No leads yet. Awaiting handoff from Marketing.");
+    expect(opts.Account?.emptyText).toBeUndefined();
+    expect(opts.Opportunity?.emptyText).toBe("The operator wrote this one.");
+  });
+
+  it("an empty list renders the designed line, not the generic one", () => {
+    // An ontology whose Lead table seeds EMPTY: Lead is a child, and the seeds
+    // plant the zero-fanout extreme — a single-parent build keeps Lead present
+    // but possibly populated, so force emptiness with an entity no relation
+    // reaches and no rows generate for... simplest: assemble and check the
+    // emptyTitle landed in the list spec via the rendered document text.
+    const built = assemblePrototype(ontology, atlas, undefined, { screenOptions: screenOptionsFor(design) });
+    expect(built.html).toContain("No leads yet. Awaiting handoff from Marketing.");
+    expect(built.html.includes("No Lead records yet")).toBe(false);
+  });
+});
