@@ -48,6 +48,7 @@
  * today. That 0 is marked provisional and named as UNKNOWN, never dressed up as
  * convergence the ledger does not have.
  */
+import { generatedStamp } from "@/v3/lib/whenGenerated";
 import { useMemo, useState, type ReactNode } from "react";
 import type { ProgramSummary } from "@/new/types";
 import type { LineBand, LineStation } from "@/v3/lib/lineModel";
@@ -156,6 +157,7 @@ function OperatorTile({ station, role, owned, onOpen, onRegen, onGenerate, regen
   const present = !!station.card?.present;
   const canGen = !present && !!station.canGenerate && !!station.card && !!onGenerate;
   const evidenceMoved = present && station.needsRefresh; // was "needs refresh"
+  const stamp = present ? generatedStamp(station.card?.generatedAt) : null;
   return (
     <div className={`v3dl-tile${present ? " present" : ""}`}>
       <button type="button" className="v3dl-tile-open" disabled={!present && !canGen}
@@ -187,6 +189,12 @@ function OperatorTile({ station, role, owned, onOpen, onRegen, onGenerate, regen
         {station.sections?.length ? (
           <span className="v3dl-secs">{station.sections.map((s) => <span key={s.key} className="v3dl-sec">{s.label}</span>)}</span>
         ) : null}
+        {/* HOW OLD IS WHAT I AM LOOKING AT — the question an operator asks
+            before any other, and the one the board could not answer. Distinct
+            from "evidence moved": that says the inputs shifted, this says when
+            this document was last written. Absent when the record does not say;
+            the exact instant rides the tooltip. */}
+        {stamp ? <span className="v3dl-tile-when" title={stamp.title}>{stamp.label}</span> : null}
       </button>
       <div className="v3dl-tile-foot">
         {present && onRegen && station.card ? (

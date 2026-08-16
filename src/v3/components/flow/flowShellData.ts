@@ -115,6 +115,16 @@ export interface ArtifactCardModel {
   stale: boolean;
   /** Open gaps the generator declared inside the document itself. */
   gaps: number;
+  /**
+   * WHEN THIS DOCUMENT WAS LAST GENERATED — the artifact's own `generatedAt`,
+   * ISO, or null when nothing on the record says.
+   *
+   * Every generator stamps it and no surface showed it, so a board of tiles
+   * looked identical whether a document was minted a minute ago or three weeks
+   * ago. "Stale" answered a different question (its inputs moved); this answers
+   * the one an operator actually asks first — how old is what I am looking at?
+   */
+  generatedAt: string | null;
 }
 
 export interface GateSignal {
@@ -436,7 +446,7 @@ export function movementEvidence(program: ProgramSummary, movement: PhaseDefinit
 /** Artifact cards for one movement — presence, confidence, readable excerpt. */
 export function movementArtifacts(program: ProgramSummary, movement: PhaseDefinition): ArtifactCardModel[] {
   const root = dataRoot(program);
-  const stubs = (root.phaseArtifacts as Record<string, Record<string, { confidence?: number; inputsFingerprint?: string; status?: string }>> | undefined)?.[movement.id] ?? {};
+  const stubs = (root.phaseArtifacts as Record<string, Record<string, { confidence?: number; inputsFingerprint?: string; status?: string; agentDraftedAt?: string }>> | undefined)?.[movement.id] ?? {};
   const currentFingerprint = movementInputsFingerprint(program, movement.id);
   return getPhaseArtifactDefs(movement.id).map((def) => {
     const content = getFormalArtifactContent(root, def.id);
@@ -477,9 +487,19 @@ export function movementArtifacts(program: ProgramSummary, movement: PhaseDefini
     // Discovery Kit never prompted a Listen regeneration: the flag was set,
     // and the only surface that could show it was reading fingerprints alone.
     const statusStale = typeof stub?.status === "string" && stub.status === "stale";
+    // The document's own stamp first; the ledger stub's draft time as the
+    // fallback, for a stub minted before its mirror was written.
+    const generatedAt = (() => {
+      const fromDoc = mirror && typeof mirror === "object" && !Array.isArray(mirror)
+        ? (mirror as Record<string, unknown>).generatedAt : null;
+      const iso = typeof fromDoc === "string" && fromDoc.trim() ? fromDoc
+        : typeof stub?.agentDraftedAt === "string" && stub.agentDraftedAt.trim() ? stub.agentDraftedAt
+          : null;
+      return iso && !Number.isNaN(Date.parse(iso)) ? iso : null;
+    })();
     return {
       id: def.id, movementId: movement.id, title: def.label, description: def.description,
-      excerpt, confidence, present, gaps,
+      excerpt, confidence, present, gaps, generatedAt,
       stale: present && (statusStale
         || (typeof stub?.inputsFingerprint === "string" && stub.inputsFingerprint !== currentFingerprint)),
     };

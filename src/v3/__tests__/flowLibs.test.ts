@@ -1652,7 +1652,7 @@ describe("gateReadiness — one composed verdict over the closed loop", () => {
   const movement = (id: string) => flowMovements().find((m) => m.id === id)!;
   const art = (over: Record<string, unknown> = {}) => ({
     id: "discovery-kit", movementId: "frame", title: "Discovery Kit", description: "",
-    excerpt: null, confidence: 80, present: true, stale: false, gaps: 0, ...over,
+    excerpt: null, confidence: 80, present: true, stale: false, gaps: 0, generatedAt: null, ...over,
   });
   const metFrame = (extra: Record<string, unknown> = {}) => programme({ ...extra, phaseInputs: { frame: {
     sponsorConversation: "— Sarah Okafor, COO —\ntext", businessObjective: "obj", sponsor: "Sarah",
@@ -1753,7 +1753,7 @@ describe("gateChecklist — record and judgment rows close the loop", () => {
   const movement = flowMovements().find((m) => m.id === "frame")!;
   const art = {
     id: "discovery-kit", movementId: "frame", title: "Discovery Kit", description: "",
-    excerpt: null, confidence: 80, present: true, stale: false, gaps: 0,
+    excerpt: null, confidence: 80, present: true, stale: false, gaps: 0, generatedAt: null,
   };
 
   it("a current document is a met record row with its confidence", () => {

@@ -24,7 +24,7 @@ const programme = (inner: Record<string, unknown>): ProgramSummary => ({
 
 const art = (over: Partial<ArtifactCardModel>): ArtifactCardModel => ({
   id: "discovery-kit", movementId: "frame", title: "Discovery Kit", description: "",
-  excerpt: null, confidence: 80, present: true, stale: false, gaps: 0, ...over,
+  excerpt: null, confidence: 80, present: true, stale: false, gaps: 0, generatedAt: null, ...over,
 });
 
 const FULL_FRAME = {

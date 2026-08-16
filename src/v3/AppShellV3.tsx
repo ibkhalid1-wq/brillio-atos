@@ -2442,10 +2442,29 @@ export default function AppShellV3() {
   // evidence, AURA rebuilds it on its own — the operator is never prompted to
   // "regenerate, evidence changed" (they keep a manual regenerate as an option).
   // Keyed by the movement's evidence FINGERPRINT so it runs once per genuine
-  // change: a successful rebuild clears the staleness (no re-fire), and a failed
-  // one won't loop until new evidence arrives. One movement per pass, and never
-  // while another agent is mid-run. Locked (gated) movements are left alone.
-  const autoRegenRef = useRef<Set<string>>(new Set());
+  // change. One movement per pass, and never while another agent is mid-run.
+  // Locked (gated) movements are left alone.
+  //
+  // A PASS THAT LEAVES WORK UNDONE IS RETRIED — up to AUTO_REGEN_MAX_PASSES.
+  // The key used to be claimed once and never released, which read as "a failed
+  // one won't loop until new evidence arrives" — no storm, but no recovery
+  // either. Observed live: a regenerated ontology cascaded correctly through
+  // vocabulary → atlas → agentify → architecture → experience design, the
+  // blueprint's run then died on the platform, and `prototype-build` was left
+  // stale for an hour while every document above it was current. Nothing would
+  // ever have rebuilt it: the fingerprint had not changed, so the pass was
+  // already spent.
+  //
+  // The retry is bounded and self-narrowing: `work` is recomputed from CURRENT
+  // staleness each pass, so a retry only picks up what genuinely remains, and a
+  // document that simply cannot build stops after a few attempts rather than
+  // looping on the provider. Attempts reset when the evidence moves again,
+  // which is a new key.
+  /** How many passes one evidence fingerprint may spend rebuilding a movement.
+   *  More than one so a transient failure recovers on its own; small, so a
+   *  document that cannot build stops asking the provider. */
+  const AUTO_REGEN_MAX_PASSES = 3;
+  const autoRegenRef = useRef<Map<string, number>>(new Map());
   useEffect(() => {
     const p = activeProgram;
     if (!p || !hasSubstantiveProgramData(p.rawData) || runningAgentIds.size > 0) return;
@@ -2478,11 +2497,18 @@ export default function AppShellV3() {
       const work = [...stale, ...firstBuild];
       if (!work.length) continue;
       const key = `${p.id}:${movement.id}:${movementInputsFingerprint(p, movement.id)}${autoBuildEnabled(p) ? ":ab" : ""}`;
-      if (autoRegenRef.current.has(key)) continue;
-      autoRegenRef.current.add(key);
+      const spent = autoRegenRef.current.get(key) ?? 0;
+      if (spent >= AUTO_REGEN_MAX_PASSES) continue;
+      autoRegenRef.current.set(key, spent + 1);
       void (async () => {
         for (const art of work) {
-          await runProgramAgent({ agentId: art.id, phaseId: movement.id, triggeredBy: "proactive" });
+          // One dead link must not strand the documents behind it. Today
+          // `runProgramAgent` reports failures rather than throwing, so this
+          // guard is belt-and-braces — but the cost of being wrong about that
+          // is the whole rest of the chain, which is exactly the defect above.
+          try {
+            await runProgramAgent({ agentId: art.id, phaseId: movement.id, triggeredBy: "proactive" });
+          } catch { /* the pass continues; staleness that survives is retried */ }
         }
       })();
       break; // one movement per pass; the refresh re-fires this for the next

@@ -27,6 +27,7 @@ const rowActivate = <T extends Element>(run: () => void) => (e: React.KeyboardEv
 import type { ProgramSummary } from "@/new/types";
 import FlowGrounding from "@/v3/components/flow/FlowGrounding";
 import BrilioLogo from "@/v3/components/BrilioLogo";
+import { timeAgo } from "@/v3/lib/whenGenerated";
 import { AttachFileButton, copyTextFromAction } from "@/v3/components/flow/flowCapture";
 const FlowArtifactStudio = lazy(() => import("@/v3/components/flow/studio/FlowArtifactStudio"));
 import type { ArtifactEditInput } from "@/v3/components/flow/studio/FlowArtifactStudio";
@@ -1025,15 +1026,7 @@ class ViewBoundary extends React.Component<{ view: string; children: React.React
 
 /* ── Today: decisions waiting on you, the log, the moments ahead ─────────── */
 
-function timeAgo(iso: string): string {
-  const t = Date.parse(iso);
-  if (Number.isNaN(t)) return "";
-  const s = Math.max(0, (Date.now() - t) / 1000);
-  if (s < 60) return "just now";
-  if (s < 3600) return `${Math.round(s / 60)}m ago`;
-  if (s < 86400) return `${Math.round(s / 3600)}h ago`;
-  return new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-}
+
 
 function DecisionCard({ program, decision, movementLabel, busy, onResolve }: {
   program: ProgramSummary;

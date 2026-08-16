@@ -13,6 +13,7 @@
  * One write path, one view: nothing renders a second copy of these numbers, so
  * there is nothing left for a second surface to disagree with.
  */
+import { generatedStamp } from "@/v3/lib/whenGenerated";
 import { Fragment, Suspense, lazy, useEffect, useMemo, useState, type ComponentProps, useRef } from "react";
 import type { ProgramSummary } from "@/new/types";
 import { buildLineModel, LINE_GLYPHS, type LineBand, type LineStation } from "@/v3/lib/lineModel";
@@ -276,6 +277,15 @@ function Station({ station, onOpen, onRegen, onGenerate, regenerating, generatin
         ) : null}
       </span>
       {station.subtitle ? <span className="v3ln-stn-sub">{station.subtitle}</span> : null}
+      {/* When this document was last generated. "evidence moved" above says its
+          INPUTS shifted; this says when the thing itself was last written, and
+          a document can be weeks old and perfectly current by that measure. */}
+      {station.card?.present && station.card.generatedAt
+        ? (() => {
+          const stamp = generatedStamp(station.card.generatedAt);
+          return stamp ? <span className="v3ln-stn-when" title={stamp.title}>{stamp.label}</span> : null;
+        })()
+        : null}
       {station.sections?.length ? (
         <span className="v3ln-stn-secs">
           {station.sections.map((s) => (

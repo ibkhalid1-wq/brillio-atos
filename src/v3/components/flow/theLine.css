@@ -153,6 +153,8 @@
   background:color-mix(in srgb,var(--mv) 12%,transparent)}
 .v3ln-rf.gen.busy{opacity:.6}
 .v3ln-stn-sub{font-size:var(--aura-t-meta);color:var(--v3-text-muted);line-height:1.4}
+/* Last generated — same question, same words, on the Line as on the tiles. */
+.v3ln-stn-when{display:block;margin-top:5px;font-size:10.5px;color:var(--v3-text-muted);letter-spacing:.01em}
 /* an artifact's own sections at a glance — visibility without opening it */
 .v3ln-stn-secs{display:flex;gap:5px;flex-wrap:wrap;margin-top:1px}
 .v3ln-stn-sec{font:600 9.5px/1.5 inherit;color:var(--v3-accent-2);
@@ -423,6 +425,10 @@
 .v3dl-tile-h{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .v3dl-tile-n{font-size:13px;font-weight:700;color:var(--v3-text-primary)}
 .v3dl-tile-sub{font-size:11px;color:var(--v3-text-muted);line-height:1.4}
+/* When this document was last generated — quiet, factual, under the state.
+   It answers "how old is this?", which no tile could answer before, and is
+   a different question from "evidence moved" (the inputs shifted). */
+.v3dl-tile-when{display:block;margin-top:6px;font-size:10.5px;color:var(--v3-text-muted);letter-spacing:.01em}
 .v3dl-tile-state{font-size:11px;display:flex;align-items:center;gap:5px}
 .v3dl-decided{display:inline-flex;align-items:center;gap:5px;color:var(--v3-positive);font-weight:600}
 .v3dl-moved{display:inline-flex;align-items:center;gap:5px;color:var(--v3-amber);font-weight:600}
