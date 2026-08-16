@@ -6928,6 +6928,14 @@ type ProvisionalPackAttribute = {
   name: string;
   kind: "string" | "enum" | "money" | "date" | "person" | "email" | "id" | "number";
   values?: string[];
+  /** The bounds a NUMBER actually has, when the standard states them. Without
+   * this a score drew from the generic 0–200 quantity pool and an "Intent
+   * Score" rendered 197 — a figure the business reads out of 100, wrong on
+   * every row that exceeded it. Same discipline as `values` for an enum: the
+   * fact rides the pack, the reconciler writes it onto the attribute, and the
+   * seed draws inside it. */
+  min?: number;
+  max?: number;
 };
 type ProvisionalPackEntity = {
   name: string; uri: string; definition: string; aliases: string[]; core?: boolean;
@@ -7379,7 +7387,7 @@ PROVISIONAL_BACKBONE_PACKS.crm = {
         { name: "leadName", kind: "string" },
         { name: "leadSource", kind: "enum", values: ["Web", "Event", "Referral", "Outbound", "Partner", "Syndication"] },
         { name: "leadStage", kind: "enum", values: ["New", "Qualifying", "Converted", "Disqualified"] },
-        { name: "intentScore", kind: "number" },
+        { name: "intentScore", kind: "number", min: 0, max: 100 },
         { name: "owner", kind: "person" },
         { name: "contactEmail", kind: "email" },
         { name: "createdDate", kind: "date" },
@@ -7651,6 +7659,8 @@ function reconcileVotedOntology(
         name: attr.name,
         kind: attr.kind,
         ...(attr.values ? { values: attr.values } : {}),
+        ...(typeof attr.min === "number" ? { min: attr.min } : {}),
+        ...(typeof attr.max === "number" ? { max: attr.max } : {}),
         evidence: `${packed.vocabulary} standardBackbone — to confirm`,
       });
     }

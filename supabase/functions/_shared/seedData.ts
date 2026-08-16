@@ -181,11 +181,19 @@ function valueFor(
   rnd: () => number,
   refValue: () => string | undefined,
   vocab?: readonly string[],
+  /** The bounds the ONTOLOGY states for this number, when it states any. A
+   * score is the case that forced it: the generic quantity pool runs to 200
+   * and an "Intent Score" is read out of 100, so two rows in three showed a
+   * figure that cannot exist. One draw either way, so bounding one column
+   * shifts no other column's values. */
+  range?: { min: number; max: number },
 ): unknown {
   const listed = vocab && vocab.length ? vocab : undefined;
   switch (role) {
     case "monetary": return Math.round((rnd() * 480000 + 2000) / 500) * 500;
-    case "quantity": return Math.floor(rnd() * 200);
+    case "quantity": return range
+      ? range.min + Math.floor(rnd() * (range.max - range.min + 1))
+      : Math.floor(rnd() * 200);
     // A share of a whole cannot exceed the whole. The bound IS the role.
     case "percent": return Math.floor(rnd() * 101);
     // Rotated by the attribute's own name so an entity carrying six category
@@ -265,6 +273,16 @@ export function generateSeed(ontology: Record<string, unknown>, version: string,
     const values = row && typeof row === "object" ? (row as { values?: unknown }).values : undefined;
     const list = Array.isArray(values) ? values.filter((v): v is string => typeof v === "string" && !!v.trim()) : [];
     return list.length ? list : undefined;
+  };
+  /** The bounds an attribute declares, written onto it by the reconciler from
+   *  the standard backbone. Absent, the generic pools stand exactly as before. */
+  const attrRangeOf = (name: string, attr: string): { min: number; max: number } | undefined => {
+    const e = entities.find((x) => String(x.name) === name);
+    const row = (Array.isArray(e?.attributes) ? e!.attributes : []).find((a) =>
+      !!a && typeof a === "object" && String((a as { name?: unknown }).name ?? "") === attr);
+    if (!row || typeof row !== "object") return undefined;
+    const { min, max } = row as { min?: unknown; max?: unknown };
+    return typeof min === "number" && typeof max === "number" && max > min ? { min, max } : undefined;
   };
   const roleOf = new Map(roles.attributeRoles.map((r) => [`${r.entity} ${r.attribute}`, r.role] as const));
   const refOf = new Map(roles.attributeRoles.filter((r) => r.refEntity).map((r) => [`${r.entity} ${r.attribute}`, r.refEntity!] as const));
@@ -394,7 +412,7 @@ export function generateSeed(ontology: Record<string, unknown>, version: string,
           const v = ta ? row[ta] : undefined;
           return typeof v === "string" && v ? v : String(row.id);
         };
-        rec[a] = valueFor(roleOf.get(`${name} ${a}`), name, a, i, rnd, refValue, vocabulary?.values.get(vocabularyKey(name, a)) ?? attrValuesOf(name, a));
+        rec[a] = valueFor(roleOf.get(`${name} ${a}`), name, a, i, rnd, refValue, vocabulary?.values.get(vocabularyKey(name, a)) ?? attrValuesOf(name, a), attrRangeOf(name, a));
       });
       // FK columns — `joinKeyFor` is the ONE definition, shared with the fabric
       // region that declares the relation, so the reader never has to guess how
@@ -420,14 +438,25 @@ export function generateSeed(ontology: Record<string, unknown>, version: string,
       // the row — so the extremes stay exactly where the planting put them and
       // the run stays reproducible.
       //
-      // 1 · AN ENDING CANNOT PRECEDE ITS BEGINNING. Each end-shaped date is
-      //     re-placed after the earliest start-shaped one, keeping the spread its
-      //     own drawn value gave it, so the dates still vary across rows.
-      if (startAttrs.length && endAttrs.length) {
+      // 1 · NOTHING ON A RECORD PRECEDES THE RECORD. Every date that is not
+      //     itself a beginning is re-placed after the earliest start-shaped
+      //     one, keeping the spread its own drawn value gave it, so the dates
+      //     still vary across rows.
+      //
+      //     It used to bound only END-shaped names, and a date whose name says
+      //     neither — `renewalDate`, `reviewDate`, `nextTouch` — drew free.
+      //     Measured on a real build: a contract starting 2026-08-05 carried a
+      //     renewal date of 2026-03-17, five months before the agreement
+      //     existed, on 3 of the first 8 rows. A renewal, a review or a follow
+      //     up is a thing that happens to a record that already exists; a date
+      //     that genuinely precedes the start is a BEGINNING and is named like
+      //     one, which is exactly what `lifecyclePhase` reads.
+      if (startAttrs.length) {
         const starts = startAttrs.map((a) => dayNumber(rec[a])).filter((n): n is number => n !== null);
         if (starts.length) {
           const opened = Math.min(...starts);
-          for (const a of endAttrs) {
+          for (const a of dateAttrs) {
+            if (lifecyclePhase(a) === "start") continue;
             const drawn = dayNumber(rec[a]);
             if (drawn === null) continue;             // a planted null stays a planted null
             rec[a] = dayToIso(opened + 1 + (drawn % 240));
@@ -452,7 +481,55 @@ export function generateSeed(ontology: Record<string, unknown>, version: string,
           else rec[money] = 2000 + (hashSeed(String(rec.id)) % 960) * 500;
         }
       }
-      // 3 · ONE ACCOUNT, ONE OWNER. Every person-shaped column used to be drawn
+      // 3 · A RECORD DOES NOT DISAGREE WITH ITSELF ABOUT BEING OVER.
+      //
+      //     A second state-shaped column was drawn independently of the first,
+      //     so on a real build an opportunity read "Closed Won" while its
+      //     forecast category read "Pipeline", and another read stage
+      //     "Proposal" with forecast "Closed" — a live deal filed as finished
+      //     and a finished deal filed as live, on the two columns a sales
+      //     leader reads together. Three of the first eight rows disagreed.
+      //
+      //     The PRIMARY state (the entity's first status column) decides, and
+      //     every other CLOSED-VOCABULARY column follows it on the one question
+      //     they can contradict: is the story over? A terminal primary pulls
+      //     each secondary to a terminal value of ITS OWN vocabulary; a live
+      //     primary pulls them off one. A secondary whose vocabulary has no
+      //     such value is left alone — there is nothing to move it to, and
+      //     inventing one would be worse.
+      //
+      //     The secondaries are status AND category columns, because the role
+      //     deriver reads a NAME: `opportunityStage` matched its status rule
+      //     and `forecastCategory` matched its category one, so a status-only
+      //     rule could never see the pair that actually disagreed. Widening is
+      //     safe by the guard above, not by luck: an ordinary category
+      //     ("Healthcare", "Strategic") holds no terminal value, so on a
+      //     finished record there is nothing to move it to and on a live one it
+      //     already agrees. Only a column that really does speak about
+      //     completion can move.
+      const coherenceAttrs = [...stateAttrs, ...attrs.filter((a) => roleOf.get(`${name} ${a}`) === "category")];
+      if (stateAttrs.length && coherenceAttrs.length > 1) {
+        const primary = coherenceAttrs[0];
+        const over = SETTLED.test(String(rec[primary] ?? ""));
+        for (const secondary of coherenceAttrs.slice(1)) {
+          const current = String(rec[secondary] ?? "");
+          if (!current || SETTLED.test(current) === over) continue;   // already agrees
+          // ONLY THE COLUMN'S OWN VOCABULARY. Falling back to the generic
+          // STATUSES pool here wrote a status word into a category column — a
+          // Region reading "Closed" — and the 33-entity measurement caught it:
+          // the shared category pool gained a 13th word that belongs to a
+          // different question. A column that states no vocabulary states
+          // nothing to move within, so it is left exactly as drawn.
+          const pool = vocabulary?.values.get(vocabularyKey(name, secondary))
+            ?? attrValuesOf(name, secondary);
+          if (!pool) continue;
+          // Chosen from the record's own id, so the repair spends no draw and
+          // two runs over one ontology still produce identical rows.
+          const fits = pool.filter((v) => SETTLED.test(v) === over);
+          if (fits.length) rec[secondary] = fits[hashSeed(String(rec.id) + secondary) % fits.length];
+        }
+      }
+      // 4 · ONE ACCOUNT, ONE OWNER. Every person-shaped column used to be drawn
       //     independently, so an account's opportunities, engagements and
       //     escalations each named a different person and none of them named the
       //     account's owner — the relationship a CRM exists to represent,
