@@ -344,6 +344,9 @@ a{color:var(--m-brand);text-decoration:none}
    is only ever rendered where there is something to switch to. */
 .m-search{width:230px;flex:none}
 .m-toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+/* A detail page's actions: the designed verbs first, then Edit/Delete. Wraps
+   rather than crowding the title on a narrow viewport. */
+.m-page-acts{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
 
 /* BOARD VIEW — a lane per value of the entity's status attribute. Offered only
    where the ontology declares one, so no screen carries a switch to nothing. */

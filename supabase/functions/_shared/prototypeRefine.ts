@@ -441,6 +441,11 @@ export function prototypeBaselineFor(
       vocabulary: inputs.vocabulary,
       appName: typeof inputs.appName === "string" ? inputs.appName : undefined,
       theme: paletteFor(experienceDesign),
+      // The design document itself — for the authored verbs, which resolve
+      // against this ontology inside the assembly. Same document every other
+      // surface assembles with, so the baseline stays the build the operator
+      // is looking at.
+      experienceDesign,
       // What each screen leads with is authored on the SAME document as the
       // menu. A baseline assembled without it is a different application from
       // the one the operator is looking at, and the post-condition would check

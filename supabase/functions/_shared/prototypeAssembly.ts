@@ -14,6 +14,7 @@ import { deriveFabric, type Fabric } from "./fabric.ts";
 import { deriveRoles, type ValueRole } from "./semanticRoles.ts";
 import { generateSeed, type SeedAssumption, type SeedRecord } from "./seedData.ts";
 import { meridianStylesheet, type PrototypeTheme } from "./prototypeDesignSystem.ts";
+import { deriveScreenActions, type ScreenAction } from "./experienceActions.ts";
 import { deriveWorkbenches, type AtlasRole, type AtlasWorkflow } from "./atlasWorkbenches.ts";
 import { deriveAgenticSurface, agentsOnEntity, gatedAgents, type SurfacedAgent } from "./agenticSurface.ts";
 import { entityNameResolver, joinKeyFor, type OntologyGraph } from "./ontologyGraph.ts";
@@ -271,6 +272,14 @@ interface PrototypeModel {
    * this existed.
    */
   widgets?: WidgetGroup[];
+  /**
+   * The DESIGNED VERBS this build carries, by screen slug — each resolved to
+   * something the renderer can actually do: a column and the value written into
+   * it (`set`), or the slug of the form that opens (`create`/`assign`). Absent
+   * when the Experience Design authored none this ontology could carry, so a
+   * build without them serialises exactly as it did before they existed.
+   */
+  acts?: Record<string, Array<{ kind: string; label: string; col: number; value: string; target: string }>>;
 }
 
 /**
@@ -692,6 +701,7 @@ function mCell(R,ri,v){
     var ri=detailRow(sc);if(ri<0)return;
     go(href(sl,at(t,ri,0))+"/edit");
   }
+  /*ACTION-RENDERER*/
   function delRec(sl){
     var sc=SC[sl];if(!sc)return;
     var t=D[sc.entity];if(!t)return;
@@ -903,10 +913,43 @@ const PERSONA_RENDERER = `
  *  that build has queues to draw and the widget segment when a screen spec was
  *  accepted. A function replacer, never a pattern one — the segments are code
  *  and `$&` inside them must stay `$&`. */
-function rendererFor(persona: boolean, widgets: boolean): string {
+/**
+ * A DESIGNED VERB, PERFORMED — emitted only for a build that carries one.
+ *
+ * The button was drawn only where the assembly could ground it (see
+ * `experienceActions.ts`), so every branch does the thing its label says: "set"
+ * writes a state the record's own attribute holds, "create" opens the form for
+ * the record the verb names, "assign" opens this record's form at the field
+ * being assigned.
+ *
+ * It rides the same optional-slot mechanism as the persona and widget
+ * renderers, and for the same reason: this is a FIXED COST on every document
+ * otherwise, and the refine budget is paid for rather than budgeted for (see
+ * DOCUMENT_REFINE_BUDGET). A build whose design authored no verb this ontology
+ * could carry serialises byte-for-byte as it did before verbs existed.
+ */
+const ACTION_RENDERER = `  function doAct(sl,ix){
+    var list=(M.acts||{})[sl];if(!list)return;
+    var a=list[ix];if(!a)return;
+    if(a.kind==="create"){go("#"+a.target+"/new");return}
+    var sc=SC[sl];if(!sc)return;
+    var t=D[sc.entity];if(!t)return;
+    var ri=detailRow(sc);if(ri<0)return;
+    if(a.kind==="assign"){go(href(sl,at(t,ri,0))+"/edit");return}
+    if(a.col<0)return;
+    if(String(at(t,ri,a.col))===a.value){toast(nameOf(t,ri)+" is already "+a.value,false);return}
+    setAt(t,ri,a.col,a.value);
+    renderAll();
+    toast(a.label+" \u2014 "+nameOf(t,ri)+" is now "+a.value,false);
+  }
+  window.doAct=doAct;
+`;
+
+function rendererFor(persona: boolean, widgets: boolean, acts: boolean): string {
   return PROTOTYPE_RENDERER
     .replace("/*PERSONA-RENDERER*/", () => (persona ? PERSONA_RENDERER : ""))
-    .replace("/*WIDGET-RENDERER*/", () => (widgets ? WIDGET_RENDERER : ""));
+    .replace("/*WIDGET-RENDERER*/", () => (widgets ? WIDGET_RENDERER : ""))
+    .replace("/*ACTION-RENDERER*/", () => (acts ? ACTION_RENDERER : ""));
 }
 
 /**
@@ -1086,6 +1129,49 @@ const authoredNames = (v: unknown): string[] => [...new Set(
 )];
 
 /**
+ * THE DESIGN'S METRIC BLOCKS, AS A SCREEN SPEC.
+ *
+ * A wireframe block of kind `metric` names an entity and the field it measures
+ * — the same judgement a screen spec's `stat` widget records. Translating
+ * rather than drawing keeps ONE validated path: the spec this returns is
+ * checked against the schema derived from this ontology, so a metric naming a
+ * field the entity does not hold is refused by name instead of rendered.
+ *
+ * The block's own `entity` decides which screen the number lands on (its list),
+ * not the screen that happened to draw it: a metric about opportunities belongs
+ * on the opportunities list wherever the designer put the tile. Returns null
+ * when the design carries no usable metric, so the absent case stays absent.
+ */
+function metricSpecFrom(design: unknown, slugOf: Map<string, string>): { screens: Array<{ screen: string; widgets: Array<Record<string, unknown>> }> } | null {
+  const d = isRecord(design) ? design : {};
+  const byScreen = new Map<string, Array<Record<string, unknown>>>();
+  for (const screen of (Array.isArray(d.screens) ? d.screens : []).filter(isRecord)) {
+    for (const region of (Array.isArray(screen.wireframe) ? screen.wireframe : []).filter(isRecord)) {
+      for (const block of (Array.isArray(region.blocks) ? region.blocks : []).filter(isRecord)) {
+        if ((typeof block.kind === "string" ? block.kind.trim().toLowerCase() : "") !== "metric") continue;
+        const entity = typeof block.entity === "string" ? block.entity.trim() : "";
+        const slug = entity ? slugOf.get(entity) : undefined;
+        if (!slug) continue;
+        const target = `list-${slug}`;
+        const widgets = byScreen.get(target) ?? [];
+        // The first named field is the measure; a metric that names none is a
+        // COUNT of the records, which is what a tile with no measure means.
+        const measure = authoredNames(block.fields)[0];
+        const widget: Record<string, unknown> = { kind: "stat", entity, ...(measure ? { measure } : {}) };
+        if (!widgets.some((w) => w.entity === entity && w.measure === widget.measure)) widgets.push(widget);
+        byScreen.set(target, widgets);
+      }
+    }
+  }
+  if (!byScreen.size) return null;
+  return {
+    screens: [...byScreen.entries()]
+      .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+      .map(([screen, widgets]) => ({ screen, widgets })),
+  };
+}
+
+/**
  * THE PER-ENTITY SCREEN OPTIONS, READ OFF THE EXPERIENCE DESIGN — the one
  * definition, reached from both runtimes, exactly as `parentEntitiesFor` and
  * `paletteFor` are. An option the document does not carry comes back absent,
@@ -1113,17 +1199,60 @@ export function screenOptionsFor(doc: unknown): Record<string, EntityScreenOptio
     if (emptyText && emptyText.length <= 160) opt.emptyText = emptyText;
     if (Object.keys(opt).length) out[entity] = opt;
   }
-  // THE DESIGNED EMPTY STATES, read off the SAME document's generated screens.
-  // Each ED screen carries per-state copy; its first named entity claims the
-  // `states.empty` line for that entity's list. The operator's screenOptions
-  // (above) win any collision — authored beats generated, as everywhere.
+  // ── THE WIREFRAME IS A DESIGN DECISION, NOT DECORATION ────────────────────
+  //
+  // Every generated screen carries `wireframe` regions of blocks, and each
+  // table/list block names an entity AND the fields it shows. That is exactly
+  // the decision `columns` records — which fields lead this entity's table —
+  // and the set of entity tables on one screen is exactly `collections`: which
+  // related records that screen puts in front of a person, in the designer's
+  // order. The assembler derived both from the ontology and threw the design's
+  // answer away, so a designer could specify the screen and watch the build
+  // ignore it.
+  //
+  // Read here, beside the empty states, because this is the ONE reader both
+  // runtimes reach and because everything it emits is spent through the
+  // existing per-entity validation: a column the entity does not hold and a
+  // collection the fabric does not declare are dropped where they are applied,
+  // exactly as an operator's own choices are. So the design can direct the
+  // build and still cannot make it lie.
+  //
+  // OPERATOR-AUTHORED OPTIONS WIN: the loop above filled `out` from
+  // `screenOptions`, and every write below is guarded on the key being absent.
   for (const screen of (Array.isArray(d.screens) ? d.screens : []).filter(isRecord)) {
     const states = isRecord(screen.states) ? screen.states : {};
     const line = typeof states.empty === "string" ? states.empty.trim() : "";
-    if (!line || line.length > 160) continue;
-    const entity = authoredNames(screen.entities)[0];
-    if (!entity || out[entity]?.emptyText) continue;
-    out[entity] = { ...out[entity], emptyText: line };
+    const listed = authoredNames(screen.entities);
+    const primary = listed[0];
+    if (line && line.length <= 160 && primary && !out[primary]?.emptyText) {
+      out[primary] = { ...out[primary], emptyText: line };
+    }
+    // The tabular blocks, in the order the design lays them out.
+    const tables = (Array.isArray(screen.wireframe) ? screen.wireframe : [])
+      .filter(isRecord)
+      .flatMap((region) => (Array.isArray(region.blocks) ? region.blocks : []).filter(isRecord))
+      .filter((b) => {
+        const kind = typeof b.kind === "string" ? b.kind.trim().toLowerCase() : "";
+        return kind === "table" || kind === "list";
+      });
+    for (const block of tables) {
+      const entity = typeof block.entity === "string" ? block.entity.trim() : "";
+      const fields = authoredNames(block.fields);
+      // FIRST SCREEN TO SAY SO WINS, so a design that shows one entity on
+      // several screens leads its table the same way on all of them — the
+      // alternative is a table whose columns depend on which screen was
+      // authored last.
+      if (entity && fields.length && !out[entity]?.columns) {
+        out[entity] = { ...out[entity], columns: fields };
+      }
+    }
+    // …and which of them this screen puts BESIDE its primary record.
+    const related = [...new Set(tables
+      .map((b) => (typeof b.entity === "string" ? b.entity.trim() : ""))
+      .filter((e) => !!e && e !== primary))];
+    if (primary && related.length && !out[primary]?.collections) {
+      out[primary] = { ...out[primary], collections: related };
+    }
   }
   return out;
 }
@@ -1302,6 +1431,15 @@ export interface AssemblyOptions {
    * Absent, the neutral "Prototype" — never the machinery.
    */
   appName?: string | null;
+  /**
+   * THE EXPERIENCE DESIGN DOCUMENT ITSELF — for the parts of it that cannot be
+   * pre-digested into `screenOptions`. The verbs it authors (`primaryActions`,
+   * and the state machines whose transitions name them) resolve against THIS
+   * ontology, which only the assembly holds, so the document rides along and
+   * `deriveScreenActions` grounds it here. Absent, the build carries the
+   * Open/Edit/Delete/New vocabulary it always did — no verb is invented.
+   */
+  experienceDesign?: unknown;
 }
 
 export function assemblePrototype(ontology: Record<string, unknown>, atlas: Record<string, unknown>, parentEntities?: readonly string[], options: AssemblyOptions = {}): AssembledPrototype {
@@ -1511,6 +1649,53 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
     role: cols.map((c) => roleCode(roleOf.get(`${name} ${c}`))),
   });
 
+  // ── THE DESIGNED VERBS ────────────────────────────────────────────────────
+  //
+  // Experience Design authors what the business DOES with a record — "Convert
+  // to Opportunity", "End Campaign", "Assign Sales Rep" — and every screen used
+  // to offer the same Open / Edit / Delete / New regardless. The resolution is
+  // `experienceActions.ts`: each authored verb is grounded against this
+  // ontology or refused, so a control is drawn only where it can act. The
+  // grounding needs two facts only the assembly holds — which entities this
+  // build drew a screen for, and which attribute is person-shaped — so they are
+  // supplied here rather than re-derived there.
+  const derivedActions = deriveScreenActions(options.experienceDesign ?? null, ontology, {
+    hasScreen: (entity: string) => ordered.includes(entity),
+    isPersonAttr: (entity: string, attribute: string) => roleOf.get(`${entity} ${attribute}`) === "person-ref",
+  });
+  const actionsFor = (name: string): ScreenAction[] => derivedActions.byEntity[name] ?? [];
+  /** The action list the RENDERER acts on, as data: index-addressed so the
+   *  markup carries no values and the handler cannot be told a lie by a
+   *  hand-edited attribute. */
+  const actionSpecs: Record<string, Array<{ kind: string; label: string; col: number; value: string; target: string }>> = {};
+  const registerActions = (name: string): void => {
+    if (actionSpecs[name]) return;
+    actionSpecs[name] = actionsFor(name).map((a) => ({
+      kind: a.kind,
+      label: a.label,
+      col: a.kind === "set" && a.attribute ? columnIndex(name, a.attribute) : -1,
+      value: a.value ?? "",
+      target: a.target ? (es.get(a.target) ?? "") : "",
+    }));
+  };
+  /** Verbs that act on ONE record — they belong beside Edit on the detail page. */
+  const recordActionsFor = (name: string, s: string): string => {
+    registerActions(name);
+    return actionsFor(name).filter((a) => a.scope === "record").map((a, i) => {
+      const ix = actionsFor(name).indexOf(a);
+      return `<button class="m-btn m-btn--secondary" title="${esc(a.basis)}" onclick="doAct('${s}',${ix})"${i === 0 ? ' data-act-first="1"' : ""}>${esc(a.label)}</button>`;
+    }).join("");
+  };
+  /** Verbs that need no record — they belong in the list's toolbar, beside New. */
+  const listActionsFor = (name: string): string => {
+    registerActions(name);
+    const s = es.get(name)!;
+    return actionsFor(name).filter((a) => a.scope === "list").map((a) => {
+      const ix = actionsFor(name).indexOf(a);
+      return `<button class="m-btn m-btn--secondary" title="${esc(a.basis)}" onclick="doAct('${s}',${ix})">${esc(a.label)}</button>`;
+    }).join("");
+  };
+
   // ── THE MODEL'S JUDGEMENT, AS DATA ────────────────────────────────────────
   //
   // What a screen deserves is a design question, and the deterministic path has
@@ -1534,9 +1719,26 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
     })),
   });
   const specViolations: string[] = [];
-  const validSpec = options.spec == null
+  /**
+   * THE DESIGN'S OWN METRICS, THROUGH THE SAME DOOR.
+   *
+   * A wireframe's `metric` blocks are the designer saying which number leads a
+   * screen — the identical judgement a screen spec records, authored earlier
+   * and by someone whose job it is. They become a spec here rather than a
+   * second drawing path, so every reference is resolved against the SAME
+   * schema and anything unresolvable is refused by name into `specViolations`:
+   * the design can ask for a number, and still cannot invent a field.
+   *
+   * A CARRIED SPEC WINS. `options.spec` is what a previous round accepted (the
+   * model's judgement, which the operator has seen); this fills only when there
+   * is none, so the design seeds the first build and never overwrites a
+   * decision already taken.
+   */
+  const designMetricSpec = options.spec != null ? null : metricSpecFrom(options.experienceDesign, es);
+  const effectiveSpec = options.spec ?? designMetricSpec;
+  const validSpec = effectiveSpec == null
     ? { screens: [], violations: [], accepted: 0 }
-    : validatePrototypeSpec(options.spec, specSchema, {
+    : validatePrototypeSpec(effectiveSpec, specSchema, {
       // The seeded values are the second half of validation: a card headed with
       // a state no record holds is a label that reads as a finding.
       valuesOf: (entity, attribute) => [...new Set((seed.records[entity] ?? [])
@@ -1862,7 +2064,7 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
     const bands = widgetBands(`list-${s}`);
     return `<section class="m-screen" data-screen="list-${s}" hidden>
       <header class="m-page-h"><div><div class="m-eyebrow">${esc(name)}</div><h1 class="m-title">${esc(name)}</h1><p class="m-sub">${rows.length} record${rows.length === 1 ? "" : "s"} · sample data</p></div>
-      <div class="m-toolbar">${toggle}<input class="m-input m-search" type="search" data-search="${s}" aria-label="Filter ${esc(name)}" placeholder="Filter ${esc(name)}" oninput="setFilter('${s}',this.value)" /><button class="m-btn m-btn--primary" onclick="go('#${s}/new')">New ${esc(name)}</button></div></header>
+      <div class="m-toolbar">${toggle}<input class="m-input m-search" type="search" data-search="${s}" aria-label="Filter ${esc(name)}" placeholder="Filter ${esc(name)}" oninput="setFilter('${s}',this.value)" />${listActionsFor(name)}<button class="m-btn m-btn--primary" onclick="go('#${s}/new')">New ${esc(name)}</button></div></header>
       ${bands}${bands ? `<div class="m-section-h">All ${esc(name)}</div>` : ""}${slot(`screen:${s}:list`)}</section>`;
   };
 
@@ -2037,7 +2239,7 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
         ? `<a href="#${s}">${esc(name)}</a>`
         : `<span class="m-crumb-flat">${esc(name)}</span>`} / <span data-crumb="${s}">${esc(headline)}</span></div>
       <header class="m-page-h"><div><div class="m-eyebrow">${esc(name)}</div><h1 class="m-title" data-headline="${s}">${esc(headline)}</h1></div>
-      <div style="display:flex;gap:10px"><button class="m-btn m-btn--secondary" onclick="editRec('${s}')">Edit</button><button class="m-btn m-btn--danger" onclick="delRec('${s}')">Delete</button></div></header>
+      <div class="m-page-acts">${recordActionsFor(name, s)}<button class="m-btn m-btn--secondary" onclick="editRec('${s}')">Edit</button><button class="m-btn m-btn--danger" onclick="delRec('${s}')">Delete</button></div></header>
       ${slot(`region:${s}:summary`)}
       ${parentBand}
       ${agentBand(name)}
@@ -2230,7 +2432,11 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
   const coverageGaps = names.filter((n) => !builtDetail.has(n)).map((n) =>
     `${n} has no screen in this prototype: it is not in the navigation and no relation reaches it from an entity that is, `
     + `so none of its records appear anywhere in the application. `
-    + `Add it in Experience Design if it belongs in the product, or say why the ontology holds a record type the product does not.`);
+    + `Add it in Experience Design if it belongs in the product, or say why the ontology holds a record type the product does not.`)
+    // …and every designed verb this model could not carry. A refused action is
+    // a finding — the state the design assumes may simply be missing from the
+    // ontology — and it belongs in the same channel as a missing screen.
+    .concat(derivedActions.refused);
 
   const workbenches = roleWorkbenches.map(workbenchScreen).join("\n");
   const firstList = `list-${es.get(lead)}`;
@@ -2259,10 +2465,19 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
   for (const n of names) if (referenced.has(n)) data[n] = tables.get(n)!;
   const links: Record<string, Array<[string, string]>> = {};
   for (const key of junctionsUsed) links[key] = (seed.junctionLinks[key] ?? []).map((l) => [l.fromId, l.toId]);
+  // The designed verbs the renderer performs, keyed by the screen slug that
+  // draws them. Empty for a build with no Experience Design, and then the
+  // renderer's action branch is unreachable rather than merely unused.
+  const acts: Record<string, Array<{ kind: string; label: string; col: number; value: string; target: string }>> = {};
+  for (const [name, list] of Object.entries(actionSpecs)) {
+    const s = es.get(name);
+    if (s && list.length) acts[s] = list;
+  }
   const model: PrototypeModel = {
     roles: roleLegend, data, links, screens: screenSpecs, first: es.get(lead) ?? "",
     work: workSpecs, appr: apprSpecs, wbRoute: WB_ROUTE, apRoute: AP_ROUTE,
     ...(widgetGroups.length ? { widgets: widgetGroups } : {}),
+    ...(Object.keys(acts).length ? { acts } : {}),
   };
   // `<` is the ONE character that can end a script block early; escaping it
   // keeps the island valid JSON (a `<` inside a JSON string is just `<`)
@@ -2282,7 +2497,7 @@ ${approvals}</main></div>
 var m=document.querySelectorAll('.m-nav-item[data-nav="'+id+'"]');
 if(m.length){document.querySelectorAll('.m-nav-item').forEach(function(n){n.classList.remove('is-active')});
 m.forEach(function(n){n.classList.add('is-active');for(var p=n.parentElement;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true})}
-window.scrollTo(0,0)}${rendererFor(workSpecs.some((w) => w.queues.length > 0) || apprSpecs.length > 0, widgetGroups.length > 0)}
+window.scrollTo(0,0)}${rendererFor(workSpecs.some((w) => w.queues.length > 0) || apprSpecs.length > 0, widgetGroups.length > 0, Object.keys(acts).length > 0)}
 if(!document.querySelector('.m-screen:not([hidden])'))show('${firstList}')</script>
 </body></html>`;
   // What was ACCEPTED is what is on the page, counted off the bands themselves —

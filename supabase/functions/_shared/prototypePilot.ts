@@ -80,6 +80,9 @@ export function pilotSliceFor(inner: Record<string, unknown>): PilotSlice {
       blueprint: inner.agenticBlueprint,
       // …and the name on the chrome: the programme's own, same as the studio.
       appName: (inner.projectMeta as Record<string, unknown> | undefined)?.name as string | undefined,
+      // …and the design's authored verbs, so the stakeholder's link offers the
+      // same actions the operator's studio does.
+      experienceDesign: inner.experienceDesign,
     });
     // regionCount 0 means the ontology carries no entities: an empty shell, not a
     // prototype. Say so rather than sending a blank app that just reads as broken.

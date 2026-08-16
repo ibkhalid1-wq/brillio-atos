@@ -2514,7 +2514,13 @@ describe("artifact studio registry", () => {
   }, 20000);
 });
 
-describe("regeneration guard — artifactDocs decision payload", () => {
+// The artifactDocs payload path — a Tier-2 decision that carries a replacement
+// document. REGENERATION no longer produces one (2026-08-16: a regeneration the
+// operator asked for applies directly, and states any cost in the artifact's own
+// gaps); the live producer is flowWatchers' ontology-repair proposal. The
+// resolver contract below is what any such proposal relies on, so it stays
+// pinned — the fixture reads as a document replacement, whoever proposed it.
+describe("a decision carrying a replacement document — artifactDocs payload", () => {
   const base = {
     domainOntology: { entities: [{ name: "Quote" }], editedAt: "2026-07-11", editedBy: "user@x" },
     phaseArtifacts: { listen: { "domain-ontology": { title: "Domain Ontology", status: "draft", inputsFingerprint: "old" } } },

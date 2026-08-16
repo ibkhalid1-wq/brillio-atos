@@ -10577,10 +10577,9 @@ Deno.serve(async (req) => {
       && !ontologyListenEvidenceOnRecord(getInnerProgramData(contextProgramData))) {
       formalRunMode = "initial_generation";
     }
-    // Set when the regeneration guard turns this run's document into a Tier-2
-    // decision instead of a write — the post-run stamp/attest block must not
-    // record it as generated.
-    let formalRegenGuarded = false;
+    // (The regeneration guard's held-document flag lived here. A regeneration
+    // now always applies — see the direct-apply block below — so every formal
+    // run reaches the stamp/attest step and there is nothing to skip.)
     // Cross-phase document carry-forward: only formal-artifact agents inject the
     // stored document intelligence, so the extra read is skipped for every other
     // agent. Keep only rows whose extracted_data is a DocumentIntelligence (a
@@ -11808,64 +11807,47 @@ Deno.serve(async (req) => {
           }
         }
         const shrunk = shrinkNotes.length > 0;
-        if (handEdited || shrunk) {
-          const proposedAt = new Date().toISOString();
-          const proposedDoc = {
+        // ── A REGENERATION APPLIES, AND SAYS WHAT IT COST ─────────────────
+        // The operator asked for this regeneration; asking them to accept it
+        // again in the inbox confirms a decision already taken (operator
+        // direction, 2026-08-16). So the propose-then-confirm door is gone
+        // and the document lands.
+        //
+        // What that door protected is NOT lost — it is stated on the thing it
+        // protected. A regeneration that replaces hand edits, or that covers
+        // less than the record it replaces, writes that into the artifact's
+        // own gaps (the visible-miss channel every other breach uses) and
+        // leaves an attestation naming it. The operator reads the cost on the
+        // document instead of clicking to allow it, and the prior version
+        // stays recoverable from the client snapshot ring.
+        const regenNotes: string[] = [];
+        if (handEdited) {
+          regenNotes.push(`This regeneration REPLACED hand edits made on ${String((priorMirror as Record<string, unknown>).editedAt).slice(0, 10)}. If those edits mattered, restore the previous version from the snapshot ring and re-apply them.`);
+        }
+        if (shrunk) {
+          regenNotes.push(`This regeneration COVERS LESS than the document it replaced (${shrinkNotes.join("; ")}) — it may have redrawn from the newest evidence instead of merging with what was already on record. Check the sections named here before relying on it.`);
+        }
+        if (regenNotes.length) {
+          const priorGaps = Array.isArray(formalResult.gaps) ? formalResult.gaps.map((g) => String(g)) : [];
+          formalResult = {
             ...formalResult,
-            generatedAt: proposedAt,
-            _generationMetadata: generationMetadata as JsonValue,
-          } as Record<string, JsonValue>;
-          const movementId = request.phaseId || spec.phase;
-          const ledgerConfidence = toLedgerConfidence(confidence);
-          formalRegenGuarded = true;
-          nextProgramData = queueFlowDecision(contextProgramData, {
-            tier: 2,
-            movementId,
-            // THE QUESTION is "does this regeneration of <artifact> replace the
-            // record?" — it is not "did the 14:38 run shrink?". Keying it on the
-            // artifact collapses a re-raise onto the row already waiting, and
-            // the refreshed row carries the NEWEST draft, so confirming can
-            // never write a proposal from an earlier run.
-            dedupeKey: `regen-guard:${request.agentId}`,
-            title: shrunk && !handEdited
-              ? `Regenerated ${spec.title} covers LESS than the record — review before it replaces it`
-              : `Accept the regenerated ${spec.title}`,
-            summary: shrunk && !handEdited
-              ? `The fresh draft shrank (${shrinkNotes.join("; ")}) — it likely redrew from the newest evidence instead of merging. This run read ${(generationMetadata.inputCoverage.conversationRecordChars).toLocaleString()} chars of conversation record and ${generationMetadata.inputCoverage.carryForwardDocuments} document${generationMetadata.inputCoverage.carryForwardDocuments === 1 ? "" : "s"}${generationMetadata.inputCoverage.outputRepaired ? ", and its output needed a repair pass (possible truncation)" : ""}. Confirming replaces the fuller document on record with this smaller draft; declining keeps the record and you can regenerate again.`
-              : `You hand-edited this document on ${String((priorMirror as Record<string, unknown>).editedAt).slice(0, 10)}. Confirming replaces your edits with the fresh generation; declining keeps your version on the record.${shrunk ? ` Note: the draft also covers less (${shrinkNotes.join("; ")}).` : ""}`,
-            payload: {
-              artifactDocs: { [spec.fieldKey]: proposedDoc } as JsonValue,
-              artifactStubs: [{
-                phaseId: movementId,
-                artifactId: request.agentId,
-                record: {
-                  title: spec.title,
-                  content: proposedDoc,
-                  status: "draft",
-                  agentDrafted: true,
-                  agentDraftedAt: proposedAt,
-                  ...(typeof ledgerConfidence === "number"
-                    ? { confidence: ledgerConfidence / 100, agentConfidence: ledgerConfidence }
-                    : {}),
-                  inputsFingerprint: movementInputsFingerprint(contextProgramData, movementId),
-                } as JsonValue,
-              }] as JsonValue,
-            } as JsonValue,
-          });
+            gaps: [...priorGaps, ...regenNotes.filter((n) => !priorGaps.includes(n))] as JsonValue,
+          };
+        }
+        nextProgramData = applyProgramSupportArtifact(contextProgramData, spec.phase, request.agentId, spec.fieldKey, formalResult, spec.title, generationMetadata, confidence);
+        // Everything built on this artifact is now standing on shifted
+        // ground — flag it so the operator is prompted to regenerate.
+        nextProgramData = staleDownstreamArtifacts(nextProgramData, spec.fieldKey);
+        if (regenNotes.length && isFlowProgramme(nextProgramData)) {
           nextProgramData = appendFlowAttestation(nextProgramData, {
             agentId: request.agentId,
-            phaseId: movementId,
+            phaseId: request.phaseId || spec.phase,
             tier: 2,
-            action: shrunk && !handEdited
-              ? `Held a shrunken ${spec.title} regeneration (${shrinkNotes.join("; ")}) — the record stands, awaiting your review`
-              : `Proposed regenerated ${spec.title} — your hand edits are protected, awaiting your confirm`,
+            action: handEdited
+              ? `Applied regenerated ${spec.title} over hand edits${shrunk ? ` (and it covers less: ${shrinkNotes.join("; ")})` : ""}`
+              : `Applied regenerated ${spec.title}, which covers less than the record did (${shrinkNotes.join("; ")})`,
             detail: (outputSummary || "").slice(0, 160),
           });
-        } else {
-          nextProgramData = applyProgramSupportArtifact(contextProgramData, spec.phase, request.agentId, spec.fieldKey, formalResult, spec.title, generationMetadata, confidence);
-          // Everything built on this artifact is now standing on shifted
-          // ground — flag it so the operator is prompted to regenerate.
-          nextProgramData = staleDownstreamArtifacts(nextProgramData, spec.fieldKey);
         }
         if (atlasContradictions.length && isFlowProgramme(nextProgramData)) {
           const existingDecisions = getInnerProgramData(nextProgramData).flowDecisions;
@@ -11919,10 +11901,9 @@ Deno.serve(async (req) => {
       // ── AURA Flow: attest + fingerprint ───────────────────────────────────
       // Every applied run leaves an attestation entry; formal artifacts get the
       // movement-inputs fingerprint stamped on their stub so the client marks
-      // them stale when evidence changes. Skipped entirely when the regen
-      // guard queued the document as a decision — nothing was applied, and the
-      // guard already attested the proposal.
-      if (!autonomy.shouldQueueReview && isFlowProgramme(nextProgramData) && !formalRegenGuarded) {
+      // them stale when evidence changes. A regeneration always applies now, so
+      // every formal run reaches here.
+      if (!autonomy.shouldQueueReview && isFlowProgramme(nextProgramData)) {
         if (formalSpecForRun) {
           // Stamp on the MOVEMENT the run was invoked for (request.phaseId),
           // not the artifact's classic ledger home (formalSpecForRun.phase may

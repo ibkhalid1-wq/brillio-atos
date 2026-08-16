@@ -78,6 +78,9 @@ export default function PrototypeStudio({ doc, onChange, program, onRefineProtot
         // collections and the opening view the operator chose beside the menu,
         // read from the same document through the same one definition.
         screenOptions: screenOptionsFor(design),
+        // The design document itself, for the verbs it authors — read through
+        // the same document the menu and palette come from.
+        experienceDesign: design,
         blueprint: readArtifactDoc(program, "agenticBlueprint"),
         // The chrome carries the programme's own name — read from the RECORD
         // (projectMeta), never the row, because the edge baseline and the
