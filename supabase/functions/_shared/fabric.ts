@@ -122,7 +122,23 @@ export function deriveFabric(ontology: Record<string, unknown>, atlas: Record<st
     if (role === "collection" || role === "multi-select" || role === "undetermined") {
       (childCollections.get(parent) ?? childCollections.set(parent, []).get(parent)!).push({ child, role });
     }
-    (parentRefs.get(child) ?? parentRefs.set(child, []).get(child)!).push({ parent });
+    // A MANY-TO-MANY HAS NO SINGLE PARENT — that is what makes it one. This
+    // push used to be unconditional, so a junction pair minted BOTH the correct
+    // `multi-select` region on one side AND a `parent-ref` nav on the other, and
+    // the same build then said two contradictory things about one relation:
+    // chips naming five linked Campaigns on the Campaign side, and a "Belongs
+    // to" card naming ONE Campaign on the Account side. Worse, the card could
+    // not even name that one: a `parent-ref` resolves through `joinKey`, a
+    // many-to-many owns no FK on either side, so the column never resolved and
+    // every such card rendered "— none named" for records whose membership the
+    // same document shipped as data.
+    //
+    // Keyed on the ROLE, not on the call site: whatever route a pair takes to
+    // get here, it is the cardinality that decides whether "belongs to one" is
+    // a true sentence about it.
+    if (role !== "multi-select") {
+      (parentRefs.get(child) ?? parentRefs.set(child, []).get(child)!).push({ parent });
+    }
   };
   for (const e of graph.edges) link(e.parent, e.child, relationshipRolesFor(e.parentToChild).parentRole);
   for (const j of graph.junctions) link(j.from, j.to, "multi-select");

@@ -56,6 +56,40 @@ const doc = renderedDoc(html);
 const regionHtml = (id: string): string =>
   doc.querySelector(`[data-fabric-id="${id}"]`)?.outerHTML ?? "";
 
+/**
+ * A SECOND ONTOLOGY, SHAPED SO THE JUNCTION CLAIM CANNOT BE VACUOUS.
+ *
+ * The claim below is that the non-owning side of a many-to-many gets NO
+ * "Belongs to" card. Asked of the ontology above, that is a question about a
+ * band which does not exist: Account is the root there and has no parent at
+ * all, so "no card names Campaign" would pass with the whole link-card renderer
+ * deleted — the exact shape of vacuity that let the previous version of this
+ * file certify the defect.
+ *
+ * Here Account has BOTH: one real parent (Region, 1:N) and one membership
+ * (Campaign, N:M). So the band exists and is rendered, and the assertion is
+ * that it holds the parent and ONLY the parent.
+ */
+const mixed = {
+  entities: [
+    ent("Region", ["id", "name"]),
+    ent("Account", ["id", "name", "regionId"]),
+    ent("Campaign", ["id", "name"]),
+  ],
+  relations: [
+    { from: "Region", to: "Account", cardinality: "1:N" },     // Account belongs to ONE Region
+    { from: "Campaign", to: "Account", cardinality: "N:M" },   // …and is a member of MANY Campaigns
+  ],
+};
+const mixedFabric = deriveFabric(mixed, {});
+const mixedDoc = renderedDoc(assemblePrototype(mixed, {}).html);
+
+/** Every relation pair the graph settled as a many-to-many, both directions —
+ *  a junction is symmetric, so neither side may be claimed as the other's one
+ *  parent. */
+const junctionPairs = (f: typeof fabric): Set<string> =>
+  new Set(f.graph.junctions.flatMap((j) => [`${j.from}>${j.to}`, `${j.to}>${j.from}`]));
+
 describe("every fabric node has a rendering", () => {
   it("emits a data-fabric-id for every node, of every kind", () => {
     // THE property that keeps the rest honest: a node the assembler forgets is
@@ -146,7 +180,69 @@ describe("an N:M renders as a SET, distinguishably", () => {
   });
 });
 
-describe("an N:1 renders a LINK to the parent", () => {
+describe("the nav node is the N:1's, and ONLY the N:1's", () => {
+  /**
+   * THIS GUARD USED TO CERTIFY THE DEFECT.
+   *
+   * It walked `kind === "nav"` and asserted each one navigates like a
+   * parent-ref — with no opinion about which relations are ENTITLED to a nav.
+   * `link()` in deriveFabric pushed a parentRef for every pair, junctions
+   * included, so the junction's `nav:account:campaign` was inside that loop and
+   * the loop blessed it. The same build then said two contradictory things
+   * about one relation: chips naming five linked Accounts on the Campaign side,
+   * and a single-parent "Belongs to" card on the Account side — a card that
+   * could not even name the parent it claimed, because a `parent-ref` resolves
+   * through `joinKey` and a many-to-many owns no FK on either side, so it read
+   * "— none named" for a record whose membership shipped in the same document.
+   *
+   * The claim is now per RELATION KIND, in both directions: an edge earns a
+   * nav, a junction earns none, and the junction is still rendered — as a set,
+   * on the side that owns the membership.
+   */
+  it("no junction pair mints a nav — a many-to-many has no single parent", () => {
+    for (const [label, f] of [["all-cardinalities", fabric], ["mixed", mixedFabric]] as const) {
+      const pairs = junctionPairs(f);
+      expect(pairs.size, `${label}: the fixture stopped declaring a junction`).toBeGreaterThan(0);
+      const navs = f.nodes.filter((n) => n.kind === "nav");
+      expect(navs.length, `${label}: the fixture stopped producing parent-refs`).toBeGreaterThan(0);
+      const wrong = navs
+        .filter((n) => pairs.has(`${n.source.relation?.[0]}>${n.source.relation?.[1]}`))
+        .map((n) => n.id);
+      expect(wrong, `${label}: these navs claim a single parent for a many-to-many:\n${wrong.join("\n")}`).toEqual([]);
+      // …and the other half of the property: every nav that DOES exist stands
+      // for an edge the graph actually settled as one-directional.
+      const edges = new Set(f.graph.edges.map((e) => `${e.parent}>${e.child}`));
+      for (const n of navs) {
+        expect(edges.has(`${n.source.relation?.[0]}>${n.source.relation?.[1]}`),
+          `${label}: nav ${n.id} stands for no edge`).toBe(true);
+      }
+    }
+  });
+
+  it("the non-owning side's Belongs-to band holds the parent, and only the parent", () => {
+    // THE RENDERED CLAIM, on the fixture built for it: Account has one parent
+    // (Region) and one membership (Campaign). MUTATION: make the parentRefs
+    // push unconditional again → the band gains a second card reading
+    // "Campaign — none named" → RED.
+    const cards = [...mixedDoc.querySelectorAll('[data-screen="detail-account"] .m-linkcard-k')]
+      .map((e) => (e.textContent ?? "").trim());
+    expect(cards, "the band is not the parent and only the parent").toEqual(["Region"]);
+    // and it is a real link to a real record — not the empty shell a junction
+    // produced, which is how the defect looked from the outside.
+    const value = mixedDoc.querySelector('[data-screen="detail-account"] .m-linkcard-v')?.textContent ?? "";
+    expect(value.trim(), "the parent card names no record").not.toMatch(/none named/i);
+    expect(value.trim().length, "the parent card is empty").toBeGreaterThan(0);
+  });
+
+  it("still renders the many-to-many — as a set, on the membership's own side", () => {
+    // Dropping the nav must not drop the RELATION. It is rendered once, where
+    // the membership table is addressed, and it is chips.
+    const el = mixedDoc.querySelector('[data-fabric-id="region:campaign:account"]');
+    expect(el, "the multi-select region is missing").toBeTruthy();
+    expect(el!.querySelectorAll(".m-chip").length, "the many-to-many renders no members").toBeGreaterThan(0);
+    expect(el!.querySelector("table"), "a many-to-many rendered as owned rows").toBeNull();
+  });
+
   it("renders every nav node as a control that navigates to the parent detail", () => {
     // MUTATION: drop the parentNavs block → RED. Before the fix this was the
     // whole of the reference relation's rendering: nothing.
