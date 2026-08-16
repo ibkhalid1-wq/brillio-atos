@@ -27,6 +27,7 @@ import { deriveFabric } from "@shared/fabric.ts";
 import { deriveRoles } from "@shared/semanticRoles.ts";
 import { generateSeed } from "@shared/seedData.ts";
 import { assemblePrototype } from "@shared/prototypeAssembly.ts";
+import { renderedDoc, renderedHtml } from "./helpers/renderPrototype";
 
 const snap = (f: string) => JSON.parse(readFileSync(resolve(__dirname, `../../../docs/laila/snapshot-2026-08-07/${f}`), "utf8"));
 const ontology = snap("domain-ontology.json") as Record<string, unknown>;
@@ -46,6 +47,18 @@ const surgeryAtlas = { workflows: [{ name: "Case Cancellation Review", steps: []
 
 const navItems = (html: string) => [...html.matchAll(/data-nav="list-([a-z0-9-]+)"/g)].map((m) => m[1]);
 const seedOf = (o: Record<string, unknown>, a: Record<string, unknown>) => generateSeed(o, deriveFabric(o, a).version);
+/**
+ * WHAT THE SNAPSHOT BUILD SHOWS, rendered once for the whole file.
+ *
+ * The assembled document ships its seed as one JSON island and draws every
+ * row from it at load, so an assertion about a VALUE on the screen has to read
+ * the document after its script has run; the served markup would answer for
+ * the island instead. Assertions about structure the assembler emits directly
+ * (the nav, the screens, the ids) keep reading the source, which is where that
+ * structure has to be.
+ */
+let renderedOnce: string | null = null;
+const shown = (): string => (renderedOnce ??= renderedHtml(assemblePrototype(ontology, atlas).html));
 
 // ── STEP 1: the graph exists, and it is the ONE copy ───────────────────────────
 describe("the ontology graph is a first-class result", () => {
@@ -158,8 +171,11 @@ describe("children are rendered under their parent", () => {
     const homes = new Map<string, number>();
     for (const n of g.nodes) homes.set(n.name, n.primaryParent ? 1 : 0);
     for (const n of g.nodes) expect([0, 1]).toContain(homes.get(n.name));
-    // and the tree covers everything exactly once
-    const placed = g.nodes.flatMap((n) => n.treeChildren).concat(g.roots);
+    // and the tree covers everything exactly once. Counted from `treeRoots`,
+    // which is where the tree actually starts: `roots` is the relation fact
+    // (nothing produces it), and an entity promoted to the top band for business
+    // primacy is in one list and not the other.
+    const placed = g.nodes.flatMap((n) => n.treeChildren).concat(g.treeRoots);
     expect(new Set(placed).size).toBe(g.entities.length);
     expect(placed.length).toBe(g.entities.length);
   });
@@ -275,8 +291,10 @@ describe("a percent is a percent", () => {
   });
 
   it("renders with its unit, so a bare number can never pass for a share again", () => {
-    const { html } = assemblePrototype(ontology, atlas);
-    expect(html).toMatch(/tabular-nums">\d{1,3}%<\/span>/);
+    // Cells are drawn by the page from the seed it ships as data, so the unit
+    // is a fact about the RENDERED document — the served markup carries the
+    // number without any component around it.
+    expect(shown()).toMatch(/tabular-nums">\d{1,3}%<\/span>/);
   });
 });
 
@@ -382,8 +400,8 @@ describe("a record is called something, and the column heading says what", () =>
     expect(gap?.listenQuestion).toContain("Account");
     // the list screen heads that column with the ENTITY, and the real category
     // is rendered as the label it is
-    const { html } = assemblePrototype(ontology, atlas);
-    const screen = html.slice(html.indexOf('data-screen="list-account"'), html.indexOf('data-screen="detail-account"'));
+    const screen = renderedDoc(assemblePrototype(ontology, atlas).html)
+      .querySelector('[data-screen="list-account"]')!.outerHTML;
     expect(screen).toContain(">Account</th>");
     expect(screen).toContain(">Category</th>");
     expect(screen).not.toMatch(/m-cell-main">[^<]*<\/div><div class="m-cell-sub">account-0001<\/div><\/td><td>Northwind Account/);

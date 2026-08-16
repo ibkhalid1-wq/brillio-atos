@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.8";
 import { UNNAMED_SUFFIX } from "../_shared/unnamedSuffix.ts";
+import { upsertFlowDecision } from "../_shared/flowDecisionQueue.ts";
 import {
   streamClaudeText,
 } from "../_shared/claudeClient.ts";
@@ -7,6 +8,14 @@ import { estimateCostUsd, resolveAgentTier } from "../_shared/modelCatalog.ts";
 import { logger } from "../_shared/logger.ts";
 import { stakeholderPrimaryArea, GENERAL_AREA } from "../_shared/flowAreas.ts";
 import { anchorAgentifyToAtlas } from "../_shared/agentifyAnchor.ts";
+// ASSEMBLE FIRST, THEN REFINE. The prototype's structure is derived, never
+// written by the model: the build is assembled from the ontology + atlas and the
+// model is handed THAT plus the operator's direction, with a post-condition that
+// keeps the assembled build when the answer would have lost structure.
+import {
+  baselineWithPriorSkin, buildPrototypeRefineBrief, prototypeBaselineFor, resolvePrototypeDoc,
+  REFINE_CONTRACT, type PrototypeBaseline, type PrototypeChangeRequest,
+} from "../_shared/prototypeRefine.ts";
 import {
   splitExternalTexts,
   mergeExternalTexts,
@@ -1381,7 +1390,7 @@ MANDATE-VERBATIM NAMING: when the mandate or any evidence names a concept, the e
 STANDARD-GROUNDED RELATIONS: entities alone do not ground an ontology — relations carry the model's shape, and on a PROVISIONAL draft they must be exactly as grounded and reproducible as the entities. Every provisional relation comes from exactly one of two sources — nothing else qualifies:
 (a) the steered reference model's OWN associations between two included concepts, carrying the standard's semantics — e.g. FHIR: Patient "participates in" ResearchStudy, ResearchSubject "is part of" ResearchStudy, Practitioner "is part of" Organization, Consent / Encounter / Observation "applies to" Patient, Organization "conducts" ResearchStudy; FIBO: the Financial Institution "manages" Account, Payment "applies to" Account, Contract "applies to" Client; GS1: Organization "produces" Product, Shipment "applies to" Product. These are MANDATORY closure, not options: when both concepts of a standard association are included entities, that relation MUST appear — omitting a standard-defined relation between two included entities is as wrong as inventing one;
 (b) the mandate's stated process sequence — chain the stages exactly as the mandate orders them with "leads to".
-RELATION VERBS are a CLOSED MENU: conducts, runs, manages, supports, produces, measures, leads to, is part of, applies to, participates in. Never author a synonym — "oversees", "drives", "results in", "enables", "is identified by" are all banned; pick the closest menu verb, and when torn between two menu verbs use the one listed EARLIER in the menu. Cardinality on a provisional draft is ALWAYS "unknown" — cardinality is precisely what interviews confirm; never guess 1:N. A relation that is merely plausible but neither standard-defined between two included concepts nor stated by the mandate is OMITTED. List relations sorted by "from", then "to". Two runs over the same mandate and industry must produce the SAME relation list, verb for verb. Once real conversations exist, relations take the stakeholders' own verb phrases and evidenced cardinalities — the closed menu governs only the provisional draft.
+RELATION VERBS are a CLOSED MENU: conducts, runs, manages, supports, produces, measures, leads to, is part of, applies to, participates in. Never author a synonym — "oversees", "drives", "results in", "enables", "is identified by" are all banned; pick the closest menu verb, and when torn between two menu verbs use the one listed EARLIER in the menu. Cardinality on a provisional draft is ALWAYS "unknown" — cardinality is precisely what interviews confirm; never guess 1:N. But WHERE THE INDUSTRY STANDARD ALREADY STATES THE SHAPE, say so alongside: set "standardPrior" to that vocabulary's cardinality (FIBO, FHIR, GS1, schema.org, whichever governs this industry) and name the source in "standardPriorSource". The cardinality field stays "unknown" — the prior is evidence for how to DRAW the relation before anyone is interviewed, never an answer to the question. Omit both when no standard covers the pair; never invent a prior to fill the field. Set "optionality" the same way — "required" or "optional" for the CHILD side when the standard or the mandate states it, omitted otherwise — because whether a parent may have zero children is what decides if an empty screen is a finding or a default. A relation that is merely plausible but neither standard-defined between two included concepts nor stated by the mandate is OMITTED. List relations sorted by "from", then "to". Two runs over the same mandate and industry must produce the SAME relation list, verb for verb. Once real conversations exist, relations take the stakeholders' own verb phrases and evidenced cardinalities — the closed menu governs only the provisional draft.
 
 STANDARDS-FIRST GROUNDING (the acid test for every provisional entity and relation): the provisional draft is deliberately CONSERVATIVE — when in doubt, leave it out and raise a gap. The input context carries "standardBackbone": the steered standards' class lists AS FACTS — names, URIs, definitions and associations. That list is AUTHORITATIVE: align entities ONLY to classes it lists (use the exact URI given), ground relations in the associations it states, and treat a class it does not list as NOT AVAILABLE to this draft — never recall additional classes from memory, even real ones. Facts over recall, always. Apply this test before including anything:
 - A business OBJECT or ACTOR entity (a party, a document, a thing exchanged, a system, a place) MUST map to a class in the steered vocabulary — carry that mapping in standardAlignment (skos:closeMatch is fine). If you cannot name a class in FHIR / FIBO / GS1 / IEC CIM / EBUCore / W3C ORG / schema.org that this noun IS or closely matches, it is NOT a grounded domain entity: drop it and raise a gap instead. This is what "grounded in industry standards" means — every object is traceable to a published class. GROUNDING IS ALIGNMENT, NOT RENAMING: when the mandate names the concept (Clinical Trial), the entity NAME stays the mandate's word and the standard class rides in standardAlignment (Clinical Trial → skos:closeMatch fhir/ResearchStudy). NEVER rename a mandate-named subject to the standard's class ("ResearchStudy", "Encounter") — MANDATE-VERBATIM NAMING still governs; the standard grounds it, it does not relabel it.
@@ -1395,13 +1404,13 @@ DECLARED SYSTEMS OF RECORD: groundingFacts carries a "systemsOfRecord" fact — 
 
 Use the stakeholders' own nouns — the ontology's names should be their language, not generic data-modelling vocabulary. Every entity carries at least one evidence source. Where different teams use different words for the same thing (or the same word for different things), record it under "ambiguities" — those collisions are exactly what the Blueprint's data contracts must resolve. A collision is only resolved when one meaning is ADOPTED; until then its "resolution" is the literal 'unresolved', which is what puts the question in front of a human. Restating the collision as something to confirm reads downstream as an answer and silently closes it.
 
-Gaps become interview questions, so phrase every gap a stakeholder must close as a PLAIN BUSINESS QUESTION in their vocabulary — never modelling vocabulary. A cardinality question becomes "Can one client have several active deals at the same time, or exactly one?" — NEVER "confirm the cardinality of Account→Opportunity". Words like entity, relation, cardinality, ontology, mapping, 1:N do not belong in anything a stakeholder reads.
+Gaps become interview questions, so phrase every gap a stakeholder must close as a PLAIN BUSINESS QUESTION in their vocabulary — never modelling vocabulary. CARDINALITY QUESTIONS RANK ABOVE ALL OTHERS — a confirmed cardinality changes the screen the prototype builds, so list them FIRST among the gaps, before questions that only change wording. A cardinality question becomes "Can one client have several active deals at the same time, or exactly one?" — NEVER "confirm the cardinality of Account→Opportunity". Words like entity, relation, cardinality, ontology, mapping, 1:N do not belong in anything a stakeholder reads.
 
 Return ONLY valid JSON:
 {
   "title": "Domain Ontology — <programme name>",
   "entities": [ { "name": "their noun", "definition": "one sentence in their language", "area": "the business area this concept belongs to — use a label from the AREA VOCABULARY in the context VERBATIM. That list is the Discovery Kit's own; it supersedes any example and outranks the atlas's labels, which are only a fallback when no vocabulary is supplied", "attributes": [ { "name": "their word for the field", "evidence": "verbatim quote or the document that names it — the SOURCE OF THIS FIELD, not the entity's" } ]  // a bare string is still accepted for compatibility, but a field with no evidence cannot be told apart from one the model inferred while summarising, and downstream it is asked about exactly as if somebody had named it. State it per attribute, "systemOfRecord": "system or null", "aliases": ["what other teams call it"], "evidence": "verbatim quote — speaker" } ],
-  "relations": [ { "from": "entity", "relation": "verb phrase", "to": "entity", "cardinality": "1:1|1:N|N:M|unknown" } ],
+  "relations": [ { "from": "entity", "relation": "verb phrase", "to": "entity", "cardinality": "1:1|1:N|N:M|unknown", "standardPrior": "1:1|1:N|N:M (optional, omit when no standard covers it)", "standardPriorSource": "the vocabulary that states it (optional)", "optionality": "required|optional (optional)" } ],
   // Division of record: the Ontology owns NOUNS. Business EVENTS (facts that occur — QuoteAmended) belong to the Current-State Atlas alongside the workflows they punctuate; do not emit an events section here. Ambiguities are terminology collisions (same word, different meanings); factual disputes between people are contradictions and belong to the programme's contradiction log, not here.
   "standardAlignment": [ { "entity": "ontology entity name", "standard": "full URI, e.g. https://schema.org/Order", "vocabulary": "schema.org|FIBO|GS1|FHIR", "relation": "skos:closeMatch|skos:exactMatch", "confidence": 0.0 } ],
   // Propose mappings ONLY from the vocabularies named in the input context's vocabularySteering — it is derived deterministically from the programme's industry; any other namespace is rejected before review. Only propose mappings you are confident in; omit rather than force.
@@ -1568,28 +1577,36 @@ DESIGN SYSTEM & CRAFT — this must look like a PREMIUM, modern SaaS product (th
 - FEEL REAL. Seeded with their data, in their vocabulary, at production density — a stakeholder should feel they are using the finished product, not previewing a mock.
 - THE PREMIUM BAR. The result should be indistinguishable from a shipped, well-funded product: a considered spacing rhythm (generous but consistent, all from the spacing scale), quiet borders and layered elevation rather than heavy lines, restrained accent use (colour earns attention — most of the UI is neutral), aligned optical grids, and refined detail on the small things (button/input states, table zebra/hover, pill contrast, iconography weight). No default-bootstrap look, no cramped or lopsided layouts, no clashing accents. When in doubt, make it calmer and more spacious, not busier.
 
-REFINE MODE — when the context carries "prototypeRefineBrief", you are NOT building from scratch. A prior prototype already exists and the delivery loop is iterating on it. REFINE it, do not rebuild it:
-- The BASELINE is prototypeRefineBrief.priorHtml — the current, in-use prototype. START FROM IT. Every screen, component, fixture, label and interaction it contains that no change request touches must survive BYTE-FOR-BYTE. Stakeholders have already signed off on parts of this app; silently redrawing a screen they approved is a regression, not a refinement.
-- HIGHEST PRIORITY — prototypeRefineBrief.designInstruction: when present, this is a DIRECT command the delivery team typed on the Prototype command line (e.g. "make the dashboard a card grid, add a sticky header, tighten spacing"). Apply it faithfully and thoroughly across the whole app where it makes sense — it is a design directive from the builders themselves, not a single stakeholder's ask, so it OUTRANKS the demo change requests. It may span the entire prototype (global polish, layout, spacing, theme) rather than one screen; carry it everywhere it applies while still preserving the app's content, data fixtures and flows. This is your lever for making the prototype more refined, modern and premium.
-- APPLY prototypeRefineBrief.openChangeRequests — each is a demo verdict asking for a change, tagged to the stakeholder and business area that raised it. Change ONLY the screens/areas those asks name, and make each change in the requester's own terms. An area with no open change request is FROZEN: leave it exactly as it was (unless designInstruction is a global polish that legitimately touches it).
-- RECONCILE THE DESIGN SYSTEM: if the baseline's tokens differ from upstreamDesign.theme (or the baseline has no :root token block at all), introduce/replace the :root token block to match upstreamDesign.theme verbatim and let the existing component classes inherit it — RE-SKIN via tokens, never re-lay-out screens to restyle them. A baseline built in a default blue must come back in the governed theme's colours.
-- SIZE: the refined document should be about the SAME SIZE as priorHtml. You are editing it, not expanding it. Do not re-author unchanged screens (that both risks regressions and blows the resource budget).
-- REPORT what moved: put every screen id / area you actually changed in "changed", and nothing you left alone. If you could not honour an ask, name it in "gaps" rather than silently dropping it.
-Refining rather than rebuilding is what preserves sign-off and keeps the product coherent as the loop turns. Only when NO prototypeRefineBrief is present do you assemble the app from scratch per the rules above.
+ASSEMBLED-BASELINE MODE — when the context carries "prototypeRefineBrief" (the normal path), the application ALREADY EXISTS. It was assembled deterministically from the Domain Ontology and the Current-State Atlas: every entity's list, its detail with the related collections and parent links the ontology declares, its form, the navigation, and seeded records throughout. You are the SKIN on that skeleton, and nothing else.
+
+${REFINE_CONTRACT}
+
+- prototypeRefineBrief.mode === "document" — prototypeRefineBrief.baselineHtml IS the assembled application. Return "html": that same document, restyled. Every data-fabric-id, every data-screen and every seeded value must still be there. An automatic check compares your document against the assembled one before it is stored; a document that lost structure is REJECTED, the assembled build is kept, and the breach is written into the artifact's gaps for the operator to read. Presentation changes only.
+- prototypeRefineBrief.mode === "stylesheet" — the assembled application is far larger than any single response, so it is NOT in your context: do not attempt to reproduce it and do NOT return "html". prototypeRefineBrief.baselineStylesheet carries its stylesheet and therefore its whole class vocabulary. Return "styleCss": a COMPLETE replacement stylesheet using those same class names. It is spliced into the assembled document, so one stylesheet re-skins every screen at once — tokens, spacing rhythm, type scale, elevation, table/card/pill/nav/form treatments, states, focus rings, motion. This is the highest-leverage design work in the product; treat it as the design system, not a patch.
+- HIGHEST PRIORITY — prototypeRefineBrief.designInstruction: a DIRECT command the delivery team typed on the Prototype command line (e.g. "tighten the spacing, make the tables quieter, warmer neutrals"). Apply it faithfully and thoroughly wherever it applies — it outranks the demo change requests. Where it asks for something only structure could deliver (a screen that does not exist, a different relation), say so in "gaps" instead of forcing it.
+- APPLY prototypeRefineBrief.openChangeRequests — each is a demo verdict from a named stakeholder about a named area. Answer each in presentation terms, in the requester's own language. An ask you cannot answer without moving structure belongs in "gaps", tagged to who asked.
+- THE THEME IS THE CLIENT'S, NOT YOURS: take upstreamDesign.theme as the palette and the type/spacing scale verbatim; never default to primary-blue-on-white.
+- prototypeRefineBrief.screenIds lists the screens the assembled build already has — a direction naming a screen is answerable when it is in that list, and is a gap when it is not.
+- prototypeRefineBrief.screenSpecSchema is the vocabulary for "screenSpec": the screens you may put summary widgets on, the entities you may reference, and which of each entity's attributes can be measured and which grouped by. Return "screenSpec" when a screen genuinely deserves a number or a chart at the top of it — a pipeline funnel on a list of opportunities, the total value beside it — and return nothing when it does not. The assembler draws it in flow, derives every heading and every count from the seeded records, and REFUSES any reference outside the schema into the artifact's gaps. Do not write labels or numbers into the spec, and never return "screenSpec" together with "html".
+- REPORT what moved: put what you actually changed in "changed". If you could not honour an ask, name it in "gaps" rather than silently dropping it.
+Only when NO prototypeRefineBrief is present — a record with no ontology or atlas to assemble from — do you build the app from scratch per the rules above.
 
 HARD OUTPUT RULES (enforced):
 - "html" is a SINGLE self-contained HTML document: one <style> block, one <script> block, NO external URLs, NO CDN links, NO web fonts, NO images by URL (inline SVG only if needed). It must render standalone in a sandboxed iframe with scripts allowed.
 - Navigation between screens is in-page (JS toggling sections or a simple hash router) — no server, no navigation away.
 - Light theme by default (unless designIntent says otherwise), built entirely from the token system above.
 - COMPACT IS MANDATORY (the whole document must fit in ~12KB and return whole). Premium comes from the token system + a tight, REUSED component-class library — define each component's CSS ONCE under <style> and apply it with classes everywhere; NEVER repeat inline styles or hand-style each element. Keep per-screen markup lean (a representative few rows/fields, not exhaustive lists). Fully build the PRIMARY screens; secondary screens can be lighter but must use the same classes. Prefer terse, semantic markup and short JS. If you approach the size limit, trim per-screen CONTENT depth — never drop screens, never inline-duplicate styles, never downgrade the design system. Do not emit comments or whitespace padding.
+- These size rules govern "html". In stylesheet mode "styleCss" replaces a stylesheet of roughly 15KB and may be that size — spend it on the design system, not on comments.
 
 Return ONLY valid JSON:
 {
   "title": "Prototype Build — <programme name>",
   "screens": [ { "id": "matches the Experience Design screen id", "name": "screen name in the stakeholders' language", "purpose": "one sentence" } ],
   "entryScreen": "the screen id the app opens on",
-  "html": "<!doctype html><html>…the entire self-contained clickable app…</html>",
-  "changed": ["in REFINE MODE: the screen ids / areas you actually edited this iteration — empty or omitted on an initial build"],
+  "html": "<!doctype html><html>…the entire self-contained clickable app…</html> — in stylesheet mode OMIT this field entirely",
+  "styleCss": "stylesheet mode ONLY: the complete replacement stylesheet, using the baseline's class names",
+  "screenSpec": { "screens": [ { "screen": "a data-screen id from screenSpecSchema", "widgets": [ { "kind": "stat|breakdown|funnel", "entity": "an entity from the schema", "attribute": "the schema attribute a breakdown/funnel groups by", "measure": "the schema measure a stat totals — omit for a count", "where": { "attribute": "a groupable attribute", "equals": "a value the records hold" } } ] } ] },
+  "changed": ["what you actually changed this iteration — screen ids, or the presentation areas a re-skin touched"],
   "seededEntities": ["ontology entities whose fixtures are shown in the app"],
   "gaps": ["Experience Design screens too thin to build, flows with no fixture to seed, faked items"],
   "summary": "one sentence verdict on prototype readiness",
@@ -2256,35 +2273,47 @@ function getCurrentPhaseScope(programData: ProgramState, phaseId: string): strin
   return lines.join("\n");
 }
 
-/**
- * The Prototype Build REFINE brief. On every run after the first, the Build
- * agent PATCHES the prior prototype instead of rebuilding it from scratch — so
- * it must receive the prior HTML verbatim plus the specific asks the demo
- * raised. Screens no change request touches stay byte-stable, which (a)
- * preserves signed-off areas across iterations, and (b) bounds the output to
- * roughly the prior document's size, keeping the generation inside the edge
- * function's resource budget. Returns null when there is no prior build (the
- * initial from-scratch build is correct) or the run is an initial_generation.
- */
-interface PrototypeRefineBrief {
-  mode: "refine";
-  round: number;
-  priorHtml: string;
-  openChangeRequests: Array<{ stakeholder: string; area: string; verdict: string; ask: string }>;
-  /** A direct, plain-language refinement the DELIVERY TEAM typed on the Prototype
-   * tab's command line (Envision `_prototypeRefine`) — a design instruction, not a
-   * stakeholder demo verdict. Highest-priority ask this iteration. */
-  designInstruction: string;
+/** The programme's assembled prototype — the baseline a build/refine starts from.
+ *  Re-derived rather than stored: `prototypeBaselineFor` is deterministic, so the
+ *  build the model is shown and the build its answer is checked against are the
+ *  same document even though they are computed at two different moments in the run. */
+function prototypeBaselineOf(inner: Record<string, unknown>): PrototypeBaseline | null {
+  const priorBuild = isRecord(inner.prototypeBuild) ? inner.prototypeBuild as Record<string, unknown> : null;
+  const baseline = prototypeBaselineFor(inner.domainOntology, inner.currentStateAtlas, inner.experienceDesign, {
+    // The same stored inputs the studio and the stakeholder's link assemble
+    // with. A baseline missing one of them is a different application from the
+    // one the operator is looking at, and the refine post-condition would
+    // measure the returned document against a build nobody has seen.
+    vocabulary: inner.prototypeValueVocabulary,
+    blueprint: inner.agenticBlueprint,
+    // …and the screen spec a previous round accepted, for the same reason the
+    // approved skin is carried: the skeleton is re-derived every run, so a
+    // judgement the model already made and the operator already saw would
+    // otherwise be discarded on the next one.
+    screenSpec: priorBuild?.screenSpec,
+  });
+  if (!baseline) return null;
+  // The skeleton is re-derived every run; the SKIN the operator already approved
+  // is carried forward off the stored build, so the loop accumulates instead of
+  // resetting to the stock stylesheet each round.
+  return baselineWithPriorSkin(baseline, priorBuild?.html ?? null);
 }
-function buildPrototypeRefineBrief(
-  inner: Record<string, unknown>,
+
+/**
+ * THE DIRECTION a Prototype Build run is given — the delivery team's typed
+ * instruction and the demo's open change requests, read off the record.
+ *
+ * This is the impure half (it reads the programme blob); the brief the model
+ * actually sees is built by `buildPrototypeRefineBrief` in `_shared`, which is
+ * pure and therefore guardable without a model call. The structure the model
+ * refines is NOT read from the prior model output any more: it is assembled from
+ * the ontology and the atlas, which is what makes a refine a refinement rather
+ * than a re-roll.
+ */
+function readPrototypeDirection(
   phaseInputsAll: Record<string, unknown>,
   runMode: RunMode,
-): PrototypeRefineBrief | null {
-  if (runMode === "initial_generation") return null;
-  const prior = isRecord(inner.prototypeBuild) ? inner.prototypeBuild as Record<string, unknown> : null;
-  const priorHtml = prior && typeof prior.html === "string" ? prior.html : "";
-  if (!priorHtml.trim()) return null;
+): { round: number; openChangeRequests: PrototypeChangeRequest[]; designInstruction: string } {
   const showInputs = normalizeProgramData(phaseInputsAll.show as JsonValue | null);
   const tourRaw = typeof showInputs.demoTour === "string" ? showInputs.demoTour : "";
   const rows = tourRaw.trim().startsWith("[") ? safeJsonParse<unknown[]>(tourRaw, []) : [];
@@ -2304,7 +2333,14 @@ function buildPrototypeRefineBrief(
   const designInstruction = typeof envisionInputs._prototypeRefine === "string"
     ? envisionInputs._prototypeRefine.trim().slice(0, 60000)
     : "";
-  return { mode: "refine", round, priorHtml, openChangeRequests, designInstruction };
+  // An initial build has no demo behind it — the change requests belong to a
+  // round that has not happened. The DIRECTION still applies: an operator who
+  // typed one before the first build meant it for the first build.
+  return {
+    round,
+    openChangeRequests: runMode === "initial_generation" ? [] : openChangeRequests,
+    designInstruction,
+  };
 }
 
 /**
@@ -3151,12 +3187,17 @@ function buildSpecialAgentInputContext(
     const changedInputs = runMode === "initial_generation"
       ? []
       : computeInputDelta(readPriorInputSnapshot(inner, formalSpec.fieldKey), buildFormalInputSnapshot(inner, formalSpec.phase));
-    // Prototype Build only: on every run after the first, hand the agent the
-    // prior HTML + the demo's open change requests so it REFINES (patches) the
-    // prototype rather than rebuilding it from scratch — preserving signed-off
-    // screens and bounding the output to the prior document's size.
-    const prototypeRefineBrief = formalSpec.fieldKey === "prototypeBuild"
-      ? buildPrototypeRefineBrief(inner, phaseInputsAll, runMode)
+    // Prototype Build only: ASSEMBLE FIRST. The build is derived from the
+    // ontology + atlas here, and the model is handed that assembled application
+    // (or, when it is larger than any answer could return, its stylesheet) plus
+    // the operator's direction — to restyle INSIDE the regions. It used to be
+    // handed the prior model-written HTML and asked to patch it, which meant the
+    // structure was whatever the last free-form run happened to invent: no
+    // fabric, no regions, nothing to diff, and a refine asking for detail-page
+    // affordances answered "no detail screens exist in the current design".
+    const prototypeBaseline = formalSpec.fieldKey === "prototypeBuild" ? prototypeBaselineOf(inner) : null;
+    const prototypeRefineBrief = prototypeBaseline
+      ? buildPrototypeRefineBrief(prototypeBaseline, readPrototypeDirection(phaseInputsAll, runMode))
       : null;
     // Design-tab command line: a plain-language refine instruction the delivery
     // team typed for THIS artifact, stashed fingerprint-safe on its phase inputs
@@ -8109,9 +8150,13 @@ function queueFlowDecision(programData: ProgramState, decision: Record<string, J
   return updateInnerProgramData(programData, (inner) => {
     const list = Array.isArray(inner.flowDecisions) ? inner.flowDecisions as JsonValue[] : [];
     const id = `dec-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+    // One open decision per QUESTION, when the caller names one (`dedupeKey`).
+    // A re-raise refreshes the open row with the newest payload instead of
+    // asking again — see _shared/flowDecisionQueue.ts for why that is a
+    // correctness fix and not merely tidying.
     return {
       ...inner,
-      flowDecisions: [...list, { id, status: "open", createdAt: new Date().toISOString(), ...decision } as JsonValue].slice(-60),
+      flowDecisions: upsertFlowDecision(list, decision, id, new Date().toISOString()) as JsonValue[],
     };
   });
 }
@@ -11303,6 +11348,19 @@ Deno.serve(async (req) => {
           // diverge again, which is the whole defect.
           formalResult = demoteKitAgendas(formalResult, new Date().toISOString());
         }
+        // ── The prototype's structure is DERIVED, and stays derived ─────────
+        // The model was handed the assembled application and asked to restyle
+        // inside its regions. Here that instruction becomes a post-condition: a
+        // returned document keeps its place only if it carries the same
+        // data-fabric-id set, the same screens and the same seeded values;
+        // otherwise the ASSEMBLED build is stored and the breach is written into
+        // the artifact's gaps. A restyle (a replacement stylesheet) is spliced
+        // into the assembled document, so it cannot disturb structure at all.
+        // Without this, "don't rewrite the structure" was a sentence in a prompt.
+        if (request.agentId === "prototype-build") {
+          const baseline = prototypeBaselineOf(getInnerProgramData(contextProgramData));
+          if (baseline) formalResult = resolvePrototypeDoc(formalResult, baseline).doc;
+        }
         // Tag experience-design flows / demo scripts with their business area so
         // the Show demo can default a recipient to their own area's flow — done
         // on the finalized result so BOTH the direct-apply and the propose-then-
@@ -11367,6 +11425,12 @@ Deno.serve(async (req) => {
           nextProgramData = queueFlowDecision(contextProgramData, {
             tier: 2,
             movementId,
+            // THE QUESTION is "does this regeneration of <artifact> replace the
+            // record?" — it is not "did the 14:38 run shrink?". Keying it on the
+            // artifact collapses a re-raise onto the row already waiting, and
+            // the refreshed row carries the NEWEST draft, so confirming can
+            // never write a proposal from an earlier run.
+            dedupeKey: `regen-guard:${request.agentId}`,
             title: shrunk && !handEdited
               ? `Regenerated ${spec.title} covers LESS than the record — review before it replaces it`
               : `Accept the regenerated ${spec.title}`,

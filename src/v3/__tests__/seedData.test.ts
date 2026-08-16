@@ -7,6 +7,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { generateSeed } from "@shared/seedData.ts";
 import { deriveFabric } from "@shared/fabric.ts";
+import { joinKeyFor } from "@shared/ontologyGraph.ts";
 
 const snap = (f: string) => JSON.parse(readFileSync(resolve(__dirname, `../../../docs/laila/snapshot-2026-08-07/${f}`), "utf8"));
 const ontology = snap("domain-ontology.json");
@@ -33,17 +34,29 @@ describe("seed data generation", () => {
 
   it("is referentially consistent — every FK points at a real parent", () => {
     const { records } = generateSeed(ontology, version);
-    const idsByEntity = new Map(Object.entries(records).map(([e, rows]) => [e.toLowerCase(), new Set(rows.map((r) => r.id))]));
+    // Keyed by the SHARED join-key definition, not by re-lowercasing the entity
+    // name. Reconstructing the key here is the same defect the generator had:
+    // this lookup used `k.slice(0,-2).toLowerCase()`, which stopped resolving
+    // the moment a multi-word entity's key became a legal identifier — so every
+    // multi-word FK fell through the `if (set)` and was checked by nothing,
+    // and the guard would have reported green on a table of dangling ids.
+    // (This snapshot has no multi-word PARENT, so the multi-word key itself is
+    // exercised in prototypeJoinKey.test.ts, on a fixture built for it.)
+    const idsByEntity = new Map(Object.entries(records).map(([e, rows]) => [joinKeyFor(e), new Set(rows.map((r) => r.id))]));
+    let checked = 0;
     for (const rows of Object.values(records)) {
       for (const rec of rows) {
         for (const [k, v] of Object.entries(rec)) {
           if (!k.endsWith("Id") || k === "id" || v == null) continue;
-          const target = k.slice(0, -2).toLowerCase();
-          const set = idsByEntity.get(target);
-          if (set) expect(set.has(String(v)), `dangling FK ${k}=${v}`).toBe(true);
+          expect(k, `FK column "${k}" is not a legal identifier`).toMatch(/^[A-Za-z][A-Za-z0-9]*Id$/);
+          const set = idsByEntity.get(k);
+          if (!set) continue;
+          checked += 1;
+          expect(set.has(String(v)), `dangling FK ${k}=${v}`).toBe(true);
         }
       }
     }
+    expect(checked, "no foreign key was resolved at all — the lookup is broken").toBeGreaterThan(50);
   });
 
   it("volume makes the design testable — pagination, extremes, planted edge cases", () => {

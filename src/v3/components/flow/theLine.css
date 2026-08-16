@@ -608,8 +608,17 @@
 /* A bare <select> keeps the browser's own 4px corner and its own height unless it is
    told otherwise, which is why one filter sat 0.5px off every control beside it. The
    view TABS are deliberately exempt: they are two-line and belong to the shell, not
-   to either surface's control set. */
-.v3ib select,.v3ln select{border-radius:var(--aura-r-ctl);height:var(--aura-ctl-h)}
+   to either surface's control set.
+
+   MIN-height, not height. A hard 26px is shorter than the line box a 12px face with
+   line-height 1.35 actually needs once a descender is in play, so the glyphs were
+   clipped top and bottom and a name like "Raj Mamodia" read as "Dai Mamodia" — the
+   control was legible only for the words that happened to have no ascender. Every
+   sibling rule in this block already uses min-height (the flex rule directly above
+   it does); this was the one place a fixed height overrode it, and it lost. Growing
+   is the safe direction: the shared token still sets the floor, so a select and the
+   button beside it keep agreeing. */
+.v3ib select,.v3ln select{border-radius:var(--aura-r-ctl);min-height:var(--aura-ctl-h)}
 
 /* ONE FOCUS RING, both surfaces. Keyboard operability is only real if you can see
    where you are, and the ring was previously whatever each control happened to
