@@ -13,7 +13,7 @@
 import { deriveFabric, type Fabric } from "./fabric.ts";
 import { deriveRoles, type ValueRole } from "./semanticRoles.ts";
 import { generateSeed, type SeedAssumption, type SeedRecord } from "./seedData.ts";
-import { meridianStylesheet, type PrototypeTheme } from "./prototypeDesignSystem.ts";
+import { meridianStylesheet, valueTone, type PrototypeTheme } from "./prototypeDesignSystem.ts";
 import { deriveScreenActions, type ScreenAction } from "./experienceActions.ts";
 import { deriveWorkbenches, type AtlasRole, type AtlasWorkflow } from "./atlasWorkbenches.ts";
 import { deriveAgenticSurface, agentsOnEntity, gatedAgents, type SurfacedAgent } from "./agenticSurface.ts";
@@ -280,6 +280,12 @@ interface PrototypeModel {
    * build without them serialises exactly as it did before they existed.
    */
   acts?: Record<string, Array<{ kind: string; label: string; col: number; value: string; target: string }>>;
+  /**
+   * value → the verdict it states ("good" | "warn" | "risk"), for the
+   * state-shaped columns. Absent when nothing on this build states one, so a
+   * build of neutral stages serialises exactly as it did before tones existed.
+   */
+  tones?: Record<string, string>;
 }
 
 /**
@@ -339,6 +345,14 @@ interface PrototypeModel {
  * the parent the record actually has. Bytes here are the whole document's, and
  * this cost ~700 of them; see `DOCUMENT_REFINE_BUDGET`.
  *
+ * `TONE` is the verdict lookup: value → "good" | "warn" | "risk", decided
+ * server-side by `valueTone` and filled from the island, so a state that
+ * carries a verdict wears it and this renderer cannot invent one. A toned
+ * badge borrows the PILL modifier — same semantic tokens, and those rules
+ * already follow `.m-badge` in the sheet, so no duplicate CSS is shipped.
+ * Health used to be pinned to `--warn` for EVERY value, so a record reading
+ * "Healthy" was drawn as a warning.
+ *
  * `Q` is a single quote. The renderer emits `onclick="go('#account/…')"`, and
  * spelling that with escapes inside a nested template literal is how a stray
  * backslash silently terminates a string and takes the whole page's script with
@@ -346,6 +360,7 @@ interface PrototypeModel {
  */
 const PROTOTYPE_RENDERER = `
 var Q=String.fromCharCode(39);
+var TONE={};
 function mEsc(v){return String(v==null?"":v).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
 function mMoney(n){return typeof n==="number"?"$"+n.toLocaleString("en-US"):mEsc(n)}
 function mCell(R,ri,v){
@@ -354,8 +369,9 @@ function mCell(R,ri,v){
   if(r==="monetary")return '<span style="font-variant-numeric:tabular-nums">'+mMoney(v)+"</span>";
   if(r==="quantity")return '<span style="font-variant-numeric:tabular-nums">'+mEsc(v)+"</span>";
   if(r==="percent")return '<span style="font-variant-numeric:tabular-nums">'+mEsc(v)+"%</span>";
-  if(r==="status"||r==="category")return '<span class="m-badge">'+mEsc(v)+"</span>";
-  if(r==="health"||r==="priority")return '<span class="m-pill m-pill--warn"><span class="m-dot m-dot--warn"></span>'+mEsc(v)+"</span>";
+  var tn=TONE[String(v)];
+  if(r==="status"||r==="category")return '<span class="m-badge'+(tn?" m-pill--"+tn:"")+'">'+mEsc(v)+"</span>";
+  if(r==="health"||r==="priority")return '<span class="m-pill'+(tn?" m-pill--"+tn:"")+'"><span class="m-dot'+(tn?" m-dot--"+tn:"")+'"></span>'+mEsc(v)+"</span>";
   if(r==="boolean")return v?'<span class="m-dot m-dot--good"></span> Yes':'<span class="m-dot"></span> No';
   if(r==="parent-ref"||r==="cross-ref"||r==="person-ref")return '<span class="m-chip">'+mEsc(v)+"</span>";
   return mEsc(v);
@@ -364,6 +380,7 @@ function mCell(R,ri,v){
   var el=document.getElementById("m-seed");
   if(!el)return;
   var M=JSON.parse(el.textContent||"{}"),R=M.roles||[],D=M.data||{},L=M.links||{};
+  TONE=M.tones||{};
   // 20 rows a page. The seeder gives a root entity 24 rows FOR THIS REASON —
   // "> page size (20) → a second page" is written into its own defaults — so a
   // pager set to 24 would put every root table on exactly one page and the
@@ -2473,11 +2490,31 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
     const s = es.get(name);
     if (s && list.length) acts[s] = list;
   }
+  // THE VERDICT EACH STATE CARRIES, decided here and shipped as a lookup — the
+  // classification is TypeScript a test can run, and the renderer only reads a
+  // map. Built from the values that actually reach the page (the seeded rows of
+  // the columns the roles call state-shaped), so it costs a few dozen bytes on
+  // a build that has states and nothing at all on one that does not.
+  const tones: Record<string, string> = {};
+  for (const entity of names) {
+    for (const attr of attrsOf(entity)) {
+      const role = roleOf.get(`${entity} ${attr}`);
+      if (role !== "status" && role !== "category" && role !== "health" && role !== "priority") continue;
+      for (const row of (seed.records[entity] ?? [])) {
+        const value = row[attr];
+        const text = typeof value === "string" ? value : "";
+        if (!text || tones[text]) continue;
+        const tone = valueTone(text);
+        if (tone) tones[text] = tone;
+      }
+    }
+  }
   const model: PrototypeModel = {
     roles: roleLegend, data, links, screens: screenSpecs, first: es.get(lead) ?? "",
     work: workSpecs, appr: apprSpecs, wbRoute: WB_ROUTE, apRoute: AP_ROUTE,
     ...(widgetGroups.length ? { widgets: widgetGroups } : {}),
     ...(Object.keys(acts).length ? { acts } : {}),
+    ...(Object.keys(tones).length ? { tones } : {}),
   };
   // `<` is the ONE character that can end a script block early; escaping it
   // keeps the island valid JSON (a `<` inside a JSON string is just `<`)

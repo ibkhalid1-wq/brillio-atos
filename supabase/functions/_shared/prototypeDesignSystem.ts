@@ -89,6 +89,41 @@ const COLOR_RGB = /^rgba?\(\s*\d{1,3}(?:\.\d+)?\s*[, ]\s*\d{1,3}(?:\.\d+)?\s*[, 
  *  that can carry a declaration, a comment or a tag. */
 const FONT_STACK = /^[A-Za-z0-9 ,'"()._-]+$/;
 
+/**
+ * ── WHICH STATES CARRY A VERDICT ─────────────────────────────────────────────
+ *
+ * A status column used to render one grey badge for every value, and a health
+ * column rendered EVERY value amber — so a record reading "Healthy" was drawn
+ * as a warning and a "Closed Lost" deal looked exactly like a "Closed Won" one.
+ * The benchmark's whole at-a-glance quality is this: a table you can read
+ * without reading it.
+ *
+ * The rule that keeps it honest is what this table LEAVES OUT. A tone is only
+ * assigned where the word itself states the verdict — "at risk", "overdue",
+ * "won", "paid". Bare magnitudes are deliberately absent: "High" is good on an
+ * influence column and bad on a risk column, and a design system that guesses
+ * which would be colouring in its own assumption. Anything unmatched keeps the
+ * neutral badge, which is the correct answer for a stage like "Prospecting".
+ *
+ * Ordered: the risk vocabulary is tested first, so "Closed Lost" cannot be
+ * caught by the "closed" in a positive phrase.
+ */
+export type ValueTone = "good" | "warn" | "risk";
+const TONE_RULES: Array<[ValueTone, RegExp]> = [
+  ["risk", /\b(at[- ]?risk|off[- ]?track|closed[- ]?lost|lost|overdue|delinquent|cancel(l)?ed|rejected|declined|disqualified|failed|failing|blocked|expired|breach(ed)?|critical|escalated|churn(ed)?|void|stalled|unpaid|suspended)\b/i],
+  ["good", /\b(healthy|on[- ]?track|active|live|closed[- ]?won|won|approved|signed|executed|complete(d)?|fulfilled|delivered|paid|settled|resolved|converted|accepted|qualified|commit(ted)?|current|ready|published|onboarded|success(ful)?)\b/i],
+  ["warn", /\b(watch|pending|awaiting|on[- ]?hold|paused|in[- ]?review|under[- ]?review|monitoring|needs[- ]?attention|due[- ]?soon|escalating|at[- ]?capacity|degraded)\b/i],
+];
+
+/** The verdict a value states, or null when it states none. Pure and
+ *  case-insensitive; the same value always tones the same way. */
+export function valueTone(value: unknown): ValueTone | null {
+  const v = String(value ?? "").trim();
+  if (!v || v.length > 40) return null;
+  for (const [tone, re] of TONE_RULES) if (re.test(v)) return tone;
+  return null;
+}
+
 export function isColorToken(value: unknown): boolean {
   const v = String(value ?? "").trim();
   return COLOR_HEX.test(v) || COLOR_RGB.test(v);
