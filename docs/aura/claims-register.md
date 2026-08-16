@@ -43,6 +43,8 @@ FULLY TRUE**.
 | 13 | **reproducible / deterministic** (not asserted anywhere) | WILL NEVER BE FULLY TRUE | Never claim "deterministic"; guard |
 | 17 | stakeholder prototype: "every screen, field and menu item comes from the domain model and process map we agreed" | **TRUE** (deploy-gated) | None — keep the presentation caveat |
 | 18 | Agentify rationale: "grounded in the pain, the wait or the judgement" | **TRUE** (model-facing) | None — re-status if ever shown to a client |
+| 19 | ontology prompt: backbone ships attributes + bracketed cardinality priors "as facts … never recall" | **TRUE** (enforced in code) | None — reconciler writes both from the packs |
+| 20 | prototype restyle: styleTokens — "a syntax error is impossible by construction" | **TRUE** (deploy-gated) | None — tokens are slot-checked; sheets syntax-gated |
 
 **Applied 2026-08-07** — rows **1–5** edited to the phrasing below and re-statused
 **TRUE** (see each row for file, before→after). No surface in the repo now asserts
@@ -242,6 +244,26 @@ into those steps' definitions of done — not touched here.
 - **Status:** **TRUE** (as worded).
 - **Remediation:** none. If this rationale is ever surfaced to a client as evidence of the
   decision, re-status this row first — a model's stated reason is not a traced one.
+
+---
+
+### 19 · Ontology prompt — "standardBackbone … names, URIs, definitions, per-class ATTRIBUTES, and associations (each … may carry the standard's cardinality in brackets)" + "Facts over recall, always."
+
+- **Where:** `supabase/functions/run-agent/index.ts`, domain-ontology system prompt (STANDARDS-FIRST GROUNDING block, reworded 2026-08-16).
+- **What changed:** the block now also claims the backbone carries per-class attribute sets and per-association cardinality priors, and directs the draft to copy both.
+- **True today?** Yes, and not by prompt alone: the packs ship both (`ProvisionalPackAttribute`, `ONTOLOGY_VERB_PRIORS` + explicit pack priors), and `reconcileVotedOntology` merges attributes and writes `standardPrior`/`standardPriorSource` **from the pack facts regardless of what the drafts recalled** — drafts' priors are discarded by the vote, so the claim's enforcement is code, not compliance. Pinned by `ontologyGrounding.test.ts` ("standard priors and attributes ride the packs").
+- **Status:** **TRUE** (enforced in code).
+- **Remediation:** none. If a pack ever ships without attributes for a steered class, the entity honestly carries only drafted ones — the claim wording survives that.
+
+---
+
+### 20 · Prototype stylesheet mode — "styleTokens … a syntax error is impossible by construction" + "any syntax breach rejects it wholesale"
+
+- **Where:** `supabase/functions/run-agent/index.ts`, prototype-build system prompt (stylesheet-mode instruction, reworded 2026-08-16); mirrored in `prototypeRefine.ts`'s brief `baselineNote`.
+- **True today?** Yes as worded: a `styleTokens` answer is slot-checked per key (`themePatchOf`), merged over the baseline's resolved theme, and the sheet is rebuilt by `meridianStylesheet` — model-authored CSS text never enters the document on this path. Legacy `styleCss` and refined whole documents are gated by `checkStylesheetSyntax` inside `checkRefinedPrototype`, and a broken prior skin is refused re-adoption. Pinned by `prototypeStyleIntegrity.test.ts`.
+- **Deploy-gated:** the claim reaches clients only after `run-agent` redeploys.
+- **Status:** **TRUE** (deploy-gated).
+- **Remediation:** none.
 
 ---
 

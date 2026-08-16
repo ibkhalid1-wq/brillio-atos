@@ -2,8 +2,8 @@
  * THE BLUEPRINT'S "ENFORCED" RULES, ENFORCED.
  *
  * The Agentic Blueprint prompt carries a block headed "ROBUSTNESS RULES
- * (enforced, not optional)" — and nothing enforced any of it. On the Laila
- * New 2 build the model minted ONE journey for nine personas and nine
+ * (enforced, not optional)" — and nothing enforced any of it. On a reviewed
+ * CRM build the model minted ONE journey for nine personas and nine
  * workflows (the JOURNEY COVERAGE rule calls that "a gap, never an omission" —
  * and the violation was not even in `gaps`), templated one per-area "Tool
  * Agent" with `autonomyLevel: "act"` across the board, and the document

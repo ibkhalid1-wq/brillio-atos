@@ -353,7 +353,7 @@ export function stylesheetIn(html: string): string {
  * open a script is removed: the model's CSS is untrusted input.
  */
 /**
- * WHETHER THE SHEET PARSES AT ALL — the check the Laila New 2 build proved
+ * WHETHER THE SHEET PARSES AT ALL — the check the reviewed CRM build proved
  * necessary. A model-authored stylesheet shipped with ONE unclosed `var(`
  * (`margin-bottom:var(--m-sp-6}`): CSS error recovery cannot cross an
  * unbalanced bracket, so the browser parsed 19 of its 158 rules and ~80% of the
@@ -899,8 +899,8 @@ export function prototypeArtifactFor(
 }
 
 /**
- * A PROTOTYPE CANNOT BE MORE CERTAIN THAN WHAT IT WAS BUILT FROM. The Laila
- * New 2 build self-assessed 0.98 atop an ontology at 0.5, an atlas at 0.4 and
+ * A PROTOTYPE CANNOT BE MORE CERTAIN THAN WHAT IT WAS BUILT FROM. A reviewed
+ * CRM build self-assessed 0.98 atop an ontology at 0.5, an atlas at 0.4 and
  * an Experience Design carrying seventeen standing gaps — a number that
  * invites a stakeholder to trust the one document in the chain that merely
  * RENDERS the others. The build's confidence is now capped by the weakest

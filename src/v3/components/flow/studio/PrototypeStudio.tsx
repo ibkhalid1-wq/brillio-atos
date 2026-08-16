@@ -79,10 +79,14 @@ export default function PrototypeStudio({ doc, onChange, program, onRefineProtot
         // read from the same document through the same one definition.
         screenOptions: screenOptionsFor(design),
         blueprint: readArtifactDoc(program, "agenticBlueprint"),
-        // The chrome carries the programme's own name — same as the edge's
-        // baseline and the stakeholder's link, so all three surfaces brand
-        // one application identically.
-        appName: program?.name,
+        // The chrome carries the programme's own name — read from the RECORD
+        // (projectMeta), never the row, because the edge baseline and the
+        // stakeholder's link read the record and the three surfaces must
+        // assemble one identical application.
+        appName: (() => {
+          const pm = (program?.rawData as { data?: { projectMeta?: { name?: unknown } } } | undefined)?.data?.projectMeta;
+          return typeof pm?.name === "string" ? pm.name : undefined;
+        })(),
       }).html;
     } catch { return null; }
   }, [program]);
