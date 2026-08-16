@@ -114,9 +114,34 @@ export function atlasWorkflows(atlas: unknown): AtlasWorkflow[] {
   return out;
 }
 
-/** The role a workflow belongs to: its owner, else the actor who starts it. */
+/**
+ * A ROLE IS A JOB, NOT A CONSULTING CREDENTIAL.
+ *
+ * The discovery kit casts its interviewees as "Marketing SME", "Sales SME" —
+ * correct for an engagement roster, where SME distinguishes the person we
+ * interviewed from the department. The atlas inherits those names as workflow
+ * owners, and the prototype rendered them verbatim, so a client's own product
+ * showed them a sidebar of SMEs: a word from our methodology, describing them,
+ * on a screen that is supposed to be theirs. Nobody in a marketing team calls
+ * their desk "the Marketing SME workbench".
+ *
+ * Only the trailing credential is dropped, never a real title: "Sales
+ * Operations SME" becomes "Sales Operations", while "Executive Sponsor" (no
+ * credential) is untouched. A name that is ONLY the credential keeps it, since
+ * "" names nobody.
+ */
+const ROLE_CREDENTIAL = /[\s,–—-]*\(?\b(smes?|subject[\s-]matter[\s-]experts?|poc|sme lead)\b\)?[\s.]*$/i;
+export function businessRole(name: unknown): string {
+  const raw = text(name);
+  if (!raw) return "";
+  const trimmed = raw.replace(ROLE_CREDENTIAL, "").trim();
+  return trimmed || raw;
+}
+
+/** The role a workflow belongs to: its owner, else the actor who starts it —
+ *  as a job title, with any consulting credential dropped. */
 export function roleOf(workflow: AtlasWorkflow): string {
-  return workflow.owner || workflow.steps.find((s) => s.actor)?.actor || "";
+  return businessRole(workflow.owner || workflow.steps.find((s) => s.actor)?.actor || "");
 }
 
 /**
@@ -142,8 +167,12 @@ export function deriveWorkbenches(atlas: unknown): AtlasRole[] {
     for (const s of w.steps) {
       for (const e of s.entities) if (!entry.entities.includes(e)) entry.entities.push(e);
       if (s.system && !entry.systems.includes(s.system)) entry.systems.push(s.system);
-      if (s.actor && s.actor !== role && !entry.collaborators.includes(s.actor)) entry.collaborators.push(s.actor);
-      if (!s.actor || s.actor === role) entry.ownSteps += 1;
+      // Collaborators are actors shown on this same workbench, so they read as
+      // job titles too — otherwise the header says "Marketing" and the handoff
+      // beneath it says "Sales SME".
+      const actor = businessRole(s.actor);
+      if (actor && actor !== role && !entry.collaborators.includes(actor)) entry.collaborators.push(actor);
+      if (!actor || actor === role) entry.ownSteps += 1;
     }
   }
   // Two roles whose names differ only by their slug would collide in the URL and

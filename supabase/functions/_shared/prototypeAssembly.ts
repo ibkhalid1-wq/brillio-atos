@@ -15,7 +15,7 @@ import { deriveRoles, type ValueRole } from "./semanticRoles.ts";
 import { generateSeed, type SeedAssumption, type SeedRecord } from "./seedData.ts";
 import { meridianStylesheet, valueTone, type PrototypeTheme } from "./prototypeDesignSystem.ts";
 import { deriveScreenActions, type ScreenAction } from "./experienceActions.ts";
-import { deriveWorkbenches, type AtlasRole, type AtlasWorkflow } from "./atlasWorkbenches.ts";
+import { businessRole, deriveWorkbenches, type AtlasRole, type AtlasWorkflow } from "./atlasWorkbenches.ts";
 import { deriveAgenticSurface, agentsOnEntity, gatedAgents, type SurfacedAgent } from "./agenticSurface.ts";
 import { entityNameResolver, joinKeyFor, type OntologyGraph } from "./ontologyGraph.ts";
 import {
@@ -2002,7 +2002,10 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
       ? `<div class="m-assumed"><span class="m-assumed-k">Not modelled</span> the atlas names ${esc(unmodelled.join(", "))} in this role's steps; the ontology holds no such entity.`
         + `<span class="m-assumed-q">${unmodelled.length === 1 ? "Is that a record" : "Are those records"} the system must keep? To confirm with the team.</span></div>` : "";
     const step = (s: { action: string; actor: string; system: string; entities: string[] }): string => {
-      const meta = [s.actor && s.actor !== r.role ? s.actor : "", s.system].filter(Boolean).join(" · ");
+      // The step's actor reads as a job title too, or the header says
+      // "Marketing" while the step beneath it says "Marketing SME".
+      const stepActor = businessRole(s.actor);
+      const meta = [stepActor && stepActor !== r.role ? stepActor : "", s.system].filter(Boolean).join(" · ");
       const chips = s.entities.map((e) => { const hit = asEntity(e); return chip(hit ?? e, hasScreen(hit) ? hit : undefined); }).join(" ");
       return `<li class="m-step"><div class="m-step-a">${esc(s.action || "—")}</div>`
         + `${meta ? `<div class="m-cell-sub">${esc(meta)}</div>` : ""}`
@@ -2023,7 +2026,7 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
       return fid ? region(fid, inner) : inner;
     }).join("");
     const works = r.collaborators.length
-      ? `<p class="m-sub">Works with ${esc(r.collaborators.join(", "))} — actors the atlas names inside these workflows.</p>` : "";
+      ? `<p class="m-sub">Works with ${esc(r.collaborators.join(", "))} — the people these workflows hand off to.</p>` : "";
     const unowned = r.role ? "" : `<div class="m-assumed"><span class="m-assumed-k">Unattributed</span> the atlas names neither an owner nor an actor for ${r.workflows.length === 1 ? "this workflow" : "these workflows"}.<span class="m-assumed-q">Who runs it? To confirm with the team.</span></div>`;
     return `<section class="m-screen" data-screen="work-${r.slug}" hidden>
       <header class="m-page-h"><div><div class="m-eyebrow">Workbench</div><h1 class="m-title">${esc(title)}</h1>

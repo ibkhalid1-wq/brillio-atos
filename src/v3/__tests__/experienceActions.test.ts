@@ -264,17 +264,18 @@ describe("§6 the app opens on a person's work", () => {
 
   it("lands on the first role's workbench, not a filing drawer", () => {
     const built = assemblePrototype(ontology, atlasWithRoles);
-    expect(built.html).toMatch(/show\('work-sales-sme'\)<\/script>/);
+    // the slug is the JOB — the credential comes off in businessRole()
+    expect(built.html).toMatch(/show\('work-sales'\)<\/script>/);
     expect(built.html).not.toMatch(/show\('list-[a-z]+'\)<\/script>/);
   });
 
   it("an empty address routes there too — the router agrees with the opener", () => {
     const built = assemblePrototype(ontology, atlasWithRoles);
     const island = JSON.parse(built.html.match(/id="m-seed">([\s\S]*?)<\/script>/)![1].replace(/\\u003c/g, "<"));
-    expect(island.home).toBe("workbench/sales-sme");
+    expect(island.home).toBe("workbench/sales");
     const page = loadPrototype(built.html, { entities: ["Lead", "Opportunity", "Campaign"], url: "https://p.test/" });
     const shown = [...page.window.document.querySelectorAll("[data-screen]")].filter((s) => !(s as HTMLElement).hidden);
-    expect(shown.map((s) => s.getAttribute("data-screen"))).toEqual(["work-sales-sme"]);
+    expect(shown.map((s) => s.getAttribute("data-screen"))).toEqual(["work-sales"]);
   });
 
   it("the sidebar leads with the people, and Records keeps its own landmark", () => {
