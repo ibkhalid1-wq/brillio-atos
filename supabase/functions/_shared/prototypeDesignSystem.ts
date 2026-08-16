@@ -115,12 +115,26 @@ const TONE_RULES: Array<[ValueTone, RegExp]> = [
   ["warn", /\b(watch|pending|awaiting|on[- ]?hold|paused|in[- ]?review|under[- ]?review|monitoring|needs[- ]?attention|due[- ]?soon|escalating|at[- ]?capacity|degraded)\b/i],
 ];
 
+/**
+ * A QUALIFIER THAT WITHHOLDS THE VERDICT. "Partially Paid" contains "paid" and
+ * read as settled — the same green as "Paid", on an invoice that is not
+ * settled, which is the sort of detail a finance stakeholder spots in the first
+ * ten seconds. A part-way state is attention, never completion. Observed on the
+ * live build's Invoice column.
+ */
+const PARTIAL = /\b(partial(ly)?|partly|pending|awaiting|in[- ]?progress|provisional|conditional)\b/i;
+
 /** The verdict a value states, or null when it states none. Pure and
  *  case-insensitive; the same value always tones the same way. */
 export function valueTone(value: unknown): ValueTone | null {
   const v = String(value ?? "").trim();
   if (!v || v.length > 40) return null;
-  for (const [tone, re] of TONE_RULES) if (re.test(v)) return tone;
+  for (const [tone, re] of TONE_RULES) {
+    if (!re.test(v)) continue;
+    // A qualifier only ever withholds a POSITIVE verdict: "partially paid" is
+    // attention, while "partially cancelled" is still bad news.
+    return tone === "good" && PARTIAL.test(v) ? "warn" : tone;
+  }
   return null;
 }
 

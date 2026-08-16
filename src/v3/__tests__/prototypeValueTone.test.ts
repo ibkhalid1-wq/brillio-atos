@@ -34,6 +34,15 @@ describe("§1 the vocabulary", () => {
     expect(valueTone("Closed Won")).toBe("good");
   });
 
+  it("a qualifier withholds a POSITIVE verdict — observed live on an invoice", () => {
+    // "Partially Paid" contains "paid" and read the same green as settled.
+    expect(valueTone("Partially Paid")).toBe("warn");
+    expect(valueTone("Paid")).toBe("good");
+    expect(valueTone("Partially Complete")).toBe("warn");
+    // …and only a positive one: partly-bad news is still bad news.
+    expect(valueTone("Partially Cancelled")).toBe("risk");
+  });
+
   it("leaves ambiguous and neutral values alone — the load-bearing omission", () => {
     // Magnitudes: good on influence, bad on risk. The system does not guess.
     for (const v of ["High", "Medium", "Low", "Tier 1"]) expect(valueTone(v)).toBeNull();
