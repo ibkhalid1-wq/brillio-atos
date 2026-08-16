@@ -30,7 +30,9 @@ import { generateSeed } from "@shared/seedData.ts";
 import {
   buildSpecSchema, validatePrototypeSpec, widgetRegionId, WIDGETS_PER_SCREEN,
 } from "@shared/prototypeScreenSpec.ts";
-import { prototypeBaselineFor, resolvePrototypeDoc, regionIdsIn, fabricIdsIn, screenIdsIn } from "@shared/prototypeRefine.ts";
+import {
+  prototypeBaselineFor, prototypeBaselineOfProgram, resolvePrototypeDoc, regionIdsIn, fabricIdsIn, screenIdsIn,
+} from "@shared/prototypeRefine.ts";
 import { auditPrototype } from "@/v3/lib/prototypeQa";
 import { loadPrototype } from "./helpers/renderPrototype";
 
@@ -450,11 +452,25 @@ describe("a screen spec on the refine path", () => {
     expect(verdict!.droppedFills).toContain(widgetRegionId("list-lead", "stats"));
   });
 
-  it("is wired into the edge on both sides of the call", () => {
-    // The two ends no unit test can reach: the schema going out with the brief,
-    // and the accepted spec coming back on the record for the next round.
+  it("carries the accepted spec back onto the next round's assembly", () => {
+    // The spec a round accepted is stored with the build; the next run must
+    // assemble WITH it or the model's judgement — and the widgets the operator
+    // has been looking at — are silently discarded every round. This was an
+    // edge-source regex; the derivation it read is now a pure function of the
+    // programme record, so it is exercised instead.
+    const record = { domainOntology: ontology, currentStateAtlas: atlas, prototypeValueVocabulary: vocabulary };
+    const carried = prototypeBaselineOfProgram({ ...record, prototypeBuild: { screenSpec: goodSpec } })!;
+    expect(carried.screenSpec).toEqual(goodSpec);
+    expect(carried.regionIds.filter((r) => r.startsWith("widget:")).length).toBe(4);
+    expect(carried.specAccepted).toBe(6);
+    // …and a record with no stored spec draws no bands, or the two assertions
+    // above would pass on an assembly that carried nothing.
+    expect(prototypeBaselineOfProgram(record)!.regionIds.filter((r) => r.startsWith("widget:"))).toEqual([]);
+  });
+
+  it("hands the schema out with the brief", () => {
+    // The one end no unit test can reach: the schema going out with the brief.
     const edge = readFileSync(resolve(__dirname, "../../../supabase/functions/run-agent/index.ts"), "utf8");
-    expect(edge).toMatch(/screenSpec:\s*priorBuild\?\.screenSpec/);
     expect(edge).toContain("prototypeRefineBrief.screenSpecSchema");
     expect(edge).toContain('"screenSpec"');
   });

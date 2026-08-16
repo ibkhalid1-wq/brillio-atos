@@ -13,8 +13,8 @@ import { anchorAgentifyToAtlas } from "../_shared/agentifyAnchor.ts";
 // model is handed THAT plus the operator's direction, with a post-condition that
 // keeps the assembled build when the answer would have lost structure.
 import {
-  baselineWithPriorSkin, buildPrototypeRefineBrief, prototypeBaselineFor, resolvePrototypeDoc,
-  REFINE_CONTRACT, type PrototypeBaseline, type PrototypeChangeRequest,
+  buildPrototypeRefineBrief, prototypeArtifactFor, prototypeBaselineOfProgram,
+  REFINE_CONTRACT, type PrototypeChangeRequest,
 } from "../_shared/prototypeRefine.ts";
 // THE VALUE VOCABULARY'S PRODUCER. Everything that decides — whether to spend
 // the one call, what to ask, how to read the reply, what document to store —
@@ -2295,32 +2295,6 @@ function getCurrentPhaseScope(programData: ProgramState, phaseId: string): strin
   return lines.join("\n");
 }
 
-/** The programme's assembled prototype — the baseline a build/refine starts from.
- *  Re-derived rather than stored: `prototypeBaselineFor` is deterministic, so the
- *  build the model is shown and the build its answer is checked against are the
- *  same document even though they are computed at two different moments in the run. */
-function prototypeBaselineOf(inner: Record<string, unknown>): PrototypeBaseline | null {
-  const priorBuild = isRecord(inner.prototypeBuild) ? inner.prototypeBuild as Record<string, unknown> : null;
-  const baseline = prototypeBaselineFor(inner.domainOntology, inner.currentStateAtlas, inner.experienceDesign, {
-    // The same stored inputs the studio and the stakeholder's link assemble
-    // with. A baseline missing one of them is a different application from the
-    // one the operator is looking at, and the refine post-condition would
-    // measure the returned document against a build nobody has seen.
-    vocabulary: inner.prototypeValueVocabulary,
-    blueprint: inner.agenticBlueprint,
-    // …and the screen spec a previous round accepted, for the same reason the
-    // approved skin is carried: the skeleton is re-derived every run, so a
-    // judgement the model already made and the operator already saw would
-    // otherwise be discarded on the next one.
-    screenSpec: priorBuild?.screenSpec,
-  });
-  if (!baseline) return null;
-  // The skeleton is re-derived every run; the SKIN the operator already approved
-  // is carried forward off the stored build, so the loop accumulates instead of
-  // resetting to the stock stylesheet each round.
-  return baselineWithPriorSkin(baseline, priorBuild?.html ?? null);
-}
-
 /**
  * THE DIRECTION a Prototype Build run is given — the delivery team's typed
  * instruction and the demo's open change requests, read off the record.
@@ -3217,7 +3191,7 @@ function buildSpecialAgentInputContext(
     // structure was whatever the last free-form run happened to invent: no
     // fabric, no regions, nothing to diff, and a refine asking for detail-page
     // affordances answered "no detail screens exist in the current design".
-    const prototypeBaseline = formalSpec.fieldKey === "prototypeBuild" ? prototypeBaselineOf(inner) : null;
+    const prototypeBaseline = formalSpec.fieldKey === "prototypeBuild" ? prototypeBaselineOfProgram(inner) : null;
     const prototypeRefineBrief = prototypeBaseline
       ? buildPrototypeRefineBrief(prototypeBaseline, readPrototypeDirection(phaseInputsAll, runMode))
       : null;
@@ -11510,9 +11484,11 @@ Deno.serve(async (req) => {
         // the artifact's gaps. A restyle (a replacement stylesheet) is spliced
         // into the assembled document, so it cannot disturb structure at all.
         // Without this, "don't rewrite the structure" was a sentence in a prompt.
+        // The decision itself is `prototypeArtifactFor` in `_shared` — record in,
+        // stored document out — so what happens on this line is exercised by a
+        // test that runs it, not merely by a test that reads it.
         if (request.agentId === "prototype-build") {
-          const baseline = prototypeBaselineOf(getInnerProgramData(contextProgramData));
-          if (baseline) formalResult = resolvePrototypeDoc(formalResult, baseline).doc;
+          formalResult = prototypeArtifactFor(getInnerProgramData(contextProgramData), formalResult).doc;
         }
         // Tag experience-design flows / demo scripts with their business area so
         // the Show demo can default a recipient to their own area's flow — done

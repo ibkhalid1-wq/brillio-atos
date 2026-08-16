@@ -481,6 +481,43 @@ export function baselineWithPriorSkin(baseline: PrototypeBaseline, priorHtml: un
   return { ...baseline, html: withStylesheet(baseline.html, css), stylesheet: css };
 }
 
+/**
+ * THE PROGRAMME'S OWN ASSEMBLED BUILD, from the programme's own record.
+ *
+ * Both halves of a refine start here: the build the model is SHOWN, and the
+ * build its answer is CHECKED AGAINST. It lived in the edge function, where
+ * nothing could execute it — so the inputs a baseline is assembled from (the
+ * value vocabulary, the blueprint, the spec a previous round accepted, the skin
+ * the operator already approved) were carried by a line no test could run. It is
+ * re-derived rather than stored because `prototypeBaselineFor` is deterministic:
+ * two calls on the same record at two moments in a run give the same document.
+ *
+ * Returns null when the record cannot assemble at all — the caller then leaves
+ * the model's answer alone rather than measuring it against a skeleton that
+ * does not exist.
+ */
+export function prototypeBaselineOfProgram(inner: Record<string, unknown>): PrototypeBaseline | null {
+  const priorBuild = isRecord(inner.prototypeBuild) ? inner.prototypeBuild : null;
+  const baseline = prototypeBaselineFor(inner.domainOntology, inner.currentStateAtlas, inner.experienceDesign, {
+    // The same stored inputs the studio and the stakeholder's link assemble
+    // with. A baseline missing one of them is a different application from the
+    // one the operator is looking at, and the refine post-condition would
+    // measure the returned document against a build nobody has seen.
+    vocabulary: inner.prototypeValueVocabulary,
+    blueprint: inner.agenticBlueprint,
+    // …and the screen spec a previous round accepted, for the same reason the
+    // approved skin is carried: the skeleton is re-derived every run, so a
+    // judgement the model already made and the operator already saw would
+    // otherwise be discarded on the next one.
+    screenSpec: priorBuild?.screenSpec,
+  });
+  if (!baseline) return null;
+  // The skeleton is re-derived every run; the SKIN the operator already approved
+  // is carried forward off the stored build, so the loop accumulates instead of
+  // resetting to the stock stylesheet each round.
+  return baselineWithPriorSkin(baseline, priorBuild?.html ?? null);
+}
+
 /** Whether the model can be handed the whole document, or only its stylesheet. */
 export function refineModeFor(baseline: PrototypeBaseline): "document" | "stylesheet" {
   return baseline.html.length <= DOCUMENT_REFINE_BUDGET ? "document" : "stylesheet";
@@ -724,6 +761,41 @@ export function resolvePrototypeDoc(
   return stamp(effective.html, "assembled", verdict, rejected.length ? rejected : (candidate || widgets
     ? []
     : ["The model returned no refinement this run, so the assembled build stands unchanged."]));
+}
+
+/** What a prototype-build run stores, and which build it turned out to be. */
+export interface PrototypeArtifact {
+  /** The document to persist under the artifact's fieldKey. */
+  doc: Record<string, unknown>;
+  /** `unassembled`: the record cannot produce a skeleton, so nothing was judged. */
+  source: PrototypeResolution["source"] | "unassembled";
+  verdict: RefineVerdict | null;
+  /** The build the answer was measured against — null when there was none. */
+  baseline: PrototypeBaseline | null;
+}
+
+/**
+ * THE WHOLE APPLIED DECISION, IN ONE CALLABLE PIECE.
+ *
+ * The record plus the model's answer in; the document that gets stored out.
+ * This is the step the edge function performs after a prototype-build run, and
+ * it is here rather than there for one reason: while the derivation lived in the
+ * edge, the ONLY evidence that the post-condition was applied at all was a regex
+ * over the edge's source text. Deleting the call and keeping the words would
+ * have left every test green while a structure-losing rewrite shipped — the
+ * exact failure this module exists to end. Composed here, the applied path runs
+ * in a test: a document that loses structure stores the assembled build, a
+ * presentation-only change stores the model's.
+ */
+export function prototypeArtifactFor(
+  inner: Record<string, unknown>,
+  modelResult: Record<string, unknown>,
+): PrototypeArtifact {
+  const baseline = prototypeBaselineOfProgram(inner);
+  // No skeleton, no post-condition: measuring an answer against a build that
+  // does not exist would reject it for structure the record never held.
+  if (!baseline) return { doc: modelResult, source: "unassembled", verdict: null, baseline: null };
+  return { ...resolvePrototypeDoc(modelResult, baseline), baseline };
 }
 
 /**
