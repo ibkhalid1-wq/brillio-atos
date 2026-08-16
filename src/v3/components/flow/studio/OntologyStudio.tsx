@@ -677,6 +677,21 @@ export default function OntologyStudio({ doc, onChange, program, gapRoutes, onRo
                                 <span className="v3fs-onto-relarrow" aria-hidden="true">→</span>
                               </span>
                               {endChip(other, !outgoing)}
+                              {/* WHAT AN "UNKNOWN" ACTUALLY RESTS ON. The generator is told never to
+                                  guess a cardinality — it is what interviews confirm — so every relation
+                                  on a provisional draft reads "unknown" here, and an operator looking at
+                                  nineteen of them cannot tell the ones with grounds from the ones with
+                                  none. The draft now carries `standardPrior` where an industry vocabulary
+                                  states the shape (17 of 19 on a reviewed CRM ontology); the prototype
+                                  already draws those as provisional lists rather than asserting a 1:N.
+                                  Showing it here is what closes the loop: the operator sees the evidence
+                                  the build is using, and the question stays visibly open. */}
+                              {asText(relation.cardinality) === "unknown" && asText(relation.standardPrior)
+                                ? <span className="v3fs-onto-relprior"
+                                    title={`${asText(relation.standardPriorSource) || "industry standard"} suggests ${asText(relation.standardPrior)} — not yet confirmed, so the prototype draws it as provisional`}>
+                                    likely {asText(relation.standardPrior)}
+                                  </span>
+                                : null}
                               <select className="v3fs-onto-relcard" value={asText(relation.cardinality) || "unknown"} aria-label="Cardinality" disabled={locked}
                                 onChange={(e) => { updateRelation(ri, { cardinality: e.target.value }); setSelected({ kind: "relation", index: ri }); }}>
                                 {CARDINALITIES.map((c) => <option key={c} value={c}>{c}</option>)}

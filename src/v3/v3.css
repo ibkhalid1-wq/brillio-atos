@@ -5974,6 +5974,19 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-onto-relarrow {font-weight:800;color:var(--v3-accent-2)}
 .v3fs-onto-relcard {margin-left:auto;flex:none;border:0;font:inherit;font-size:10px;font-weight:700;cursor:pointer;
   color:var(--v3-text-muted);background:color-mix(in srgb,var(--fs-line) 40%,transparent);border-radius:99px;padding:3px 7px;outline:0}
+/* The industry-standard prior behind an "unknown" cardinality. Quiet and to the
+   LEFT of the select, because it is evidence for the answer, not the answer: the
+   generator is told never to guess a cardinality, so the field stays unknown and
+   the question stays open. Without this an operator sees nineteen identical
+   "unknown" rows and cannot tell which ones the prototype has grounds to draw. */
+.v3fs-onto-relprior{margin-left:auto;margin-right:8px;font-size:10px;font-weight:700;
+  letter-spacing:.05em;text-transform:uppercase;white-space:nowrap;cursor:help;
+  color:var(--v3-text-secondary,#625d74);background:rgba(98,93,116,.09);
+  border:1px solid rgba(98,93,116,.22);border-radius:999px;padding:2px 8px}
+/* The select already carries margin-left:auto to sit at the right edge. With the
+   badge in front of it, TWO auto margins split the free space and the pair drifts
+   to the middle — so the badge takes the auto and the select stops claiming it. */
+.v3fs-onto-relprior + .v3fs-onto-relcard{margin-left:0}
 .v3fs-onto-relcard:hover {color:var(--v3-accent-b)}
 .v3fs-onto-relx {opacity:0;transition:opacity .12s ease}
 .v3fs-onto-relrow:hover .v3fs-onto-relx, .v3fs-onto-relx:focus-visible {opacity:1}
