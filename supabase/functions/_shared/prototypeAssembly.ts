@@ -256,8 +256,13 @@ interface PrototypeModel {
   data: Record<string, SeedTable>;
   links: Record<string, Array<[string, string]>>;
   screens: ScreenSpec[];
-  /** The entity slug the application opens on when the URL names none. */
+  /** The entity slug the RECORDS group leads with — the operator's curated
+   *  first choice, and the fallback landing screen. */
   first: string;
+  /** The route the application opens on when the URL names none: a person's
+   *  workbench (`<wbRoute>/<slug>`). Absent when the atlas named no roles, and
+   *  then the app opens on `first` exactly as it always did. */
+  home?: string;
   /** The atlas's roles, each with its queues. Empty when the atlas has none. */
   work: WorkbenchSpec[];
   /** The gated agents' queues. Empty when the blueprint is absent or gates nothing. */
@@ -385,7 +390,7 @@ function mCell(R,ri,v){
   // "> page size (20) → a second page" is written into its own defaults — so a
   // pager set to 24 would put every root table on exactly one page and the
   // control would be honest and useless at the same time.
-  var SCREENS=M.screens||[],SC={},HOME=M.first||"",PAGE=20,i;
+  var SCREENS=M.screens||[],SC={},HOME=M.first||"",HOMEW=M.home||"",PAGE=20,i;
   for(i=0;i<SCREENS.length;i++)SC[SCREENS[i].slug]=SCREENS[i];
   // Workbenches, approval queues, and the two RESERVED route words.
   var WORK=M.work||[],WB={},APPR=M.appr||[],WBR=M.wbRoute||"workbench",APR=M.apRoute||"approvals";
@@ -814,6 +819,9 @@ function mCell(R,ri,v){
     var h="";
     try{h=location.hash||""}catch(e){h=""}
     if(!h)h=HASH;
+    // An address that names nothing lands where the app opens — a person's
+    // workbench when the atlas gave one, else the lead entity's list.
+    if(!h.replace(/^#/,"")&&HOMEW)h="#"+HOMEW;
     var parts=h.replace(/^#/,"").split("/");
     if(parts[0]===WBR&&WB[parts[1]]){if(WB[parts[1]].queues.length)renderWorkbench(WB[parts[1]]);show("work-"+parts[1]);return}
     if(parts[0]===APR&&APPR.length){renderApprovals();show("approvals");return}
@@ -2456,7 +2464,23 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
     .concat(derivedActions.refused);
 
   const workbenches = roleWorkbenches.map(workbenchScreen).join("\n");
+  /**
+   * WHAT THE APPLICATION OPENS ON — a person's work, not a filing drawer.
+   *
+   * It opened on the lead entity's LIST, so the first thing a stakeholder saw
+   * was a table of every campaign: true, complete, and nobody's job. The
+   * workbench is the screen that answers "how does my day change" — their
+   * records, and their workflow beside them — and it sat below the record menu
+   * where a demo reached it last.
+   *
+   * The operator's curated menu is still honoured for what it decides: WHICH
+   * ENTITY leads the records group. This decides something else — where the app
+   * starts — and falls back to that same first entity whenever the atlas names
+   * no roles, so a programme without an atlas opens exactly as it always did.
+   */
+  const primaryWorkbench = roleWorkbenches[0];
   const firstList = `list-${es.get(lead)}`;
+  const entryScreen = primaryWorkbench ? `work-${primaryWorkbench.slug}` : firstList;
 
   // THE SECOND NAVIGATION — the people and the agents.
   //
@@ -2511,6 +2535,9 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
   }
   const model: PrototypeModel = {
     roles: roleLegend, data, links, screens: screenSpecs, first: es.get(lead) ?? "",
+    // Where the app starts when the URL names nothing — a workbench route when
+    // the atlas gives one, else the lead entity's list (`first`).
+    ...(primaryWorkbench ? { home: `${WB_ROUTE}/${primaryWorkbench.slug}` } : {}),
     work: workSpecs, appr: apprSpecs, wbRoute: WB_ROUTE, apRoute: AP_ROUTE,
     ...(widgetGroups.length ? { widgets: widgetGroups } : {}),
     ...(Object.keys(acts).length ? { acts } : {}),
@@ -2525,7 +2552,7 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>${esc(appName)}</title><style>${meridianStylesheet(options.theme)}
 .m-screen[hidden]{display:none}.m-screen{display:block}</style></head><body>
-<div class="m-app"><aside class="m-side"><div class="m-brand"><span class="m-brand-dot"></span>${esc(appName)}</div><nav class="m-nav" aria-label="Records">${nav}</nav>${auxNav}</aside>
+<div class="m-app"><aside class="m-side"><div class="m-brand"><span class="m-brand-dot"></span>${esc(appName)}</div>${auxNav}<nav class="m-nav" aria-label="Records">${nav}</nav></aside>
 <main class="m-main">${screens}
 ${workbenches}
 ${approvals}</main></div>
@@ -2535,7 +2562,7 @@ var m=document.querySelectorAll('.m-nav-item[data-nav="'+id+'"]');
 if(m.length){document.querySelectorAll('.m-nav-item').forEach(function(n){n.classList.remove('is-active')});
 m.forEach(function(n){n.classList.add('is-active');for(var p=n.parentElement;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true})}
 window.scrollTo(0,0)}${rendererFor(workSpecs.some((w) => w.queues.length > 0) || apprSpecs.length > 0, widgetGroups.length > 0, Object.keys(acts).length > 0)}
-if(!document.querySelector('.m-screen:not([hidden])'))show('${firstList}')</script>
+if(!document.querySelector('.m-screen:not([hidden])'))show('${entryScreen}')</script>
 </body></html>`;
   // What was ACCEPTED is what is on the page, counted off the bands themselves —
   // not what validation let through, which a missing column can still stop.

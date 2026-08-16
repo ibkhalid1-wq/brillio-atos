@@ -244,3 +244,50 @@ describe("§5 a verb the standard controls already answer is neither drawn twice
     expect(refused.join(" ")).toMatch(/"Report Performance" on Campaign is not drawn/);
   });
 });
+
+/**
+ * WHERE THE APPLICATION OPENS (2026-08-16, operator direction).
+ *
+ * It opened on the lead entity's LIST — a table of every campaign: true,
+ * complete, and nobody's job. The workbench is the screen that answers "how
+ * does my day change", and it sat below the record menu where a demo reached it
+ * last. The app now lands on a person's work, and the sidebar leads with the
+ * people. The operator's curated menu still decides which ENTITY leads Records.
+ */
+describe("§6 the app opens on a person's work", () => {
+  const atlasWithRoles = {
+    workflows: [
+      { name: "Qualify", area: "Sales", owner: "Sales SME", steps: [{ actor: "Sales SME", action: "Score the lead.", entities: ["Lead"] }] },
+      { name: "Campaigns", area: "Marketing", owner: "Marketing SME", steps: [{ actor: "Marketing SME", action: "Launch it.", entities: ["Campaign"] }] },
+    ],
+  };
+
+  it("lands on the first role's workbench, not a filing drawer", () => {
+    const built = assemblePrototype(ontology, atlasWithRoles);
+    expect(built.html).toMatch(/show\('work-sales-sme'\)<\/script>/);
+    expect(built.html).not.toMatch(/show\('list-[a-z]+'\)<\/script>/);
+  });
+
+  it("an empty address routes there too — the router agrees with the opener", () => {
+    const built = assemblePrototype(ontology, atlasWithRoles);
+    const island = JSON.parse(built.html.match(/id="m-seed">([\s\S]*?)<\/script>/)![1].replace(/\\u003c/g, "<"));
+    expect(island.home).toBe("workbench/sales-sme");
+    const page = loadPrototype(built.html, { entities: ["Lead", "Opportunity", "Campaign"], url: "https://p.test/" });
+    const shown = [...page.window.document.querySelectorAll("[data-screen]")].filter((s) => !(s as HTMLElement).hidden);
+    expect(shown.map((s) => s.getAttribute("data-screen"))).toEqual(["work-sales-sme"]);
+  });
+
+  it("the sidebar leads with the people, and Records keeps its own landmark", () => {
+    const doc = loadPrototype(assemblePrototype(ontology, atlasWithRoles).html,
+      { entities: ["Lead"], url: "https://p.test/" }).window.document;
+    const navs = [...doc.querySelectorAll("aside.m-side nav")].map((n) => n.getAttribute("aria-label"));
+    expect(navs[0]).toBe("Workbenches and agents");
+    expect(navs).toContain("Records");
+  });
+
+  it("no atlas, no workbench — it opens exactly where it always did", () => {
+    const bare = assemblePrototype(ontology, {});
+    expect(bare.html).toMatch(/show\('list-[a-z]+'\)<\/script>/);
+    expect(bare.html).not.toContain('"home"');
+  });
+});

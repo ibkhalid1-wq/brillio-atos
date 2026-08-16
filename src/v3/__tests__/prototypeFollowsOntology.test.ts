@@ -132,9 +132,16 @@ describe("the navigation is ordered by the ontology, not by seed volume", () => 
     expect(items.indexOf("opportunity")).toBeLessThan(items.indexOf("practice-forecast-split"));
   });
 
-  it("the first screen shown follows the same order", () => {
+  it("the first screen shown follows the same order — when there is no workbench to open on", () => {
+    // The RECORDS group still leads with the ontology's own order. What the app
+    // OPENS on is a different decision (2026-08-16): a person's workbench when
+    // the atlas names roles, because a table of every campaign is true,
+    // complete and nobody's job. With no atlas there is no workbench, and the
+    // landing screen is the lead entity's list exactly as before.
+    expect(assemblePrototype(ontology, {}).html).toContain("show('list-account')</script>");
+    // …and with an atlas, it lands on the first role's workbench.
     const { html } = assemblePrototype(ontology, atlas);
-    expect(html).toContain("show('list-account')</script>");
+    expect(html).toMatch(/show\('work-[a-z0-9-]+'\)<\/script>/);
   });
 
   it("a child never appears above its parent in the tree", () => {

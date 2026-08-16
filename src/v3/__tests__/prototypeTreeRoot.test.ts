@@ -115,7 +115,7 @@ const clinicalOntology = {
  */
 function sidebar(html: string) {
   const doc = renderedDoc(html);
-  const nav = doc.querySelector("aside.m-side nav.m-nav");
+  const nav = doc.querySelector('aside.m-side nav[aria-label="Records"]');
   if (!nav) throw new Error("the assembled page has no sidebar");
   const nameOf = (el: Element): string => (el.querySelector(".m-nav-item")?.childNodes[0]?.textContent ?? "").trim();
   const section = (title: string): Element[] => {
@@ -306,7 +306,7 @@ describe("the tree still covers the ontology exactly once", () => {
     const chosen = ["Opportunity", "Account", "Partner"];
     const html = assemblePrototype(ontology, atlas, chosen).html;
     const doc = renderedDoc(html);
-    const nav = doc.querySelector("aside.m-side nav.m-nav")!;
+    const nav = doc.querySelector('aside.m-side nav[aria-label="Records"]')!;
     expect(nav.querySelector(".m-nav-sub"), "a curated menu grew a tree").toBeNull();
     expect([...nav.querySelectorAll(".m-nav-item")].map((i) => (i.childNodes[0]?.textContent ?? "").trim())).toEqual(chosen);
   });
@@ -317,7 +317,7 @@ describe("the top band is open and the depth below it is one click away", () => 
   it("every tree root is expanded; branches beneath them ship collapsed", () => {
     const { html } = assemblePrototype(ontology, atlas);
     const doc = renderedDoc(html);
-    const nav = doc.querySelector("aside.m-side nav.m-nav")!;
+    const nav = doc.querySelector('aside.m-side nav[aria-label="Records"]')!;
     const groups = [...nav.querySelectorAll("details.m-nav-group")];
     expect(groups.length).toBeGreaterThan(2);
     const isTop = (el: Element) => !el.parentElement?.classList.contains("m-nav-sub");
