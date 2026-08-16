@@ -44,6 +44,7 @@
 import { assemblePrototype, paletteFor, parentEntitiesFor, screenOptionsFor } from "./prototypeAssembly.ts";
 import { generateSeed } from "./seedData.ts";
 import { SCREEN_SPEC_CONTRACT, WIDGET_REGION_PREFIX, type PrototypeSpecSchema } from "./prototypeScreenSpec.ts";
+import { meridianStylesheet, resolveTheme, themePatchOf, type PrototypeTheme } from "./prototypeDesignSystem.ts";
 
 /** The assembled build a refine starts from, plus everything a refine must preserve. */
 export interface PrototypeBaseline {
@@ -68,6 +69,11 @@ export interface PrototypeBaseline {
   regionIds: string[];
   /** The assembled document's stylesheet — what a restyle replaces. */
   stylesheet: string;
+  /** The RESOLVED theme this baseline was assembled with (Experience Design's
+   *  palette over the Meridian defaults). What a `styleTokens` patch merges
+   *  over — so a token restyle is a re-skin of the governed design system,
+   *  never a re-authoring of its CSS. */
+  theme: PrototypeTheme;
   /**
    * WHAT MAKES THE BUILD AN APPLICATION RATHER THAN A PICTURE OF ONE: each
    * function the assembled markup's inline handlers call, and how many controls
@@ -346,6 +352,58 @@ export function stylesheetIn(html: string): string {
  * inspection. Anything in the replacement that could close the block early or
  * open a script is removed: the model's CSS is untrusted input.
  */
+/**
+ * WHETHER THE SHEET PARSES AT ALL — the check the Laila New 2 build proved
+ * necessary. A model-authored stylesheet shipped with ONE unclosed `var(`
+ * (`margin-bottom:var(--m-sp-6}`): CSS error recovery cannot cross an
+ * unbalanced bracket, so the browser parsed 19 of its 158 rules and ~80% of the
+ * design system — chips, tables, badges, every @media query — was silently
+ * dead. The structural post-condition passed it, because every id, screen and
+ * value was intact; the page just rendered them unstyled.
+ *
+ * This is a delimiter scanner, not a CSS parser: it tracks strings, comments
+ * and the (){}[] stack, which is exactly the class of breach a browser cannot
+ * recover from. A sheet it rejects would lose every rule after the breach; a
+ * sheet it accepts may still contain a bad declaration, but a bad declaration
+ * costs one property, not the document.
+ */
+export function checkStylesheetSyntax(css: string): string[] {
+  const s = String(css ?? "");
+  const stack: Array<{ ch: string; at: number }> = [];
+  const PAIR: Record<string, string> = { ")": "(", "}": "{", "]": "[" };
+  let i = 0;
+  while (i < s.length) {
+    const c = s[i];
+    if (c === "/" && s[i + 1] === "*") {
+      const end = s.indexOf("*/", i + 2);
+      if (end === -1) return [`the stylesheet has an unterminated comment opened at character ${i} — every rule after it is dead`];
+      i = end + 2; continue;
+    }
+    if (c === '"' || c === "'") {
+      let j = i + 1;
+      while (j < s.length && s[j] !== c) j += s[j] === "\\" ? 2 : 1;
+      if (j >= s.length) return [`the stylesheet has an unterminated ${c === '"' ? "double" : "single"}-quoted string opened at character ${i} — every rule after it is dead`];
+      i = j + 1; continue;
+    }
+    if (c === "(" || c === "{" || c === "[") stack.push({ ch: c, at: i });
+    else if (c === ")" || c === "}" || c === "]") {
+      const top = stack.pop();
+      if (!top || top.ch !== PAIR[c]) {
+        const ctx = s.slice(Math.max(0, i - 40), i + 1).replace(/\s+/g, " ");
+        return [`the stylesheet has a mismatched '${c}' at character ${i} (…${ctx}) — the browser cannot recover past it`];
+      }
+    }
+    i += 1;
+  }
+  if (stack.length) {
+    const top = stack[stack.length - 1];
+    const ctx = s.slice(Math.max(0, top.at - 12), top.at + 40).replace(/\s+/g, " ");
+    const after = s.length - top.at;
+    return [`the stylesheet has an unclosed '${top.ch}' opened at character ${top.at} (…${ctx}…) — the ${after.toLocaleString("en-US")} characters after it are dead to the browser`];
+  }
+  return [];
+}
+
 export function withStylesheet(html: string, css: string): string {
   const safe = String(css ?? "").replace(/<\/\s*style/gi, "&lt;/style").replace(/<\s*script/gi, "&lt;script");
   const m = /<style[^>]*>([\s\S]*?)<\/style>/i.exec(html);
@@ -431,6 +489,7 @@ export function prototypeBaselineFor(
       seedValues: [...values].sort(),
       regionIds: [...new Set(regionIdsIn(html))].sort(),
       stylesheet: stylesheetIn(html),
+      theme: resolveTheme(paletteFor(experienceDesign)),
       handlers,
       regionCount,
       specSchema,
@@ -478,6 +537,13 @@ export function baselineWithPriorSkin(baseline: PrototypeBaseline, priorHtml: un
   if (ids.length !== baseline.fabricIds.length || ids.join("\u0000") !== baseline.fabricIds.join("\u0000")) return baseline;
   const css = stylesheetIn(priorHtml);
   if (!css.trim() || css === baseline.stylesheet) return baseline;
+  // A PRIOR SKIN THAT DOES NOT PARSE IS NOT A SKIN. Before this check, one
+  // broken restyle poisoned every later build: the stored sheet was re-adopted
+  // here on each round ("the skin already approved"), so even a full
+  // regeneration shipped the same dead stylesheet. Falling back to the stock
+  // sheet loses an approved look at worst; carrying the breach loses the
+  // design system itself.
+  if (checkStylesheetSyntax(css).length) return baseline;
   return { ...baseline, html: withStylesheet(baseline.html, css), stylesheet: css };
 }
 
@@ -587,7 +653,7 @@ export function buildPrototypeRefineBrief(
       ? { baselineHtml: baseline.html }
       : {
         baselineStylesheet: baseline.stylesheet,
-        baselineNote: `The assembled application is ${baseline.html.length.toLocaleString("en-US")} characters — more than can be returned in one response, so it is NOT in your context and you must not attempt to reproduce it. Return "styleCss" only: a complete replacement stylesheet for the classes below. It is spliced into the assembled document, so the restyle reaches every one of its ${baseline.regionCount} regions and cannot disturb any of them.`,
+        baselineNote: `The assembled application is ${baseline.html.length.toLocaleString("en-US")} characters — more than can be returned in one response, so it is NOT in your context and you must not attempt to reproduce it. Return "styleTokens" only: an object overriding any of the governed design tokens — brand, brandSoft, accent, ink, inkSoft, muted, bg, surface, surface2, line, positive, warn, danger (each a hex or rgb()/rgba() colour), radius (a number, 0–64), fontSans, fontDisplay (each a font stack). Your tokens are merged over the theme below, the chrome that sits on the brand is re-derived from your brand colour, and the design system's own stylesheet is rebuilt around them — so the restyle reaches every one of the ${baseline.regionCount} regions and a syntax error is impossible by construction. You contribute the judgement (which colours, what warmth, how much radius); never CSS text. A token whose value does not fit its slot is refused and named in gaps, and the rest still apply. Do NOT return "styleCss" — a hand-authored sheet is one typo away from killing every rule after it, and it will be rejected wholesale for any syntax breach.`,
       }),
     screenIds: baseline.screenIds.slice(0, SCREEN_ID_CAP),
     screenSpecSchema: baseline.specSchema,
@@ -670,8 +736,14 @@ export function checkRefinedPrototype(baseline: PrototypeBaseline, candidateHtml
     .map(([name, want]) => `${name} (${want} → ${calls[name] ?? 0})`)
     .sort();
 
+  // THE SHEET HAS TO PARSE. Structure, values and handlers can all survive a
+  // stylesheet whose one typo kills every rule after it — the page then renders
+  // as unstyled text and every check above still reports PASS. Proven on a real
+  // build: one unclosed `var(` cost 139 of 158 rules. See checkStylesheetSyntax.
+  const brokenSheet = checkStylesheetSyntax(stylesheetIn(html));
+
   const list = (xs: string[]) => xs.slice(0, NAMED).join(", ") + (xs.length > NAMED ? `, +${xs.length - NAMED} more` : "");
-  const violations: string[] = [];
+  const violations: string[] = [...brokenSheet];
   if (droppedRegions.length) violations.push(`${droppedRegions.length} region${droppedRegions.length === 1 ? "" : "s"} lost their data-fabric-id (${list(droppedRegions)})`);
   if (addedRegions.length) violations.push(`${addedRegions.length} data-fabric-id${addedRegions.length === 1 ? " was" : "s were"} invented (${list(addedRegions)})`);
   if (duplicatedRegions.length) violations.push(`${duplicatedRegions.length} data-fabric-id${duplicatedRegions.length === 1 ? " appears" : "s appear"} more than once (${list(duplicatedRegions)})`);
@@ -727,6 +799,7 @@ export function resolvePrototypeDoc(
   const stamp = (html: string, source: PrototypeResolution["source"], verdict: RefineVerdict | null, notes: string[]) => {
     const out: Record<string, unknown> = { ...doc, html, gaps: [...gaps, ...coverage, ...specNotes, ...notes] };
     delete out.styleCss;
+    delete out.styleTokens;
     // THE SPEC THAT PRODUCED THIS BUILD IS STORED WITH IT, so the next round
     // re-assembles the same application rather than one the model's judgement
     // has quietly fallen out of. A round that drew nothing stores nothing.
@@ -749,6 +822,28 @@ export function resolvePrototypeDoc(
   const rejected = verdict && !verdict.ok
     ? [`The refined document was NOT stored: it broke the assembled structure — ${verdict.violations.join("; ")}. The assembled build stands; ask again in presentation terms, or change the ontology if the structure itself is wrong.`]
     : [];
+  // TOKENS BEFORE SHEETS. A `styleTokens` answer re-skins the governed design
+  // system: each value is slot-checked, the chrome is re-derived from the new
+  // brand, and the sheet is the deterministic one — syntactically correct by
+  // construction. This is the contract the brief now asks for; a full
+  // `styleCss` remains accepted below for one round of backward compatibility,
+  // gated by the same syntax check as everything else.
+  const { patch, rejected: badTokens } = themePatchOf(doc.styleTokens);
+  if (Object.keys(patch).length) {
+    const tokenNotes = badTokens.length
+      ? [`${badTokens.length} style token${badTokens.length === 1 ? " was" : "s were"} refused (${badTokens.join(", ")}) — not a governed token, or a value its slot does not accept. The rest were applied.`]
+      : [];
+    const retokened = withStylesheet(effective.html, meridianStylesheet({ ...effective.theme, ...patch }));
+    const check = checkRefinedPrototype(effective, retokened);
+    if (check.ok) return stamp(retokened, "restyled", check, [...rejected, ...tokenNotes]);
+    // Unreachable in practice — the markup is untouched and the sheet is the
+    // design system's own — but a check that can fail is only worth having if
+    // its failure is handled like every other.
+    return stamp(effective.html, "assembled", check, [
+      ...rejected, ...tokenNotes,
+      `The token restyle was NOT applied: ${check.violations.join("; ")}.`,
+    ]);
+  }
   if (css) {
     const restyled = withStylesheet(effective.html, css);
     const check = checkRefinedPrototype(effective, restyled);

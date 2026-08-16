@@ -168,17 +168,39 @@ export function brandChrome(brand: string, ink: string): BrandChrome {
   };
 }
 
+/** Whether a value FITS ITS SLOT — the same shape check `resolveTheme` applies,
+ * exported so a caller holding an untrusted partial (a model's `styleTokens`,
+ * an operator's paste) can accept per-key instead of all-or-nothing. */
+export function fitsThemeSlot(k: keyof PrototypeTheme, v: unknown): boolean {
+  if (k === "radius") return typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 64;
+  if (k === "fontSans" || k === "fontDisplay") return typeof v === "string" && FONT_STACK.test(v);
+  return isColorToken(v);
+}
+
+/** The slot-checked subset of an untrusted token map: every key that names a
+ * theme token AND carries a value its slot accepts, nothing else. `rejected`
+ * names what was refused so the caller can say so instead of half-honouring. */
+export function themePatchOf(raw: unknown): { patch: Partial<PrototypeTheme>; rejected: string[] } {
+  const patch: Partial<PrototypeTheme> = {};
+  const rejected: string[] = [];
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+      if (!(k in MERIDIAN_TOKENS)) { rejected.push(k); continue; }
+      const key = k as keyof PrototypeTheme;
+      if (fitsThemeSlot(key, v)) (patch as Record<string, unknown>)[key] = v;
+      else rejected.push(k);
+    }
+  }
+  return { patch, rejected };
+}
+
 /** Merge a partial (governed) theme over the defaults — absent/blank keys, and
  * any value that does not fit its slot, keep the Meridian default, so a sparse
  * (or hostile) `experienceDesign.theme` still yields a complete, coherent and
  * safely-interpolatable token set. */
 export function resolveTheme(theme?: Partial<PrototypeTheme> | null): PrototypeTheme {
   const t = theme || {};
-  const fits = (k: keyof PrototypeTheme, v: unknown): boolean => {
-    if (k === "radius") return typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 64;
-    if (k === "fontSans" || k === "fontDisplay") return typeof v === "string" && FONT_STACK.test(v);
-    return isColorToken(v);
-  };
+  const fits = fitsThemeSlot;
   const pick = <K extends keyof PrototypeTheme>(k: K): PrototypeTheme[K] => {
     const v = t[k];
     if (v === undefined || v === null || v === "") return MERIDIAN_TOKENS[k];
