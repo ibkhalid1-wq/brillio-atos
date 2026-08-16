@@ -6689,6 +6689,42 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-docview-b > .v3fs-protocmd.compact,
 .v3fs-docview-b > .v3fs-refine.compact {margin:2px 0 14px}
 
+/* ── Annotate ─────────────────────────────────────────────────────────────────
+   Point at something in the running build and say what it should be called, or
+   that it should not be there. The band sits ABOVE the preview, because what it
+   says ("click a field…") is an instruction about the thing below it. */
+.v3fs-anno {display:flex;flex-direction:column;gap:9px;padding:11px 13px;border-radius:12px;
+  border:1px solid color-mix(in srgb,var(--v3-accent-2) 40%,var(--fs-line));
+  background:color-mix(in srgb,var(--v3-accent-2) 5%,var(--fs-card))}
+.v3fs-anno-h {display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.v3fs-anno-t {font-size:12.5px;font-weight:700;color:var(--v3-accent-2)}
+.v3fs-anno-hint {font-size:11.5px;color:var(--v3-text-muted);flex:1 1 auto;min-width:0}
+.v3fs-anno-x {font:inherit;font-size:11px;font-weight:650;color:var(--v3-text-secondary);background:none;
+  border:1px solid var(--fs-line);border-radius:7px;padding:3px 11px;cursor:pointer}
+.v3fs-anno-x:hover {color:var(--v3-text-primary);border-color:var(--v3-control-line)}
+.v3fs-anno-panel {display:flex;flex-direction:column;gap:9px;padding:11px 12px;border-radius:10px;
+  background:var(--v3-surface);border:1px solid var(--fs-line)}
+.v3fs-anno-what {margin:0;font-size:12.5px;color:var(--v3-text-primary)}
+.v3fs-anno-said {color:var(--v3-text-muted);font-style:italic}
+.v3fs-anno-row {display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.v3fs-anno-lbl {font-size:11px;font-weight:650;color:var(--v3-text-secondary);flex:none}
+.v3fs-anno-in {flex:1 1 200px;min-width:0;font:inherit;font-size:12.5px;padding:6px 10px;
+  border:1px solid var(--fs-line);border-radius:8px;background:var(--fs-card);color:var(--v3-text-primary)}
+.v3fs-anno-in:focus {outline:none;border-color:var(--v3-accent-2);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--v3-accent-2) 14%,transparent)}
+.v3fs-anno-note {margin:0;font-size:11px;line-height:1.55;color:var(--v3-text-muted);max-width:78ch}
+/* What is in force, with who put it there on the hover — provenance is the
+   difference between a decision and an unexplained difference. */
+.v3fs-anno-list {display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.v3fs-anno-list-l {font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--v3-text-muted)}
+.v3fs-anno-chip {display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;
+  color:var(--v3-text-secondary);background:var(--fs-card);border:1px solid var(--fs-line);
+  border-radius:999px;padding:3px 5px 3px 11px}
+.v3fs-anno-chip-v {color:var(--v3-accent-2);font-weight:700}
+.v3fs-anno-chip-x {display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;border:none;
+  cursor:pointer;font-size:12px;line-height:1;color:var(--v3-text-muted);background:var(--fs-line)}
+.v3fs-anno-chip-x:hover {color:var(--v3-red);background:var(--v3-red-soft)}
+
 /* ── The refine instrument ────────────────────────────────────────────────────
    The command line alone read as a search box sitting on top of the prototype.
    The wrapper gives it a name, the contract it works under, openings in the

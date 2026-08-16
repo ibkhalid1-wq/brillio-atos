@@ -92,6 +92,9 @@ interface CastRow {
 
 interface TheLineProps {
   program: ProgramSummary;
+  /** Who is standing here — attributed on a design decision they record
+   *  about the built application. */
+  actor?: string;
   /**
    * THE ONE HANDOFF. Discover reads; the Inbox acts. Where Discover surfaces
    * something that needs an operator MOVE, it states the fact and offers this —
@@ -413,7 +416,7 @@ function packFor(program: ProgramSummary, who: string, movementId: "frame" | "li
   return shown.find(linkIsOpen) ?? shown[shown.length - 1];
 }
 
-export default function TheLine({ program, onOpenInbox, onSaveInputs, onRenamePerson, onRenameRole, onMintFollowUp, onMintReview, onCloseLink, onScheduleFollowUp, onRunAgent, runningAgentIds, onSaveArtifactDoc, onRecordGate, onReopenGate, onSendForApproval, onDesignRound }: TheLineProps) {
+export default function TheLine({ program, actor, onOpenInbox, onSaveInputs, onRenamePerson, onRenameRole, onMintFollowUp, onMintReview, onCloseLink, onScheduleFollowUp, onRunAgent, runningAgentIds, onSaveArtifactDoc, onRecordGate, onReopenGate, onSendForApproval, onDesignRound }: TheLineProps) {
   const model = useMemo(() => buildLineModel(program), [program]);
   // The ONE in-browser ledger read every surface here shares (read-only migrate).
   const ledger = useProgramLedger(program);
@@ -1876,7 +1879,7 @@ export default function TheLine({ program, onOpenInbox, onSaveInputs, onRenamePe
 
       {docFor ? (
         <Suspense fallback={null}>
-          <FlowArtifactStudio program={program} artifact={docFor} initialSection={docSection}
+          <FlowArtifactStudio program={program} actor={actor} artifact={docFor} initialSection={docSection}
             onSaveDoc={onSaveArtifactDoc}
             /* The board's `onSaveInputs` may return void; the studio wants a promise.
                Adapted here rather than widening the studio's contract for one caller. */

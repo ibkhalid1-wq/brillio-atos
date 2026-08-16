@@ -75,6 +75,89 @@ const SYSTEM_ACTORS = new Set(["prototype", "import", "system", "operator", "?",
 const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 
 /**
+ * ── THE INGEST THAT WAS MISSING ────────────────────────────────────────────────
+ *
+ * Answers came back with their loci attached and NOTHING READ THEM. The pack
+ * sends each question with the point it settles; `composeLocusAnswers` writes
+ * the reply as `Q:` / `A:` / `[locus: …]`; the reply is stored, attributed, on
+ * the programme. And then the loop stopped: `parseLocusAnswers` had no
+ * production caller, so every locus stayed open for ever and `heard` was zero on
+ * every real programme.
+ *
+ * What follows is that missing half — built as a READER over what the portal
+ * already wrote, not as a second write path. The answers are already on the
+ * record; nothing needs to be re-stored for them to count.
+ *
+ * THE DISCRIMINATOR IS THE TAG ITSELF, and it has to be, because the boundary
+ * this module defends is between a person's own words and an operator's retyping
+ * of them. A `[locus: …]` tag is produced by exactly one thing — the response
+ * surface behind somebody's token-gated link. An operator's typed capture has no
+ * tags and therefore closes nothing, which is the rule stated at the top of this
+ * file, now enforced by the shape of the evidence rather than by a convention
+ * nobody could check.
+ */
+
+/** "— Priya Raman, Marketing lead, 2026-08-16 —" — the attribution convention
+ *  the transcript fields document and `parseTranscript` already splits on. Kept
+ *  to a name-with-comma so a dash-wrapped line inside a pasted document ("—
+ *  INPUT SIGNALS —") cannot mint a phantom voice. */
+const ATTRIBUTION = /^[—–-]{1,2}\s*(.{3,200}?)\s*[—–-]{1,2}\s*$/gm;
+const LOCUS_TAG = /^\[locus:\s*(.+?)\]\s*$/;
+const ISO_DAY = /\b(\d{4}-\d{2}-\d{2})\b/;
+
+/** Split "Priya Raman, Marketing lead, 2026-08-16" into the parts a closure needs. */
+function attributionOf(header: string): { name: string; role?: string; at: string } | null {
+  const parts = header.split(",").map((p) => p.trim()).filter(Boolean);
+  if (parts.length < 2) return null;                       // no comma: not an attribution
+  if (/^Document:/i.test(parts[0])) return null;           // a document, not a voice
+  const at = header.match(ISO_DAY)?.[1] ?? "";
+  const dated = (p: string) => ISO_DAY.test(p) || /^\d/.test(p);
+  const role = parts.slice(1).find((p) => !dated(p));
+  return { name: parts[0], role, at };
+}
+
+/**
+ * Every locus-tagged answer sitting in the programme's own evidence, with the
+ * person it is attributed to.
+ *
+ * Deliberately walks EVERY movement and every string field rather than one named
+ * one: a review answer lands on the movement being reviewed, and a design round's
+ * lands on another. The tag is what makes a block an answer, not its address.
+ */
+export function deriveStakeholderAnswers(program: ProgramSummary | null | undefined): StakeholderAnswer[] {
+  if (!program) return [];
+  const out: StakeholderAnswer[] = [];
+  for (const movementId of ["frame", "listen", "envision", "show", "evolve"]) {
+    const inputs = readMovementInputs(program, movementId) as Record<string, unknown>;
+    for (const [field, value] of Object.entries(inputs)) {
+      const text = typeof value === "string" ? value : "";
+      if (!text.includes("[locus:")) continue;
+      const heads = [...text.matchAll(ATTRIBUTION)].filter((m) => attributionOf(m[1]));
+      for (let i = 0; i < heads.length; i += 1) {
+        const who = attributionOf(heads[i][1])!;
+        const from = (heads[i].index ?? 0) + heads[i][0].length;
+        const to = i + 1 < heads.length ? heads[i + 1].index ?? text.length : text.length;
+        for (const block of text.slice(from, to).split(/\n{2,}/)) {
+          const lines = block.split("\n").map((l) => l.trim()).filter(Boolean);
+          const tag = lines.length ? LOCUS_TAG.exec(lines[lines.length - 1]) : null;
+          if (!tag) continue;
+          const answer = lines.find((l) => l.startsWith("A: "))?.slice(3).trim() ?? "";
+          if (!answer) continue;
+          out.push({
+            about: tag[1].trim(), answer,
+            saidByName: who.name, saidByRole: who.role,
+            at: who.at,
+            // The provenance a closure is required to carry: where it arrived.
+            via: `${movementId}.${field}`,
+          });
+        }
+      }
+    }
+  }
+  return out;
+}
+
+/**
  * The answers on the record, validated. Anything that cannot honestly close a locus
  * is dropped HERE rather than minted into a claim that lies about its provenance:
  * no locus, no words, no named person, a system actor wearing a person's slot, or no
@@ -83,10 +166,14 @@ const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 export function readStakeholderAnswers(program: ProgramSummary | null | undefined): StakeholderAnswer[] {
   if (!program) return [];
   const raw = (readMovementInputs(program, "listen") as Record<string, unknown> | undefined)?.[STAKEHOLDER_ANSWERS_FIELD];
+  // The explicit field stays the primary channel — a caller that wants to state
+  // an answer outright still can. What the derivation adds is every answer
+  // ALREADY on the record, which is where they have all been sitting.
+  const derived = deriveStakeholderAnswers(program);
   const arr = typeof raw === "string"
     ? (() => { try { return JSON.parse(raw) as unknown; } catch { return []; } })()
     : raw;
-  if (!Array.isArray(arr)) return [];
+  if (!Array.isArray(arr)) return dedupeAnswers(derived);
   const out: StakeholderAnswer[] = [];
   for (const row of arr) {
     if (!row || typeof row !== "object") continue;
@@ -95,6 +182,22 @@ export function readStakeholderAnswers(program: ProgramSummary | null | undefine
     if (!about || !answer || !via) continue;
     if (!saidByName || SYSTEM_ACTORS.has(saidByName.toLowerCase())) continue;
     out.push({ about, answer, saidByName, saidByRole: str(r.saidByRole) || undefined, at: str(r.at), via });
+  }
+  return dedupeAnswers([...out, ...derived]);
+}
+
+/** One answer per locus per person: an operator who ALSO filed the row explicitly
+ *  has not made the stakeholder say it twice, and the burn-down must not move by
+ *  two for one reply. First wins — the explicit row is listed first, so a caller
+ *  who stated the answer outright keeps their own wording. */
+function dedupeAnswers(rows: readonly StakeholderAnswer[]): StakeholderAnswer[] {
+  const seen = new Set<string>();
+  const out: StakeholderAnswer[] = [];
+  for (const r of rows) {
+    const key = `${r.about}\u0000${r.saidByName.toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(r);
   }
   return out;
 }

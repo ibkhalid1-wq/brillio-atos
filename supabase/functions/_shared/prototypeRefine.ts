@@ -43,6 +43,7 @@
  */
 import { assemblePrototype, paletteFor, parentEntitiesFor, screenOptionsFor } from "./prototypeAssembly.ts";
 import { generateSeed } from "./seedData.ts";
+import { storedOverridesOf } from "./designOverrides.ts";
 import { SCREEN_SPEC_CONTRACT, WIDGET_REGION_PREFIX, type PrototypeSpecSchema } from "./prototypeScreenSpec.ts";
 import { meridianStylesheet, resolveTheme, themePatchOf, type PrototypeTheme } from "./prototypeDesignSystem.ts";
 
@@ -106,6 +107,11 @@ export interface PrototypeBaseline {
    * one that quietly stopped appearing.
    */
   specAccepted: number;
+  /** Design decisions this ontology can no longer honour, each one named. The
+   *  caller writes them into the build's gaps — see `designOverrides.ts`. */
+  overrideOrphans: string[];
+  /** How many stored design decisions this build wore. */
+  overridesApplied: number;
   specViolations: string[];
   /**
    * WHAT THE ONTOLOGY HOLDS THAT THIS BUILD RENDERS NO SCREEN FOR — the
@@ -428,7 +434,7 @@ export function prototypeBaselineFor(
    *  and the stakeholder's link assemble with: this baseline is what a refine is
    *  checked against, and a baseline missing an input the studio had would
    *  reject the operator's own build for structure it never lost. */
-  inputs: { vocabulary?: unknown; blueprint?: unknown; screenSpec?: unknown; appName?: unknown } = {},
+  inputs: { vocabulary?: unknown; blueprint?: unknown; screenSpec?: unknown; appName?: unknown; overrides?: unknown } = {},
 ): PrototypeBaseline | null {
   if (!isRecord(ontology) || !isRecord(atlas)) return null;
   try {
@@ -452,9 +458,14 @@ export function prototypeBaselineFor(
       // the model's answer against a build nobody asked for.
       screenOptions: screenOptionsFor(experienceDesign),
       blueprint: inputs.blueprint,
+      // The decisions people already made about this build. Same reason the
+      // skin and the accepted spec are carried: the skeleton is re-derived
+      // every run, so a judgement somebody already made and the operator
+      // already saw would otherwise be discarded on the next one.
+      overrides: inputs.overrides,
       ...(spec == null ? {} : { spec }),
     });
-    const { html, fabric, regionCount, specSchema, specAccepted, specViolations, coverageGaps } = assemble();
+    const { html, fabric, regionCount, specSchema, specAccepted, specViolations, coverageGaps, overrideOrphans, overridesApplied } = assemble();
     if (!regionCount) return null;
     // THE SAME SEED THE PAGE WAS DRAWN FROM. This called `generateSeed` without
     // the vocabulary while the assembly above was passed it — so on any
@@ -501,6 +512,8 @@ export function prototypeBaselineFor(
       specSchema,
       screenSpec: carried,
       specAccepted,
+      overrideOrphans,
+      overridesApplied,
       specViolations,
       coverageGaps,
       applySpec(spec: unknown) {
@@ -585,6 +598,11 @@ export function prototypeBaselineOfProgram(inner: Record<string, unknown>): Prot
     // What the application calls itself: the programme's own name, so the
     // chrome reads as the client's product rather than as the pipeline's.
     appName: isRecord(inner.projectMeta) ? inner.projectMeta.name : undefined,
+    // …and every design decision a person has made about this application —
+    // an operator renaming a column, a stakeholder renaming a workbench in a
+    // review. Programme-level and append-only, so the rebuild wears them again
+    // instead of being the thing that erases them.
+    overrides: storedOverridesOf(inner),
   });
   if (!baseline) return null;
   // The skeleton is re-derived every run; the SKIN the operator already approved
@@ -805,8 +823,17 @@ export function resolvePrototypeDoc(
    * reads exactly like an absence nobody found.
    */
   const coverage = (baseline.coverageGaps ?? []).filter((g) => !gaps.includes(g));
+  /**
+   * A DESIGN DECISION THIS BUILD COULD NOT HONOUR IS NAMED, NEVER DROPPED.
+   *
+   * The same rule the approved skin already follows, and for the same reason:
+   * losing somebody's decision in silence is how a review round's outcome gets
+   * discovered at the NEXT review round. Stated on every branch, like coverage —
+   * a rejected refine ships the same orphan the accepted one would have.
+   */
+  const orphans = (baseline.overrideOrphans ?? []).filter((g) => !gaps.includes(g));
   const stamp = (html: string, source: PrototypeResolution["source"], verdict: RefineVerdict | null, notes: string[]) => {
-    const out: Record<string, unknown> = { ...doc, html, gaps: [...gaps, ...coverage, ...specNotes, ...notes] };
+    const out: Record<string, unknown> = { ...doc, html, gaps: [...gaps, ...coverage, ...orphans, ...specNotes, ...notes] };
     delete out.styleCss;
     delete out.styleTokens;
     // THE SPEC THAT PRODUCED THIS BUILD IS STORED WITH IT, so the next round

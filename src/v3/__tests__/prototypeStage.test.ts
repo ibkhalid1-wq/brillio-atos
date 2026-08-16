@@ -209,6 +209,21 @@ describe("the prototype is drawn, not described", () => {
     expect(regenerated).toEqual(["card-prototype"]);
   });
 
+  it("does not draw an application for a programme that has no build", () => {
+    // The assembly succeeds from the ontology and atlas alone. Drawing it under
+    // "upstream not ready" would put a complete application beside a line
+    // saying there isn't one — and the picture is the more persuasive of the two.
+    const band2 = band();
+    const proto = band2.stations.find((st) => st.id === "prototype")!;
+    (proto.card as { present: boolean }).present = false;
+    render(createElement(DesignLoopZones, {
+      band: band2, program: real, ledger, roster: [],
+      onOpen: () => {}, regenBusy: {}, genBusy: {},
+    } as never));
+    expect(q(".v3dl-stage-frame")).toBeNull();
+    expect(q(".v3dl-stage-none")).not.toBeNull();
+  });
+
   it("says what it will be built from when there is nothing to draw yet", () => {
     render(zones(programWith({})));
     expect(q(".v3dl-stage-frame")).toBeNull();

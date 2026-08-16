@@ -22,6 +22,10 @@ import {
   buildSpecSchema, validatePrototypeSpec, widgetBandsHtml, widgetGroupsFor,
   WIDGET_RENDERER, type PrototypeSpecSchema, type WidgetGroup,
 } from "./prototypeScreenSpec.ts";
+import {
+  readDesignOverrides, resolveOverrides, worldOf, labelFor, isHidden, orphanGaps,
+  type DesignOverride,
+} from "./designOverrides.ts";
 
 const esc = (s: unknown) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
 const slug = (s: unknown) => String(s ?? "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "x";
@@ -75,6 +79,15 @@ export interface AssembledPrototype {
   specViolations: string[];
   /** How many widgets the spec actually put on the page. */
   specAccepted: number;
+  /**
+   * DESIGN DECISIONS THIS BUILD COULD NOT HONOUR, each naming who made it, what
+   * it said and why it no longer resolves. The caller writes these into the
+   * artifact's gaps: the rule the approved skin already follows is that a
+   * decision which cannot be applied is NAMED, never dropped.
+   */
+  overrideOrphans: string[];
+  /** How many stored overrides this build actually wore. */
+  overridesApplied: number;
   /**
    * EVERY ONTOLOGY ENTITY THIS BUILD RENDERS NO SCREEN FOR, named and reasoned.
    *
@@ -1465,6 +1478,16 @@ export interface AssemblyOptions {
    * Open/Edit/Delete/New vocabulary it always did — no verb is invented.
    */
   experienceDesign?: unknown;
+  /**
+   * THE DECISIONS PEOPLE MADE ABOUT THIS BUILD — an operator renaming a column
+   * in the studio, a stakeholder saying "we call that Demand gen" in a review.
+   * Stored as data addressed by what it is about, so the re-derived skeleton
+   * wears them again on every run instead of losing them (`designOverrides.ts`).
+   * One that this ontology can no longer honour is reported in
+   * `overrideOrphans`, never dropped. Omitting it assembles exactly the
+   * application it assembled before, byte for byte.
+   */
+  overrides?: unknown;
 }
 
 export function assemblePrototype(ontology: Record<string, unknown>, atlas: Record<string, unknown>, parentEntities?: readonly string[], options: AssemblyOptions = {}): AssembledPrototype {
@@ -1480,10 +1503,44 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
   const refOf = new Map<string, string | undefined>(roles.attributeRoles.map((r) => [`${r.entity} ${r.attribute}`, r.refEntity] as const));
   const entities = (Array.isArray(ontology.entities) ? ontology.entities : []) as Array<Record<string, unknown>>;
   const names = entities.map((e) => String(e.name ?? "")).filter(Boolean);
-  const attrsOf = (name: string) => {
+  /**
+   * THE DECISIONS PEOPLE ALREADY MADE ABOUT THIS APPLICATION, resolved against
+   * the ontology being assembled from — freshly, every run, because the address
+   * is what the thing IS ({entity, attribute}) and not where it landed
+   * (`field:campaign:campaignstatus`, which a rename invalidates). One that no
+   * longer resolves is carried out as a named gap, not swallowed.
+   */
+  const overrideSet = resolveOverrides(readDesignOverrides(options.overrides), worldOf(ontology));
+  const overrideOrphans = orphanGaps(overrideSet.orphaned);
+  const overridesApplied = overrideSet.applied.size;
+  /** What this entity is CALLED on screen. Never its key: the slug, the route,
+   *  the seed's own record map and every join stay on the ontology's name — a
+   *  rename here is a label, not a migration. */
+  const entityLabel = (n: string) => labelFor(overrideSet.applied, { of: "entity", entity: n }, n);
+  /** What this attribute is called on screen — `humanizeField` unless somebody
+   *  said otherwise. */
+  const attrLabel = (entity: string, attribute: string) =>
+    labelFor(overrideSet.applied, { of: "attribute", entity, attribute }, humanizeField(attribute));
+  /** Whether somebody took this column off the build. */
+  const attrHidden = (entity: string, attribute: string) =>
+    isHidden(overrideSet.applied, { of: "attribute", entity, attribute });
+
+  const attrsRawOf = (name: string) => {
     const e = entities.find((x) => String(x.name) === name);
     return (Array.isArray(e?.attributes) ? e!.attributes : []).map((a) => (typeof a === "string" ? a : String((a as { name?: unknown })?.name ?? ""))).filter(Boolean);
   };
+  /**
+   * THE ATTRIBUTES THIS BUILD DRAWS — every screen's field list comes through
+   * here, so a column somebody took off the build is off the detail and the
+   * form too. "Hidden from tables" would be a weaker promise than the control
+   * makes, and a field a stakeholder asked to remove reappearing one click
+   * deeper is the kind of half-kept decision that costs a review round.
+   *
+   * The FABRIC is derived from the ontology, not from this: the node still
+   * exists, so an override can be withdrawn and the field comes back without a
+   * regeneration of anything upstream.
+   */
+  const attrsOf = (name: string) => attrsRawOf(name).filter((a) => !attrHidden(name, a));
   // THE OPERATOR'S PER-ENTITY SCREEN OPTIONS, normalised through the same
   // reader both runtimes use — a raw object handed in by a caller is held to
   // exactly the shape the document is held to. Every one of the three is
@@ -1627,7 +1684,7 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
     if (authored.length) return authored.slice(0, limit);
     return derivedLeadColumns(all, (a) => roleOf.get(`${name} ${a}`), limit);
   };
-  const headFor = (name: string, c: string) => (c === "_display" ? name : humanizeField(c));
+  const headFor = (name: string, c: string) => (c === "_display" ? entityLabel(name) : attrLabel(name, c));
 
   /**
    * WHICH DECLARED ASSUMPTION PRODUCED THIS HOLE.
@@ -1816,7 +1873,15 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
   /** A region the client fills that is NOT a fabric node — see the renderer's
    *  index. It carries no `data-fabric-id` precisely because the fabric never
    *  declared it: an invented id would corrupt the delta's address space. */
-  const fillSlot = (id: string) => `<div data-region="${esc(id)}"></div>`;
+  const fillSlot = (id: string, entity?: string) =>
+    // WHAT THIS REGION IS ABOUT, when the fabric does not say. A queue is not a
+    // fabric node — it is a persona's view of one — so it carries no id an
+    // override could be keyed on, and the front door (a workbench) is made
+    // ENTIRELY of them. Naming the entity here is not a guess: the assembler
+    // knows it at the moment it emits the slot, and it is the same string the
+    // ontology spells. It is what lets somebody point at the thing they are
+    // actually looking at instead of at the one screen behind it.
+    `<div data-region="${esc(id)}"${entity ? ` data-entity="${esc(entity)}"` : ""}></div>`;
   /**
    * A ROUTE WORD NO ENTITY OWNS. `#workbench/sales-operations` and `#approvals`
    * are addresses in the same space as `#account`, so an ontology holding an
@@ -1979,7 +2044,7 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
         emptyTitle: optionsFor(entity).emptyText ?? `No ${entity} records yet`,
         cite: citeOf(assumptionFor(seedParentOf(entity), entity)),
       });
-      return fillSlot(region);
+      return fillSlot(region, entity);
     }).join("");
     workSpecs.push(spec);
     // THE THIRD EMITTER of a bare list address. An agent band names the records
@@ -2091,8 +2156,8 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
     // is true of the rows under it: all of them.
     const bands = widgetBands(`list-${s}`);
     return `<section class="m-screen" data-screen="list-${s}" hidden>
-      <header class="m-page-h"><div><div class="m-eyebrow">${esc(name)}</div><h1 class="m-title">${esc(name)}</h1><p class="m-sub">${rows.length} record${rows.length === 1 ? "" : "s"} · sample data</p></div>
-      <div class="m-toolbar">${toggle}<input class="m-input m-search" type="search" data-search="${s}" aria-label="Filter ${esc(name)}" placeholder="Filter ${esc(name)}" oninput="setFilter('${s}',this.value)" />${listActionsFor(name)}<button class="m-btn m-btn--primary" onclick="go('#${s}/new')">New ${esc(name)}</button></div></header>
+      <header class="m-page-h"><div><div class="m-eyebrow">${esc(entityLabel(name))}</div><h1 class="m-title">${esc(entityLabel(name))}</h1><p class="m-sub">${rows.length} record${rows.length === 1 ? "" : "s"} · sample data</p></div>
+      <div class="m-toolbar">${toggle}<input class="m-input m-search" type="search" data-search="${s}" aria-label="Filter ${esc(entityLabel(name))}" placeholder="Filter ${esc(entityLabel(name))}" oninput="setFilter('${s}',this.value)" />${listActionsFor(name)}<button class="m-btn m-btn--primary" onclick="go('#${s}/new')">New ${esc(entityLabel(name))}</button></div></header>
       ${bands}${bands ? `<div class="m-section-h">All ${esc(name)}</div>` : ""}${slot(`screen:${s}:list`)}</section>`;
   };
 
@@ -2266,7 +2331,7 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
         // "up" to, so the crumb names its type without offering the journey.
         ? `<a href="#${s}">${esc(name)}</a>`
         : `<span class="m-crumb-flat">${esc(name)}</span>`} / <span data-crumb="${s}">${esc(headline)}</span></div>
-      <header class="m-page-h"><div><div class="m-eyebrow">${esc(name)}</div><h1 class="m-title" data-headline="${s}">${esc(headline)}</h1></div>
+      <header class="m-page-h"><div><div class="m-eyebrow">${esc(entityLabel(name))}</div><h1 class="m-title" data-headline="${s}">${esc(headline)}</h1></div>
       <div class="m-page-acts">${recordActionsFor(name, s)}<button class="m-btn m-btn--secondary" onclick="editRec('${s}')">Edit</button><button class="m-btn m-btn--danger" onclick="delRec('${s}')">Delete</button></div></header>
       ${slot(`region:${s}:summary`)}
       ${parentBand}
@@ -2325,7 +2390,7 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
       const target = isRef ? refOf.get(key) : undefined;
       const picker = target && names.includes(target) && (seed.records[target] ?? []).length ? target : undefined;
       if (picker) referenced.add(picker);
-      const label = esc(humanizeField(a));
+      const label = esc(attrLabel(name, a));
       // The join key travels on the control that WRITES it, so the renderer
       // never rebuilds the convention on the reading side — the guess this key
       // already had to be rescued from once.
@@ -2344,7 +2409,7 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
     }).join("");
     return `<section class="m-screen" data-screen="form-${s}" hidden>
       <div class="m-crumbs"><a href="#${s}">${esc(name)}</a> / <span data-form-crumb="${s}">New</span></div>
-      <header class="m-page-h"><div><div class="m-eyebrow">${esc(name)}</div><h1 class="m-title" data-form-title="${s}">New ${esc(name)}</h1></div></header>
+      <header class="m-page-h"><div><div class="m-eyebrow">${esc(entityLabel(name))}</div><h1 class="m-title" data-form-title="${s}">New ${esc(entityLabel(name))}</h1></div></header>
       <section class="m-card" style="max-width:620px" data-form="${s}">${fields}<div class="m-form-actions"><button class="m-btn m-btn--ghost" onclick="go('#${s}')">Cancel</button><button class="m-btn m-btn--primary" onclick="saveRec('${s}')">Save</button></div></section></section>`;
   };
 
@@ -2371,7 +2436,7 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
   // When they have NOT: the derived spine and tree, unchanged.
   const lead = curated.length ? ordered[0] : (graph.spine[0] ?? ordered[0]);
   const navItem = (n: string) =>
-    `<span class="m-nav-item${n === lead ? " is-active" : ""}" data-nav="list-${es.get(n)}" onclick="event.preventDefault();event.stopPropagation();go('#${es.get(n)}')">${esc(n)}<span class="m-nav-count">${seed.counts[n] ?? 0}</span></span>`;
+    `<span class="m-nav-item${n === lead ? " is-active" : ""}" data-nav="list-${es.get(n)}" onclick="event.preventDefault();event.stopPropagation();go('#${es.get(n)}')">${esc(entityLabel(n))}<span class="m-nav-count">${seed.counts[n] ?? 0}</span></span>`;
   // Every entity keeps exactly ONE home in the tree — its shallowest parent, or
   // the top level when the graph promoted it there — so nothing is listed twice
   // and nothing is orphaned. The other parents are not lost: each still carries
@@ -2570,5 +2635,5 @@ if(!document.querySelector('.m-screen:not([hidden])'))show('${entryScreen}')</sc
   // What was ACCEPTED is what is on the page, counted off the bands themselves —
   // not what validation let through, which a missing column can still stop.
   const specAccepted = widgetGroups.reduce((n, g) => n + g.items.length, 0);
-  return { html, fabric, regionCount, specSchema, specViolations, specAccepted, coverageGaps };
+  return { html, fabric, regionCount, specSchema, specViolations, specAccepted, coverageGaps, overrideOrphans, overridesApplied };
 }

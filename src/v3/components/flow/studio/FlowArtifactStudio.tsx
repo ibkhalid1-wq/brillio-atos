@@ -16,6 +16,7 @@ import { readRoleBindings, readOperatorAsks, operatorAsksFor, resolveMovementSta
 import { artifactApprovalState } from "@/v3/components/flow/flowApprovals";
 import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
 import { operatorOverrideCount } from "@/v3/components/flow/flowOperatorOverrides";
+import { storedOverridesOf, targetLabel } from "@shared/designOverrides.ts";
 import { partitionOntologyViolations } from "@/v3/components/flow/flowOntologyConstraints";
 import { listOpenFlowDecisions, listFlowAttestations, docSectionDiff } from "@/v3/components/flow/flowDecisions";
 import { buildPrototypePrompt } from "@/v3/components/flow/flowBuildPrompt";
@@ -60,7 +61,7 @@ export interface ArtifactEditInput {
   doc: Record<string, unknown>;
 }
 
-export default function FlowArtifactStudio({ program, artifact, onClose, onRegenerate, onSaveDoc, onOpenInbox, onOpenArtifact, onSaveInputs, embedded, regenerating, header, initialSection }: {
+export default function FlowArtifactStudio({ program, actor, artifact, onClose, onRegenerate, onSaveDoc, onOpenInbox, onOpenArtifact, onSaveInputs, embedded, regenerating, header, initialSection }: {
   program: ProgramSummary;
   artifact: ArtifactCardModel;
   onClose: () => void;
@@ -82,10 +83,19 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
   onOpenInbox?: () => void;
   /** Open a different artifact's document (chips in studios drill through). */
   onOpenArtifact?: (artifactId: string) => void;
+  /** Who is standing here — attributed on a design decision they record. */
+  actor?: string;
   /** Save a movement's inputs (role bindings from the kit studio). */
   onSaveInputs?: (phaseId: string, inputs: Record<string, string>, opts?: { silent?: boolean; attest?: { action: string; detail?: string }; extraInputs?: Record<string, Record<string, string>> }) => Promise<void>;
 }) {
   const entry = STUDIO_REGISTRY[artifact.id];
+  /** The programme's design-decision log — read where it is written, so the
+   *  studio's list and the assembler's input cannot diverge. */
+  const readDesignOverrideLog = (p: ProgramSummary): unknown[] => {
+    const raw = (p.rawData ?? {}) as Record<string, unknown>;
+    const inner = (typeof raw.data === "object" && raw.data !== null ? raw.data : raw) as Record<string, unknown>;
+    return storedOverridesOf(inner);
+  };
   const storedDoc = useMemo(
     () => (entry ? readArtifactDoc(program, entry.fieldKey) : null),
     [program, entry],
@@ -770,6 +780,25 @@ export default function FlowArtifactStudio({ program, artifact, onClose, onRegen
                     bindings[role] = email ? { name, email } : { name };
                     await onSaveInputs(movementId, { _roleBindings: JSON.stringify(bindings) }, {
                       attest: { action: `Role bound — ${role} → ${name}`, detail: email || undefined },
+                    });
+                  } : undefined}
+                  designOverrides={readDesignOverrideLog(program)}
+                  onDesignOverride={onSaveInputs ? async (entry) => {
+                    // The decisions people make about the BUILT application, on the
+                    // same overlay write path the gap routes and role bindings use.
+                    // Underscore-prefixed, so renaming a column does not flag every
+                    // downstream document stale — and programme-level, because the
+                    // document it would otherwise live in is replaced on every run.
+                    const log = readDesignOverrideLog(program);
+                    const at = new Date().toISOString();
+                    const row = { ...entry, id: `${at}-${log.length}`, at, by: actor || "you" };
+                    await onSaveInputs("envision", { _designOverrides: JSON.stringify([...log, row]) }, {
+                      attest: {
+                        action: entry.kind === "reset" ? "Design decision withdrawn"
+                          : entry.kind === "hide" ? "Removed from the build"
+                          : "Renamed in the build",
+                        detail: `${targetLabel(entry.target)}${entry.value ? ` → ${entry.value}` : ""}`,
+                      },
                     });
                   } : undefined}
                   gapRoutes={readGapRoutes(program, artifact.movementId)}

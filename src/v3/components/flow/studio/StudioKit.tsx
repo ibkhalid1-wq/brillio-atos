@@ -337,4 +337,10 @@ export interface StudioProps {
   /** Redirect one gap to a stakeholder/role (attested `_gapRoutes` write); ""
    *  clears the addressee (movement-wide). Absent ⇒ the Gaps table is read-only. */
   onRouteGap?: (gap: string, who: string) => void | Promise<void>;
+  /** The design decisions already made about the built application — the stored
+   *  log, so the studio can show what is in force and who put it there. */
+  designOverrides?: unknown[];
+  /** Record one (an operator renaming a column, hiding a field, or withdrawing
+   *  an earlier decision). Absent ⇒ the prototype is read-only to annotation. */
+  onDesignOverride?: (entry: Omit<import("@shared/designOverrides.ts").DesignOverride, "id" | "at" | "by">) => void | Promise<void>;
 }

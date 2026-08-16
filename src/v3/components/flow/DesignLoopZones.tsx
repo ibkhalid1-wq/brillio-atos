@@ -304,7 +304,13 @@ function PrototypeStage({ station, program, onOpen, onRegen, onGenerate, regener
         </span>
       </header>
 
-      {html ? (
+      {/* DRAWN ONLY WHEN THERE IS A BUILD ON THE RECORD. The assembly succeeds
+          from the ontology and atlas alone, so a programme whose prototype was
+          never generated would otherwise show a complete application under the
+          words "upstream not ready" — a picture that contradicts the state line
+          beside it, and the more persuasive of the two. What the stage shows is
+          the live re-assembly of a build that EXISTS, never a speculative one. */}
+      {html && present ? (
         // Inert on the board. A prototype you can CLICK is a prototype you can
         // get lost inside two levels deep on a page that is about the state of
         // the programme; the studio and the browser tab are where it is walked.

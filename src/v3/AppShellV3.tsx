@@ -2756,6 +2756,7 @@ export default function AppShellV3() {
         <FlowShell
           program={activeProgram}
           programs={programs}
+          actor={currentUser?.email || "you"}
           jumpToFlowNonce={flowJumpNonce}
           runningAgentIds={runningAgentIds}
           regenActiveIds={regenActiveIds}

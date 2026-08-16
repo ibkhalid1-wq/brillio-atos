@@ -14,6 +14,12 @@ import { prototypeBaselineOfProgram } from "@shared/prototypeRefine.ts";
 import { paletteFor } from "@shared/prototypeAssembly.ts";
 import { buildPrototypeProject, downloadPrototypeZip, importPrototypeProject, projectSlug } from "./prototypeExport";
 import PrototypeCommandBar from "@/v3/components/flow/PrototypeCommandBar";
+import { deriveFabric } from "@shared/fabric.ts";
+import {
+  readDesignOverrides, projectOverrides, targetOfFabricNode, targetLabel,
+  type DesignOverride, type OverrideTarget,
+} from "@shared/designOverrides.ts";
+import { withAnnotator, readAnnotatePick } from "./prototypeAnnotate";
 
 function toast(message: string, tone: "info" | "error" = "info") {
   window.dispatchEvent(new CustomEvent("atlas-v3-toast", { detail: { message, tone } }));
@@ -35,7 +41,7 @@ export function openPrototypeInBrowser(html: string) {
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
-export default function PrototypeStudio({ doc, onChange, program, onRefinePrototype, refining }: StudioProps) {
+export default function PrototypeStudio({ doc, onChange, program, onRefinePrototype, refining, designOverrides, onDesignOverride }: StudioProps) {
   const html = asText(doc.html);
   const screens = asArray(doc.screens).map(asRecord);
   const summary = asText(doc.summary);
@@ -87,6 +93,70 @@ export default function PrototypeStudio({ doc, onChange, program, onRefineProtot
     } catch { return null; }
   }, [program]);
   const [view, setView] = useState<"fabric" | "build">("fabric");
+  /**
+   * ANNOTATE — point at something in the running build and say what it should
+   * be called, or that it should not be there.
+   *
+   * The address comes free: every element carries its `data-fabric-id`, and the
+   * fabric node behind it carries the `{entity, attribute}` tuple an override is
+   * keyed on. So the operator never types an address, and nothing has to parse
+   * one back out of a sentence. What they write is stored as DATA and re-applied
+   * by every later build — the point of the whole channel.
+   */
+  const [annotating, setAnnotating] = useState(false);
+  const [pick, setPick] = useState<{ target: OverrideTarget; text: string } | null>(null);
+  const [rename, setRename] = useState("");
+
+  /** Fabric id → the durable tuple it stands for, derived from the SAME
+   *  ontology and atlas the build was assembled from. */
+  const targetsById = useMemo(() => {
+    const map = new Map<string, OverrideTarget>();
+    if (!program) return map;
+    try {
+      const raw = (program.rawData ?? {}) as Record<string, unknown>;
+      const inner = (typeof raw.data === "object" && raw.data !== null ? raw.data : raw) as Record<string, unknown>;
+      const fabric = deriveFabric(inner.domainOntology as Record<string, unknown>, inner.currentStateAtlas as Record<string, unknown>);
+      for (const node of fabric.nodes) {
+        const t = targetOfFabricNode(node);
+        if (t) map.set(node.id, t);
+      }
+    } catch { /* no ontology yet — annotate stays unavailable */ }
+    return map;
+  }, [program]);
+
+  /** What is in force right now, for the panel that lists it. */
+  const inForce = useMemo(
+    () => [...projectOverrides(readDesignOverrides(designOverrides ?? [])).values()],
+    [designOverrides],
+  );
+
+  useEffect(() => {
+    if (!annotating) return;
+    const onMessage = (event: MessageEvent) => {
+      const picked = readAnnotatePick(event.data);
+      if (!picked) return;
+      // A fabric node resolves to its own tuple. A persona's queue is not a
+      // fabric node, so it carries the entity it lists instead — and that IS a
+      // durable address, because it is the ontology's own name for the thing on
+      // screen. Anything else has nothing a later build could find again, and is
+      // refused out loud rather than swallowed.
+      const target = targetsById.get(picked.fabricId)
+        ?? (picked.entity ? { of: "entity", entity: picked.entity } as OverrideTarget : undefined);
+      if (!target) { toast("That part of the screen isn't addressable — try a field, a table or a menu entry.", "error"); return; }
+      setPick({ target, text: picked.text });
+      setRename(target.of === "attribute" ? target.attribute : target.of === "entity" ? target.entity : "");
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [annotating, targetsById]);
+
+  const record = async (entry: Parameters<NonNullable<typeof onDesignOverride>>[0]) => {
+    if (!onDesignOverride) return;
+    await onDesignOverride(entry);
+    setPick(null);
+    setRename("");
+  };
+
   // fabric is the default; fall through honestly when one side is missing
   const effectiveView: "fabric" | "build" = assembled && (view === "fabric" || !html) ? "fabric" : "build";
 
@@ -139,6 +209,11 @@ export default function PrototypeStudio({ doc, onChange, program, onRefineProtot
               in place; Experience Design is the entity → parent-screen decision, a
               different artifact entirely. The label collided from the day that studio
               was rewritten, and an operator clicking it here expected the toggles. */}
+          {onDesignOverride && targetsById.size ? (
+            <button type="button" className={annotating ? "on" : ""}
+              title="Point at anything in the running build and say what it should be called — or that it should not be there. What you record is kept as data and re-applied by every later build."
+              onClick={() => { setAnnotating((on) => !on); setPick(null); setMode("preview"); }}>◎ Annotate</button>
+          ) : null}
           {html ? <button type="button" className={mode === "edit" ? "on" : ""} title="Edit this build's screens and markup in place — the assembled prototype is regenerated, so edits belong on the refined build" onClick={() => setMode("edit")}>✎ Edit this build</button> : null}
           {/* LIVE vs AS GENERATED — not two designs, one freshness comparison.
               Both now assemble from the same inputs, carry the same accepted
@@ -204,8 +279,76 @@ export default function PrototypeStudio({ doc, onChange, program, onRefineProtot
           plain language (type or dictate); it re-runs the prototype-build agent. */}
       {onRefinePrototype ? <PrototypeCommandBar onRefine={onRefinePrototype} regenerating={refining} compact /> : null}
 
+      {annotating ? (
+        <div className="v3fs-anno">
+          <div className="v3fs-anno-h">
+            <span className="v3fs-anno-t">Annotating</span>
+            <span className="v3fs-anno-hint">
+              {pick ? `Selected — ${targetLabel(pick.target)}` : "Click a field, a table or a menu entry in the build below."}
+            </span>
+            <button type="button" className="v3fs-anno-x" onClick={() => { setAnnotating(false); setPick(null); }}>done</button>
+          </div>
+          {pick ? (
+            <div className="v3fs-anno-panel">
+              <p className="v3fs-anno-what">
+                <b>{targetLabel(pick.target)}</b>
+                {pick.text ? <span className="v3fs-anno-said"> — “{pick.text}”</span> : null}
+              </p>
+              {pick.target.of === "relation" ? null : (
+                <div className="v3fs-anno-row">
+                  <label className="v3fs-anno-lbl" htmlFor="anno-rename">Call it</label>
+                  <input id="anno-rename" className="v3fs-anno-in" value={rename}
+                    onChange={(e) => setRename(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter" && rename.trim()) void record({ via: "operator", kind: "label", target: pick.target, value: rename.trim() }); }} />
+                  <button type="button" className="v3fs-btn pri" disabled={!rename.trim()}
+                    onClick={() => void record({ via: "operator", kind: "label", target: pick.target, value: rename.trim() })}>Rename</button>
+                </div>
+              )}
+              <div className="v3fs-anno-row">
+                {pick.target.of === "attribute" ? (
+                  <button type="button" className="v3fs-btn"
+                    title="Take this field off the build — the table, the detail and the form. The ontology keeps it, so the decision can be withdrawn."
+                    onClick={() => void record({ via: "operator", kind: "hide", target: pick.target })}>Remove from the build</button>
+                ) : null}
+                <button type="button" className="v3fs-btn" onClick={() => setPick(null)}>Cancel</button>
+              </div>
+              {/* THE BOUNDARY, STATED WHERE IT IS CROSSED. A rule about the
+                  domain put in here would live in the pixels, where the
+                  questions, the seed and every downstream document cannot see
+                  it. */}
+              <p className="v3fs-anno-note">
+                Presentation only. If what changed is a <em>rule</em> — required, or not allowed after
+                something — it belongs in the ontology, where the whole chain can see it.
+              </p>
+            </div>
+          ) : null}
+          {inForce.length ? (
+            <div className="v3fs-anno-list">
+              <span className="v3fs-anno-list-l">In force</span>
+              {inForce.map((o: DesignOverride) => (
+                <span key={o.id} className="v3fs-anno-chip"
+                  title={`${o.by}${o.byRole ? `, ${o.byRole}` : ""}${o.at ? ` · ${o.at.slice(0, 10)}` : ""}${o.note ? ` — “${o.note}”` : ""}`}>
+                  {targetLabel(o.target)}
+                  <span className="v3fs-anno-chip-v">{o.kind === "hide" ? "removed" : `→ ${o.value}`}</span>
+                  {onDesignOverride ? (
+                    <button type="button" className="v3fs-anno-chip-x" aria-label={`Withdraw ${targetLabel(o.target)}`}
+                      title="Withdraw this decision — the build goes back to what the ontology says"
+                      onClick={() => void record({ via: "operator", kind: "reset", target: o.target })}>×</button>
+                  ) : null}
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* KEYED ON THE DECISIONS TOO. A srcDoc that changes is not reloaded by
+          the browser on its own, so recording a rename left the operator looking
+          at the build they had just changed with no sign it had landed — the one
+          moment the feedback matters most. */}
       {mode === "preview" ? (
-        <iframe className="v3fs-proto-frame" sandbox="allow-scripts allow-forms" srcDoc={source} title="Prototype" />
+        <iframe className="v3fs-proto-frame" key={`${annotating ? "anno" : "plain"}:${inForce.map((o) => o.id).join(",")}`}
+          sandbox="allow-scripts allow-forms" srcDoc={annotating ? withAnnotator(source) : source} title="Prototype" />
       ) : (
         <div className="v3fs-proto-edit">
           <div className="v3fs-proto-editcol">

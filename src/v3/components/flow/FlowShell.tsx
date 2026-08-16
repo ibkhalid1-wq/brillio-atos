@@ -73,6 +73,9 @@ import {
 interface FlowShellProps {
   program: ProgramSummary;
   programs: ProgramSummary[];
+  /** Who is standing here — attributed on any decision they record about the
+   *  built application (`designOverrides`). */
+  actor?: string;
   runningAgentIds: Set<string>;
   /** Agents in flight OR queued for regeneration — Regenerate controls hide when
    *  their artifact is in this set. */
@@ -951,7 +954,7 @@ export default function FlowShell(props: FlowShellProps) {
             onIngestPortalItem={props.onIngestPortalItem} onDismissPortalItem={props.onDismissPortalItem} onRecordApproval={props.onRecordApproval}
             onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} />
         ) : view === "flow" ? (
-          <TheLine program={program} onSaveInputs={props.onSaveInputs}
+          <TheLine program={program} actor={props.actor} onSaveInputs={props.onSaveInputs}
             onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }}
             onRenamePerson={props.onRenamePerson} onRenameRole={props.onRenameRole}
             onMintFollowUp={props.onMintFollowUp} onMintReview={props.onMintReview}
@@ -963,7 +966,7 @@ export default function FlowShell(props: FlowShellProps) {
         ) : view === "people" ? (
           <FlowPeople program={program} onSaveInputs={props.onSaveInputs} onRenamePerson={props.onRenamePerson} onGoInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }} />
         ) : view === "library" ? (
-          <FlowLibrary program={program} programs={props.programs} onSelectProgram={props.onSelectProgram} onSaveInputs={props.onSaveInputs} onTagClaim={props.onTagClaim} onComment={props.onComment} onSaveArtifactDoc={props.onSaveArtifactDoc} onRunAgent={props.onRunAgent} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }} onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} onRenamePerson={props.onRenamePerson} onRenameRole={props.onRenameRole} />
+          <FlowLibrary program={program} actor={props.actor} programs={props.programs} onSelectProgram={props.onSelectProgram} onSaveInputs={props.onSaveInputs} onTagClaim={props.onTagClaim} onComment={props.onComment} onSaveArtifactDoc={props.onSaveArtifactDoc} onRunAgent={props.onRunAgent} onOpenInbox={() => { setView("today"); window.scrollTo({ top: 0 }); }} onGoFlow={() => { setView("flow"); window.scrollTo({ top: 0 }); }} onRenamePerson={props.onRenamePerson} onRenameRole={props.onRenameRole} />
         ) : view === "mission" ? (
           <FlowMission
             aiStatus={props.aiStatus}
@@ -2870,7 +2873,7 @@ function FlowPeople({ program, onSaveInputs, onRenamePerson, onGoInbox }: { prog
   );
 }
 
-function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagClaim, onComment, onSaveArtifactDoc, onOpenInbox, onGoFlow, onRenamePerson, onRenameRole, onRunAgent }: { program: ProgramSummary; programs: ProgramSummary[]; onSelectProgram: (id: string) => void; onSaveInputs?: FlowShellProps["onSaveInputs"]; onTagClaim?: FlowShellProps["onTagClaim"]; onComment?: FlowShellProps["onComment"]; onSaveArtifactDoc: FlowShellProps["onSaveArtifactDoc"]; onOpenInbox?: () => void; onGoFlow?: () => void; onRenamePerson?: FlowShellProps["onRenamePerson"]; onRenameRole?: FlowShellProps["onRenameRole"]; onRunAgent?: FlowShellProps["onRunAgent"] }) {
+function FlowLibrary({ program, actor, programs, onSelectProgram, onSaveInputs, onTagClaim, onComment, onSaveArtifactDoc, onOpenInbox, onGoFlow, onRenamePerson, onRenameRole, onRunAgent }: { program: ProgramSummary; actor?: string; programs: ProgramSummary[]; onSelectProgram: (id: string) => void; onSaveInputs?: FlowShellProps["onSaveInputs"]; onTagClaim?: FlowShellProps["onTagClaim"]; onComment?: FlowShellProps["onComment"]; onSaveArtifactDoc: FlowShellProps["onSaveArtifactDoc"]; onOpenInbox?: () => void; onGoFlow?: () => void; onRenamePerson?: FlowShellProps["onRenamePerson"]; onRenameRole?: FlowShellProps["onRenameRole"]; onRunAgent?: FlowShellProps["onRunAgent"] }) {
   const claims = listClaimTags(program);
   const tagTargets = useMemo(() => claimTargets(program), [program]);
   const [claimHighlight, setClaimHighlight] = useState<string | undefined>(undefined);
@@ -3248,7 +3251,7 @@ function FlowLibrary({ program, programs, onSelectProgram, onSaveInputs, onTagCl
           offer was a link sending the operator to the Flow page to do it there. The
           dispatch lives in `useArtifactRegen`, so both surfaces share one definition of
           what is in flight and when it came back. */}
-      {docFor ? <Suspense fallback={null}><FlowArtifactStudio program={program} artifact={docFor} onClose={() => setDocFor(null)} onSaveDoc={onSaveArtifactDoc} onSaveInputs={onSaveInputs} onComment={onComment} onOpenInbox={onOpenInbox} onRegenerate={regenerate ? () => regenerate(docFor) : undefined} regenerating={regenerating(docFor.id)}
+      {docFor ? <Suspense fallback={null}><FlowArtifactStudio program={program} actor={actor} artifact={docFor} onClose={() => setDocFor(null)} onSaveDoc={onSaveArtifactDoc} onSaveInputs={onSaveInputs} onComment={onComment} onOpenInbox={onOpenInbox} onRegenerate={regenerate ? () => regenerate(docFor) : undefined} regenerating={regenerating(docFor.id)}
         header={docFor.id === "discovery-kit"
           ? <DiscoveryKitAlign program={program} onSaveInputs={onSaveInputs} onRenamePerson={onRenamePerson} onRenameRole={onRenameRole} />
           : undefined}
