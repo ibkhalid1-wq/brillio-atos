@@ -229,3 +229,18 @@ describe("§4 the design's metric blocks become validated widgets", () => {
     expect(a).toBe(b);
   });
 });
+
+describe("§5 a verb the standard controls already answer is neither drawn twice nor cried about", () => {
+  const selfish = { screens: [{ id: "c", entities: ["Campaign"], primaryActions: ["Create Campaign", "Edit Campaign", "Report Performance"] }] };
+  const { byEntity, refused } = deriveScreenActions(selfish, ontology, deps);
+
+  it("create/edit of the screen's own entity are satisfied by New and Edit — no button, no gap", () => {
+    expect(byEntity.Campaign ?? []).toHaveLength(0);
+    expect(refused.join(" ")).not.toMatch(/Create Campaign/);
+    expect(refused.join(" ")).not.toMatch(/Edit Campaign/);
+  });
+
+  it("a genuine process step is still refused, so the channel keeps its meaning", () => {
+    expect(refused.join(" ")).toMatch(/"Report Performance" on Campaign is not drawn/);
+  });
+});

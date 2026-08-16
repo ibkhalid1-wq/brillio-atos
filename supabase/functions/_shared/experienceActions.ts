@@ -109,7 +109,7 @@ function resolveAction(
   entityNames: string[],
   hasScreen: (entity: string) => boolean,
   isPersonAttr: (entity: string, attribute: string) => boolean,
-): ScreenAction | null {
+): ScreenAction | "satisfied" | null {
   const attrs = attributesOf(ontology, entity);
 
   // 1 · `set` — the verb, or the state a machine transition triggered by it
@@ -151,6 +151,17 @@ function resolveAction(
       return { label, kind: "assign", attribute: person.name, scope: "record", basis: `edits ${person.name}` };
     }
   }
+
+  // 4 · ALREADY SATISFIED — the verb asks for a capability every screen has.
+  //     "Create Campaign" on Campaign is the New button; "Edit Campaign" is
+  //     the Edit button. Drawing a second control for it would duplicate the
+  //     page, and REFUSING it would be worse: it reports as missing a thing
+  //     the build does. Measured on a real design, six of twenty-four refusals
+  //     were this — a gap channel that cries wolf is one nobody reads.
+  const selfWords = words(entity);
+  const namesSelf = selfWords.length > 0 && selfWords.every((part) => w.has(part));
+  if (namesSelf && /\b(create|new|add|draft|open|start|identify|register|record)\b/i.test(label)) return "satisfied";
+  if (namesSelf && /\b(edit|update|amend|revise|maintain)\b/i.test(label)) return "satisfied";
 
   return null;
 }
@@ -201,6 +212,9 @@ export function deriveScreenActions(
 
     for (const label of labels) {
       const resolved = resolveAction(label, entity, ontology, machineTargets, entityNames, deps.hasScreen, deps.isPersonAttr);
+      // A verb the standard controls already answer needs no button and is no
+      // gap — the build does it, under the label every screen uses.
+      if (resolved === "satisfied") continue;
       if (!resolved) {
         const line = `The design's "${label}" on ${entity} is not drawn: nothing in the model can carry it — no ${entity} field holds that state, no entity of that name has a screen, and it assigns nothing. Either the state is missing from the model or the action means something else; ask in Listen.`;
         if (!refused.includes(line)) refused.push(line);
