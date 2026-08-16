@@ -26,10 +26,16 @@
  *   2. THE POST-CONDITION IS A PURE FUNCTION, not a prompt promise.
  *      `checkRefinedPrototype` compares the returned document against the
  *      assembled one: the same set of `data-fabric-id`s, no duplicates, the same
- *      screens, and no seed value dropped. A document that fails is NOT shipped —
- *      the assembled build stands and the failure is written into the artifact's
- *      gaps, because a structure-losing rewrite that ships silently is the exact
- *      defect this module exists to end.
+ *      screens, no seed value dropped — AND THE APPLICATION STILL WORKS. The
+ *      assembled build is not a picture: one executable script draws every table
+ *      from the data island, and every control carries an inline handler that
+ *      calls into it. A document that comes back with the script gone, or with
+ *      the handlers stripped off the controls, keeps every id and every screen
+ *      and every value, and is a SCREENSHOT — which is why the id-and-value
+ *      comparison alone passed it. Both are now checked. A document that fails is
+ *      NOT shipped — the assembled build stands and the failure is written into
+ *      the artifact's gaps, because a structure-losing rewrite that ships
+ *      silently is the exact defect this module exists to end.
  *
  * Every function here is pure and takes no clock: the transformation is testable
  * end to end without a model call, which is the only way any of it can be
@@ -62,6 +68,19 @@ export interface PrototypeBaseline {
   regionIds: string[];
   /** The assembled document's stylesheet — what a restyle replaces. */
   stylesheet: string;
+  /**
+   * WHAT MAKES THE BUILD AN APPLICATION RATHER THAN A PICTURE OF ONE: each
+   * function the assembled markup's inline handlers call, and how many controls
+   * call it — restricted to the ones the page's own script DEFINES, so this is
+   * the renderer's surface as the page reaches it rather than a list of every
+   * identifier that appears in a handler.
+   *
+   * A refine that returns the same ids, the same screens and the same values,
+   * with the script deleted or the handlers stripped, passed every other check
+   * here and shipped as "refined": the delivered prototype rendered nothing and
+   * responded to nothing. This is what the post-condition holds it to.
+   */
+  handlers: Record<string, number>;
   regionCount: number;
   /** What a screen spec may reference — derived from this ontology and this
    *  build's screens (see `prototypeScreenSpec.ts`). */
@@ -242,6 +261,76 @@ function decodeEntities(s: string): string {
     .replace(/&amp;/g, "&");
 }
 
+/**
+ * THE DOCUMENT WITHOUT ITS SCRIPTS OR ITS STYLE BODIES — the markup a person
+ * actually gets. The renderer BUILDS handler markup inside its own string
+ * literals (`onclick="'+act(href(slug,id))+'"`), so a reader that counts handler
+ * attributes across the raw bytes is measuring the renderer's source rather than
+ * the page's controls: on the two-entity build that reads 26 handlers where the
+ * markup carries 16, and the difference moves whenever the renderer is edited.
+ */
+function markupOf(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<!--[\s\S]*?-->/g, " ");
+}
+
+/** Bare function calls in one snippet of handler JavaScript — `go('#account')`
+ *  yields `go`, and `event.preventDefault()` yields nothing, because a method on
+ *  something is not a name the page has to define. */
+function callsIn(js: string): string[] {
+  const out = new Set<string>();
+  for (const m of js.matchAll(/(\.?)\b([A-Za-z_$][\w$]*)\s*\(/g)) if (!m[1]) out.add(m[2]);
+  return [...out];
+}
+
+/**
+ * WHAT THE PAGE'S CONTROLS CALL, AND HOW MANY CONTROLS CALL IT.
+ *
+ * Keyed by the function an inline handler invokes rather than by a count of
+ * handler attributes, because that is the property worth holding: a document
+ * that keeps twenty handlers and drops every `saveRec` has taken Save away, and
+ * a total would not notice. One control counts once per name it calls.
+ *
+ * Tolerant of every quoting form for the same reason `attrValuesIn` is — on this
+ * path the model writes the markup, so the assembler's own quoting cannot be
+ * assumed.
+ */
+export function handlerCallsIn(html: string): Record<string, number> {
+  const out: Record<string, number> = {};
+  const re = /\son[a-z]+\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/gi;
+  const markup = markupOf(html);
+  for (let m = re.exec(markup); m; m = re.exec(markup)) {
+    for (const name of callsIn(decodeEntities(m[1] ?? m[2] ?? m[3] ?? ""))) out[name] = (out[name] ?? 0) + 1;
+  }
+  return out;
+}
+
+/**
+ * EVERY NAME THE PAGE'S EXECUTABLE SCRIPT DEFINES — the client renderer's
+ * surface, as an inline handler can reach it.
+ *
+ * Deliberately generous about HOW a name is defined (declaration, assignment,
+ * arrow, a property hung on `window`): the question this answers is "is the
+ * renderer still here", and the failure this exists to catch is a document that
+ * came back with no script at all. Reading a re-formatted renderer as present is
+ * correct; refusing one because it now writes `const go = () =>` would reject a
+ * document that works.
+ */
+export function scriptDefinesIn(html: string): string[] {
+  const out = new Set<string>();
+  for (const m of html.matchAll(/<script([^>]*)>([\s\S]*?)<\/script>/gi)) {
+    // A JSON island defines nothing; it is data the renderer reads.
+    if (/type\s*=\s*(?:"[^"]*json[^"]*"|'[^']*json[^']*'|[^\s"'>]*json[^\s"'>]*)/i.test(m[1])) continue;
+    const body = m[2];
+    for (const d of body.matchAll(/\bfunction\s+([A-Za-z_$][\w$]*)/g)) out.add(d[1]);
+    for (const d of body.matchAll(/\b(?:var|let|const)\s+([A-Za-z_$][\w$]*)\s*=/g)) out.add(d[1]);
+    for (const d of body.matchAll(/([A-Za-z_$][\w$]*)\s*=\s*(?:async\s+)?(?:function\b|\(?[\w$,\s]*\)?\s*=>)/g)) out.add(d[1]);
+  }
+  return [...out];
+}
+
 /** The contents of the document's first `<style>` block ("" when it has none). */
 export function stylesheetIn(html: string): string {
   const m = /<style[^>]*>([\s\S]*?)<\/style>/i.exec(html);
@@ -327,6 +416,13 @@ export function prototypeBaselineFor(
         }
       }
     }
+    // WHAT THE CONTROLS CALL THAT THE PAGE ANSWERS. Intersected with what the
+    // script defines so the guarded set is the renderer's surface: a handler
+    // calling something this build never defined is already inert, and holding
+    // a refine to it would be demanding it preserve a defect.
+    const defined = new Set(scriptDefinesIn(html));
+    const handlers: Record<string, number> = {};
+    for (const [name, n] of Object.entries(handlerCallsIn(html))) if (defined.has(name)) handlers[name] = n;
     return {
       html,
       fabricVersion: fabric.version,
@@ -335,6 +431,7 @@ export function prototypeBaselineFor(
       seedValues: [...values].sort(),
       regionIds: [...new Set(regionIdsIn(html))].sort(),
       stylesheet: stylesheetIn(html),
+      handlers,
       regionCount,
       specSchema,
       screenSpec: carried,
@@ -397,6 +494,7 @@ export const REFINE_CONTRACT = [
   "NEVER alter navigation: the same data-screen ids, the same links between them.",
   "NEVER alter seed values: every record id, name and value the baseline shows must still be shown. You may re-present a value; you may not remove, replace or invent one.",
   'The baseline carries its records as ONE JSON data island — a <script type="application/json"> block — which the page renders into the regions at load. Return that block byte for byte. Editing it, reformatting it or dropping it empties every table in the application, and the check reads it as records lost.',
+  "THE BASELINE IS A WORKING APPLICATION, NOT A PICTURE OF ONE. Its other <script> block is the client renderer that draws every row from that island, and each control carries an inline handler (onclick, oninput) that calls into it. Return the renderer unchanged and leave every handler attribute on the element that carries it. A document that comes back without them keeps every id, every screen and every value and is a SCREENSHOT — the check reads it as the application lost, and the assembled build is kept instead of yours.",
   "DO change presentation INSIDE the regions and in the stylesheet: spacing, hierarchy, type, colour, density, elevation, the component vocabulary, the chrome. That is the whole of your contribution and it is a large one.",
   "If the direction asks for something presentation cannot deliver without moving structure, DO NOT move the structure — name it in gaps instead, so it reaches the people who can change the ontology or the design.",
   "",
@@ -472,6 +570,13 @@ export interface RefineVerdict {
    *  queues and the summary bands. Empty on a build that has none. */
   droppedFills: string[];
   droppedSeedValues: string[];
+  /** Behaviours the page's controls call that NO script in the returned document
+   *  defines any more — the client renderer gone, or renamed out from under
+   *  them. Every control that calls one of these is inert. */
+  lostRenderer: string[];
+  /** Behaviours fewer controls reach than did, one entry per behaviour, written
+   *  `name (was → now)`. A control the document still draws and no longer wires. */
+  lostHandlers: string[];
   /** One line per breach, in the operator's language. Empty when ok. */
   violations: string[];
 }
@@ -514,6 +619,20 @@ export function checkRefinedPrototype(baseline: PrototypeBaseline, candidateHtml
     if (droppedSeedValues.length >= VALUE_MISS_CAP) break;
   }
 
+  // THE PAGE STILL HAS TO WORK. Everything above compares what the document
+  // SHOWS; a document can keep every id, every screen and every value and still
+  // come back with its script deleted or its controls unwired, at which point
+  // the delivered prototype is a screenshot — it renders no rows, because the
+  // rows are drawn from the data island at load, and it answers no click.
+  const guarded = baseline.handlers ?? {};
+  const defined = new Set(scriptDefinesIn(html));
+  const calls = handlerCallsIn(html);
+  const lostRenderer = Object.keys(guarded).filter((name) => !defined.has(name)).sort();
+  const lostHandlers = Object.entries(guarded)
+    .filter(([name, want]) => (calls[name] ?? 0) < want)
+    .map(([name, want]) => `${name} (${want} → ${calls[name] ?? 0})`)
+    .sort();
+
   const list = (xs: string[]) => xs.slice(0, NAMED).join(", ") + (xs.length > NAMED ? `, +${xs.length - NAMED} more` : "");
   const violations: string[] = [];
   if (droppedRegions.length) violations.push(`${droppedRegions.length} region${droppedRegions.length === 1 ? "" : "s"} lost their data-fabric-id (${list(droppedRegions)})`);
@@ -522,9 +641,12 @@ export function checkRefinedPrototype(baseline: PrototypeBaseline, candidateHtml
   if (droppedScreens.length) violations.push(`${droppedScreens.length} screen${droppedScreens.length === 1 ? "" : "s"} disappeared (${list(droppedScreens)})`);
   if (droppedFills.length) violations.push(`${droppedFills.length} filled region${droppedFills.length === 1 ? "" : "s"} disappeared — a queue or a summary band the page draws into (${list(droppedFills)})`);
   if (droppedSeedValues.length) violations.push(`${droppedSeedValues.length} seeded value${droppedSeedValues.length === 1 ? "" : "s"} no longer appear (${list(droppedSeedValues)})`);
+  if (lostRenderer.length) violations.push(`the client renderer is gone — ${lostRenderer.length} behaviour${lostRenderer.length === 1 ? "" : "s"} the page's controls call (${list(lostRenderer)}) ${lostRenderer.length === 1 ? "is" : "are"} defined by no script in the document, so the tables draw no rows and every control that calls ${lostRenderer.length === 1 ? "it" : "them"} does nothing`);
+  if (lostHandlers.length) violations.push(`${lostHandlers.length} behaviour${lostHandlers.length === 1 ? "" : "s"} lost the controls that reached ${lostHandlers.length === 1 ? "it" : "them"} (${list(lostHandlers)}) — the page still draws the control and the click goes nowhere`);
   return {
     ok: violations.length === 0,
-    droppedRegions, addedRegions, duplicatedRegions, droppedScreens, droppedFills, droppedSeedValues, violations,
+    droppedRegions, addedRegions, duplicatedRegions, droppedScreens, droppedFills, droppedSeedValues,
+    lostRenderer, lostHandlers, violations,
   };
 }
 
