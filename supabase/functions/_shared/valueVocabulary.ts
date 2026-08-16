@@ -271,6 +271,15 @@ export async function generateValueVocabulary(
 }
 
 /**
+ * THE KEY EVERY CONSUMER READS THE ARTIFACT BY. The seeder gets the vocabulary
+ * from whoever assembles; the operator's studio, the stakeholder's pilot and the
+ * refine baseline all take it off the programme blob under this one name. The
+ * producer writes the same name — a producer and a consumer that disagree about
+ * where the artifact lives is exactly the failure this whole module exists after.
+ */
+export const VOCABULARY_FIELD_KEY = "prototypeValueVocabulary";
+
+/**
  * The artifact as the SEEDER sees it: a lookup, plus the two facts that decide
  * whether anyone should trust it — is it current, and what did it not answer.
  *
@@ -297,5 +306,184 @@ export function resolveVocabulary(artifact: unknown, ontology: Record<string, un
     current: !declared || declared === ontologyVocabularyFingerprint(ontology),
     missing: targets.filter((t) => !values.has(t.key)),
     covered: targets.filter((t) => values.has(t.key)),
+  };
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+ * THE PRODUCER
+ *
+ * Everything above is the CONSUMER side — and for a while that was all there
+ * was. The seeder read `opts.vocabulary`, the studio and the stakeholder's pilot
+ * passed the stored artifact, and NOTHING ANYWHERE WROTE ONE: three readers,
+ * zero writers, so the defect this module is named after ("Region: Managed.
+ * Industry: Priority. Tier: Standard.") was still on every build. A feature with
+ * no producer is not a feature; it is plumbing with the water off.
+ *
+ * What follows is the producer, and it is pure. The decision (call or don't),
+ * the prompt, the parse and the stored document are all values computed from the
+ * programme blob — the edge function contributes a transport and a place to
+ * write, nothing else. That is what makes "one call per ontology change" a
+ * testable property instead of a promise: the suite runs the whole producer with
+ * a counting stub and asserts the model was asked exactly once.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+/** Whether to spend the one call, and why — the whole gate, as a value. */
+export interface VocabularyPlan {
+  /** Ask the model? */
+  run: boolean;
+  /** Why, in a sentence an operator reads on the run. Never empty. */
+  reason: string;
+  /** The fingerprint of the ontology surface in front of us right now. */
+  fingerprint: string;
+  /** The fingerprint the stored artifact carries — "" when there is none. */
+  storedFingerprint: string;
+  /** The request to send, when there is one to send. */
+  request: VocabularyRequest | null;
+}
+
+/**
+ * ONE CALL PER ONTOLOGY CHANGE, decided here.
+ *
+ * The trigger is a fingerprint comparison, not a habit and not a timestamp: the
+ * artifact declares the ontology surface it was generated for, and if that is
+ * still the surface in front of us there is nothing to ask. Everything else —
+ * no ontology, no closed-set field, a stored vocabulary that answers nothing —
+ * is a SKIP WITH A REASON, because a producer that declines in silence is
+ * indistinguishable from one that is broken.
+ *
+ * `force` is the operator saying "do it anyway"; the automatic follow-on never
+ * passes it, which is precisely what keeps the call count at one per change.
+ */
+export function planValueVocabulary(
+  inner: Record<string, unknown>,
+  opts: { force?: boolean } = {},
+): VocabularyPlan {
+  const ontology = isRecord(inner.domainOntology) ? inner.domainOntology : null;
+  const stored = inner[VOCABULARY_FIELD_KEY];
+  const storedFingerprint = isRecord(stored) && typeof stored.ontology === "string" ? stored.ontology : "";
+  if (!ontology) {
+    return {
+      run: false,
+      reason: "there is no domain ontology on the record yet — the vocabulary answers the ontology's own fields, so there is nothing to ask about",
+      fingerprint: "",
+      storedFingerprint,
+      request: null,
+    };
+  }
+  const request = vocabularyRequest(ontology);
+  const base = { fingerprint: request.fingerprint, storedFingerprint };
+  if (!request.targets.length) {
+    return {
+      ...base,
+      run: false,
+      reason: "this ontology has no category, status, health or priority field — nothing to ask for",
+      request: null,
+    };
+  }
+  // A stored artifact only counts as PRODUCED if it can change a value. One that
+  // parses to nothing usable (the model refused, the reply was prose, every key
+  // it answered has since left the ontology) resolves to `null` for the seeder,
+  // so treating it as an answer would leave the programme permanently on the
+  // generic pool with no way back.
+  const usable = resolveVocabulary(stored, ontology);
+  if (!usable) {
+    return {
+      ...base,
+      run: true,
+      reason: storedFingerprint
+        ? "the stored vocabulary answers no field this ontology asks about"
+        : "no value vocabulary has been produced for this ontology yet",
+      request,
+    };
+  }
+  if (storedFingerprint && storedFingerprint !== request.fingerprint) {
+    return { ...base, run: true, reason: "the ontology's fields have changed since the stored vocabulary was generated", request };
+  }
+  if (opts.force) {
+    return { ...base, run: true, reason: "regenerating the vocabulary on request", request };
+  }
+  return {
+    ...base,
+    run: false,
+    reason: `the stored vocabulary was generated for this exact ontology surface (${request.fingerprint}) — one call per ontology change means no call now`,
+    request: null,
+  };
+}
+
+/**
+ * The stored DOCUMENT — the artifact a human opens, diffs and edits.
+ *
+ * It is the consumer's shape with the receipts attached: `values` and `ontology`
+ * are what `resolveVocabulary` reads, and `gaps` / `warnings` / `summary` are why
+ * anyone should believe it. No clock and no id generation here — the caller
+ * stamps `generatedAt` — so the same reply always yields the same document and a
+ * diff between two versions is a diff in the VALUES, not in the metadata.
+ */
+export function valueVocabularyDocument(
+  parsed: ParsedVocabulary,
+  ontology: Record<string, unknown>,
+): Record<string, unknown> {
+  const targets = vocabularyTargets(ontology);
+  const values = parsed.vocabulary.values;
+  const answered = (t: VocabularyTarget) => Array.isArray(values[t.key]) && values[t.key].length > 0;
+  const covered = targets.filter(answered);
+  const missing = targets.filter((t) => !answered(t));
+  return {
+    title: "Value Vocabulary",
+    kind: "value-vocabulary",
+    ontology: parsed.vocabulary.ontology,
+    values,
+    // The fields it answered, spelled out per field so the document reads as a
+    // picklist review and not as a blob of JSON.
+    fields: covered.map((t) => ({ key: t.key, entity: t.entity, attribute: t.attribute, role: t.role, values: values[t.key] })),
+    // A MISS STAYS VISIBLE, here as well as in the seed's assumptions: a field
+    // left on the generic pool is a Listen question, not a finished answer.
+    gaps: missing.map((t) => `${t.key} (${t.role}) has no supplied values — the generic pool answers it; ask what values it really holds`),
+    warnings: parsed.warnings,
+    summary: `${covered.length} of ${targets.length} closed-set field${targets.length === 1 ? "" : "s"} carry programme values`,
+    confidence: targets.length ? Math.round((covered.length / targets.length) * 100) / 100 : 0,
+  };
+}
+
+/** What the producer did, as a value the caller stores and reports. */
+export interface VocabularyOutcome {
+  status: "generated" | "skipped";
+  /** Why it ran or did not — the plan's reason, carried through to the run row. */
+  reason: string;
+  /** The document to store, or null when nothing was produced. */
+  document: Record<string, unknown> | null;
+  warnings: string[];
+  summary: string;
+  confidence: number | null;
+}
+
+/**
+ * THE PRODUCER, END TO END, WITHOUT A TRANSPORT.
+ *
+ * Give it the programme's inner blob and a function that can complete a prompt;
+ * it decides whether to ask, asks at most once, sanitises the reply and returns
+ * the document to store. `complete` is NEVER called on a skip — that is the
+ * property the whole "one call per ontology change" claim reduces to, and it is
+ * checkable with a counter.
+ */
+export async function produceValueVocabulary(
+  inner: Record<string, unknown>,
+  complete: (request: VocabularyRequest) => Promise<string>,
+  opts: { force?: boolean } = {},
+): Promise<VocabularyOutcome> {
+  const plan = planValueVocabulary(inner, opts);
+  if (!plan.run || !plan.request) {
+    return { status: "skipped", reason: plan.reason, document: null, warnings: [], summary: plan.reason, confidence: null };
+  }
+  const ontology = inner.domainOntology as Record<string, unknown>;
+  const parsed = parseValueVocabulary(await complete(plan.request), ontology);
+  const document = valueVocabularyDocument(parsed, ontology);
+  return {
+    status: "generated",
+    reason: plan.reason,
+    document,
+    warnings: parsed.warnings,
+    summary: String(document.summary ?? ""),
+    confidence: typeof document.confidence === "number" ? document.confidence : null,
   };
 }

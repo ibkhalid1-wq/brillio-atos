@@ -16,6 +16,14 @@ import {
   baselineWithPriorSkin, buildPrototypeRefineBrief, prototypeBaselineFor, resolvePrototypeDoc,
   REFINE_CONTRACT, type PrototypeBaseline, type PrototypeChangeRequest,
 } from "../_shared/prototypeRefine.ts";
+// THE VALUE VOCABULARY'S PRODUCER. Everything that decides — whether to spend
+// the one call, what to ask, how to read the reply, what document to store —
+// lives in the shared module as pure functions; this file supplies the transport
+// and the place to write. That split is why the producer is exercised end to end
+// in the test suite without a model.
+import {
+  planValueVocabulary, produceValueVocabulary, VOCABULARY_FIELD_KEY,
+} from "../_shared/valueVocabulary.ts";
 import {
   splitExternalTexts,
   mergeExternalTexts,
@@ -149,7 +157,21 @@ const VALID_AGENT_IDS = new Set([
   "demo-scripts",
   "hardening-plan",
   "eval-suite",
+  // The prototype's picklist values. Not a formal artifact and not a movement
+  // document: one model call per ONTOLOGY CHANGE, producing the input the
+  // deterministic seeder reads. See VALUE_VOCABULARY_PHASE below.
+  "value-vocabulary",
 ]);
+
+// WHERE THE VALUE VOCABULARY IS FILED, and how much room its one call gets.
+// It is filed beside the DOMAIN ONTOLOGY it answers — same movement, so the
+// artifact and the fields it supplies values for are read together, and a
+// regenerated ontology and its vocabulary sit next to each other in the diff.
+// Keep this equal to FORMAL_ARTIFACT_AGENTS["domain-ontology"].phase.
+const VALUE_VOCABULARY_PHASE = "listen";
+// A picklist per closed-set field, a dozen short labels each: small output, and
+// a hard ceiling so a runaway reply cannot cost what a document costs.
+const VALUE_VOCABULARY_TOKENS = 2048;
 
 // Presentation-only agent ids surfaced in the UI that map onto an implemented
 // agent. Kept in lockstep with AppShellV3's resolveAgentId so both layers agree.
@@ -5595,6 +5617,44 @@ async function isProviderRateLimited(res: Response): Promise<boolean> {
  * result returns immediately — downstream agents only persist follow-on intelligence
  * and are never part of the response payload.
  */
+/**
+ * THE ONE FOLLOW-ON THE VALUE VOCABULARY NEEDS.
+ *
+ * "One model call per ontology change" has to be triggered by an ontology
+ * change, and this is the only place the server sees one land. It is not a
+ * cascade: `value-vocabulary` produces a support artifact, so it never re-enters
+ * `triggerDownstreamAgents`, and the run it starts checks the ontology
+ * fingerprint before spending anything — a regeneration that did not move the
+ * closed-set fields calls no model at all.
+ *
+ * KNOWN GAP, deliberately visible: on Flow programmes a regenerated ontology can
+ * arrive as a propose-then-confirm decision the operator resolves in the client.
+ * That path writes the document without passing through here, so the vocabulary
+ * is not refreshed automatically — it is then STALE, which the seed declares as
+ * an assumption ("the ontology has changed since this vocabulary was
+ * generated"), and re-running the agent from the programme refreshes it.
+ */
+async function runValueVocabularyFollowOn(programId: string): Promise<void> {
+  try {
+    await fetch(`${SUPABASE_URL}/functions/v1/run-agent`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      },
+      body: JSON.stringify({
+        programId,
+        agentId: "value-vocabulary",
+        phaseId: VALUE_VOCABULARY_PHASE,
+        triggeredBy: "trigger",
+        triggerEvent: "downstream:domain-ontology",
+      } satisfies RunAgentRequest),
+    });
+  } catch (error) {
+    console.warn("AURA value-vocabulary follow-on failed:", error);
+  }
+}
+
 async function triggerDownstreamAgents(
   completedAgentId: string,
   programId: string,
@@ -10506,6 +10566,99 @@ Deno.serve(async (req) => {
       } satisfies RunAgentResponse);
     }
 
+    // ── The value vocabulary — ONE model call per ONTOLOGY CHANGE ─────────────
+    //
+    // The seeder's generic pools print "Region: Managed. Industry: Priority.
+    // Tier: Standard." — three fields, one twelve-word pool, and every one of
+    // them saying a word that belongs to a different field. The fix is an
+    // artifact: `{ "Entity.attribute": ["plausible","values"] }`, produced HERE
+    // and read by the deterministic seeder as an input, so a rebuild calls no
+    // model and cannot move a value.
+    //
+    // This branch is transport only. `produceValueVocabulary` decides whether to
+    // spend the call (a fingerprint comparison against the stored artifact),
+    // builds the prompt, sanitises the reply and returns the document; a skip
+    // never reaches the model at all. It sits before the generic agent path on
+    // purpose — the prompt is derived from the ontology's own fields, so it must
+    // not collect the programme context pack, the pattern block or the run
+    // memory that path appends.
+    if (request.agentId === "value-vocabulary") {
+      let vocabularyTokens = 0;
+      const outcome = await produceValueVocabulary(
+        getInnerProgramData(contextProgramData),
+        async (vocabularyRequest) => {
+          const call = await callJsonLLM(vocabularyRequest.system, vocabularyRequest.user, VALUE_VOCABULARY_TOKENS);
+          vocabularyTokens += call.inputTokens + call.outputTokens;
+          return call.raw;
+        },
+        // An operator asking for it explicitly overrides the fingerprint gate.
+        // The automatic follow-on never does — that is exactly what keeps the
+        // count at one call per ontology change rather than one per run.
+        { force: request.triggeredBy === "user" },
+      );
+      const outputPayload: Record<string, JsonValue> = {
+        status: outcome.status,
+        reason: outcome.reason,
+        summary: outcome.summary,
+        warnings: outcome.warnings as JsonValue,
+        gaps: (outcome.document?.gaps ?? []) as JsonValue,
+        fields: (outcome.document?.fields ?? []) as JsonValue,
+      };
+      let nextProgramData = contextProgramData;
+      if (outcome.document) {
+        nextProgramData = applyProgramSupportArtifact(
+          contextProgramData,
+          VALUE_VOCABULARY_PHASE,
+          "value-vocabulary",
+          VOCABULARY_FIELD_KEY,
+          outcome.document,
+          "Value Vocabulary",
+        );
+        await persistAgentArtifact(auth.admin, request.programId, request.agentId, VALUE_VOCABULARY_PHASE, outcome.document, outcome.confidence);
+        await persistProgramData(auth.admin, request.programId, nextProgramData, persistConcurrency);
+      }
+      await auth.admin
+        .from("adam_agent_runs")
+        .update({
+          status: "complete",
+          output: outputPayload as JsonValue,
+          handoff: null,
+          reasoning_trace: null,
+          confidence: outcome.confidence,
+          tokens_used: vocabularyTokens,
+          completed_at: new Date().toISOString(),
+          awaiting_decision_id: null,
+        })
+        .eq("id", runId);
+      await emitAgentEvent(auth.admin, {
+        programId: request.programId,
+        agentId: request.agentId,
+        phaseId: request.phaseId,
+        eventType: "completed",
+        payload: {
+          confidence: outcome.confidence,
+          generatedAt: new Date().toISOString(),
+          // A skip is reported with its reason, never as a silent success: a
+          // producer that declines invisibly reads exactly like a broken one.
+          outputSummary: outcome.status === "generated" ? outcome.summary : `Skipped — ${outcome.reason}`,
+        },
+      });
+      await broadcastStatus(auth.admin, {
+        runId,
+        programId: request.programId,
+        agentId: request.agentId,
+        phaseId: request.phaseId,
+        status: "complete",
+        confidence: outcome.confidence,
+        latestObservationType: "response_received",
+      });
+      return jsonResponse({
+        status: "complete",
+        runId,
+        output: outputPayload,
+      } satisfies RunAgentResponse);
+    }
+
     if (request.agentId === "closure") {
       const phases = getProgramPhaseContext(contextProgramData);
       const allPhasesReady = phases.every((phase) => phase.pct >= 90);
@@ -11801,6 +11954,15 @@ Deno.serve(async (req) => {
           completedHandoff.recommendedImpacts = FORMAL_ARTIFACT_IMPACTS[request.agentId] ?? [];
         }
         scheduleBackground(triggerDownstreamAgents(request.agentId, request.programId, request.phaseId, completedHandoff, nextProgramData));
+        // THE ONTOLOGY JUST CHANGED — the one moment the value vocabulary is
+        // allowed to cost a model call. `planValueVocabulary` reads the document
+        // this run actually persisted (nextProgramData) against the stored
+        // artifact's fingerprint, so a regeneration that left the closed-set
+        // fields alone schedules nothing.
+        if (request.agentId === "domain-ontology"
+          && planValueVocabulary(getInnerProgramData(nextProgramData)).run) {
+          scheduleBackground(runValueVocabularyFollowOn(request.programId));
+        }
       }
 
       return jsonResponse({
