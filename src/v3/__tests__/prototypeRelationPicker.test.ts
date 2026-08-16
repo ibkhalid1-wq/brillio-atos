@@ -307,7 +307,7 @@ describe("two fields pointing at one parent", () => {
     // The other still offers the records, and says why the link is not its own.
     const other = pickers.find((p) => !p.hasAttribute("data-fkc"))!;
     expect(other.options.length).toBeGreaterThan(1);
-    expect(other.closest(".m-field")!.querySelector(".m-help")?.textContent ?? "").toMatch(/Confirm in Listen/);
+    expect(other.closest(".m-field")!.querySelector(".m-help")?.textContent ?? "").toMatch(/To confirm with the team/);
   });
 
   it("the owner moves the record; the other stores the name it shows", () => {

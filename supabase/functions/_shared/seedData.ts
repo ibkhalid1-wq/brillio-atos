@@ -73,7 +73,16 @@ export interface SeedResult {
 function hashSeed(s: string): number { let h = 2166136261 >>> 0; for (let i = 0; i < s.length; i += 1) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
 function mulberry32(seed: number) { let a = seed >>> 0; return () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 
-const COMPANIES = ["Northwind", "Contoso", "Fabrikam", "Aperture", "Initech", "Umbra", "Halcyon", "Vertex", "Meridian Labs", "Blue Yonder", "Cobalt", "Sterling", "Ironwood", "Pinnacle", "Kestrel", "Lumen", "Orenda", "Quill", "Radian", "Solstice", "Tacit", "Vantage", "Wexford", "Zephyr"];
+// Plausible-but-fictitious organisations. The previous pool led with
+// Northwind/Contoso/Fabrikam — three names every enterprise stakeholder
+// recognises as DEMO DATA on sight, which is exactly the tell the premise bans:
+// the prototype must feel like the finished product ([[aura premise]]: polish
+// is never degraded by provisionality). These read as a real book of business
+// and match no real company deliberately.
+// Kept SHORT deliberately: these strings recur in every title and display name
+// in the seed island, and the document budget is paid per appearance — see
+// DOCUMENT_REFINE_BUDGET's ledger in prototypeRefine.ts.
+const COMPANIES = ["Northgate", "Harborview", "Summit", "Lakeshore", "Ironbridge", "Fairfield", "Redwood", "Pinecrest", "Bluewater", "Stonebrook", "Silverline", "Oakfield", "Clearwater", "Maplewood", "Kingsport", "Ashford", "Brightpath", "Drummond", "Crescent", "Westbrook", "Sablewood", "Foxhall", "Danforth", "Calder"];
 const WORDS = ["review", "renewal", "expansion", "migration", "pilot", "rollout", "audit", "handoff", "escalation", "onboarding", "assessment", "sync"];
 const STATUSES = ["Open", "In progress", "Blocked", "Closed", "On hold"];
 // Obviously-synthetic people, in the same register as the placeholder companies
@@ -255,13 +264,18 @@ export function generateSeed(ontology: Record<string, unknown>, version: string,
     // that does not say which is one an operator cannot weigh: "assumed 1:N" and
     // "assumed 1:N because the standard says so" are different claims. `ground`
     // is `declared` only when the ontology itself said it.
+    // The `assumed` text reaches TWO readers: the operator's assumptions ledger
+    // AND the stakeholder-facing empty states (`empty()` in the renderer cites
+    // it verbatim). So it is written in business language — the premise puts
+    // methodology words (cardinality, provisional, ontology) in the question
+    // pack and the tooltips, never in the pixels a stakeholder reads.
     const restsOn = ground === "declared" || ground === "confirmed"
-      ? `declared ${card}`
+      ? `the team stated how ${parent} and ${child} relate (${card})`
       : ground === "unknown"
-        ? `cardinality unconfirmed — drawn as a provisional list`
-        : `${card} taken from ${ground === "standard" ? "the industry standard" : "a foreign key the attributes carry"}, not yet confirmed`;
-    // optionality is absent on every relation — assume child-optional/parent-optional
-    assumptions.push({ kind: "optionality", subject: `${parent} → ${child} [${card}]`, pair: [parent, child], assumed: `${restsOn}; child-optional, parent-optional (default)`, listenQuestion: `Must every ${child} have a ${parent}? Can a ${parent} have zero ${child}?` });
+        ? `how many ${child} records one ${parent} holds isn't confirmed yet — shown as a simple list for now`
+        : `the shape follows ${ground === "standard" ? "the industry standard" : "the data the records already carry"} (${card}), to be confirmed`;
+    // optionality is absent on every relation — assume both sides optional
+    assumptions.push({ kind: "optionality", subject: `${parent} → ${child} [${card}]`, pair: [parent, child], assumed: restsOn, listenQuestion: `Must every ${child} belong to a ${parent}? Can a ${parent} have none?` });
     if (card.endsWith(":N")) assumptions.push({ kind: "fan-out", subject: `${parent} → ${child}`, pair: [parent, child], assumed: `0–${maxFanOut} per ${parent}`, listenQuestion: `Realistic count of ${child} per ${parent}?` });
     if (verb && verb.toLowerCase() === "produces") assumptions.push({ kind: "relation-verb", subject: `${parent} → ${child}`, pair: [parent, child], assumed: 'generic verb "produces" treated as parent→child FK', listenQuestion: `Is ${parent}→${child} a composition, a reference, or a lifecycle transition?` });
   }
@@ -369,7 +383,12 @@ export function generateSeed(ontology: Record<string, unknown>, version: string,
       for (const [pName, pid] of Object.entries(parentIds)) rec[joinKeyFor(pName)] = pid;
       // planted edge cases (once, on the first non-root entity with attributes)
       if (!planted && !isRoot.has(name) && attrs.length) {
-        if (i === 0) { const t = titleAttrOf(name) ?? attrs.find((a) => roleOf.get(`${name} ${a}`) === "identifier") ?? attrs[0]; rec[t] = `${rec[t]} — an unusually long synthetic label used to stress the layout of ${name} rows and columns`; }
+        // The long-label extreme stays — layout has to survive it — but it now
+        // reads as a record a business could actually hold. The previous text
+        // ("an unusually long synthetic label used to stress the layout…")
+        // NAMED ITSELF AS TEST TOOLING, on the first row of the first child
+        // entity: the most prominent record in the demo announced the demo.
+        if (i === 0) { const t = titleAttrOf(name) ?? attrs.find((a) => roleOf.get(`${name} ${a}`) === "identifier") ?? attrs[0]; rec[t] = `${rec[t]} — multi-region programme, extended scope, co-delivered with alliance partner`; }
         if (i === 1) { const opt = attrs[attrs.length - 1]; rec[opt] = null; } // missing optional
         if (i === 2) { const money = attrs.find((a) => roleOf.get(`${name} ${a}`) === "monetary"); if (money) rec[money] = 0; } // boundary
         if (i === 2) planted = true;
@@ -436,8 +455,16 @@ export function generateSeed(ontology: Record<string, unknown>, version: string,
       const pRows = primary ? (records[primary.parent] ?? []) : [];
       let idx = 0;
       pRows.forEach((p, pi) => {
-        // deliberately include the extremes: first parent gets 0, second gets max
-        const k = pi === 0 ? 0 : pi === 1 ? maxFanOut : (primary?.parentToChild === "1:1" ? 1 : Math.floor(rnd() * (maxFanOut + 1)));
+        // The extremes are still planted — the empty state and the wrap case
+        // must both be reachable — but at the TAIL of the parent list, not the
+        // head. They used to sit on rows 1 and 2: the first record a
+        // stakeholder opens was, by design, the empty one, and the demo led
+        // with its own edge cases. The last two rows keep both states on
+        // screen for QA while the natural entry path shows a populated system.
+        const last = pRows.length - 1;
+        const k = pi === last && pRows.length > 1 ? 0
+          : pi === last - 1 && pRows.length > 2 ? maxFanOut
+          : (primary?.parentToChild === "1:1" ? 1 : Math.floor(rnd() * (maxFanOut + 1)));
         for (let j = 0; j < k && rows.length < entityCap; j += 1) {
           const parentIds: Record<string, string> = { [primary!.parent]: String(p.id) };
           for (const pe of parents.slice(1)) { const alt = records[pe.parent] ?? []; if (alt.length) parentIds[pe.parent] = String(alt[(idx + j) % alt.length].id); }

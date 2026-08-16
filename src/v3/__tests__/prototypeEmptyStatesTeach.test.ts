@@ -81,7 +81,7 @@ describe("empty states teach", () => {
     for (const e of emptyRegions) {
       const cited = assumptionsFor(e.id).filter((a) => e.text.includes(a.assumed));
       expect(cited.some((a) => e.text.includes(a.listenQuestion)), `${e.id} cites an assumption without its question`).toBe(true);
-      expect(e.text, `${e.id} does not route the reader anywhere`).toMatch(/Listen/);
+      expect(e.text, `${e.id} does not route the reader anywhere`).toMatch(/To confirm with the team/);
     }
   });
 

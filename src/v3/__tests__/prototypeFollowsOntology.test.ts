@@ -418,7 +418,7 @@ describe("a record is called something, and the column heading says what", () =>
     const { html } = assemblePrototype(ontology, atlas);
     expect(html, "SYNTHETIC-SEED is rendered as if it were a record's name").not.toContain("SYNTHETIC-SEED");
     // the honesty label is where it belongs — on the page, not in a value cell
-    expect(html).toContain("synthetic seed data");
+    expect(html).toContain("sample data");
   });
 
   it("a title is never a pointer at another entity", () => {

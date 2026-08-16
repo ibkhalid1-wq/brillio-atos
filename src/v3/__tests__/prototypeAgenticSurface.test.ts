@@ -116,7 +116,7 @@ describe("the acceptance criterion", () => {
     const band = textOf(screen("detail-opportunity")!.querySelector(".m-agents"));
     expect(band).toContain("Pricing Book");
     expect(band).toMatch(/Unmapped/i);
-    expect(band).toMatch(/Confirm in Listen/i);
+    expect(band).toMatch(/To confirm with the team/i);
     // Forecast Snapshot is an output with no entity here — same rule.
     expect(band).toContain("Forecast Snapshot");
   });

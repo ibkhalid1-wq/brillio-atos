@@ -145,7 +145,7 @@ describe("a queue is that role's records, not a table of everything", () => {
     }
     // A five-row page of a longer list SAYS it is a page — the header/rows
     // contradiction the render gate exists to catch.
-    if (total > 5) expect(textOf(card)).toMatch(/View all \d+ Contract/);
+    if (total > 5) expect(textOf(card)).toMatch(/View all \d+ →/);
   });
 
   it("its lanes are the status values the records actually carry", () => {
@@ -204,7 +204,7 @@ describe("every name the atlas states stays visible", () => {
     const s = screen(clinicDoc, "work-theatre-scheduler")!;
     expect(textOf(s)).toContain("Consent Form");
     expect(textOf(s)).toMatch(/Not modelled/i);
-    expect(textOf(s)).toMatch(/Confirm in Listen/i);
+    expect(textOf(s)).toMatch(/To confirm with the team/i);
   });
 
   it("an entity outside this build's menu is printed as having no screen", () => {

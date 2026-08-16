@@ -455,10 +455,10 @@ function mCell(R,ri,v){
   function empty(title,cite){
     return '<div class="m-empty"><div class="m-empty-t">'+mEsc(title)+'</div><div class="m-assumed">'
       +(cite
-        ?'<span class="m-assumed-k">Assumed</span> '+mEsc(cite.a)+" — one of this run"+Q+"s declared assumptions."
-          +'<span class="m-assumed-q">'+mEsc(cite.q)+" Confirm in Listen.</span>"
-        :'<span class="m-assumed-k">Undeclared</span> no assumption in this run accounts for the gap.'
-          +'<span class="m-assumed-q">Why is there nothing here? Confirm in Listen.</span>')
+        ?'<span class="m-assumed-k">Note</span> '+mEsc(cite.a)+"."
+          +'<span class="m-assumed-q">'+mEsc(cite.q)+" To confirm with the team.</span>"
+        :'<span class="m-assumed-k">Note</span> nothing accounts for this gap yet.'
+          +'<span class="m-assumed-q">Why is there nothing here? To confirm with the team.</span>')
       +"</div></div>";
   }
   // WHICH ROWS THIS LIST IS SHOWING — the live rows, through the filter, in the
@@ -572,7 +572,7 @@ function mCell(R,ri,v){
     }
     var shown=all.slice(0,5),inner;
     var head='<div class="m-card-h"><div class="m-card-t">'+mEsc(kd.entity)+"</div>"
-      +(kd.provisional?'<span class="m-prov" title="Cardinality not yet confirmed — this shape is provisional">provisional</span>':"")
+      +(kd.provisional?'<span class="m-prov" title="Not confirmed yet — drawn from the industry standard">to confirm</span>':"")
       +'<span class="m-badge">'+all.length+"</span></div>";
     if(kd.multi){
       if(shown.length){
@@ -585,7 +585,7 @@ function mCell(R,ri,v){
       var body="";for(i=0;i<shown.length;i++)body+="<tr>"+cells(t,kd,shown[i],kd.slug,false)+"</tr>";
       inner='<div class="m-table-wrap"><table class="m-table"><thead><tr>'+heads(kd,"")+"</tr></thead><tbody>"+body+"</tbody></table></div>"
         +(all.length>shown.length&&kd.listed
-          ?'<div class="m-card-f"><button class="m-btn m-btn--secondary m-btn--sm" onclick="go('+Q+"#"+kd.slug+Q+')">View all '+all.length+" "+mEsc(kd.entity)+" →</button></div>"
+          ?'<div class="m-card-f"><button class="m-btn m-btn--secondary m-btn--sm" onclick="go('+Q+"#"+kd.slug+Q+')">View all '+all.length+" →</button></div>"
           :"");
     }else inner=empty(kd.emptyTitle,kd.cite);
     fill(kd.region,'<section class="m-card" style="margin-top:16px">'+head+inner+"</section>");
@@ -854,7 +854,7 @@ const PERSONA_RENDERER = `
       ?'<div class="m-table-wrap"><table class="m-table"><thead><tr>'+heads(qs,"")+'<th style="text-align:right">Actions</th></tr></thead><tbody>'
         +body+"</tbody></table></div>"
         +'<div class="m-card-f"><span style="margin-right:auto">'+lanes(t,qs.status,ix)+"</span>"
-        +'<button class="m-btn m-btn--secondary m-btn--sm" onclick="go('+Q+"#"+qs.slug+Q+')">View all '+ix.length+" "+mEsc(qs.entity)+" →</button></div>"
+        +'<button class="m-btn m-btn--secondary m-btn--sm" onclick="go('+Q+"#"+qs.slug+Q+')">View all '+ix.length+" →</button></div>"
       :empty(qs.emptyTitle,qs.cite);
     fill(qs.region,'<section class="m-card" style="margin-top:16px">'
       +'<div class="m-card-h"><div class="m-card-t">'+mEsc(qs.entity)+'</div><span class="m-badge">'+ix.length+"</span></div>"
@@ -1270,6 +1270,15 @@ export interface AssemblyOptions {
    * application it assembled before, byte for byte.
    */
   spec?: unknown;
+  /**
+   * What the application CALLS ITSELF — the document title and the sidebar
+   * brand. The programme's own name (`projectMeta.name`), threaded from every
+   * surface that knows it. The slot used to be hardcoded "Assembled" with a
+   * title that read "assembled from ontology + atlas": the one line of chrome a
+   * stakeholder reads on every screen named the pipeline, not their product.
+   * Absent, the neutral "Prototype" — never the machinery.
+   */
+  appName?: string | null;
 }
 
 export function assemblePrototype(ontology: Record<string, unknown>, atlas: Record<string, unknown>, parentEntities?: readonly string[], options: AssemblyOptions = {}): AssembledPrototype {
@@ -1597,7 +1606,7 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
         : `<div class="m-agent-gate"><span class="m-pill m-pill--risk"><span class="m-dot m-dot--risk"></span>No human gate stated</span></div>`;
       const miss = a.unmapped.length
         ? `<div class="m-assumed"><span class="m-assumed-k">Unmapped</span> this agent also names ${esc(a.unmapped.join(", "))}, which this ontology does not hold.`
-          + `<span class="m-assumed-q">Is that a record the system must keep? Confirm in Listen.</span></div>`
+          + `<span class="m-assumed-q">Is that a record the system must keep? To confirm with the team.</span></div>`
         : "";
       return `<li class="m-agent"><div class="m-agent-h"><span class="m-agent-n">${esc(a.name)}</span>`
         + verbs.map((v) => `<span class="m-badge">${v}</span>`).join("")
@@ -1607,7 +1616,7 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
     };
     return `<section class="m-card" style="margin-top:16px"><div class="m-card-h"><div class="m-card-t">Agent activity</div>`
       + `<span class="m-badge">${acting.length}</span></div>`
-      + `<p class="m-cell-sub">From the agentic blueprint — the agents that act on ${esc(name)} records.</p>`
+      + `<p class="m-cell-sub">Agents that work on ${esc(name)} records — and where a person stays in control.</p>`
       + `<ul class="m-agents">${acting.map(item).join("")}</ul></section>`;
   };
 
@@ -1741,7 +1750,7 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
         + `<span class="m-assumed-q">Should this role get ${offMenu.length === 1 ? "that screen" : "those screens"}? Confirm in Experience Design.</span></div>` : "";
     const notModelled = unmodelled.length
       ? `<div class="m-assumed"><span class="m-assumed-k">Not modelled</span> the atlas names ${esc(unmodelled.join(", "))} in this role's steps; the ontology holds no such entity.`
-        + `<span class="m-assumed-q">${unmodelled.length === 1 ? "Is that a record" : "Are those records"} the system must keep? Confirm in Listen.</span></div>` : "";
+        + `<span class="m-assumed-q">${unmodelled.length === 1 ? "Is that a record" : "Are those records"} the system must keep? To confirm with the team.</span></div>` : "";
     const step = (s: { action: string; actor: string; system: string; entities: string[] }): string => {
       const meta = [s.actor && s.actor !== r.role ? s.actor : "", s.system].filter(Boolean).join(" · ");
       const chips = s.entities.map((e) => { const hit = asEntity(e); return chip(hit ?? e, hasScreen(hit) ? hit : undefined); }).join(" ");
@@ -1754,7 +1763,7 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
         + `<div class="m-card-h"><div class="m-card-t">${esc(w.name)}</div>`
         + `<span class="m-badge">${w.steps.length} step${w.steps.length === 1 ? "" : "s"}</span></div>`
         + `${w.trigger ? `<p class="m-cell-sub">Trigger — ${esc(w.trigger)}</p>` : ""}`
-        + `${w.steps.length ? `<ol class="m-steps">${w.steps.map(step).join("")}</ol>` : `<div class="m-assumed"><span class="m-assumed-k">No steps</span> the atlas names this workflow without stating how it runs.<span class="m-assumed-q">What are the steps? Confirm in Listen.</span></div>`}`
+        + `${w.steps.length ? `<ol class="m-steps">${w.steps.map(step).join("")}</ol>` : `<div class="m-assumed"><span class="m-assumed-k">No steps</span> the atlas names this workflow without stating how it runs.<span class="m-assumed-q">What are the steps? To confirm with the team.</span></div>`}`
         + `${w.handoffs.length ? `<p class="m-cell-sub">Hands off — ${esc(w.handoffs.join("; "))}</p>` : ""}</section>`;
       const fid = flowIdFor(w);
       // The fabric declares one node per atlas workflow and nothing rendered
@@ -1765,10 +1774,10 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
     }).join("");
     const works = r.collaborators.length
       ? `<p class="m-sub">Works with ${esc(r.collaborators.join(", "))} — actors the atlas names inside these workflows.</p>` : "";
-    const unowned = r.role ? "" : `<div class="m-assumed"><span class="m-assumed-k">Unattributed</span> the atlas names neither an owner nor an actor for ${r.workflows.length === 1 ? "this workflow" : "these workflows"}.<span class="m-assumed-q">Who runs it? Confirm in Listen.</span></div>`;
+    const unowned = r.role ? "" : `<div class="m-assumed"><span class="m-assumed-k">Unattributed</span> the atlas names neither an owner nor an actor for ${r.workflows.length === 1 ? "this workflow" : "these workflows"}.<span class="m-assumed-q">Who runs it? To confirm with the team.</span></div>`;
     return `<section class="m-screen" data-screen="work-${r.slug}" hidden>
       <header class="m-page-h"><div><div class="m-eyebrow">Workbench</div><h1 class="m-title">${esc(title)}</h1>
-      <p class="m-sub">${r.workflows.length} workflow${r.workflows.length === 1 ? "" : "s"} in the current-state atlas${r.systems.length ? ` · ${esc(r.systems.join(", "))}` : ""}</p>
+      <p class="m-sub">${r.workflows.length} workflow${r.workflows.length === 1 ? "" : "s"} mapped today${r.systems.length ? ` · ${esc(r.systems.join(", "))}` : ""}</p>
       ${works}</div></header>
       ${unowned}${queues}${alsoQueued}${notHere}${notModelled}${flows}</section>`;
   };
@@ -1827,7 +1836,7 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
     // is true of the rows under it: all of them.
     const bands = widgetBands(`list-${s}`);
     return `<section class="m-screen" data-screen="list-${s}" hidden>
-      <header class="m-page-h"><div><div class="m-eyebrow">${esc(name)}</div><h1 class="m-title">${esc(name)}</h1><p class="m-sub">${rows.length} record${rows.length === 1 ? "" : "s"} · synthetic seed data</p></div>
+      <header class="m-page-h"><div><div class="m-eyebrow">${esc(name)}</div><h1 class="m-title">${esc(name)}</h1><p class="m-sub">${rows.length} record${rows.length === 1 ? "" : "s"} · sample data</p></div>
       <div class="m-toolbar">${toggle}<input class="m-input m-search" type="search" data-search="${s}" aria-label="Filter ${esc(name)}" placeholder="Filter ${esc(name)}" oninput="setFilter('${s}',this.value)" /><button class="m-btn m-btn--primary" onclick="go('#${s}/new')">New ${esc(name)}</button></div></header>
       ${bands}${bands ? `<div class="m-section-h">All ${esc(name)}</div>` : ""}${slot(`screen:${s}:list`)}</section>`;
   };
@@ -2072,9 +2081,9 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
           : role === "boolean" ? `<label class="m-checkbox"><input type="checkbox" data-f="${esc(a)}" /> ${label}</label>`
             : `<input class="m-input" data-f="${esc(a)}" placeholder="${label}" />`;
       const gap = isRef && !picker
-        ? `<div class="m-help">Reads as a reference, but the ontology names no entity for it — so this stays free text. Which record should it point at? Confirm in Listen.</div>`
+        ? `<div class="m-help">Reads as a reference, but the ontology names no entity for it — so this stays free text. Which record should it point at? To confirm with the team.</div>`
         : picker && fkOwner.has(picker) && !owns
-          ? `<div class="m-help">The model holds one link from ${esc(name)} to ${esc(picker)}, and ${esc(humanizeField(fkOwner.get(picker)))} writes it — so this field stores the name only. Are these two different links? Confirm in Listen.</div>`
+          ? `<div class="m-help">The model holds one link from ${esc(name)} to ${esc(picker)}, and ${esc(humanizeField(fkOwner.get(picker)))} writes it — so this field stores the name only. Are these two different links? To confirm with the team.</div>`
           : "";
       return region(`field:${s}:${slug(a)}`, `<div class="m-field"><label class="m-label">${label}${req}</label>${input}${gap}</div>`);
     }).join("");
@@ -2235,10 +2244,11 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
   // and unable to close its own element.
   const island = JSON.stringify(model).replace(/</g, "\\u003c");
 
+  const appName = String(options.appName ?? "").trim() || "Prototype";
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Prototype — assembled from ontology + atlas</title><style>${meridianStylesheet(options.theme)}
+<title>${esc(appName)}</title><style>${meridianStylesheet(options.theme)}
 .m-screen[hidden]{display:none}.m-screen{display:block}</style></head><body>
-<div class="m-app"><aside class="m-side"><div class="m-brand"><span class="m-brand-dot"></span>Assembled</div><nav class="m-nav" aria-label="Records">${nav}</nav>${auxNav}</aside>
+<div class="m-app"><aside class="m-side"><div class="m-brand"><span class="m-brand-dot"></span>${esc(appName)}</div><nav class="m-nav" aria-label="Records">${nav}</nav>${auxNav}</aside>
 <main class="m-main">${screens}
 ${workbenches}
 ${approvals}</main></div>

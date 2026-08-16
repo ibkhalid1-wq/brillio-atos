@@ -371,7 +371,7 @@ describe("a field that references a record offers the records", () => {
     const field = a.doc.querySelector('[data-fabric-id="field:note:parent"]')!;
     expect(field, "the fixture lost its untargeted reference").toBeTruthy();
     expect(field.querySelector("select"), "invented a target the ontology never named").toBeNull();
-    expect(field.querySelector(".m-help")?.textContent ?? "", "the gap is silent").toMatch(/Listen/i);
+    expect(field.querySelector(".m-help")?.textContent ?? "", "the gap is silent").toMatch(/to confirm with the team/i);
   });
 
   it("a status field offers the values the data holds, not a vocabulary from the template", () => {

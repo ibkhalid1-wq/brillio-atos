@@ -79,6 +79,10 @@ export default function PrototypeStudio({ doc, onChange, program, onRefineProtot
         // read from the same document through the same one definition.
         screenOptions: screenOptionsFor(design),
         blueprint: readArtifactDoc(program, "agenticBlueprint"),
+        // The chrome carries the programme's own name — same as the edge's
+        // baseline and the stakeholder's link, so all three surfaces brand
+        // one application identically.
+        appName: program?.name,
       }).html;
     } catch { return null; }
   }, [program]);

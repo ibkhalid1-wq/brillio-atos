@@ -428,7 +428,7 @@ export function prototypeBaselineFor(
    *  and the stakeholder's link assemble with: this baseline is what a refine is
    *  checked against, and a baseline missing an input the studio had would
    *  reject the operator's own build for structure it never lost. */
-  inputs: { vocabulary?: unknown; blueprint?: unknown; screenSpec?: unknown } = {},
+  inputs: { vocabulary?: unknown; blueprint?: unknown; screenSpec?: unknown; appName?: unknown } = {},
 ): PrototypeBaseline | null {
   if (!isRecord(ontology) || !isRecord(atlas)) return null;
   try {
@@ -439,6 +439,7 @@ export function prototypeBaselineFor(
      *  build its spec is drawn into are two different applications. */
     const assemble = (spec: unknown = carried) => assemblePrototype(ontology, atlas, parents, {
       vocabulary: inputs.vocabulary,
+      appName: typeof inputs.appName === "string" ? inputs.appName : undefined,
       theme: paletteFor(experienceDesign),
       // What each screen leads with is authored on the SAME document as the
       // menu. A baseline assembled without it is a different application from
@@ -576,6 +577,9 @@ export function prototypeBaselineOfProgram(inner: Record<string, unknown>): Prot
     // judgement the model already made and the operator already saw would
     // otherwise be discarded on the next one.
     screenSpec: priorBuild?.screenSpec,
+    // What the application calls itself: the programme's own name, so the
+    // chrome reads as the client's product rather than as the pipeline's.
+    appName: isRecord(inner.projectMeta) ? inner.projectMeta.name : undefined,
   });
   if (!baseline) return null;
   // The skeleton is re-derived every run; the SKIN the operator already approved
