@@ -269,8 +269,10 @@ describe("the gate passes the assembled build", () => {
    * legitimate operator decision — and it is still an absence, so it has to be
    * DECLARED rather than left for a stakeholder to notice. The gate reports it
    * as a silent drop until something declares it, and as a warning once
-   * something does. (The assembled path has no `gaps` channel today; the
-   * caller supplies the declaration.)
+   * something does. The assembly now MAKES that declaration itself
+   * (`coverageGaps`, guarded in `prototypeOntologyCoverage.test.ts`); this
+   * pins the gate's half of the bargain — that a declaration, whoever writes
+   * it, is what moves the verdict.
    */
   it("an absence stays an error until the build declares it — on the assembled path too", () => {
     const names = entitiesOf(ontology);
