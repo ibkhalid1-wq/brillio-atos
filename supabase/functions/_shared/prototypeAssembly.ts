@@ -74,6 +74,23 @@ export interface AssembledPrototype {
   specViolations: string[];
   /** How many widgets the spec actually put on the page. */
   specAccepted: number;
+  /**
+   * EVERY ONTOLOGY ENTITY THIS BUILD RENDERS NO SCREEN FOR, named and reasoned.
+   *
+   * The menu is the operator's, and the drill-through closure below builds a
+   * detail for anything a menu entity relates to — so what is left is an entity
+   * the ontology holds, the navigation does not offer, and no relation reaches:
+   * absent from the application entirely. That is a legitimate curation
+   * outcome and it is still an ABSENCE, and on a reviewed CRM build it was a
+   * silent one — the entities were gone from the app while nothing in `gaps`,
+   * `warnings` or `assumptions` said a word.
+   *
+   * So the assembly states it here, in the artifact's own words, and the caller
+   * writes it into `gaps` (`resolvePrototypeDoc`). The render-QA gate reads the
+   * same list: an undeclared absence is an ERROR there, a declared one a
+   * warning. Empty when the build covers the whole ontology.
+   */
+  coverageGaps: string[];
 }
 
 /**
@@ -2065,6 +2082,24 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
   }
   const screens = screensHtml;
 
+  // WHAT THE ONTOLOGY HOLDS AND THIS BUILD DOES NOT SHOW — said out loud.
+  //
+  // `builtDetail` is the closure's own answer to "which entities can be
+  // opened", so the complement of it against the ontology's entity list is
+  // exactly the set with no screen of any kind: not in the navigation, and not
+  // reached from anything that is. Their rows are not in the data island either
+  // (it is keyed by `referenced`), so nothing about them is in the application.
+  //
+  // Derived from the build rather than from the operator's input, because the
+  // question is what the DOCUMENT covers: an entity the operator left out of
+  // the menu but a chosen entity relates to is rendered, and must not be
+  // declared missing. Order is ontology order, so the same ontology and the
+  // same menu produce the same declaration.
+  const coverageGaps = names.filter((n) => !builtDetail.has(n)).map((n) =>
+    `${n} has no screen in this prototype: it is not in the navigation and no relation reaches it from an entity that is, `
+    + `so none of its records appear anywhere in the application. `
+    + `Add it in Experience Design if it belongs in the product, or say why the ontology holds a record type the product does not.`);
+
   const workbenches = roleWorkbenches.map(workbenchScreen).join("\n");
   const firstList = `list-${es.get(lead)}`;
 
@@ -2120,5 +2155,5 @@ if(!document.querySelector('.m-screen:not([hidden])'))show('${firstList}')</scri
   // What was ACCEPTED is what is on the page, counted off the bands themselves —
   // not what validation let through, which a missing column can still stop.
   const specAccepted = widgetGroups.reduce((n, g) => n + g.items.length, 0);
-  return { html, fabric, regionCount, specSchema, specViolations, specAccepted };
+  return { html, fabric, regionCount, specSchema, specViolations, specAccepted, coverageGaps };
 }

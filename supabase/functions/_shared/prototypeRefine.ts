@@ -83,6 +83,18 @@ export interface PrototypeBaseline {
   specAccepted: number;
   specViolations: string[];
   /**
+   * WHAT THE ONTOLOGY HOLDS THAT THIS BUILD RENDERS NO SCREEN FOR — the
+   * assembly's own declaration (`AssembledPrototype.coverageGaps`), carried
+   * here so `resolvePrototypeDoc` can write it into the artifact's `gaps` on
+   * every run. Curation is the operator's call; leaving the result of it
+   * unstated is not, and it was unstated: entities vanished from the app while
+   * `gaps` said nothing.
+   *
+   * A property of the ontology and the menu, so a screen spec cannot change it
+   * — it is read off the baseline, never re-derived per refine.
+   */
+  coverageGaps: string[];
+  /**
    * RE-ASSEMBLE THIS BUILD WITH A SCREEN SPEC APPLIED. The closure is how the
    * ontology reaches the result handler without the handler having to hold it:
    * `resolvePrototypeDoc` is handed a baseline, and a spec can only be drawn by
@@ -275,7 +287,7 @@ export function prototypeBaselineFor(
       blueprint: inputs.blueprint,
       ...(spec == null ? {} : { spec }),
     });
-    const { html, fabric, regionCount, specSchema, specAccepted, specViolations } = assemble();
+    const { html, fabric, regionCount, specSchema, specAccepted, specViolations, coverageGaps } = assemble();
     if (!regionCount) return null;
     // THE SAME SEED THE PAGE WAS DRAWN FROM. This called `generateSeed` without
     // the vocabulary while the assembly above was passed it — so on any
@@ -314,6 +326,7 @@ export function prototypeBaselineFor(
       screenSpec: carried,
       specAccepted,
       specViolations,
+      coverageGaps,
       applySpec(spec: unknown) {
         try {
           const out = assemble(spec);
@@ -527,8 +540,19 @@ export function resolvePrototypeDoc(
   // THE SPEC IS DRAWN BEFORE ANYTHING ELSE IS JUDGED, because everything after
   // it is measured against the build the operator will actually get.
   const { baseline: effective, notes: specNotes, widgets, spec } = applyScreenSpec(doc.screenSpec, baseline);
+  /**
+   * WHAT THE BUILD DOES NOT COVER, ON EVERY RUN AND ON EVERY BRANCH.
+   *
+   * Stated here rather than inside one branch because it is a property of the
+   * ontology and the menu, not of what the model returned: a refined document,
+   * a restyle and a rejected answer all ship the same set of screens, so they
+   * all omit the same entities. Declared every run for the reason
+   * `specViolations` is — an absence that was stated once and then went quiet
+   * reads exactly like an absence nobody found.
+   */
+  const coverage = (baseline.coverageGaps ?? []).filter((g) => !gaps.includes(g));
   const stamp = (html: string, source: PrototypeResolution["source"], verdict: RefineVerdict | null, notes: string[]) => {
-    const out: Record<string, unknown> = { ...doc, html, gaps: [...gaps, ...specNotes, ...notes] };
+    const out: Record<string, unknown> = { ...doc, html, gaps: [...gaps, ...coverage, ...specNotes, ...notes] };
     delete out.styleCss;
     // THE SPEC THAT PRODUCED THIS BUILD IS STORED WITH IT, so the next round
     // re-assembles the same application rather than one the model's judgement
