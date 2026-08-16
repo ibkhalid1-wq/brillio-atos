@@ -249,9 +249,19 @@ export function generateSeed(ontology: Record<string, unknown>, version: string,
   const { edges, order } = graph;
   const assumptions: SeedAssumption[] = [];
   for (const e of edges) {
-    const { parent, child, cardinality: card, relation: verb } = e;
+    const { parent, child, cardinality: card, relation: verb, ground } = e;
+    // WHAT THE SHAPE RESTS ON. An edge whose cardinality nobody declared is now
+    // drawn from a standard prior or an inferred foreign key, and an assumption
+    // that does not say which is one an operator cannot weigh: "assumed 1:N" and
+    // "assumed 1:N because the standard says so" are different claims. `ground`
+    // is `declared` only when the ontology itself said it.
+    const restsOn = ground === "declared" || ground === "confirmed"
+      ? `declared ${card}`
+      : ground === "unknown"
+        ? `cardinality unconfirmed — drawn as a provisional list`
+        : `${card} taken from ${ground === "standard" ? "the industry standard" : "a foreign key the attributes carry"}, not yet confirmed`;
     // optionality is absent on every relation — assume child-optional/parent-optional
-    assumptions.push({ kind: "optionality", subject: `${parent} → ${child} [${card}]`, pair: [parent, child], assumed: "child-optional, parent-optional (default)", listenQuestion: `Must every ${child} have a ${parent}? Can a ${parent} have zero ${child}?` });
+    assumptions.push({ kind: "optionality", subject: `${parent} → ${child} [${card}]`, pair: [parent, child], assumed: `${restsOn}; child-optional, parent-optional (default)`, listenQuestion: `Must every ${child} have a ${parent}? Can a ${parent} have zero ${child}?` });
     if (card.endsWith(":N")) assumptions.push({ kind: "fan-out", subject: `${parent} → ${child}`, pair: [parent, child], assumed: `0–${maxFanOut} per ${parent}`, listenQuestion: `Realistic count of ${child} per ${parent}?` });
     if (verb && verb.toLowerCase() === "produces") assumptions.push({ kind: "relation-verb", subject: `${parent} → ${child}`, pair: [parent, child], assumed: 'generic verb "produces" treated as parent→child FK', listenQuestion: `Is ${parent}→${child} a composition, a reference, or a lifecycle transition?` });
   }

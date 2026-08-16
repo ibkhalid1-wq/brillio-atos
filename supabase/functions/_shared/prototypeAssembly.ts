@@ -155,13 +155,28 @@ interface ListSpec extends ColumnSpec {
   status: number;
 }
 interface SummarySpec extends ColumnSpec { region: string; row: number }
-interface NavSpec { region: string; entity: string; slug: string; fk: number }
+interface NavSpec {
+  region: string; entity: string; slug: string; fk: number;
+  /** The parent's DETAIL exists (the closure guarantees it for anything
+   *  reachable), so the card may navigate to the named record. */
+  linked: boolean;
+  /** The parent also has a LIST — only true for menu entities. Without it the
+   *  "browse all" fallback has nowhere to go, so it is not offered. */
+  listed: boolean;
+}
 interface KidSpec extends ColumnSpec {
   region: string; entity: string; slug: string;
   /** A many-to-many is a SET: chips, resolved through its membership table
    *  (`junction`). A collection is a list of owned rows, resolved through the
    *  child's foreign-key column (`fk`, -1 when the relation declares none). */
   multi: boolean; fk: number; junction: string;
+  /** The ontology has not confirmed this relation's cardinality, so the section
+   *  renders as a list AND says so. See `relationshipRolesFor`. */
+  provisional?: boolean;
+  /** Does this entity have a LIST screen? A reachable-only entity has just a
+   *  detail, so "View all N" would navigate nowhere. Drilling into one record
+   *  still works — that is the whole point of the closure. */
+  listed?: boolean;
   emptyTitle: string; cite: EmptyCite | null;
 }
 interface ScreenSpec {
@@ -499,10 +514,13 @@ function mCell(R,ri,v){
     // many-to-many reaches here by construction (neither side owns a key), so
     // this is not an edge case.
     if(pri<0){
+      if(!nv.listed){fill(nv.region,'<div class="m-linkcard is-flat">'+k
+        +'<span class="m-linkcard-v">— none named</span></div>');return}
       fill(nv.region,'<button class="m-linkcard" onclick="go('+Q+"#"+nv.slug+Q+')">'+k
         +'<span class="m-linkcard-v">— none named; browse '+mEsc(nv.entity)+'</span><span class="m-linkcard-go">→</span></button>');
       return;
     }
+
     fill(nv.region,'<button class="m-linkcard" onclick="'+act(href(nv.slug,at(pt,pri,0)))+'">'+k
       +'<span class="m-linkcard-v">'+mEsc(nameOf(pt,pri))+'</span><span class="m-linkcard-go">→</span></button>');
   }
@@ -517,7 +535,9 @@ function mCell(R,ri,v){
       for(r=0;r<ix.length;r++)if(String(at(t,ix[r],kd.fk))===recId)all.push(ix[r]);
     }
     var shown=all.slice(0,5),inner;
-    var head='<div class="m-card-h"><div class="m-card-t">'+mEsc(kd.entity)+'</div><span class="m-badge">'+all.length+"</span></div>";
+    var head='<div class="m-card-h"><div class="m-card-t">'+mEsc(kd.entity)+"</div>"
+      +(kd.provisional?'<span class="m-prov" title="Cardinality not yet confirmed — this shape is provisional">provisional</span>':"")
+      +'<span class="m-badge">'+all.length+"</span></div>";
     if(kd.multi){
       if(shown.length){
         var chips="";
@@ -528,7 +548,7 @@ function mCell(R,ri,v){
     }else if(shown.length){
       var body="";for(i=0;i<shown.length;i++)body+="<tr>"+cells(t,kd,shown[i],kd.slug,false)+"</tr>";
       inner='<div class="m-table-wrap"><table class="m-table"><thead><tr>'+heads(kd,"")+"</tr></thead><tbody>"+body+"</tbody></table></div>"
-        +(all.length>shown.length
+        +(all.length>shown.length&&kd.listed
           ?'<div class="m-card-f"><button class="m-btn m-btn--secondary m-btn--sm" onclick="go('+Q+"#"+kd.slug+Q+')">View all '+all.length+" "+mEsc(kd.entity)+" →</button></div>"
           :"");
     }else inner=empty(kd.emptyTitle,kd.cite);
@@ -1623,7 +1643,14 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
       return fillSlot(region);
     }).join("");
     workSpecs.push(spec);
-    const chip = (label: string, entity?: string) => entity
+    // THE THIRD EMITTER of a bare list address. An agent band names the records
+    // it reads and writes, and each name was a control pointing at `#<entity>`
+    // — the LIST. A reachable-only entity has only a detail (it is not in the
+    // menu), so on a curated build these were 24 controls that changed the URL
+    // and landed the viewer somewhere else. The flat variant already existed for
+    // a chip with no entity behind it; an entity with no list screen is the same
+    // case — the fact is worth stating, the navigation is not there to offer.
+    const chip = (label: string, entity?: string) => entity && ordered.includes(entity)
       ? `<button class="m-chip" onclick="go('#${es.get(entity)}')">${esc(label)}</button>`
       : `<span class="m-chip m-chip--flat">${esc(label)}</span>`;
     const rest = queued.slice(QUEUES_MAX);
@@ -1796,9 +1823,17 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
         junction: multi ? (n.junctionKey ?? "") : "",
         ...columnSpec(childName, leadColumnsFor(childName, SCREEN_BUDGET.relatedColumns, n.joinKey)),
         emptyTitle: multi ? `No ${childName} linked` : `No ${childName} yet`,
+        // AN UNCONFIRMED SHAPE SAYS SO ON THE PAGE. `undetermined` is what a
+        // relation carries before an interview settles its cardinality, which
+        // on a provisional draft is every relation the generator wrote. The
+        // section still renders as a list — the screen has to be usable — and
+        // the badge is the difference between a prototype that ASKS and one
+        // that quietly answers for the client.
+        provisional: n.role === "undetermined",
         // A record with no links is a real zero now that membership is
         // generated — but the fan-out behind it is still assumed, so the empty
         // state cites the assumption rather than presenting a guess as a finding.
+        listed: ordered.includes(childName),
         cite: citeOf(assumptionFor(name, childName)),
       });
       return slot(n.id);
@@ -1847,7 +1882,15 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
       const ps = es.get(parentName);
       if (ps) {
         referenced.add(parentName);
-        navs.push({ region: nd.id, entity: parentName, slug: ps, fk: nd.joinKey ? columnIndex(name, nd.joinKey) : -1 });
+        // A LINK IS A PROMISE THAT THE DESTINATION EXISTS. Screens are built for
+        // the CURATED entities only, while `es` slugs every entity in the
+        // ontology — so on an operator's curated build this pushed a link card
+        // for every parent, most of which had no screen, and the router quietly
+        // fell back to the home list while the URL claimed otherwise. Measured
+        // on a reviewed CRM build: 166 such cards. The relation is still worth
+        // showing; the navigation is not, so an unbuilt parent renders as text.
+        navs.push({ region: nd.id, entity: parentName, slug: ps, fk: nd.joinKey ? columnIndex(name, nd.joinKey) : -1,
+          listed: ordered.includes(parentName), linked: true /* the closure below builds a detail screen for every reachable parent */ });
       }
       return slot(nd.id);
     }).join("");
@@ -1871,7 +1914,14 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
     // named, because a detail page headed with somebody else's name is the
     // "Open on row 12 shows row 1" defect wearing a different hat.
     return `<section class="m-screen" data-screen="detail-${s}" hidden>
-      <div class="m-crumbs"><a href="#${s}">${esc(name)}</a> / <span data-crumb="${s}">${esc(headline)}</span></div>
+      <div class="m-crumbs">${listed.has(name)
+        // THE BREADCRUMB IS A CONTROL TOO — the third emitter, and the one that
+        // scaled with the closure: every reachable-only detail screen carries
+        // one, so it produced a dead link per drilled-into entity (24 on a
+        // reviewed CRM build). An entity absent from the menu has no list to go
+        // "up" to, so the crumb names its type without offering the journey.
+        ? `<a href="#${s}">${esc(name)}</a>`
+        : `<span class="m-crumb-flat">${esc(name)}</span>`} / <span data-crumb="${s}">${esc(headline)}</span></div>
       <header class="m-page-h"><div><div class="m-eyebrow">${esc(name)}</div><h1 class="m-title" data-headline="${s}">${esc(headline)}</h1></div>
       <div style="display:flex;gap:10px"><button class="m-btn m-btn--secondary" onclick="editRec('${s}')">Edit</button><button class="m-btn m-btn--danger" onclick="delRec('${s}')">Delete</button></div></header>
       ${slot(`region:${s}:summary`)}
@@ -1982,7 +2032,39 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
   // it: an agent's gate on a record's own page is only offered a queue where a
   // queue exists, and that is decided here.
   const approvals = approvalsScreen();
-  const screens = ordered.map((n) => listScreen(n) + detailScreen(n) + formScreen(n)).join("\n");
+  // DRILL-THROUGH: THE MENU DECIDES WHAT IS LISTED, NOT WHAT CAN BE OPENED.
+  //
+  // Screens were built for the curated menu alone, so every related record shown
+  // on a detail page was a dead end — the control changed the URL and the router
+  // fell back to the home list. "What belongs in the navigation" and "what can a
+  // person open" are different questions, and only the first is the operator's.
+  //
+  // So the build closes over reachability, and an entity that arrives only by
+  // being referenced gets its DETAIL screen and nothing else. That is what a
+  // drill-through needs: somewhere to land. It deliberately does not get a list
+  // (it is not in the menu, so nothing should offer to browse all of them) or a
+  // form (nothing offers to create one). Building all three for the closure was
+  // measured on the 33-entity snapshot at 95 screens and 439,745 bytes against
+  // 13 and 247,110 — curation stopped reducing the build at all. Detail-only
+  // keeps the drill-through and most of the saving.
+  //
+  // `listScreen`/`detailScreen` are what populate `referenced`, so the closure
+  // must run them as it discovers rather than over a set computed up front.
+  const listed = new Set(ordered);
+  const builtDetail = new Set<string>();
+  let frontier: string[] = [...ordered];
+  let screensHtml = "";
+  while (frontier.length) {
+    for (const n of frontier) {
+      if (builtDetail.has(n) || !names.includes(n)) continue;
+      builtDetail.add(n);
+      screensHtml += (listed.has(n) ? listScreen(n) : "") + detailScreen(n)
+        + (listed.has(n) ? formScreen(n) : "") + "\n";
+    }
+    frontier = [...new Set([...referenced])].filter((r) => !builtDetail.has(r) && names.includes(r));
+  }
+  const screens = screensHtml;
+
   const workbenches = roleWorkbenches.map(workbenchScreen).join("\n");
   const firstList = `list-${es.get(lead)}`;
 

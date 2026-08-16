@@ -18,7 +18,11 @@ export type ValueRole =
   | "monetary" | "date" | "quantity" | "percent" | "code" | "category" | "free-text" | "boolean"
   | "status" | "health" | "priority"
   | "parent-ref" | "person-ref" | "cross-ref";
-export type RelationshipRole = "collection" | "parent-ref" | "multi-select";
+/** `undetermined` is a SHAPE PLUS A CONFESSION: it renders like a collection so
+ *  the screen is still usable, and it is a distinct value so every surface can
+ *  tell "many of these hang off it" from "nobody has said yet". */
+export type RelationshipRole = "collection" | "parent-ref" | "multi-select" | "undetermined";
+
 export type RoleMethod = "derived" | "heuristic";
 
 export interface AttributeRole {
@@ -158,11 +162,20 @@ function roleForAttribute(
  */
 export function relationshipRolesFor(cardinality: string): { parentRole: RelationshipRole; childRole: "parent-ref" | "cross-ref" } {
   const c = cardinality.replace(/\s/g, "").toUpperCase();
-  let parentRole: RelationshipRole = "collection";
+  let parentRole: RelationshipRole = "undetermined";
   if (c === "N:M" || c === "M:N" || c === "*:*") parentRole = "multi-select";
-  else if (c === "N:1") parentRole = "parent-ref";
-  else if (c === "1:1") parentRole = "parent-ref";
-  else parentRole = "collection"; // 1:N and unknown default to a child collection on the parent
+  else if (c === "N:1" || c === "1:1") parentRole = "parent-ref";
+  else if (c === "1:N") parentRole = "collection";
+  // UNKNOWN IS NOT ONE-TO-MANY. It used to fall through to `collection`, which
+  // made the prototype assert a cardinality nobody had confirmed — and the
+  // ontology generator writes "unknown" on EVERY relation of a provisional
+  // draft on purpose ("cardinality is precisely what interviews confirm; never
+  // guess 1:N"). So on a programme before its interviews, every relation was
+  // silently drawn as a child table. `undetermined` keeps the shape a list can
+  // take while letting the surface SAY it is unconfirmed, which is the whole
+  // point of asking. See rolesForRelation for how a standard prior or an
+  // attribute-level FK can raise it to a real role with its grounds recorded.
+  else parentRole = "undetermined";
   return { parentRole, childRole: parentRole === "multi-select" ? "cross-ref" : "parent-ref" };
 }
 

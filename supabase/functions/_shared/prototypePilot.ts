@@ -25,7 +25,7 @@
  * test suite: the entrypoint imports remote modules and reads `Deno.env` at load,
  * which vitest cannot execute. This module is pure.
  */
-import { assemblePrototype, paletteFor, screenOptionsFor } from "./prototypeAssembly.ts";
+import { assemblePrototype, paletteFor, parentEntitiesFor, screenOptionsFor } from "./prototypeAssembly.ts";
 
 export interface PilotSlice {
   /** The assembled prototype, self-contained. Absent when it can't be derived. */
@@ -59,7 +59,14 @@ export function pilotSliceFor(inner: Record<string, unknown>): PilotSlice {
     // The palette is an INPUT of the same standing: the stakeholder's link must
     // wear the client's brand for the same reason the operator's studio does —
     // one `assemblePrototype`, one reading of the record, one artefact.
-    const { html, regionCount } = assemblePrototype(ontology!, atlas!, undefined, {
+    // THE MENU IS AN INPUT OF THE SAME STANDING, and this passed `undefined`.
+    // The operator chooses in Experience Design which entities get a screen;
+    // the studio reads that choice, and the stakeholder's link did not — so the
+    // two surfaces assembled DIFFERENT APPLICATIONS from one record, and the
+    // person being asked to validate the prototype was validating a menu nobody
+    // had authored. Everything else on this call was already threaded for
+    // exactly this reason; the menu was the one that got missed.
+    const { html, regionCount } = assemblePrototype(ontology!, atlas!, parentEntitiesFor(inner.experienceDesign), {
       vocabulary: inner.prototypeValueVocabulary,
       theme: paletteFor(inner.experienceDesign),
       // The per-entity screen options are an INPUT of the same standing, off the
@@ -67,6 +74,10 @@ export function pilotSliceFor(inner: Record<string, unknown>): PilotSlice {
       // stakeholder validating the prototype must be validating the one that was
       // decided — not a second application that heads its tables differently.
       screenOptions: screenOptionsFor(inner.experienceDesign),
+      // …and the agent bands. Without the blueprint the stakeholder sees the
+      // records but not the agents acting on them — the part of the pitch the
+      // whole programme is about, absent from the only surface a client opens.
+      blueprint: inner.agenticBlueprint,
     });
     // regionCount 0 means the ontology carries no entities: an empty shell, not a
     // prototype. Say so rather than sending a blank app that just reads as broken.

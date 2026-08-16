@@ -29,9 +29,22 @@
  * the seed assumptions quote back); `parentToChild` is the same fact read in
  * the normalised direction, which is what a renderer needs.
  */
-export interface GraphEdge { parent: string; child: string; cardinality: string; parentToChild: string; relation: string }
+/**
+ * WHERE A CARDINALITY CAME FROM. `declared` is the ontology's own word and
+ * `confirmed` an interview's; `standard` is a vocabulary prior (FIBO, FHIR,
+ * GS1, schema.org); `inferred` is a foreign key the attributes actually carry;
+ * `unknown` is nobody's yet.
+ *
+ * Only `declared` and `confirmed` are ANSWERS. The rest are grounds — good
+ * enough to choose the shape a screen takes, never good enough to stop asking.
+ * This lives here rather than beside `RelationshipRole` because `semanticRoles`
+ * imports THIS module; the dependency only runs one way.
+ */
+export type CardinalityGround = "declared" | "confirmed" | "standard" | "inferred" | "unknown";
+
+export interface GraphEdge { parent: string; child: string; cardinality: string; parentToChild: string; relation: string; ground: CardinalityGround }
 /** A many-to-many, which owns no FK in either direction. */
-export interface GraphJunction { from: string; to: string; cardinality: string }
+export interface GraphJunction { from: string; to: string; cardinality: string; ground: CardinalityGround }
 /**
  * An attribute whose NAME is an entity in this ontology — i.e. a reference the
  * ontology itself tells us about, without any hardcoded word list.
@@ -204,6 +217,44 @@ export function deriveAttributeReferences(ontology: Record<string, unknown>): At
   return out;
 }
 
+/**
+ * RAISE AN UNKNOWN ON EVIDENCE, NEVER ON A GUESS.
+ *
+ * The ontology generator writes `cardinality: "unknown"` on every relation of a
+ * provisional draft ON PURPOSE — "cardinality is precisely what interviews
+ * confirm; never guess 1:N". Downstream, unknown then fell through to a 1:N
+ * child collection, so a prototype built before any interview asserted a shape
+ * nobody had confirmed, on every relation it drew.
+ *
+ * Two things can settle it without inventing anything, and they differ in
+ * strength:
+ *   inferred — the attributes THEMSELVES carry the key. `Opportunity` holding
+ *     an `accountId` while `Account` holds no reciprocal is a 1:N with grounds
+ *     in the document, not a guess about the business.
+ *   standard — the industry vocabulary states it. Defensible, and still
+ *     somebody else's claim about somebody else's client.
+ *
+ * Neither is promoted to `declared`, and neither closes the Listen question:
+ * evidence changes the SHAPE the prototype draws, not the status of the ask.
+ */
+export function groundedCardinality(
+  from: string, to: string, cardinality: string,
+  holdsKeyTo?: (entity: string, target: string) => boolean,
+  standardPrior?: string,
+): { cardinality: string; ground: CardinalityGround } {
+  const c = String(cardinality ?? "").replace(/\s/g, "").toUpperCase();
+  if (c && c !== "UNKNOWN") return { cardinality: c, ground: "declared" };
+  const childHolds = holdsKeyTo?.(to, from) ?? false;
+  const parentHolds = holdsKeyTo?.(from, to) ?? false;
+  // Exactly one side holding the other's key is the evidence; both or neither
+  // says nothing, and a coin-flip is the thing this function exists to refuse.
+  if (childHolds && !parentHolds) return { cardinality: "1:N", ground: "inferred" };
+  if (parentHolds && !childHolds) return { cardinality: "N:1", ground: "inferred" };
+  const s = String(standardPrior ?? "").replace(/\s/g, "").toUpperCase();
+  if (s && s !== "UNKNOWN") return { cardinality: s, ground: "standard" };
+  return { cardinality: "UNKNOWN", ground: "unknown" };
+}
+
 export function deriveOntologyGraph(ontology: Record<string, unknown>): OntologyGraph {
   const entities = entitiesOf(ontology);
   const names = entities.map(nameOf).filter(Boolean);
@@ -212,16 +263,34 @@ export function deriveOntologyGraph(ontology: Record<string, unknown>): Ontology
   // ── edges: cardinality decides which side owns the FK ──
   const edges: GraphEdge[] = [];
   const junctions: GraphJunction[] = [];
+  // AN UNKNOWN CARDINALITY IS GROUNDED BEFORE IT IS USED, and the grounds
+  // travel with the edge. The generator writes "unknown" on every relation of a
+  // provisional draft deliberately, so without this every such relation took
+  // the `1:N` branch by default and the prototype asserted a shape nobody had
+  // confirmed. `groundedCardinality` raises it only on evidence the document
+  // itself carries (an FK in the attributes) or a named standard prior; failing
+  // both it stays UNKNOWN and the role becomes `undetermined`, which renders as
+  // a list that says it is unconfirmed.
+  const refs = deriveAttributeReferences(ontology);
+  const holdsKeyTo = (entity: string, target: string) =>
+    refs.some((x) => x.entity === entity && x.target === target);
   for (const r of relationsOf(ontology)) {
     const from = String(r.from ?? ""), to = String(r.to ?? "");
-    const cardinality = String(r.cardinality ?? "").toUpperCase().replace(/\s/g, "");
+    const declared = String(r.cardinality ?? "").toUpperCase().replace(/\s/g, "");
     const relation = String(r.relation ?? "");
     if (!index.has(from) || !index.has(to)) continue;
-    if (cardinality === "N:M" || cardinality === "M:N" || cardinality === "*:*") { junctions.push({ from, to, cardinality }); continue; }
+    const g = groundedCardinality(from, to, declared, holdsKeyTo, String(r.standardPrior ?? ""));
+    const cardinality = g.cardinality;
+    const ground = g.ground;
+    if (cardinality === "N:M" || cardinality === "M:N" || cardinality === "*:*") { junctions.push({ from, to, cardinality, ground }); continue; }
     const flipped = cardinality === "N:1";
     const parent = flipped ? to : from;
     const child = flipped ? from : to;
-    edges.push({ parent, child, cardinality, parentToChild: flipped ? "1:N" : cardinality, relation });
+    // An ungrounded relation still hangs its child off its parent — the screen
+    // has to be drawable — but `parentToChild` stays UNKNOWN so the role is
+    // `undetermined` rather than a silent 1:N.
+    const parentToChild = cardinality === "UNKNOWN" ? "UNKNOWN" : (flipped ? "1:N" : cardinality);
+    edges.push({ parent, child, cardinality, parentToChild, relation, ground });
   }
 
   // ── parents / children, deduped, self-edges excluded (nothing is its own home) ──
