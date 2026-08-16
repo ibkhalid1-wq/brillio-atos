@@ -8544,7 +8544,10 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 .v3fs-pq-q {display:flex;flex-direction:column;gap:7px;padding:10px 0 0;border-top:1px solid color-mix(in srgb,var(--fs-line) 70%,transparent)}
 .v3fs-pq-q.done {border-top-color:color-mix(in srgb,var(--v3-green) 45%,var(--fs-line))}
 .v3fs-pq-q.deferred {opacity:.85}
-.v3fs-pq-type {font-size:10.5px;font-weight:750;letter-spacing:.05em;text-transform:uppercase;color:var(--v3-accent-2)}
+/* The type tag is a quiet label, not a shout. It was uppercased, so
+   "Automate this?" reached a client as "AUTOMATE THIS?" — the only raised
+   voice on a page that is otherwise asking politely. */
+.v3fs-pq-type {font-size:11px;font-weight:700;letter-spacing:.01em;color:var(--v3-accent-2)}
 .v3fs-pq-t {font-size:13.5px;color:var(--v3-text-secondary);line-height:1.55}
 .v3fs-pq-chips {display:flex;flex-wrap:wrap;gap:8px}
 .v3fs-pq-chip {font:inherit;font-size:12.5px;font-weight:600;padding:7px 13px;border-radius:999px;cursor:pointer;

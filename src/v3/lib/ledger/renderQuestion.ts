@@ -47,12 +47,26 @@ export interface RenderedQuestion {
   label: string;
   /** The full question text — never truncated, never stored. */
   question: string;
+  /**
+   * THE SAME QUESTION WITH ITS SUBJECT LEFT OUT, for a surface that has already
+   * named the subject — a grouped card whose header IS the step.
+   *
+   * The operator inbox fixed this by grouping ("a question list states its
+   * subject once"); the stakeholder's page grouped too but still rendered the
+   * full text in every row, so a step with three unknowns restated the whole
+   * step three times inside a card already headed with it — the same forty
+   * words, three times, differing in the last six.
+   *
+   * Equal to `question` wherever the phrasing carries no separable stem, so a
+   * surface can render `short` unconditionally inside a group and lose nothing.
+   */
+  short: string;
   affordance: AnswerAffordance;
 }
 
 const LABELS: Record<string, string> = {
   automationDisposition: "Automate this?",
-  phase: "Which phase",
+  phase: "When it happens",
   actorRole: "Who does this",
   decision: "What decides",
   semantics: "What this means",
@@ -196,11 +210,15 @@ export function renderQuestion(store: LedgerStore, about: string, audience: Audi
   const your = audience === "stakeholder" ? "your" : "the";
 
   let question: string;
+  /** The subject this phrasing states up front, when it states one — what a
+   *  grouped card's header already carries. */
+  let stem = "";
 
   if (el?.kind === "step") {
     // FULL action text from the #action claim — the element name is a 60-char cut.
     const action = (scalarAt(store, `${elementId}#action`) ?? el.name).trim().replace(/[.\s]+$/, "");
     const quoted = `One step in ${your} process is: "${action}."`;
+    stem = quoted;
     question =
       kind === "automationDisposition" ? `${quoted} Should this be automated, assisted, or stay manual?`
         : kind === "actorRole" ? `${quoted} Who does this step?`
@@ -225,7 +243,7 @@ export function renderQuestion(store: LedgerStore, about: string, audience: Audi
     // Entities, attributes, workflows — names verbatim, original casing.
     const name = nameFor(store, el, elementId, byId);
     question =
-      kind === "phase" ? `Which phase of ${your} process does "${name}" belong to?`
+      kind === "phase" ? `At what point in ${your} work does "${name}" happen?`
         // A LIFECYCLE IS NOT A PICKLIST. "What values can Opportunity.stage take?"
         // is a schema question, asked of whoever exports the schema. The same locus,
         // put to the person who moves the thing, is "what stages does it go
@@ -256,7 +274,9 @@ export function renderQuestion(store: LedgerStore, about: string, audience: Audi
   const elementName = el?.kind === "step"
     ? (scalarAt(store, `${elementId}#action`) ?? el.name)
     : nameFor(store, el, elementId, byId);
-  return { id: about, elementId, elementName, kind, label: questionLabel(kind), question, affordance: affordanceFor(kind) };
+  // `short` drops the stem for a surface whose header already names the subject.
+  const short = stem && question.startsWith(stem) ? question.slice(stem.length).trim() : question;
+  return { id: about, elementId, elementName, kind, label: questionLabel(kind), question, short, affordance: affordanceFor(kind) };
 }
 
 const fallbackTail = (kind: string): string => `${questionLabel(kind).toLowerCase()}?`;

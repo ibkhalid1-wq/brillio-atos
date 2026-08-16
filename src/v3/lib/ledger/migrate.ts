@@ -347,7 +347,33 @@ export function migrate(snap: Snapshot): LedgerStore {
     store.addElement({ id: rid, kind: "relation", name: `${from}→${to}`, refs: { from: entIdByName.get(from) ?? "", to: entIdByName.get(to) ?? "" } });
     // a relation whose endpoints have different primary functions is a genuine seam → joint(A ⋈ B)
     const owner = jointOrOwner(areaByName.get(from) ?? "", areaByName.get(to) ?? "");
-    if (r.cardinality) A(aboutOf(rid, "cardinality"), s(String(r.cardinality)), "code-derived", "to-be", "domain", owner, { status: "weak" });
+    // ── CARDINALITY IS A QUESTION UNTIL SOMEBODY ANSWERS IT ──────────────────
+    //
+    // This read `if (r.cardinality)`, and the provisional ontology writes the
+    // STRING "unknown" on every relation deliberately. A truthy string, so the
+    // slot was filled with a weak claim whose value was the word "unknown" —
+    // the ledger recording "we know: the answer is unknown". It settled the
+    // locus instead of asking it, so it never reached the unknown queue, never
+    // reached the stakeholder's kit, and the one question whose answer changes
+    // a screen the prototype builds was the one question nobody was asked.
+    // (`optionality` on the next line opens correctly, which is why those
+    // questions appeared and these did not.)
+    //
+    // This module's own rule, from its header: every absent-but-schema-relevant
+    // slot becomes an explicit `?unknown`. "unknown" IS absent, spelled out.
+    //
+    // The standard prior deliberately does NOT ride along as a claim. A
+    // substantive value supersedes an open unknown on the same locus (see
+    // `store.assert`), so a prior written here would silently close the very
+    // question it is evidence for — and the prior is exactly that: evidence for
+    // how to DRAW the relation before anyone is interviewed, never an answer.
+    // It shapes the prototype; the ledger keeps the question open.
+    const declaredCardinality = String(r.cardinality ?? "").trim();
+    if (declaredCardinality && declaredCardinality.toLowerCase() !== "unknown") {
+      A(aboutOf(rid, "cardinality"), s(declaredCardinality), "code-derived", "to-be", "domain", owner, { status: "weak" });
+    } else {
+      A(aboutOf(rid, "cardinality"), OPEN, "generated", "to-be", "domain", owner, { status: "open" });
+    }
     A(aboutOf(rid, "optionality"), OPEN, "generated", "to-be", "domain", owner, { status: "open" }); // F-D
     if (String(r.relation ?? "").toLowerCase() === "produces") A(aboutOf(rid, "semantics"), OPEN, "generated", "to-be", "domain", owner, { status: "open" });
   }

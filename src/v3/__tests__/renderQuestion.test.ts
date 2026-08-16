@@ -103,7 +103,7 @@ describe("rendering rules — full data, verbatim quoting, casing, plain relatio
     expect(disp.label).toBe("Automate this?");
     const phase = renderQuestion(store, byKind("phase")!.about, "stakeholder");
     expect(phase.affordance.kind).toBe("phase-picker");
-    expect(phase.label).toBe("Which phase");
+    expect(phase.label).toBe("When it happens");   // was "Which phase" — methodology word, on a client's page
     const actor = renderQuestion(store, byKind("actorRole")!.about, "stakeholder");
     expect(actor.affordance).toEqual({ kind: "role-picker", freeText: true });
     expect(actor.label).toBe("Who does this");

@@ -16,7 +16,7 @@
  * a different kind of thing, and sounds like it.
  *
  * `${your}` is still correct in the two places that earn it — "One step in your
- * process is…" and "Which phase of your process…" — where the possessive marks
+ * process is…" and "At what point in your work…" — where the possessive marks
  * whose workflow is being described. This test does not touch those.
  */
 import { describe, it, expect } from "vitest";
@@ -80,8 +80,11 @@ describe("generated questions carry no world preamble", () => {
     }
     const phase = all.find((a) => a.endsWith("#phase"));
     if (phase) {
-      expect(renderQuestion(store, phase, "stakeholder").question).toContain("your process");
-      expect(renderQuestion(store, phase, "operator").question).toContain("the process");
+      // The phase question no longer says "which phase of your PROCESS" — that
+      // named the methodology at a stakeholder. What this case guards is the
+      // POSSESSIVE, not the noun: the audience switch still fires.
+      expect(renderQuestion(store, phase, "stakeholder").question).toContain("your work");
+      expect(renderQuestion(store, phase, "operator").question).toContain("the work");
     }
   });
 });

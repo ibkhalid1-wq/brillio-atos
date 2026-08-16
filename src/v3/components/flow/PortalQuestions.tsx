@@ -98,12 +98,15 @@ function QuestionRow({ row, answer, why, deferredTo, onAnswer, onWhy, onDefer, r
   phaseOptions: string[];
   roleOptions: string[];
 }) {
-  const { affordance, question, label } = row.rendered;
+  // The CARD's header already names the step, so the row asks the question
+  // WITHOUT restating it. `question` (the whole thing) stays the accessible
+  // label on every control, so a screen reader still hears the full ask.
+  const { affordance, question, short, label } = row.rendered;
   const done = !!answer.trim() || !!deferredTo;
   return (
     <div className={`v3fs-pq-q${done ? " done" : ""}${deferredTo ? " deferred" : ""}`}>
       <span className="v3fs-pq-type">{label}</span>
-      <span className="v3fs-pq-t" title={row.about}>{question}</span>
+      <span className="v3fs-pq-t" title={question}>{short}</span>
       {deferredTo ? (
         <div className="v3fs-portal-defer-note">
           Routed to <b>{deferredTo}</b> — they&rsquo;ll be asked directly.
