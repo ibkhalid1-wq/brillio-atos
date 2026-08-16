@@ -9,8 +9,13 @@ import { enforceBlueprintInvariants } from "@shared/blueprintInvariants.ts";
 const inner = {
   currentStateAtlas: {
     workflows: [
-      { name: "Campaign Management" }, { name: "Lead to Opportunity" },
-      { name: "Order Processing" }, { name: "Contract Management" },
+      { name: "Campaign Management", owner: "Marketing SME", steps: [
+        { actor: "Marketing SME", action: "Define campaign objectives, then schedule it.", system: "Marketing Automation" },
+        { actor: "Marketing SME", action: "Launch and monitor the campaign." },
+      ] },
+      { name: "Lead to Opportunity", owner: "Sales SME", steps: [{ actor: "Sales SME", action: "Qualify the lead." }] },
+      { name: "Order Processing", owner: "Sales Operations SME", steps: [] },
+      { name: "Contract Management", owner: "Legal SME", steps: [{ actor: "Legal SME", action: "Draft the agreement." }] },
     ],
   },
   discoveryKit: {
@@ -57,13 +62,51 @@ describe("safety invariant is repaired, not requested", () => {
 });
 
 describe("coverage breaches become named gaps", () => {
-  it("the Laila shape — one journey beside many workflows — is called out by name", () => {
+  it("the one-journey shape is REPAIRED from the atlas, not merely reported", () => {
+    // The shape measured live: one journey beside nine workflows, so eight
+    // ninths of the business had no walk-through. The atlas can describe them,
+    // so it does — every field transcribed from a document on the record.
     const { doc } = enforceBlueprintInvariants(inner, {
       agents: [agent()], journeys: [{ name: "Customer Lifecycle Orchestration", persona: "customer", stages: [] }],
       hitlPoints: [], dataContracts: [], gaps: [],
     });
-    const gaps = (doc.gaps as string[]).join(" ");
-    expect(gaps).toMatch(/One journey stands beside 4 mapped workflows/);
+    const journeys = doc.journeys as Array<Record<string, unknown>>;
+    expect(journeys).toHaveLength(5);                       // the authored one + all 4 uncovered workflows
+    expect(journeys[0].name).toBe("Customer Lifecycle Orchestration");
+    expect(journeys[0].derived).toBeUndefined();            // the model's own is untouched
+    const added = journeys.filter((j) => j.derived === true);
+    expect(added.map((j) => j.name)).toEqual(["Campaign Management", "Lead to Opportunity", "Order Processing", "Contract Management"]);
+    // …and each carries the workflow's own steps, actor and agent.
+    const campaign = added.find((j) => j.name === "Campaign Management")!;
+    const stages = campaign.stages as Array<Record<string, unknown>>;
+    // the LABEL is the step's first clause; the line keeps the whole action
+    expect(stages[0].name).toBe("Define campaign objectives");
+    expect(stages[0].user).toBe("Marketing SME: Define campaign objectives, then schedule it");
+    expect(stages[0].systems).toBe("Marketing Automation");
+    expect(String(campaign.basis)).toMatch(/Transcribed from the current-state atlas/);
+    // the operator is told, in the artifact's own channel
+    expect((doc.gaps as string[]).join(" ")).toMatch(/4 journeys were added from the current-state atlas/);
+  });
+
+  it("a workflow an agent replaces is still not covered — an agent is not a walk-through", () => {
+    // "Lead to Opportunity" IS the agent's replacesWorkflow, and it still needs
+    // a journey: an agent is what does the work, a journey is how it reads.
+    const { doc } = enforceBlueprintInvariants(inner, {
+      agents: [agent()], journeys: [], hitlPoints: [], dataContracts: [], gaps: [],
+    });
+    const names = (doc.journeys as Array<Record<string, unknown>>).map((j) => j.name);
+    expect(names).toContain("Lead to Opportunity");
+  });
+
+  it("with no atlas to transcribe, it reports rather than invents", () => {
+    const { doc } = enforceBlueprintInvariants(
+      { currentStateAtlas: { workflows: [{ name: "A" }, { name: "B" }, { name: "C" }] }, discoveryKit: { personas: [] } },
+      { agents: [agent({ replacesWorkflow: "" })], journeys: [{ name: "One", persona: "user", stages: [] }], hitlPoints: [], dataContracts: [], gaps: [] },
+    );
+    // workflows with no steps still yield a journey — the name is evidence too
+    const added = (doc.journeys as Array<Record<string, unknown>>).filter((j) => j.derived === true);
+    expect(added).toHaveLength(3);
+    expect((added[0].stages as unknown[])).toHaveLength(1);
   });
 
   it("a workflow no agent replaces and no journey walks is named", () => {

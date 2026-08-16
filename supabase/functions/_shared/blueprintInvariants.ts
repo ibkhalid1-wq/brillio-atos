@@ -81,21 +81,81 @@ export function enforceBlueprintInvariants(
   });
 
   // ── 2 · Journey coverage: every Atlas workflow, every kit persona ──
+  //
+  // REPAIRED, not just reported. The rule says a workflow with no journey is
+  // "a gap, never an omission", and the first version of this module honoured
+  // the letter of that by naming the miss — which left the operator holding a
+  // true sentence and no blueprint. On a real programme ONE journey stood
+  // beside nine workflows and nine personas, so eight ninths of the business
+  // had no walk-through at all.
+  //
+  // A journey the Atlas can already describe is SYNTHESISED from it: the
+  // workflow's own name, its owner, its steps in order, and the agent that
+  // replaces it. That is not invention — every field is copied from a document
+  // on the record, which is the same standard the ontology's core synthesis
+  // holds itself to. What the model contributes (a customer-facing arc across
+  // workflows) is left exactly as authored; what it omitted is filled from
+  // evidence and STAMPED `derived`, so nobody mistakes a transcription for the
+  // blueprint agent's judgement.
   const atlas = isRecord(inner.currentStateAtlas) ? inner.currentStateAtlas : {};
   const kit = isRecord(inner.discoveryKit) ? inner.discoveryKit : {};
-  const workflows = asRecords(atlas.workflows).map((w) => asString(w.name)).filter(Boolean);
+  const workflowRows = asRecords(atlas.workflows).filter((w) => asString(w.name));
+  const workflows = workflowRows.map((w) => asString(w.name));
   const personas = asRecords(kit.personas).map((p) => asString(p.name) || asString(p.role)).filter(Boolean);
-  const journeyText = journeys.map((j) =>
+  const textOf = (list: Array<Record<string, unknown>>): string => list.map((j) =>
     [asString(j.name), ...asRecords(j.stages).flatMap((s) => [asString(s.name), asString(s.user), asString(s.customer), asString(s.agent)])].join(" • ")).join(" • ");
   const agentWorkflows = repairedAgents.map((a) => asString(a.replacesWorkflow)).filter(Boolean);
 
-  const uncoveredWorkflows = workflows.filter((w) =>
-    !agentWorkflows.some((aw) => namesMatch(aw, w)) && !namesMatch(journeyText, w));
-  if (uncoveredWorkflows.length) {
-    notes.push(`${uncoveredWorkflows.length} atlas workflow${uncoveredWorkflows.length === 1 ? "" : "s"} no agent replaces and no journey walks (${uncoveredWorkflows.join(", ")}) — the coverage rule calls each a gap, never an omission.`);
+  // A workflow is covered when a journey walks it. An AGENT that replaces it is
+  // not coverage — an agent is what does the work, a journey is how the work
+  // reads end to end, and the rule asks for the second.
+  const authoredText = textOf(journeys);
+  const uncovered = workflowRows.filter((w) => !namesMatch(authoredText, asString(w.name)));
+  /** How many steps of one workflow become stages. Past this the journey is a
+   *  procedure manual rather than a walk-through, and the document has a budget. */
+  const STAGE_CAP = 8;
+  const derivedJourneys = uncovered.map((w) => {
+    const name = asString(w.name);
+    const owner = asString(w.owner);
+    const agentFor = repairedAgents.find((a) => namesMatch(asString(a.replacesWorkflow), name));
+    const steps = asRecords(w.steps).slice(0, STAGE_CAP);
+    const stages = steps.map((step) => {
+      const action = asString(step.action).replace(/\s+/g, " ").replace(/\.$/, "");
+      const actor = asString(step.actor) || owner;
+      return {
+        // The label is the step's own first clause — the words the Atlas used.
+        name: (action.split(/[,;:]/)[0] || action).slice(0, 60),
+        customer: null,
+        user: actor ? `${actor}: ${action}` : action,
+        agent: agentFor ? asString(agentFor.name) : null,
+        systems: asString(step.system) || null,
+      };
+    });
+    return {
+      name,
+      persona: "user",
+      stages: stages.length ? stages : [{ name, customer: null, user: owner || "To confirm", agent: agentFor ? asString(agentFor.name) : null, systems: null }],
+      derived: true,
+      basis: `Transcribed from the current-state atlas workflow "${name}"${owner ? `, owned by ${owner}` : ""} — the blueprint authored no journey that walks it.`,
+    };
+  });
+  if (derivedJourneys.length) {
+    notes.push(`${derivedJourneys.length} journey${derivedJourneys.length === 1 ? " was" : "s were"} added from the current-state atlas (${derivedJourneys.map((j) => j.name).join(", ")}) — the blueprint authored none that walked ${derivedJourneys.length === 1 ? "it" : "them"}. Each is a transcription of that workflow's own steps, marked "derived": confirm the arc reads the way the business tells it.`);
   }
-  if (workflows.length > 2 && journeys.length === 1) {
-    notes.push(`One journey stands beside ${workflows.length} mapped workflows and ${personas.length} personas — the blueprint's own coverage rule expects every persona and workflow to map to a journey; a single journey cannot carry them all.`);
+  const allJourneys = [...journeys, ...derivedJourneys];
+  // NO PERSONA CHECK LIVES HERE, deliberately. The rule names personas too,
+  // but the only test available is whether a persona's NAME appears in a
+  // journey's prose — and a journey can walk somebody's work perfectly well
+  // without spelling their title. A proxy that fires on a correct blueprint
+  // teaches the operator to stop reading gaps, which costs more than the check
+  // is worth; the same reasoning retired six false refusals from the verb
+  // resolver. A persona nobody works for is visible where it is decidable:
+  // in the kit's own coverage, upstream of here.
+  // The shape that started this: a single journey and nothing to build more
+  // from. With an atlas the repair above has already run, so this only fires
+  // where there was no evidence to transcribe.
+  if (workflows.length > 2 && allJourneys.length === 1) {
+    notes.push(`One journey stands beside ${workflows.length} mapped workflows and ${personas.length} personas, and the atlas carried no steps to derive the rest from — the coverage rule expects every persona and workflow to map to a journey.`);
   }
 
   // ── 3 · Completeness: contracts carry the hard parts; agents degrade gracefully ──
@@ -115,7 +175,14 @@ export function enforceBlueprintInvariants(
   const gaps = (Array.isArray(result.gaps) ? result.gaps : []).map((g) => String(g));
   const fresh = notes.filter((n) => !gaps.includes(n));
   return {
-    doc: { ...result, agents: repairedAgents, gaps: [...gaps, ...fresh] },
+    doc: {
+      ...result,
+      agents: repairedAgents,
+      // Only when something was actually transcribed — a document that needed
+      // no journey repair keeps the array it arrived with, identity included.
+      ...(derivedJourneys.length ? { journeys: allJourneys } : {}),
+      gaps: [...gaps, ...fresh],
+    },
     notes,
   };
 }
