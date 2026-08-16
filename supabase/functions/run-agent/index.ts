@@ -16,6 +16,7 @@ import {
   buildPrototypeRefineBrief, prototypeArtifactFor, prototypeBaselineOfProgram,
   REFINE_CONTRACT, type PrototypeChangeRequest,
 } from "../_shared/prototypeRefine.ts";
+import { enforceBlueprintInvariants } from "../_shared/blueprintInvariants.ts";
 // THE VALUE VOCABULARY'S PRODUCER. Everything that decides — whether to spend
 // the one call, what to ask, how to read the reply, what document to store —
 // lives in the shared module as pure functions; this file supplies the transport
@@ -11745,6 +11746,16 @@ Deno.serve(async (req) => {
         // test that runs it, not merely by a test that reads it.
         if (request.agentId === "prototype-build") {
           formalResult = prototypeArtifactFor(getInnerProgramData(contextProgramData), formalResult).doc;
+        }
+        // The blueprint's "ROBUSTNESS RULES (enforced, not optional)" were
+        // prompt prose with no post-condition: one journey shipped beside nine
+        // workflows, act-level agents on irreversible work carried no gate,
+        // and gaps said nothing. Same discipline as the prototype line above —
+        // the decision is a pure _shared function a test runs: the safety
+        // invariant is REPAIRED (demotion to act-with-approval is always
+        // safe), coverage and completeness breaches become NAMED gaps.
+        if (request.agentId === "agentic-blueprint") {
+          formalResult = enforceBlueprintInvariants(getInnerProgramData(contextProgramData), formalResult).doc;
         }
         // Tag experience-design flows / demo scripts with their business area so
         // the Show demo can default a recipient to their own area's flow — done
