@@ -93,7 +93,20 @@ describe("the baseline is assembled, not remembered", () => {
     // than filtered out, so a workbench that appears from nowhere still fails.
     const workbenches = deriveWorkbenches(snap("current-state-atlas.json")).map((r) => `work-${r.slug}`);
     expect(workbenches.length).toBeGreaterThan(0);
-    expect(curated.screenIds).toEqual([...["detail-account", "form-account", "list-account"], ...workbenches].sort());
+    // CURATION IS A STATEMENT ABOUT THE MENU, NOT ABOUT REACHABILITY. Only the
+    // chosen entity gets the full set — list, detail and form. Everything the
+    // build can reach gets a DETAIL and nothing else, so a related record opens
+    // instead of dead-ending; it is not listed and cannot be created, because
+    // neither was offered. MUTATION: build the closure's list/form too → RED.
+    const listed = curated.screenIds.filter((id) => id.startsWith("list-") && !id.startsWith("work-"));
+    const formed = curated.screenIds.filter((id) => id.startsWith("form-"));
+    expect(listed).toEqual(["list-account"]);
+    expect(formed).toEqual(["form-account"]);
+    const details = curated.screenIds.filter((id) => id.startsWith("detail-"));
+    expect(details, "the chosen entity lost its detail").toContain("detail-account");
+    expect(details.length, "nothing became reachable — the closure is inert").toBeGreaterThan(1);
+    expect(curated.screenIds).toEqual([...new Set([...curated.screenIds])].sort());
+    for (const w of workbenches) expect(curated.screenIds).toContain(w);
     expect(curated.fabricIds.length).toBeLessThan(big.fabricIds.length);
   });
 });

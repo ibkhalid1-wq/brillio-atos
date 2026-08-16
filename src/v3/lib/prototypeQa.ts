@@ -45,7 +45,7 @@
  * WARNINGS: visible in the report, not a failure. Nothing is dropped silently.
  */
 
-export type QaCheck = "layout-overlap" | "console-errors" | "entity-coverage" | "header-agreement";
+export type QaCheck = "layout-overlap" | "console-errors" | "entity-coverage" | "header-agreement" | "dead-end";
 export type QaSeverity = "error" | "warning";
 
 export interface QaFinding {
@@ -472,15 +472,82 @@ function statedCounts(heading: string): number[] {
 
 // ── the gate ─────────────────────────────────────────────────────────────────
 
+
+/**
+ * EVERY CONTROL MUST LAND SOMEWHERE.
+ *
+ * A prototype is a thing people CLICK. A control whose destination was never
+ * built changes the URL and drops the viewer on the home list, so the demo
+ * silently contradicts itself and the viewer concludes the record does not
+ * exist. Measured on a reviewed CRM build before the drill-through closure: 166
+ * such controls on one curated application.
+ *
+ * This is a GENERATION-LEVEL invariant, not a property of one build. It is
+ * checked on the RENDERED DOCUMENT, so it binds the deterministic assembly, a
+ * model-authored page and anything a refine returns, and cannot be satisfied by
+ * inspecting whatever produced them. The assembler satisfies it by construction
+ * (every reachable entity gets a detail screen); a model-authored page has to
+ * satisfy it however it likes, and is told, in `qaFeedback`, when it does not.
+ *
+ * THE TWO ADDRESSES ARE NOT THE SAME QUESTION. `#slug/recordId` opens one
+ * record and needs `detail-slug`; a bare `#slug` browses them all and needs
+ * `list-slug`. Checking both against the list screens is what made an earlier
+ * version of this call a working drill-through broken.
+ */
+function checkDeadEnds(input: PrototypeQaInput): QaFinding[] {
+  const { doc } = input;
+  const built = new Set<string>();
+  for (const el of doc.querySelectorAll("[data-screen]")) {
+    const id = el.getAttribute("data-screen");
+    if (id) built.add(id);
+  }
+  // Not a screen-addressed document: there is no contract here to check, and
+  // inventing one would fail every page that routes some other way.
+  if (!built.size) return [];
+  const out: QaFinding[] = [];
+  const seen = new Set<string>();
+  for (const el of doc.querySelectorAll("[onclick],a[href]")) {
+    const raw = el.getAttribute("onclick") ?? el.getAttribute("href") ?? "";
+    const hit = raw.match(/#([a-z0-9-]+)(\/([^'"),\s]+))?/i);
+    if (!hit) continue;
+    const slug = hit[1];
+    const tail = hit[3] ?? "";
+    // RESERVED ROUTE WORDS. The router keeps two addresses that name a ROUTE
+    // rather than an entity — `#workbench/<role>` and `#approvals/<agent>` —
+    // and their screens are not `detail-…`. An earlier version of this check did
+    // not know that and reported 11 dead ends on a build with none: it read
+    // "workbench" as an entity and demanded `detail-workbench`. A checker that
+    // cries wolf on a correct build is worse than no checker, because the next
+    // real finding gets waved through with it.
+    const wants = tail ? `detail-${slug}` : `list-${slug}`;
+    if (built.has(wants)) continue;
+    // The second segment naming a screen of its own covers the reserved routes
+    // without this module having to hardcode their spellings.
+    if (tail && [...built].some((id) => id.endsWith(`-${tail}`))) continue;
+    const label = (el.textContent || "").replace(/\s+/g, " ").trim().slice(0, 60);
+    const key = `${wants}|${label}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      check: "dead-end",
+      severity: "error",
+      message: `A control labelled "${label || slug}" navigates to "${slug}", which this build has no ${hit[3] ? "detail" : "list"} screen for — the click will land somewhere else.`,
+      where: wants,
+    });
+  }
+  return out;
+}
+
 export function auditPrototype(input: PrototypeQaInput): PrototypeQaReport {
   const findings = [
     ...checkOverlap(input),
     ...checkConsole(input),
     ...checkEntityCoverage(input),
     ...checkHeaderAgreement(input),
+    ...checkDeadEnds(input),
   ];
   const byCheck: Record<QaCheck, QaFinding[]> = {
-    "layout-overlap": [], "console-errors": [], "entity-coverage": [], "header-agreement": [],
+    "layout-overlap": [], "console-errors": [], "entity-coverage": [], "header-agreement": [], "dead-end": [],
   };
   for (const f of findings) byCheck[f.check].push(f);
   const errors = findings.filter((f) => f.severity === "error");

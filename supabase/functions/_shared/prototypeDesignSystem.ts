@@ -352,12 +352,27 @@ a{color:var(--m-brand);text-decoration:none}
 /* A many-to-many is a SET, so its members wrap as tags rather than filling a
    table of owned rows. */
 .m-chips{display:flex;flex-wrap:wrap;gap:8px;padding:2px 0}
+/* A relation whose cardinality nobody has confirmed. Quiet on purpose — it is a
+   caveat on a working section, not an error, and a demo full of alarm colours
+   teaches the viewer to stop reading them. */
+.m-prov{margin-right:auto;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--m-warn);background:color-mix(in srgb,var(--m-warn) 12%,transparent);
+  border:1px solid color-mix(in srgb,var(--m-warn) 32%,transparent);border-radius:var(--m-r-pill);padding:2px 8px}
 /* Parent reference (N:1 / 1:1) — a link to the one record this belongs to.
    Rendered from the fabric's nav nodes, which had no rendering at all. */
 .m-linkcards{display:flex;flex-wrap:wrap;gap:10px}
 .m-linkcard{display:inline-flex;align-items:baseline;gap:10px;font:inherit;text-align:left;cursor:pointer;
   background:var(--m-surface-2);border:1px solid var(--m-line);border-radius:var(--m-r-md);padding:10px 14px}
 .m-linkcard:hover{border-color:color-mix(in srgb,var(--m-brand) 40%,transparent);background:var(--m-brand-soft)}
+/* The parent is real but has no screen in this build, so the card states the
+   relation without pretending to navigate. It must not LOOK clickable: a
+   control that does nothing is worse than a plain fact. */
+.m-linkcard.is-flat{cursor:default;background:transparent}
+/* A breadcrumb whose type has no list to return to (a reachable-only entity is
+   drillable but not browsable). It states the type without offering a journey
+   the build cannot make. */
+.m-crumb-flat{color:var(--m-muted)}
+.m-linkcard.is-flat:hover{border-color:var(--m-line);background:transparent}
 .m-linkcard-k{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--m-muted)}
 .m-linkcard-v{font-size:13px;font-weight:600;color:var(--m-ink)}
 .m-linkcard-go{color:var(--m-brand);font-weight:700}

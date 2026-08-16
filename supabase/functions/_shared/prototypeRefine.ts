@@ -277,7 +277,14 @@ export function prototypeBaselineFor(
     });
     const { html, fabric, regionCount, specSchema, specAccepted, specViolations } = assemble();
     if (!regionCount) return null;
-    const seed = generateSeed(ontology, fabric.version);
+    // THE SAME SEED THE PAGE WAS DRAWN FROM. This called `generateSeed` without
+    // the vocabulary while the assembly above was passed it — so on any
+    // programme that HAS a value vocabulary the two seeds produced different
+    // strings, almost none of the guarded set survived the `text.nodes.has`
+    // filter below, and the post-condition quietly shrank to guarding nothing.
+    // A safety check that silently stops checking is worse than none: it
+    // reports PASS on a refine that dropped the client's data.
+    const seed = generateSeed(ontology, fabric.version, { vocabulary: inputs.vocabulary });
     const text = documentText(html);
     // WHAT THE PAGE SAYS, from the seed that said it. Every string a seeded
     // record carries — its id, its display name, and each of its own values —

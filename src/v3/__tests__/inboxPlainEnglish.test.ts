@@ -357,7 +357,16 @@ describe("Discover reads and the Inbox acts — one system, one boundary", () =>
     expect(css).toContain(".v3ib,.v3ib *{letter-spacing:normal}");
     // one focus ring, one control height, both surfaces
     expect(css).toContain(".v3ib :focus-visible,.v3ln :focus-visible");
-    expect(css).toContain(".v3ib select,.v3ln select{border-radius:var(--aura-r-ctl);height:var(--aura-ctl-h)}");
+    // THE PROPERTY, NOT THE SPELLING. This pinned the rule's exact bytes, so it
+    // failed the day `height` became `min-height` — a fix, not a regression: the
+    // fixed 26px was shorter than the line box the control's own font needs, and
+    // it clipped descenders (a stakeholder name read "Dai Mamodia"). What must
+    // stay true is that ONE rule covers BOTH surfaces and sizes them from the
+    // SHARED token, so a select and the button beside it keep agreeing.
+    const ctl = css.match(/\.v3ib select,\.v3ln select\{([^}]*)\}/);
+    expect(ctl, "the shared select rule is gone — move or drop this guard").not.toBeNull();
+    expect(ctl![1]).toContain("var(--aura-r-ctl)");
+    expect(ctl![1], "the select must size from the shared control-height token").toMatch(/(^|;)\s*(min-)?height:var\(--aura-ctl-h\)/);
   });
 
   it("motion is one duration and honours reduced-motion", () => {
