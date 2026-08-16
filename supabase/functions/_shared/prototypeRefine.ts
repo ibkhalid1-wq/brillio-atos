@@ -136,8 +136,22 @@ export interface PrototypeBaseline {
  * a build holds. The CEILING is still the model's output budget and still has
  * not moved; this sits under it with less room again, and the failure mode is
  * unchanged and safe.
+ *
+ * WHY IT MOVED A THIRD TIME, from 56,000 — AND WHY THIS IS THE LAST ONE. The
+ * renderer grew ~1.1KB when a relation picker's Save became a save of the
+ * RELATION: it now writes the join key every reader of that relation resolves
+ * through, and re-opens a form on the parent the record actually has, instead
+ * of writing the parent's id into the column the page prints as a name. That is
+ * a correctness fix in the application every build ships, and its cost is fixed
+ * — two-entity build or thirty — so it landed on the same fixture that has
+ * defined this threshold twice before (55.8KB → 56.9KB).
+ *
+ * The arithmetic is now the point: the ceiling is ~60KB of output and this sits
+ * 3KB under it. There is no room for a fourth raise, so the NEXT fixed-cost
+ * addition has to be paid for rather than budgeted for — by the elision above,
+ * which takes ~17KB off both sides and is structural rather than asked-for.
  */
-export const DOCUMENT_REFINE_BUDGET = 56_000;
+export const DOCUMENT_REFINE_BUDGET = 57_500;
 
 const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
