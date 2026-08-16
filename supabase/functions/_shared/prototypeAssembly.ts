@@ -16,7 +16,7 @@ import { generateSeed, type SeedAssumption, type SeedRecord } from "./seedData.t
 import { meridianStylesheet, type PrototypeTheme } from "./prototypeDesignSystem.ts";
 import { deriveWorkbenches, type AtlasRole, type AtlasWorkflow } from "./atlasWorkbenches.ts";
 import { deriveAgenticSurface, agentsOnEntity, gatedAgents, type SurfacedAgent } from "./agenticSurface.ts";
-import { entityNameResolver, type OntologyGraph } from "./ontologyGraph.ts";
+import { entityNameResolver, joinKeyFor, type OntologyGraph } from "./ontologyGraph.ts";
 import {
   buildSpecSchema, validatePrototypeSpec, widgetBandsHtml, widgetGroupsFor,
   WIDGET_RENDERER, type PrototypeSpecSchema, type WidgetGroup,
@@ -311,6 +311,25 @@ interface PrototypeModel {
  * — reads the same list. The served bytes never move, so the build stays
  * byte-identical for the same ontology.
  *
+ * ── A PICKER SAVES THE RELATION, NOT A LABEL ─────────────────────────────────
+ *
+ * A relation-typed field renders as a `<select>` whose option values are the
+ * parent's ids. Saving wrote that id into the ATTRIBUTE column — the one the
+ * detail prints as a name and the list heads as one — and nowhere else, while
+ * the link card (`NavSpec.fk`) and the parent's collection (`KidSpec.fk`) both
+ * resolve the relation through the JOIN KEY. One save then left a record
+ * stating its parent three ways: a raw id where a name belongs, a link card
+ * still pointing at the parent the user had just replaced, and a parent whose
+ * collection never moved.
+ *
+ * So a picker carries the join-key COLUMN NAME (`data-fkc`, minted by
+ * `joinKeyFor` at assembly — the reading side never rebuilds the convention),
+ * `saveRec` writes BOTH halves from the one record chosen (name to the column a
+ * person reads, id to the key the application reads, in that order so an
+ * attribute that IS the key keeps the id), and `pickerVal` re-opens the form on
+ * the parent the record actually has. Bytes here are the whole document's, and
+ * this cost ~700 of them; see `DOCUMENT_REFINE_BUDGET`.
+ *
  * `Q` is a single quote. The renderer emits `onclick="go('#account/…')"`, and
  * spelling that with escapes inside a nested template literal is how a stray
  * backslash silently terminates a string and takes the whole page's script with
@@ -601,6 +620,18 @@ function mCell(R,ri,v){
   }
   // ── the form: a record in, a record out ────────────────────────────────────
   function formHost(sl){return document.querySelector('[data-form="'+sl+'"]')}
+  // The parent a picker is showing, by ID: its key where the row has one, else
+  // the stored name resolved back to the record that bears it.
+  function pickerVal(c,t,ri){
+    var pt=D[c.getAttribute("data-fk")],fc=c.getAttribute("data-fkc"),v;
+    if(!pt)return "";
+    if(fc){v=at(t,ri,t.cols.indexOf(fc));return v==null?"":String(v)}
+    v=at(t,ri,t.cols.indexOf(c.getAttribute("data-f")));
+    if(v==null||v==="")return "";
+    var ix=live(pt),k;
+    for(k=0;k<ix.length;k++)if(String(at(pt,ix[k],0))===String(v)||nameOf(pt,ix[k])===String(v))return String(at(pt,ix[k],0));
+    return "";
+  }
   function renderForm(sc,ri){
     var sl=sc.slug,t=D[sc.entity],host=formHost(sl);
     FORM[sl]=ri;
@@ -608,6 +639,7 @@ function mCell(R,ri,v){
     var ctrls=host.querySelectorAll("[data-f]"),i;
     for(i=0;i<ctrls.length;i++){
       var c=ctrls[i],ci=t?t.cols.indexOf(c.getAttribute("data-f")):-1;
+      if(c.getAttribute("data-fk")){c.value=ri>=0&&t?pickerVal(c,t,ri):"";continue}
       var v=ri>=0&&t?at(t,ri,ci):null;
       if(c.type==="checkbox")c.checked=!!v;else c.value=v==null?"":String(v);
     }
@@ -632,7 +664,19 @@ function mCell(R,ri,v){
     var sc=SC[sl];if(!sc)return;
     var t=D[sc.entity],host=formHost(sl);if(!t||!host)return;
     var ctrls=host.querySelectorAll("[data-f]"),vals={},i;
-    for(i=0;i<ctrls.length;i++){var c=ctrls[i];vals[c.getAttribute("data-f")]=c.type==="checkbox"?!!c.checked:c.value}
+    // A picker writes BOTH halves of the relation: the name a person reads,
+    // then the join key the application reads.
+    for(i=0;i<ctrls.length;i++){
+      var c=ctrls[i],f=c.getAttribute("data-f"),pk=c.getAttribute("data-fk"),fc=c.getAttribute("data-fkc");
+      if(c.type==="checkbox"){vals[f]=!!c.checked;continue}
+      if(pk){
+        var pt=D[pk],pri=(pt&&c.value)?rowOf(pt,c.value):-1;
+        vals[f]=pri>=0?nameOf(pt,pri):"";
+        if(fc)vals[fc]=pri>=0?String(at(pt,pri,0)):null;
+        continue;
+      }
+      vals[f]=c.value;
+    }
     var ri=FORM[sl];if(ri==null)ri=-1;
     if(ri>=0){for(var k in vals)if(Object.prototype.hasOwnProperty.call(vals,k))setAt(t,ri,t.cols.indexOf(k),vals[k])}
     else ri=addRow(t,sc,vals);
@@ -1979,8 +2023,36 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
   // convention rebuilt out of the column name. Where the role says "reference"
   // and nothing says to what, the field stays a text box AND SAYS SO: a miss
   // that renders as an ordinary input is a miss nobody can see.
+  //
+  // AND THE PICKER SAVES THE RELATION. Its options are ids, and it wrote that
+  // id straight into the ATTRIBUTE column — the column the detail page prints
+  // as a name and the list heads as one — while the parent link card and the
+  // parent's child collection both resolve the relation through the JOIN KEY
+  // (`joinKeyFor`, the one definition, which is what `NavSpec.fk` and
+  // `KidSpec.fk` index). So one save left the same record stating its parent
+  // three different ways: a raw id where a name belongs, a link card still
+  // pointing at the record the user had just replaced, and a parent whose
+  // collection never moved. The picker now carries the join-key COLUMN NAME
+  // (`data-fkc`) and the renderer writes both halves — the id to the key the
+  // application reads, the name to the column a person reads.
   const formScreen = (name: string): string => {
     const s = es.get(name)!; const attrs = attrsOf(name);
+    // WHICH FIELD OWNS THE JOIN KEY. There is exactly ONE key column per parent
+    // entity, so where an ontology names two attributes pointing at the same
+    // parent (a contract's billing account and its primary account) only one of
+    // them can be that column — otherwise two pickers write the same key and
+    // the record contradicts itself again, this time between its own fields.
+    // The attribute that IS the key column owns it; failing that, the first the
+    // ontology declares. The others still pick a real record and still store
+    // its name, and the form SAYS the link is not theirs to write.
+    const fkOwner = new Map<string, string>();
+    for (const a of attrs) {
+      const r = roleOf.get(`${name} ${a}`);
+      if (r !== "parent-ref" && r !== "cross-ref") continue;
+      const t = refOf.get(`${name} ${a}`);
+      if (!t || !names.includes(t) || columnIndex(name, joinKeyFor(t)) < 0) continue;
+      if (!fkOwner.has(t) || a === joinKeyFor(t)) fkOwner.set(t, a);
+    }
     const fields = attrs.map((a) => {
       const key = `${name} ${a}`;
       const role = roleOf.get(key);
@@ -1990,13 +2062,20 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
       const picker = target && names.includes(target) && (seed.records[target] ?? []).length ? target : undefined;
       if (picker) referenced.add(picker);
       const label = esc(humanizeField(a));
-      const input = picker ? `<select class="m-select" data-f="${esc(a)}" data-fk="${esc(picker)}"></select>`
+      // The join key travels on the control that WRITES it, so the renderer
+      // never rebuilds the convention on the reading side — the guess this key
+      // already had to be rescued from once.
+      const owns = picker ? fkOwner.get(picker) === a : false;
+      const fkc = owns ? ` data-fkc="${esc(joinKeyFor(picker!))}"` : "";
+      const input = picker ? `<select class="m-select" data-f="${esc(a)}" data-fk="${esc(picker)}"${fkc}></select>`
         : role === "status" ? `<select class="m-select" data-f="${esc(a)}" data-vals="1"></select>`
           : role === "boolean" ? `<label class="m-checkbox"><input type="checkbox" data-f="${esc(a)}" /> ${label}</label>`
             : `<input class="m-input" data-f="${esc(a)}" placeholder="${label}" />`;
       const gap = isRef && !picker
         ? `<div class="m-help">Reads as a reference, but the ontology names no entity for it — so this stays free text. Which record should it point at? Confirm in Listen.</div>`
-        : "";
+        : picker && fkOwner.has(picker) && !owns
+          ? `<div class="m-help">The model holds one link from ${esc(name)} to ${esc(picker)}, and ${esc(humanizeField(fkOwner.get(picker)))} writes it — so this field stores the name only. Are these two different links? Confirm in Listen.</div>`
+          : "";
       return region(`field:${s}:${slug(a)}`, `<div class="m-field"><label class="m-label">${label}${req}</label>${input}${gap}</div>`);
     }).join("");
     return `<section class="m-screen" data-screen="form-${s}" hidden>

@@ -354,8 +354,12 @@ describe("a field that references a record offers the records", () => {
     const offered = [...select.options].slice(1).map((o) => o.textContent ?? "");
     expect(offered.length).toBe(names.size);
     expect(offered.every((n) => names.has(n)), `an option names no Account: ${offered.find((n) => !names.has(n))}`).toBe(true);
-    // …and the value is the id, so a save writes a real foreign key rather than
-    // the label a person happened to read.
+    // …and the value is the id, which is what a save has to have in hand. What
+    // it DOES with it is not asserted here, and the comment that used to claim
+    // "a save writes a real foreign key" was reporting coverage this file never
+    // had: the id went into the attribute column the page prints as a name and
+    // the relation never moved. The save itself is driven, end to end, in
+    // `prototypeRelationPicker.test.ts`.
     const ids = new Set((seed.records.Account ?? []).map((r) => String(r.id)));
     expect([...select.options].slice(1).every((o) => ids.has(o.value))).toBe(true);
   });
