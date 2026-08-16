@@ -57,14 +57,21 @@ const regionHtml = (id: string): string =>
   doc.querySelector(`[data-fabric-id="${id}"]`)?.outerHTML ?? "";
 
 describe("every fabric node has a rendering", () => {
-  it("emits a data-fabric-id for every region and nav node", () => {
+  it("emits a data-fabric-id for every node, of every kind", () => {
     // THE property that keeps the rest honest: a node the assembler forgets is
     // a silent hole. `nav` nodes were exactly that — derived, then unrendered.
+    //
+    // THIS USED TO FILTER TO `region` AND `nav`, and that filter was itself a
+    // hole: the `screen` kind was covered by nothing here or anywhere else, and
+    // 33 of the snapshot's 66 screen nodes had no element in the document. No
+    // kind is exempt now, and the total contract — per kind, on two ontologies,
+    // and with the curated build's declared exemptions checked both ways —
+    // lives in prototypeFabricDomFidelity.test.ts.
     const missing = fabric.nodes
-      .filter((n) => n.kind === "region" || n.kind === "nav")
       .filter((n) => !html.includes(`data-fabric-id="${n.id}"`))
       .map((n) => `${n.kind} ${n.id}`);
     expect(missing, `fabric nodes with no rendering:\n${missing.join("\n")}`).toEqual([]);
+    expect(new Set(fabric.nodes.map((n) => n.kind)).size, "the fixture stopped emitting several kinds").toBeGreaterThan(3);
   });
 });
 

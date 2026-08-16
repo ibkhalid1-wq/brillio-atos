@@ -1276,6 +1276,25 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
    * it must exist in the served bytes and not merely after a script has run.
    */
   const slot = (id: string) => region(id, "");
+  /**
+   * A SCREEN CARRIES ITS OWN FABRIC ID, on the element that IS the screen.
+   *
+   * `deriveFabric` emits two `screen:` nodes per entity — `screen:{s}` for the
+   * detail and `screen:{s}:list` for the list. The list one was addressable
+   * because its table slot happens to be keyed by it; the detail one was
+   * addressable nowhere, so on the snapshot build 33 of 66 screen nodes had no
+   * element in the document at all. Nothing noticed: every fidelity assertion
+   * in the suite filtered to `region`, `nav` and `field`, so an entire node
+   * KIND could stop being rendered in silence — the exact failure mode the
+   * fabric→DOM contract exists to stop.
+   *
+   * The attribute goes on the `<section>` rather than a wrapper: the section is
+   * the screen, and a wrapper would put a second element between the router's
+   * `.m-screen` and its container for no gain. It is counted like a region
+   * because `regionCount` is the count of elements a delta can address, and
+   * this element is now one of them.
+   */
+  const screenFid = (id: string) => { regionCount += 1; return ` data-fabric-id="${esc(id)}"`; };
 
   // ── the data island, assembled alongside the skeleton ──
   const roleLegend: string[] = [];
@@ -1930,7 +1949,7 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
     // that text — and the renderer rewrites both to whichever record the URL
     // named, because a detail page headed with somebody else's name is the
     // "Open on row 12 shows row 1" defect wearing a different hat.
-    return `<section class="m-screen" data-screen="detail-${s}" hidden>
+    return `<section class="m-screen" data-screen="detail-${s}"${screenFid(`screen:${s}`)} hidden>
       <div class="m-crumbs">${listed.has(name)
         // THE BREADCRUMB IS A CONTROL TOO — the third emitter, and the one that
         // scaled with the closure: every reachable-only detail screen carries
