@@ -32,6 +32,7 @@ import {
   screenIdsIn, stylesheetIn, withStylesheet, REFINE_CONTRACT, DOCUMENT_REFINE_BUDGET,
 } from "@shared/prototypeRefine.ts";
 import { parentEntitiesFor } from "@shared/prototypeAssembly.ts";
+import { MERIDIAN_VERSION } from "@shared/prototypeDesignSystem.ts";
 import { deriveWorkbenches } from "@shared/atlasWorkbenches.ts";
 import { docSectionDiff } from "@/v3/components/flow/flowDecisions";
 
@@ -352,7 +353,12 @@ describe("what a prototype-build run actually stores", () => {
     // both part of the build a new answer is judged against — and part of the
     // build a rejected answer falls back to. Assembled fresh each run, so
     // without them the operator gets back a build they last saw in round one.
-    const approved = withStylesheet(small.html, ".m-card{outline:3px solid #123456}");
+    // Stamped, because that is what an approved sheet looks like: the pipeline
+    // marks every sheet it installs with the design system it was authored
+    // against, so a skin from an EARLIER system cannot hold a build at the old
+    // design for ever. An unstamped sheet here would be testing a build the
+    // product cannot produce.
+    const approved = withStylesheet(small.html, `:root{--m-ds:${MERIDIAN_VERSION}}\n.m-card{outline:3px solid #123456}`);
     const spec = { screens: [{ screen: "list-account", widgets: [{ kind: "stat", entity: "Account" }] }] };
     const round2 = { ...record, prototypeBuild: { html: approved, screenSpec: spec } };
     const { doc, source } = prototypeArtifactFor(round2, { html: "<html><body>a free-form rewrite</body></html>" });

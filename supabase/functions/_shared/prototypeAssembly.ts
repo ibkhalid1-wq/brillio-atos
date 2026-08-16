@@ -393,6 +393,9 @@ var Q=String.fromCharCode(39);
 var TONE={};
 function mEsc(v){return String(v==null?"":v).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
 function mMoney(n){return typeof n==="number"?"$"+n.toLocaleString("en-US"):mEsc(n)}
+/* Roles whose values are MAGNITUDES — the head and the body read this one
+   table, so a column can never disagree with its own heading. */
+var NUM={monetary:1,quantity:1,percent:1};
 function mCell(R,ri,v){
   if(v==null||v==="")return '<span class="m-cell-sub">—</span>';
   var r=ri<0?"":R[ri];
@@ -488,11 +491,14 @@ function mCell(R,ri,v){
       var v=at(t,ri,spec.ix[i]);
       if(i===0){
         var lead=v;if(lead==null)lead=at(t,ri,t.d);if(lead==null)lead=id;
-        out+='<td><div class="m-cell-main">'+mEsc(lead)+'</div><div class="m-cell-sub">'+mEsc(id)+"</div></td>";
-      }else out+="<td>"+mCell(R,spec.role[i],v)+"</td>";
+        /* THE NAME IS THE WAY IN. Opening this row, never the one the entity
+           happens to showcase. */
+        var main=action
+          ?'<button class="m-cell-go" onclick="'+act(href(slug,id))+'">'+mEsc(lead)+"</button>"
+          :'<div class="m-cell-main">'+mEsc(lead)+"</div>";
+        out+="<td>"+main+'<div class="m-cell-sub">'+mEsc(id)+"</div></td>";
+      }else out+="<td"+(NUM[R[spec.role[i]]]?' class="m-num"':"")+">"+mCell(R,spec.role[i],v)+"</td>";
     }
-    // OPEN THIS ROW, not the one the entity happens to showcase.
-    if(action)out+='<td class="m-row-actions"><button class="m-btn m-btn--secondary m-btn--sm" onclick="'+act(href(slug,id))+'">Open</button></td>';
     return out;
   }
   // A column head SORTS. It used to be painted with a descending arrow on the
@@ -500,11 +506,11 @@ function mCell(R,ri,v){
   function heads(spec,sl){
     var out="",s=sl?st(sl):null;
     for(var i=0;i<spec.head.length;i++){
-      var ci=spec.ix[i];
+      var ci=spec.ix[i],nu=NUM[R[spec.role[i]]]?" m-num":"";
       if(sl&&ci>=0){
         var on=s.sort===ci;
-        out+='<th class="m-th-sort'+(on?(s.dir<0?" is-desc":" is-asc"):"")+'" onclick="sortBy('+Q+sl+Q+","+i+')">'+mEsc(spec.head[i])+"</th>";
-      }else out+="<th>"+mEsc(spec.head[i])+"</th>";
+        out+='<th class="m-th-sort'+nu+(on?(s.dir<0?" is-desc":" is-asc"):"")+'" onclick="sortBy('+Q+sl+Q+","+i+')">'+mEsc(spec.head[i])+"</th>";
+      }else out+="<th"+(nu?' class="m-num"':"")+">"+mEsc(spec.head[i])+"</th>";
     }
     return out;
   }
@@ -586,7 +592,7 @@ function mCell(R,ri,v){
     var body="";
     for(r=start;r<end;r++)body+="<tr"+(flagged[rows[r]]?' class="is-flagged"':"")+">"+cells(t,spec,rows[r],sc.slug,true)+"</tr>";
     fill(spec.region,'<div class="m-table-wrap"><table class="m-table"><thead><tr>'+heads(spec,sc.slug)
-      +'<th style="text-align:right">Actions</th></tr></thead><tbody>'+body+"</tbody></table>"
+      +"</tr></thead><tbody>"+body+"</tbody></table>"
       +'<div class="m-pagination"><span>'+(start+1)+"–"+end+" of "+rows.length
       +(rows.length===all.length?"":" (filtered from "+all.length+")")+'</span><span style="display:flex;gap:8px">'
       +'<button class="m-btn m-btn--secondary" onclick="pageBy('+Q+sc.slug+Q+',-1)"'+(s.page<=0?" disabled":"")+">Prev</button>"
@@ -639,7 +645,7 @@ function mCell(R,ri,v){
       }else inner=empty(kd.emptyTitle,kd.cite);
     }else if(shown.length){
       var body="";for(i=0;i<shown.length;i++)body+="<tr>"+cells(t,kd,shown[i],kd.slug,true)+"</tr>";
-      inner='<div class="m-table-wrap"><table class="m-table"><thead><tr>'+heads(kd,"")+'<th style="text-align:right">Actions</th></tr></thead><tbody>'+body+"</tbody></table></div>"
+      inner='<div class="m-table-wrap"><table class="m-table"><thead><tr>'+heads(kd,"")+"</tr></thead><tbody>"+body+"</tbody></table></div>"
         +(all.length>shown.length&&kd.listed
           ?'<div class="m-card-f"><button class="m-btn m-btn--secondary m-btn--sm" onclick="go('+Q+"#"+kd.slug+Q+')">View all '+all.length+" →</button></div>"
           :"");
@@ -664,7 +670,7 @@ function mCell(R,ri,v){
     st(sc.slug).rec=ri;
     var dl="",i;
     for(i=0;i<d.summary.ix.length;i++)
-      dl+="<div><dt>"+mEsc(d.summary.head[i])+"</dt><dd>"+mCell(R,d.summary.role[i],at(t,ri,d.summary.ix[i]))+"</dd></div>";
+      dl+="<dt>"+mEsc(d.summary.head[i])+"</dt><dd>"+mCell(R,d.summary.role[i],at(t,ri,d.summary.ix[i]))+"</dd>";
     fill(d.summary.region,'<section class="m-card"><div class="m-card-t" style="margin-bottom:14px">Details</div><dl class="m-dl">'+dl+"</dl></section>");
     // The heading names the record on screen. It was baked once, from the
     // showcase record, so every other record wore somebody else's name.
@@ -911,7 +917,7 @@ const PERSONA_RENDERER = `
     var ix=live(t),shown=ix.slice(0,5),body="",i;
     for(i=0;i<shown.length;i++)body+="<tr>"+cells(t,qs,shown[i],qs.slug,true)+"</tr>";
     var inner=shown.length
-      ?'<div class="m-table-wrap"><table class="m-table"><thead><tr>'+heads(qs,"")+'<th style="text-align:right">Actions</th></tr></thead><tbody>'
+      ?'<div class="m-table-wrap"><table class="m-table"><thead><tr>'+heads(qs,"")+"</tr></thead><tbody>"
         +body+"</tbody></table></div>"
         +'<div class="m-card-f"><span style="margin-right:auto">'+lanes(t,qs.status,ix)+"</span>"
         +'<button class="m-btn m-btn--secondary m-btn--sm" onclick="go('+Q+"#"+qs.slug+Q+')">View all '+ix.length+" →</button></div>"
@@ -2345,10 +2351,11 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
         : `<span class="m-crumb-flat">${esc(name)}</span>`} / <span data-crumb="${s}">${esc(headline)}</span></div>
       <header class="m-page-h"><div><div class="m-eyebrow">${esc(entityLabel(name))}</div><h1 class="m-title" data-headline="${s}">${esc(headline)}</h1></div>
       <div class="m-page-acts">${recordActionsFor(name, s)}<button class="m-btn m-btn--secondary" onclick="editRec('${s}')">Edit</button><button class="m-btn m-btn--danger" onclick="delRec('${s}')">Delete</button></div></header>
-      ${slot(`region:${s}:summary`)}
-      ${parentBand}
-      ${agentBand(name)}
-      ${children}</section>`;
+      <div class="m-detail">
+      <div class="m-detail-rail">${slot(`region:${s}:summary`)}
+      ${parentBand}</div>
+      <div class="m-detail-main">${agentBand(name)}
+      ${children}</div></div></section>`;
   };
 
   // ── one form per entity ──

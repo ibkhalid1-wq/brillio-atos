@@ -131,7 +131,7 @@ describe("the five named controls do what they say", () => {
     const a = app(shopHtml);
     const all = a.idsIn(ACCOUNTS);
     expect(all.length).toBe(20);                     // page one of 24
-    const target = a.region(ACCOUNTS).querySelector("tbody tr .m-cell-main")!.textContent!;
+    const target = a.region(ACCOUNTS).querySelector("tbody tr .m-cell-go, tbody tr .m-cell-main")!.textContent!;
     a.type(a.doc.querySelector('input[data-search="account"]'), target);
     const filtered = a.idsIn(ACCOUNTS);
     expect(filtered.length).toBeGreaterThan(0);
@@ -250,7 +250,7 @@ describe("Open shows the record that was clicked", () => {
     const opened: string[] = [];
     for (const n of [0, 5, 11, 19]) {
       const id = rows[n].querySelector(".m-cell-sub")!.textContent!;
-      const name = rows[n].querySelector(".m-cell-main")!.textContent!;
+      const name = rows[n].querySelector(".m-cell-go, .m-cell-main")!.textContent!;
       a.click(rows[n].querySelector("button"));
       expect(a.visible()).toEqual(["detail-account"]);
       const detail = a.screen("detail-account");
@@ -446,7 +446,7 @@ describe("a board is offered where there is a status, and nowhere else", () => {
 
   it("the board is a view of the filter's result, not of everything", () => {
     const a = app(shopHtml);
-    const one = a.region(ACCOUNTS).querySelector("tbody tr .m-cell-main")!.textContent!;
+    const one = a.region(ACCOUNTS).querySelector("tbody tr .m-cell-go, tbody tr .m-cell-main")!.textContent!;
     a.type(a.doc.querySelector('input[data-search="account"]'), one);
     a.click(a.doc.querySelector('[data-view="account"] [data-v="board"]'));
     const total = [...a.region(ACCOUNTS).querySelectorAll(".m-board-col .m-badge")]

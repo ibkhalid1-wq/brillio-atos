@@ -47,8 +47,11 @@ describe("a collection row is a way in, not a picture of one", () => {
     expect(cards.length, "no detail screen drew a collection at all").toBeGreaterThan(3);
     for (const c of cards) {
       for (const row of c.rows) {
-        const open = row.querySelector(".m-row-actions button");
+        // The affordance is the record's OWN NAME — a column of identical
+        // filled buttons said nothing the name does not, and shouted it.
+        const open = row.querySelector(".m-cell-go");
         expect(open, `${c.screen} · ${c.title}: a row with no way into it`).not.toBeNull();
+        expect(open!.tagName, "must be a real button — keyboard and screen reader").toBe("BUTTON");
       }
     }
   });
@@ -56,7 +59,7 @@ describe("a collection row is a way in, not a picture of one", () => {
   it("the control goes to the CHILD's detail, not back to the record you are on", () => {
     const { document } = load().window;
     const [first] = collectionCards(document);
-    const open = first.rows[0].querySelector(".m-row-actions button")!;
+    const open = first.rows[0].querySelector(".m-cell-go")!;
     const handler = open.getAttribute("onclick") ?? "";
     // The row's OWN id, not the entity's showcase record — the defect `cells`
     // records in its own comment, guarded here at the level it matters.
@@ -66,9 +69,11 @@ describe("a collection row is a way in, not a picture of one", () => {
     expect(handler).not.toContain(first.screen.replace("detail-", "") + "'");
   });
 
-  it("the head row still matches the body — an action column needs a column", () => {
+  it("the head row still matches the body", () => {
     // A body row one cell wider than its head is the kind of defect that reads
-    // as a rendering bug to a client and never as a missing <th>.
+    // as a rendering bug to a client and never as a missing <th>. With the way
+    // in moved INTO the name cell there is no extra column to keep in step —
+    // which is the point, and this is what proves it.
     const { document } = load().window;
     for (const c of collectionCards(document)) {
       const heads = c.card.querySelectorAll("thead th").length;
@@ -88,7 +93,7 @@ describe("the walk reaches the bottom", () => {
     const detailOf = (slug: string) => document.querySelector(`section[data-screen="detail-${slug}"]`);
     const firstChildSlug = (screen: Element | null): string | null => {
       if (!screen) return null;
-      const open = screen.querySelector(".m-card tbody tr .m-row-actions button");
+      const open = screen.querySelector(".m-card tbody tr .m-cell-go");
       const m = /#([a-z0-9-]+)\//.exec(open?.getAttribute("onclick") ?? "");
       return m ? m[1] : null;
     };
@@ -111,7 +116,7 @@ describe("the walk reaches the bottom", () => {
   it("every screen the walk lands on exists — a control into nothing is worse than none", () => {
     const { document } = load().window;
     const screens = new Set([...document.querySelectorAll("[data-screen]")].map((s) => s.getAttribute("data-screen")));
-    for (const button of document.querySelectorAll(".m-card .m-row-actions button, .m-chip")) {
+    for (const button of document.querySelectorAll(".m-card .m-cell-go, .m-chip")) {
       const m = /#([a-z0-9-]+)/.exec(button.getAttribute("onclick") ?? "");
       if (!m) continue;
       expect(screens.has(`detail-${m[1]}`), `nothing at #${m[1]}`).toBe(true);

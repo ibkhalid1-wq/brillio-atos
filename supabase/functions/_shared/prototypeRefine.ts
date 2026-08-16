@@ -45,7 +45,19 @@ import { assemblePrototype, paletteFor, parentEntitiesFor, screenOptionsFor } fr
 import { generateSeed } from "./seedData.ts";
 import { storedOverridesOf } from "./designOverrides.ts";
 import { SCREEN_SPEC_CONTRACT, WIDGET_REGION_PREFIX, type PrototypeSpecSchema } from "./prototypeScreenSpec.ts";
-import { meridianStylesheet, resolveTheme, themePatchOf, type PrototypeTheme } from "./prototypeDesignSystem.ts";
+import { MERIDIAN_VERSION, meridianStylesheet, resolveTheme, themePatchOf, type PrototypeTheme } from "./prototypeDesignSystem.ts";
+
+/** Which design system a stored stylesheet came from. Absent ⇒ older than the
+ *  stamp, which is the same answer for our purposes: not this one. */
+function dsVersionOf(css: string): number | null {
+  const m = /--m-ds:\s*(\d+)/.exec(css);
+  return m ? Number(m[1]) : null;
+}
+
+/** Mark a sheet as authored against the current system, if it does not say. */
+function stampSheet(css: string): string {
+  return dsVersionOf(css) === null ? `:root{--m-ds:${MERIDIAN_VERSION}}\n${css}` : css;
+}
 
 /** The assembled build a refine starts from, plus everything a refine must preserve. */
 export interface PrototypeBaseline {
@@ -556,6 +568,13 @@ export function baselineWithPriorSkin(baseline: PrototypeBaseline, priorHtml: un
   if (ids.length !== baseline.fabricIds.length || ids.join("\u0000") !== baseline.fabricIds.join("\u0000")) return baseline;
   const css = stylesheetIn(priorHtml);
   if (!css.trim() || css === baseline.stylesheet) return baseline;
+  // A SKIN FROM AN EARLIER DESIGN SYSTEM IS NOT AN APPROVED SKIN, IT IS AN OLD
+  // ONE. "Differs from stock" cannot tell a deliberate restyle from a sheet
+  // that is merely out of date, so without this the day the system improves is
+  // the day every existing programme stops being able to receive it — the
+  // upgrade lands in the code, the tests pass, and no client ever sees it.
+  // Measured the first time it happened, on the live preview.
+  if (dsVersionOf(css) !== MERIDIAN_VERSION) return baseline;
   // A PRIOR SKIN THAT DOES NOT PARSE IS NOT A SKIN. Before this check, one
   // broken restyle poisoned every later build: the stored sheet was re-adopted
   // here on each round ("the skin already approved"), so even a full
@@ -881,7 +900,11 @@ export function resolvePrototypeDoc(
     ]);
   }
   if (css) {
-    const restyled = withStylesheet(effective.html, css);
+    // A HAND-AUTHORED SHEET IS STILL AUTHORED AGAINST THIS SYSTEM, so it carries
+    // the stamp. Without it the restyle would be installed happily and then
+    // refused as "from an older design system" on the very next build — a skin
+    // approved in one round and dropped in the next, silently.
+    const restyled = withStylesheet(effective.html, stampSheet(css));
     const check = checkRefinedPrototype(effective, restyled);
     if (check.ok) return stamp(restyled, "restyled", check, rejected);
     return stamp(effective.html, "assembled", check, [

@@ -68,10 +68,16 @@ const declarationOrderOntology = {
  *  none of the cards this file counts. */
 const parse = (html: string) => renderedDoc(html);
 const detailScreens = (doc: Document) => Array.from(doc.querySelectorAll('section[data-screen^="detail-"]'));
-/** Sections standing OPEN: the region divs that are direct children of the
- *  screen, minus the record's own summary. */
+/**
+ * Sections standing OPEN: the region divs nothing hides, minus the record's own
+ * summary. Read by the DISTINCTION (not inside a `details`) rather than by
+ * depth — "direct child of the screen" said open and meant one level down, so a
+ * layout wrapper reported every section as dropped on a build where nothing had
+ * moved.
+ */
 const openSections = (screen: Element) =>
-  Array.from(screen.children)
+  Array.from(screen.querySelectorAll("[data-fabric-id]"))
+    .filter((e) => !e.closest("details"))
     .map((c) => c.getAttribute("data-fabric-id") ?? "")
     .filter((id) => id.startsWith("region:") && !id.endsWith(":summary"));
 const collapsedSections = (screen: Element) =>

@@ -47,6 +47,22 @@ export interface PrototypeTheme {
  * sandboxed, self-contained prototype renders correctly with no webfont fetch
  * (Inter/Outfit are honoured when present, never required).
  */
+/**
+ * THE DESIGN SYSTEM'S OWN VERSION, stamped into every sheet it emits.
+ *
+ * A prior build's stylesheet is re-adopted as "the skin the operator approved"
+ * whenever it differs from the stock one. That test cannot tell a deliberate
+ * restyle from a sheet that is simply OLD — so the day this system improves,
+ * every existing programme keeps the sheet it was built with and no upgrade
+ * ever reaches a client. Observed the first time it happened: the polish landed
+ * in the code, the tests went green, and the live preview was unchanged.
+ *
+ * Bump it whenever the emitted sheet changes in a way a stale copy should not
+ * outlive. `baselineWithPriorSkin` reads it back and refuses a skin from an
+ * earlier system rather than holding the build at the old design.
+ */
+export const MERIDIAN_VERSION = 2;
+
 export const MERIDIAN_TOKENS: PrototypeTheme = {
   brand: "#211747",
   brandSoft: "#eae8f2",
@@ -62,8 +78,14 @@ export const MERIDIAN_TOKENS: PrototypeTheme = {
   warn: "#9c5c0e", // AA on white (5.32:1); source #b26a12 failed AA-normal at 4.23
   danger: "#b3402a",
   radius: 12,
-  fontSans: '"Inter", "Outfit", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-  fontDisplay: '"Outfit", "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
+  // THE DOCUMENT IS SELF-CONTAINED, SO IT CANNOT FETCH A TYPEFACE. Naming Inter
+  // first and stopping at `system-ui` left the one decision that carries the
+  // most perceived quality to whatever the operating system happened to default
+  // to. Inter and Outfit stay first for the machines that have them; behind
+  // them each platform's best UI face is named EXPLICITLY, in order, so the
+  // fallback is a choice rather than an accident. No request, no bytes.
+  fontSans: '"Inter", "Inter var", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", system-ui, Roboto, "Helvetica Neue", Arial, sans-serif',
+  fontDisplay: '"Outfit", "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI Variable Display", "Segoe UI", system-ui, Roboto, sans-serif',
 };
 
 /**
@@ -272,6 +294,7 @@ export function meridianRootVars(theme?: Partial<PrototypeTheme> | null): string
   const r = t.radius;
   const c = brandChrome(t.brand, t.ink);
   return `:root{
+  --m-ds:${MERIDIAN_VERSION};
   --m-brand:${t.brand};--m-brand-soft:${t.brandSoft};--m-accent:${t.accent};
   --m-brand-strong:${c.brandStrong};--m-brand-mark:${c.brandMark};
   --m-on-brand:${c.onBrand};--m-on-brand-dim:${c.onBrandDim};--m-on-brand-mute:${c.onBrandMute};
@@ -294,8 +317,35 @@ export function meridianRootVars(theme?: Partial<PrototypeTheme> | null): string
  * (docs/aura/prototype-design-system.md). Pure appearance; no content, no
  * ontology. Pass a theme to bake per-engagement overrides into `:root`.
  */
+/**
+ * THE NOTES ARE FOR WHOEVER MAINTAINS THIS SHEET, NOT FOR THE CLIENT.
+ *
+ * 3,417 bytes of comments were being shipped inside every prototype — to the
+ * stakeholder who opens it, and again into the model's context on every
+ * document-mode refine, where they compete for room with the application
+ * itself. On the build that sets the ceiling that was 6% of the whole document,
+ * spent on explanations addressed to a developer who will read them HERE.
+ *
+ * So they stay in the source, where they are useful, and leave at emit. Not a
+ * minifier: whitespace, line breaks and the shape of the sheet are all kept, so
+ * the served CSS is still readable by anyone who opens the file. Only the
+ * commentary goes.
+ *
+ * Safe by inspection of what this sheet contains: no `url()`, no data URI, and
+ * no string value holding a slash-star — the only `content:` values are single
+ * glyphs and the empty string. A comment with an unbalanced brace inside it is
+ * removed too, which can only help `checkStylesheetSyntax`.
+ */
+export function stripSheetComments(css: string): string {
+  return css
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    // A line that was only a comment leaves its indent and its newline behind.
+    .replace(/^[ \t]+$/gm, "")
+    .replace(/\n{3,}/g, "\n\n");
+}
+
 export function meridianStylesheet(theme?: Partial<PrototypeTheme> | null): string {
-  return `${meridianRootVars(theme)}
+  return stripSheetComments(`${meridianRootVars(theme)}
 *,*::before,*::after{box-sizing:border-box}
 body{margin:0;background:var(--m-bg);color:var(--m-ink);font-family:var(--m-font);font-size:14px;line-height:1.55;-webkit-font-smoothing:antialiased}
 h1,h2,h3,h4{font-family:var(--m-font-display);margin:0;letter-spacing:-.02em;line-height:1.1}
@@ -355,8 +405,33 @@ a{color:var(--m-brand);text-decoration:none}
 /* Cards & panels */
 .m-card{background:var(--m-surface);border:1px solid var(--m-line);border-radius:var(--m-r-lg);box-shadow:var(--m-shadow-sm);padding:var(--m-sp-5)}
 .m-card-h{display:flex;align-items:center;justify-content:space-between;gap:var(--m-sp-3);margin-bottom:var(--m-sp-4)}
-.m-card-t{font-size:15px;font-weight:700}
+/* THE MISSING STEP. 32px title then 15px card titles is not a hierarchy — it is
+   a title and then everything else. A page groups by its section heads, so they
+   get a size of their own. */
+.m-card-t{font-size:19px;font-weight:700;font-family:var(--m-font-display);letter-spacing:-.01em}
 .m-grid{display:grid;gap:var(--m-sp-4)}
+/* THE DETAIL SCREEN IS TWO COLUMNS. A record with six short fields used to render
+   a 1,100px card holding two columns of text and half a page of nothing, with
+   every relation stacked beneath it at full width — a three-screen scroll with
+   no hierarchy between THIS RECORD and what hangs off it. The record's own facts
+   and the links up to its parents go in a rail; the collections it owns get the
+   main column, where a table has room to be a table. Below 1,040px it stacks,
+   exactly as before.
+
+   THE BREAKPOINT SERVES THE VIEWPORT THE DEMO HAPPENS IN, not the one the
+   operator happens to be previewing in. Tried at 900 so the studio's own 949px
+   frame would compose too, and the main column came out at ~490px: the agent
+   cards wrapped their badges onto separate lines and read worse than the stack
+   they replaced. The operator already sees the composed version — the Design
+   Loop stage draws at 1,280 — so the narrow frame stacks, which is the better
+   rendering at that width anyway. Nothing moves in the DOM: same regions, same order, same
+   ids — the grid re-orders them and only above the breakpoint. */
+.m-detail{display:grid;gap:var(--m-sp-5);align-items:start}
+@media (min-width:1040px){
+  .m-detail{grid-template-columns:minmax(0,1fr) 340px}
+  .m-detail>.m-detail-rail{grid-column:2;grid-row:1;position:sticky;top:var(--m-sp-6);display:flex;flex-direction:column;gap:var(--m-sp-4)}
+  .m-detail>.m-detail-main{grid-column:1;grid-row:1;display:flex;flex-direction:column;gap:var(--m-sp-5);min-width:0}
+}
 @media (min-width:900px){.m-grid--2{grid-template-columns:1fr 1fr}.m-grid--3{grid-template-columns:repeat(3,1fr)}}
 
 /* Forms */
@@ -384,8 +459,28 @@ a{color:var(--m-brand);text-decoration:none}
 .m-table tbody tr:hover{background:var(--m-surface-2)}
 .m-table tbody tr.is-flagged{background:color-mix(in srgb,var(--m-danger) 5%,transparent);box-shadow:inset 3px 0 0 var(--m-danger)}
 .m-cell-main{font-weight:600;color:var(--m-ink)}
+/* THE NAME IS THE WAY IN. A column of identical filled "Open" buttons is the
+   loudest thing on a table and says nothing a record's own name does not — so
+   the drill-down moved INTO the cell. A real button, so it is keyboard-reachable
+   and announced; styled as the text it replaces, so the table reads as data
+   rather than as a form. The chevron appears on hover and focus: the affordance
+   is discoverable without being permanent furniture. */
+.m-cell-go{font:inherit;font-weight:600;font-size:13px;color:var(--m-ink);background:none;border:0;padding:0;
+  text-align:left;cursor:pointer;display:inline-flex;align-items:center;gap:5px;border-radius:3px}
+.m-cell-go::after{content:"›";font-size:15px;line-height:1;color:var(--m-brand);opacity:0;transform:translateX(-3px);
+  transition:opacity var(--m-dur) var(--m-ease),transform var(--m-dur) var(--m-ease)}
+.m-cell-go:hover{color:var(--m-brand)}
+.m-table tbody tr:hover .m-cell-go::after,.m-cell-go:focus-visible::after{opacity:1;transform:none}
+.m-cell-go:focus-visible{box-shadow:var(--m-ring);color:var(--m-brand)}
+@media (hover:none){.m-cell-go::after{opacity:1;transform:none}}
 .m-cell-sub{font-size:11.5px;color:var(--m-muted);margin-top:2px}
 .m-row-actions{display:flex;gap:6px;justify-content:flex-end}
+/* NUMBERS LINE UP. They already carried tabular figures — the intent was there
+   — but the cell was left-aligned, so two amounts could not be compared by eye.
+   Set from the DERIVED role, on the head and the body together, so a column
+   never disagrees with its own heading. */
+.m-table th.m-num,.m-table td.m-num{text-align:right;font-variant-numeric:tabular-nums}
+
 .m-pagination{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-top:1px solid var(--m-line);font-size:12.5px;color:var(--m-muted)}
 .m-pagination .m-btn{padding:4px 10px}
 
@@ -521,9 +616,12 @@ a{color:var(--m-brand);text-decoration:none}
 .m-section-h{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--m-muted);margin-bottom:var(--m-sp-3)}
 
 /* Detail definition list */
-.m-dl{display:grid;grid-template-columns:auto 1fr;gap:10px 18px;font-size:13.5px}
-.m-dl dt{color:var(--m-muted);font-weight:600}
-.m-dl dd{margin:0;color:var(--m-ink)}
+/* LABEL BESIDE VALUE, not above it. Each pair used to be wrapped in a <div>, so
+   the "auto 1fr" grid laid out two COLUMNS OF STACKED PAIRS and the eye read it
+   in four diagonal passes. Unwrapped, the same declaration does what it says. */
+.m-dl{display:grid;grid-template-columns:auto minmax(0,1fr);gap:11px 20px;font-size:13.5px;align-items:baseline}
+.m-dl dt{color:var(--m-muted);font-weight:500}
+.m-dl dd{margin:0;color:var(--m-ink);font-weight:500}
 @media (max-width:720px){.m-app{grid-template-columns:1fr}.m-side{position:static;height:auto;flex-direction:row;flex-wrap:wrap}.m-main{padding:var(--m-sp-4)}}
-`;
+`);
 }

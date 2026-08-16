@@ -97,10 +97,20 @@ const listSpec = (doc: Document, entity: string) => {
 };
 const detailScreen = (doc: Document, entity: string) =>
   doc.querySelector(`section[data-screen="detail-${slug(entity)}"]`)!;
-/** Sections standing OPEN: region divs that are direct children of the screen,
- *  minus the record's own summary — the collapsed ones live inside `details`. */
+/**
+ * Sections standing OPEN: region divs the screen shows without a disclosure,
+ * minus the record's own summary. Collapsed ones live inside a `details`.
+ *
+ * Read by that DISTINCTION rather than by depth. It used to walk
+ * `screen.children`, which said "open" and meant "one level down from the
+ * section" — so wrapping the detail screen in a two-column layout reported every
+ * collection as missing on a build where nothing had moved. What makes a section
+ * open is that nothing hides it, and that is what this asks.
+ */
 const openSections = (screen: Element) =>
-  [...screen.children].map((c) => c.getAttribute("data-fabric-id") ?? "")
+  [...screen.querySelectorAll("[data-fabric-id]")]
+    .filter((e) => !e.closest("details"))
+    .map((c) => c.getAttribute("data-fabric-id") ?? "")
     .filter((id) => id.startsWith("region:") && !id.endsWith(":summary"));
 const collapsedSections = (screen: Element) =>
   [...screen.querySelectorAll("details [data-fabric-id]")].map((e) => e.getAttribute("data-fabric-id") ?? "");
@@ -168,11 +178,9 @@ describe("a toggle changes the built application", () => {
     const card = chosen.querySelector('[data-fabric-id="region:account:contact"]')!;
     const heads = [...card.querySelectorAll("thead th")].map((th) => (th.textContent ?? "").trim());
     // The FK back to the context is dropped there (the same value down the
-    // column), so what survives of the choice is the rest of it, in order —
-    // followed by the Actions column, because a collection row opens the record
-    // it names. Assert the DATA columns and let the way-in be the way-in.
-    expect(heads.filter((h) => h !== "Actions")).toEqual(["Contact Name"]);
-    expect(heads).toContain("Actions");
+    // column), so what survives of the choice is the rest of it, in order. No
+    // Actions column any more: the way in is the record's own name, inline.
+    expect(heads).toEqual(["Contact Name"]);
   });
 
   it("drops a column the ontology no longer holds, and falls back when nothing survives", () => {
