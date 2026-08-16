@@ -24,10 +24,10 @@ const end = EDGE.indexOf("/** True when a Listen conversation is on record");
 const section = EDGE.slice(start, end);
 const js = ts.transpileModule(
   `const isRecord = (v: unknown) => typeof v === "object" && v !== null && !Array.isArray(v);\n${section}\n` +
-  `return { reconcileVotedOntology, resolveProvisionalPacks, ontologyVocabularySteering, clientVocabularyPack, crmDomainPack, ontologyNameKey, ontologyStandardKey, ONTOLOGY_VOTE_N, ONTOLOGY_VOTE_THRESHOLD, ONTOLOGY_MENU_VERBS };`,
+  `return { reconcileVotedOntology, resolveProvisionalPacks, ontologyVocabularySteering, clientVocabularyPack, crmDomainPack, ontologyNameKey, ontologyStandardKey, ONTOLOGY_VOTE_N, ONTOLOGY_VOTE_THRESHOLD, ONTOLOGY_MENU_VERBS, packRelationFactsOf, packAttributesByClassOf, ONTOLOGY_VERB_PRIORS };`,
   { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.None } },
 ).outputText;
-type ResolvedPack = { vocabulary: string; entities: Array<{ name: string; uri: string; definition?: string; aliases: string[]; core?: boolean; areaHints?: string[] }>; relations: Array<{ from: string; verb: string; to: string }> };
+type ResolvedPack = { vocabulary: string; entities: Array<{ name: string; uri: string; definition?: string; aliases: string[]; core?: boolean; areaHints?: string[]; attributes?: Array<{ name: string; kind: string; values?: string[] }> }>; relations: Array<{ from: string; verb: string; to: string; prior?: string }> };
 const sandbox = new Function(js)() as {
   reconcileVotedOntology: (drafts: Array<Record<string, unknown>>, opts: Record<string, unknown>) => Record<string, unknown>;
   resolveProvisionalPacks: (steering: string) => ResolvedPack[];
@@ -39,6 +39,9 @@ const sandbox = new Function(js)() as {
   ONTOLOGY_VOTE_N: number;
   ONTOLOGY_VOTE_THRESHOLD: number;
   ONTOLOGY_MENU_VERBS: string[];
+  packRelationFactsOf: (packs: ResolvedPack[]) => Map<string, { prior: string; vocabulary: string }>;
+  packAttributesByClassOf: (packs: ResolvedPack[]) => Map<string, { attributes: Array<{ name: string; kind: string; values?: string[] }>; vocabulary: string }>;
+  ONTOLOGY_VERB_PRIORS: Record<string, string>;
 };
 const packsFor = (industry: string, segment?: string) =>
   sandbox.resolveProvisionalPacks(sandbox.ontologyVocabularySteering(industry, segment));
@@ -814,5 +817,96 @@ describe("area coverage promotion (specialist packs)", () => {
     };
     const got = names(sandbox.reconcileVotedOntology(Array.from({ length: 5 }, withInvented), surgeryOpts()));
     expect(got).not.toContain("Turnaround Velocity Index");
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// STANDARD PRIORS AND ATTRIBUTES ARE DATA, NOT RECALL (2026-08-16).
+//
+// The Laila New 2 build proved the gap: the prompt ASKED for standardPrior,
+// the drafts recalled none, and the reconciler minted every relation
+// `cardinality: "unknown"` with no prior anyway — drafts' priors are discarded
+// by the vote. Downstream, all 12 relations rendered as unconfirmed shrugs and
+// 13 of 15 entities carried exactly one attribute. The facts now ride the
+// packs: a verb-shape default (`ONTOLOGY_VERB_PRIORS`) under explicit per-pack
+// overrides, and per-class attribute sets merged onto every asserted entity.
+// ═════════════════════════════════════════════════════════════════════════════
+describe("standard priors and attributes ride the packs", () => {
+  const CRM_MANDATE = "Replace Salesforce as the CRM running the customer relationship management lifecycle across Sales, Marketing and GTM: campaigns, leads, opportunities, accounts and contracts.";
+  const crmPack = sandbox.crmDomainPack(CRM_MANDATE)!;
+  const crmPacks = [...packsFor("Technology & Software"), crmPack];
+  const crmOpts = () => {
+    const opts = {
+      ...groundingFor(crmPacks, CRM_MANDATE, "the sponsor", ["Sales", "Marketing", "Legal"]),
+      packRelationFacts: sandbox.packRelationFactsOf(crmPacks),
+      packAttributesByClass: sandbox.packAttributesByClassOf(crmPacks),
+    };
+    // The runner asserts the functional-domain pack's cores too (the mandate
+    // named the domain) — without this, extended-demotion culls the CRM
+    // classes and the fixture tests nothing.
+    for (const e of crmPack.entities) if (e.core) (opts.coreClasses as Set<string>).add(e.name);
+    return opts;
+  };
+  const crmDraft = () => ({
+    entities: ["Lead", "Opportunity", "Account", "Contact", "Campaign", "Contract"].map((name) => ({
+      name, definition: `${name}.`, area: "Sales",
+      attributes: name === "Account" ? [{ name: "accountName", evidence: "sponsor said so — verbatim" }] : [],
+      systemOfRecord: null, aliases: [], evidence: "from the sponsor mandate — to confirm",
+    })),
+    relations: [
+      { from: "Campaign", relation: "produces", to: "Lead", cardinality: "unknown" },
+      { from: "Contact", relation: "is part of", to: "Account", cardinality: "unknown" },
+    ],
+    events: [], standardAlignment: [], gaps: [],
+  });
+  const doc = sandbox.reconcileVotedOntology(Array.from({ length: 5 }, crmDraft) as never, crmOpts());
+  const relOf = (from: string, to: string) =>
+    (doc.relations as Array<Record<string, unknown>>).find((r) => r.from === from && r.to === to);
+
+  it("a voted standard association carries the standard's prior — cardinality stays unknown", () => {
+    const r = relOf("Campaign", "Lead")!;
+    expect(r.cardinality).toBe("unknown");
+    expect(r.standardPrior).toBe("1:N");                       // "produces" verb shape
+    expect(String(r.standardPriorSource)).toMatch(/CRM/);
+    expect(relOf("Contact", "Account")!.standardPrior).toBe("N:1");  // "is part of"
+  });
+
+  it("closure relations carry priors too, and an explicit pack prior overrides the verb default", () => {
+    // Territory→Account is closed in (no draft voted it); its pack prior 1:N
+    // must beat the "applies to" default N:1 — one territory, many accounts.
+    const facts = sandbox.packRelationFactsOf([crmPack]);
+    expect(facts.get("Territory applies to Account")?.prior).toBe("1:N");
+    expect(sandbox.ONTOLOGY_VERB_PRIORS["applies to"]).toBe("N:1");
+    // And every closure-minted relation that matches a pack fact has a prior.
+    const withPrior = (doc.relations as Array<Record<string, unknown>>).filter((r) => r.standardPrior);
+    expect(withPrior.length).toBeGreaterThan(2);
+  });
+
+  it("a mandate chain link gets NO prior — the standard did not state that shape", () => {
+    for (const r of (doc.relations as Array<Record<string, unknown>>)) {
+      if (r.relation === "leads to" && !String(r.standardPriorSource ?? "").length) {
+        expect(r.standardPrior).toBeUndefined();
+      }
+    }
+  });
+
+  it("an asserted entity carries the standard's attribute set, each marked to-confirm", () => {
+    const lead = (doc.entities as Array<Record<string, unknown>>).find((e) => e.name === "Lead")!;
+    const attrs = lead.attributes as Array<Record<string, unknown>>;
+    const source = attrs.find((a) => a.name === "leadSource")!;
+    expect(source.kind).toBe("enum");
+    expect(source.values).toContain("Referral");
+    expect(String(source.evidence)).toMatch(/standardBackbone — to confirm/);
+    expect(attrs.length).toBeGreaterThanOrEqual(6);
+  });
+
+  it("a drafted attribute wins its name collision — mandate evidence outranks the pack", () => {
+    const account = (doc.entities as Array<Record<string, unknown>>).find((e) => e.name === "Account")!;
+    const attrs = account.attributes as Array<Record<string, unknown>>;
+    const name = attrs.filter((a) => a.name === "accountName");
+    expect(name).toHaveLength(1);
+    expect(String(name[0].evidence)).toMatch(/sponsor said so/);
+    // …and the pack's OTHER attributes still arrive around it.
+    expect(attrs.map((a) => a.name)).toContain("health");
   });
 });

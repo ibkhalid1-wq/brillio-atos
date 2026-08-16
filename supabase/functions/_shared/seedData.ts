@@ -203,7 +203,7 @@ function valueFor(
       if (listed) return listed[Math.floor(rnd() * listed.length)];
       break;
     case "code": return `${entity.slice(0, 3).toUpperCase()}-${String(1000 + Math.floor(rnd() * 8999))}`;
-    case "person-ref": return PEOPLE[Math.floor(rnd() * PEOPLE.length)];
+    case "person-ref": return listed ? listed[Math.floor(rnd() * listed.length)] : PEOPLE[Math.floor(rnd() * PEOPLE.length)];
     // A reference to another record reads as THAT RECORD'S name. When the
     // ontology names the entity being referenced, the value is the actual title
     // of the actual row the FK points at — so an Opportunity column on a
@@ -217,6 +217,11 @@ function valueFor(
     case "identifier": return `${entity.replace(/[^A-Za-z]/g, "").slice(0, 3).toUpperCase()}-${String(i + 1).padStart(5, "0")}`;
     default: break;
   }
+  // A field with a CLOSED VALUE SET draws from it whatever role the name
+  // derivation guessed — the set is a stated fact about the field, the role is
+  // an inference about the name, and facts outrank inferences. Same draw
+  // count as the free-text branch, so covering one field shifts no other.
+  if (listed) return listed[Math.floor(rnd() * listed.length)];
   return `${COMPANIES[i % COMPANIES.length]} ${WORDS[Math.floor(rnd() * WORDS.length)]}`;
 }
 
@@ -246,6 +251,20 @@ export function generateSeed(ontology: Record<string, unknown>, version: string,
   const attrsOf = (name: string) => {
     const e = entities.find((x) => String(x.name) === name);
     return (Array.isArray(e?.attributes) ? e!.attributes : []).map((a) => (typeof a === "string" ? a : String((a as { name?: unknown })?.name ?? ""))).filter(Boolean);
+  };
+  /** The closed value set an attribute CARRIES ON THE ONTOLOGY ITSELF — the
+   * standard backbone's enum values, written onto the attribute by the
+   * reconciler ("values": [...]). Ranked below the programme's own value
+   * vocabulary (a stakeholder-confirmable artifact) and above the generic
+   * pools: a Lead Source drawn from here reads "Referral", not "Priority" —
+   * a pool word standing in for a value nobody stated. */
+  const attrValuesOf = (name: string, attr: string): readonly string[] | undefined => {
+    const e = entities.find((x) => String(x.name) === name);
+    const row = (Array.isArray(e?.attributes) ? e!.attributes : []).find((a) =>
+      !!a && typeof a === "object" && String((a as { name?: unknown }).name ?? "") === attr);
+    const values = row && typeof row === "object" ? (row as { values?: unknown }).values : undefined;
+    const list = Array.isArray(values) ? values.filter((v): v is string => typeof v === "string" && !!v.trim()) : [];
+    return list.length ? list : undefined;
   };
   const roleOf = new Map(roles.attributeRoles.map((r) => [`${r.entity} ${r.attribute}`, r.role] as const));
   const refOf = new Map(roles.attributeRoles.filter((r) => r.refEntity).map((r) => [`${r.entity} ${r.attribute}`, r.refEntity!] as const));
@@ -375,7 +394,7 @@ export function generateSeed(ontology: Record<string, unknown>, version: string,
           const v = ta ? row[ta] : undefined;
           return typeof v === "string" && v ? v : String(row.id);
         };
-        rec[a] = valueFor(roleOf.get(`${name} ${a}`), name, a, i, rnd, refValue, vocabulary?.values.get(vocabularyKey(name, a)));
+        rec[a] = valueFor(roleOf.get(`${name} ${a}`), name, a, i, rnd, refValue, vocabulary?.values.get(vocabularyKey(name, a)) ?? attrValuesOf(name, a));
       });
       // FK columns — `joinKeyFor` is the ONE definition, shared with the fabric
       // region that declares the relation, so the reader never has to guess how

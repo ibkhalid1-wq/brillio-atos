@@ -1414,7 +1414,10 @@ STANDARD-GROUNDED RELATIONS: entities alone do not ground an ontology — relati
 (b) the mandate's stated process sequence — chain the stages exactly as the mandate orders them with "leads to".
 RELATION VERBS are a CLOSED MENU: conducts, runs, manages, supports, produces, measures, leads to, is part of, applies to, participates in. Never author a synonym — "oversees", "drives", "results in", "enables", "is identified by" are all banned; pick the closest menu verb, and when torn between two menu verbs use the one listed EARLIER in the menu. Cardinality on a provisional draft is ALWAYS "unknown" — cardinality is precisely what interviews confirm; never guess 1:N. But WHERE THE INDUSTRY STANDARD ALREADY STATES THE SHAPE, say so alongside: set "standardPrior" to that vocabulary's cardinality (FIBO, FHIR, GS1, schema.org, whichever governs this industry) and name the source in "standardPriorSource". The cardinality field stays "unknown" — the prior is evidence for how to DRAW the relation before anyone is interviewed, never an answer to the question. Omit both when no standard covers the pair; never invent a prior to fill the field. Set "optionality" the same way — "required" or "optional" for the CHILD side when the standard or the mandate states it, omitted otherwise — because whether a parent may have zero children is what decides if an empty screen is a finding or a default. A relation that is merely plausible but neither standard-defined between two included concepts nor stated by the mandate is OMITTED. List relations sorted by "from", then "to". Two runs over the same mandate and industry must produce the SAME relation list, verb for verb. Once real conversations exist, relations take the stakeholders' own verb phrases and evidenced cardinalities — the closed menu governs only the provisional draft.
 
-STANDARDS-FIRST GROUNDING (the acid test for every provisional entity and relation): the provisional draft is deliberately CONSERVATIVE — when in doubt, leave it out and raise a gap. The input context carries "standardBackbone": the steered standards' class lists AS FACTS — names, URIs, definitions and associations. That list is AUTHORITATIVE: align entities ONLY to classes it lists (use the exact URI given), ground relations in the associations it states, and treat a class it does not list as NOT AVAILABLE to this draft — never recall additional classes from memory, even real ones. Facts over recall, always. Apply this test before including anything:
+STANDARDS-FIRST GROUNDING (the acid test for every provisional entity and relation): the provisional draft is deliberately CONSERVATIVE — when in doubt, leave it out and raise a gap. The input context carries "standardBackbone": the steered standards' class lists AS FACTS — names, URIs, definitions, per-class ATTRIBUTES, and associations (each association may carry the standard's cardinality in brackets, e.g. "Campaign produces Lead [1:N]"). That list is AUTHORITATIVE: align entities ONLY to classes it lists (use the exact URI given), ground relations in the associations it states, and treat a class it does not list as NOT AVAILABLE to this draft — never recall additional classes from memory, even real ones. Facts over recall, always.
+ATTRIBUTES COME FROM THE BACKBONE TOO: when a drafted entity aligns to a backbone class that lists "attributes", copy that attribute set onto the entity — every one, with its "kind" and (for enum-shaped fields) its "values", evidence "<vocabulary> standardBackbone". A one-attribute entity beside a backbone class that states seven is a draft that ignored the facts in front of it. Attributes the conversation record itself evidences ride alongside with their verbatim evidence; never invent attributes beyond the backbone and the record.
+CARDINALITY PRIORS COME FROM THE BACKBONE: where your relation matches an association whose bracketed cardinality is stated, set "standardPrior" to it and "standardPriorSource" to that vocabulary — the fact is in front of you, not recalled. Cardinality itself stays "unknown" on a provisional draft, always.
+Apply this test before including anything:
 - A business OBJECT or ACTOR entity (a party, a document, a thing exchanged, a system, a place) MUST map to a class in the steered vocabulary — carry that mapping in standardAlignment (skos:closeMatch is fine). If you cannot name a class in FHIR / FIBO / GS1 / IEC CIM / EBUCore / W3C ORG / schema.org that this noun IS or closely matches, it is NOT a grounded domain entity: drop it and raise a gap instead. This is what "grounded in industry standards" means — every object is traceable to a published class. GROUNDING IS ALIGNMENT, NOT RENAMING: when the mandate names the concept (Clinical Trial), the entity NAME stays the mandate's word and the standard class rides in standardAlignment (Clinical Trial → skos:closeMatch fhir/ResearchStudy). NEVER rename a mandate-named subject to the standard's class ("ResearchStudy", "Encounter") — MANDATE-VERBATIM NAMING still governs; the standard grounds it, it does not relabel it.
 - A process STAGE entity (a step of the funnel the mandate names — "Patient Identification") is the ONE exception to the mapping requirement, because standards model objects and events, not a client's process steps. A stage is admissible ONLY when the mandate EXPLICITLY names it; it needs no standardAlignment, but an invented stage the mandate does not name is banned.
 - Every RELATION must be either a named association the steered standard defines between two included classes (carrying that standard's semantics) or the mandate's own stated stage sequence. A relation you can ground in neither is dropped — never assert a relationship the standard does not define and the mandate does not state.
@@ -3271,8 +3274,19 @@ function buildSpecialAgentInputContext(
             vocabularySteering: steering,
             standardBackbone: backbonePacks.map((pack) => ({
               vocabulary: pack.vocabulary,
-              classes: pack.entities.map((e) => ({ name: e.name, uri: e.uri || null, definition: e.definition })),
-              associations: pack.relations.map((r) => `${r.from} ${r.verb} ${r.to}`),
+              classes: pack.entities.map((e) => ({
+                name: e.name, uri: e.uri || null, definition: e.definition,
+                // The standard's own attribute set, as data — the drafted
+                // entity copies these instead of recalling one field.
+                ...(e.attributes?.length ? { attributes: e.attributes } : {}),
+              })),
+              // Association strings carry the standard's cardinality alongside
+              // (explicit pack prior, else the verb-shape default) so a draft
+              // can state standardPrior from the fact in front of it.
+              associations: pack.relations.map((r) => {
+                const prior = r.prior ?? ONTOLOGY_VERB_PRIORS[r.verb];
+                return `${r.from} ${r.verb} ${r.to}${prior ? ` [${prior}]` : ""}`;
+              }),
             })),
           };
         })()
@@ -6904,18 +6918,83 @@ function ontologyClassFromUri(uri: unknown): string {
 // generation context so grounding is matching against provided facts rather
 // than training recall — a class the pack does not list cannot be aligned to.
 // Recovered from the deterministic-compiler experiment (689d9ff).
+/** A standard attribute the vocabulary defines for a class — shipped as DATA
+ * so a provisional entity carries the fields the standard already states
+ * instead of the one field the model happened to recall. `values` is the
+ * closed set an enum-shaped attribute draws from; it reaches the seed
+ * generator, so a Lead Source renders "Referral", never a generic pool word. */
+type ProvisionalPackAttribute = {
+  name: string;
+  kind: "string" | "enum" | "money" | "date" | "person" | "email" | "id" | "number";
+  values?: string[];
+};
 type ProvisionalPackEntity = {
   name: string; uri: string; definition: string; aliases: string[]; core?: boolean;
   /** Words that place this class in a business area, for the core-synthesis
    * path — which has no drafted row to read an area off. Matched against the
    * Discovery Kit's declared coverage domains; no match leaves it General. */
   areaHints?: string[];
+  /** The standard's own attribute set for this class. Merged onto every
+   * asserted entity that grounds to it (reconciler), each marked to-confirm. */
+  attributes?: ProvisionalPackAttribute[];
 };
 type ProvisionalPack = {
   vocabulary: string;
   entities: ProvisionalPackEntity[];
-  relations: Array<{ from: string; verb: string; to: string }>;
+  /** `prior`: the cardinality the standard states for this association, in the
+   * from→to direction — overrides the verb-shape default below. */
+  relations: Array<{ from: string; verb: string; to: string; prior?: "1:1" | "1:N" | "N:1" | "N:M" }>;
 };
+
+/**
+ * WHAT SHAPE A MENU VERB CARRIES. The relation verbs are a CLOSED MENU, and
+ * each verb's canonical cardinality is a property of the verb, not of any one
+ * pack: many parts make one whole, one producer yields many products, a
+ * participation is many-to-many. This is the deterministic floor under
+ * `standardPrior` — the reconciler was minting every relation with
+ * `cardinality: "unknown"` and NO prior (drafts' priors were discarded by the
+ * vote), so every provisional relation rendered as an unconfirmed shrug even
+ * where the standard states the shape. A pack relation's explicit `prior`
+ * overrides its verb's default; a verb absent here contributes none.
+ */
+const ONTOLOGY_VERB_PRIORS: Record<string, "1:1" | "1:N" | "N:1" | "N:M"> = {
+  "is part of": "N:1",
+  "applies to": "N:1",
+  "produces": "1:N",
+  "conducts": "1:N",
+  "runs": "1:N",
+  "manages": "1:N",
+  "leads to": "1:1",
+  "participates in": "N:M",
+  "supports": "N:1",
+  "measures": "1:1",
+};
+
+/** assoc string ("From verb To") → the prior and the vocabulary that grounds
+ * it. Explicit pack priors first; the verb-shape default fills the rest. */
+function packRelationFactsOf(packs: ProvisionalPack[]): Map<string, { prior: string; vocabulary: string }> {
+  const out = new Map<string, { prior: string; vocabulary: string }>();
+  for (const pack of packs) {
+    for (const r of pack.relations) {
+      const key = `${r.from} ${r.verb} ${r.to}`;
+      const prior = r.prior ?? ONTOLOGY_VERB_PRIORS[r.verb];
+      if (prior && !out.has(key)) out.set(key, { prior, vocabulary: pack.vocabulary });
+    }
+  }
+  return out;
+}
+
+/** class name → the standard attribute set, first pack wins (same first-wins
+ * discipline as packClasses). */
+function packAttributesByClassOf(packs: ProvisionalPack[]): Map<string, { attributes: ProvisionalPackAttribute[]; vocabulary: string }> {
+  const out = new Map<string, { attributes: ProvisionalPackAttribute[]; vocabulary: string }>();
+  for (const pack of packs) {
+    for (const e of pack.entities) {
+      if (e.attributes?.length && !out.has(e.name)) out.set(e.name, { attributes: e.attributes, vocabulary: pack.vocabulary });
+    }
+  }
+  return out;
+}
 
 const PROVISIONAL_BACKBONE_PACKS: Record<string, ProvisionalPack> = {
   fhir: {
@@ -7108,13 +7187,56 @@ const PROVISIONAL_BACKBONE_PACKS: Record<string, ProvisionalPack> = {
   schema: {
     vocabulary: "schema.org",
     entities: [
-      { core: true, name: "Person", uri: "https://schema.org/Person", definition: "An individual", aliases: ["person", "user", "individual", "customer", "prospect"] },
-      { core: true, name: "Organization", uri: "https://schema.org/Organization", definition: "A company or organisation", aliases: ["organisation", "company", "vendor", "supplier", "partner"] },
-      { name: "Product", uri: "https://schema.org/Product", definition: "A product", aliases: ["product", "goods"] },
-      { name: "Service", uri: "https://schema.org/Service", definition: "A service", aliases: ["service", "offering"] },
-      { name: "Order", uri: "https://schema.org/Order", definition: "An order for products or services", aliases: ["order", "purchase order", "sales order"] },
-      { name: "Invoice", uri: "https://schema.org/Invoice", definition: "A bill for an order", aliases: ["invoice", "bill", "billing"] },
-      { name: "Offer", uri: "https://schema.org/Offer", definition: "An offer or quotation", aliases: ["offer", "quote", "quotation", "proposal"] },
+      { core: true, name: "Person", uri: "https://schema.org/Person", definition: "An individual", aliases: ["person", "user", "individual", "customer", "prospect"],
+        attributes: [
+          { name: "name", kind: "person" },
+          { name: "email", kind: "email" },
+          { name: "jobTitle", kind: "string" },
+          { name: "telephone", kind: "string" },
+        ] },
+      { core: true, name: "Organization", uri: "https://schema.org/Organization", definition: "A company or organisation", aliases: ["organisation", "company", "vendor", "supplier", "partner"],
+        attributes: [
+          { name: "name", kind: "string" },
+          { name: "legalName", kind: "string" },
+          { name: "industry", kind: "string" },
+          { name: "location", kind: "string" },
+        ] },
+      { name: "Product", uri: "https://schema.org/Product", definition: "A product", aliases: ["product", "goods"],
+        attributes: [
+          { name: "productName", kind: "string" },
+          { name: "category", kind: "string" },
+          { name: "listPrice", kind: "money" },
+          { name: "productStatus", kind: "enum", values: ["Active", "Preview", "Retired"] },
+        ] },
+      { name: "Service", uri: "https://schema.org/Service", definition: "A service", aliases: ["service", "offering"],
+        attributes: [
+          { name: "serviceName", kind: "string" },
+          { name: "serviceType", kind: "string" },
+          { name: "serviceStatus", kind: "enum", values: ["Offered", "Active", "Sunset"] },
+        ] },
+      { name: "Order", uri: "https://schema.org/Order", definition: "An order for products or services", aliases: ["order", "purchase order", "sales order"],
+        attributes: [
+          { name: "orderNumber", kind: "id" },
+          { name: "orderStatus", kind: "enum", values: ["Received", "Processing", "Fulfilled", "Cancelled"] },
+          { name: "orderDate", kind: "date" },
+          { name: "totalAmount", kind: "money" },
+          { name: "deliveryDate", kind: "date" },
+        ] },
+      { name: "Invoice", uri: "https://schema.org/Invoice", definition: "A bill for an order", aliases: ["invoice", "bill", "billing"],
+        attributes: [
+          { name: "invoiceNumber", kind: "id" },
+          { name: "paymentStatus", kind: "enum", values: ["Draft", "Sent", "Paid", "Overdue"] },
+          { name: "amount", kind: "money" },
+          { name: "issuedDate", kind: "date" },
+          { name: "dueDate", kind: "date" },
+        ] },
+      { name: "Offer", uri: "https://schema.org/Offer", definition: "An offer or quotation", aliases: ["offer", "quote", "quotation", "proposal"],
+        attributes: [
+          { name: "offerId", kind: "id" },
+          { name: "price", kind: "money" },
+          { name: "validThrough", kind: "date" },
+          { name: "offerStatus", kind: "enum", values: ["Draft", "Presented", "Accepted", "Declined"] },
+        ] },
       { name: "SoftwareApplication", uri: "https://schema.org/SoftwareApplication", definition: "A software system", aliases: ["software", "application", "platform", "app", "crm", "system"] },
       { name: "Event", uri: "https://schema.org/Event", definition: "An event", aliases: ["event"] },
       { name: "Reservation", uri: "https://schema.org/Reservation", definition: "A reservation or booking", aliases: ["reservation", "booking"] },
@@ -7251,24 +7373,104 @@ PROVISIONAL_BACKBONE_PACKS.crm = {
     // schema.org pack already claims those for Person and Organization, and
     // packClasses is first-wins, so duplicating them would silently shadow
     // these classes rather than reach them.
-    { core: true, name: "Lead", uri: "", definition: "An unqualified enquiry not yet accepted into the pipeline", aliases: ["lead", "inquiry", "enquiry", "mql", "sql"], areaHints: ["marketing", "demand", "sales"] },
-    { core: true, name: "Opportunity", uri: "", definition: "A qualified deal being actively pursued", aliases: ["opportunity", "deal", "pursuit"], areaHints: ["sales", "pursuit", "gtm", "go-to-market"] },
-    { core: true, name: "Account", uri: "", definition: "The customer organisation a relationship is held with", aliases: ["account", "customer account", "client account"], areaHints: ["sales", "account", "customer"] },
-    { core: true, name: "Contact", uri: "", definition: "A named person at an account", aliases: ["contact", "buyer", "decision maker"], areaHints: ["sales", "marketing", "customer"] },
+    { core: true, name: "Lead", uri: "", definition: "An unqualified enquiry not yet accepted into the pipeline", aliases: ["lead", "inquiry", "enquiry", "mql", "sql"], areaHints: ["marketing", "demand", "sales"],
+      attributes: [
+        { name: "leadName", kind: "string" },
+        { name: "leadSource", kind: "enum", values: ["Web", "Event", "Referral", "Outbound", "Partner", "Syndication"] },
+        { name: "leadStage", kind: "enum", values: ["New", "Qualifying", "Converted", "Disqualified"] },
+        { name: "intentScore", kind: "number" },
+        { name: "owner", kind: "person" },
+        { name: "contactEmail", kind: "email" },
+        { name: "createdDate", kind: "date" },
+      ] },
+    { core: true, name: "Opportunity", uri: "", definition: "A qualified deal being actively pursued", aliases: ["opportunity", "deal", "pursuit"], areaHints: ["sales", "pursuit", "gtm", "go-to-market"],
+      attributes: [
+        { name: "opportunityName", kind: "string" },
+        { name: "opportunityStage", kind: "enum", values: ["Suspect", "Qualified", "Solution Shaping", "Proposal", "Negotiation", "Closed Won", "Closed Lost"] },
+        { name: "dealValue", kind: "money" },
+        { name: "closeDate", kind: "date" },
+        { name: "owner", kind: "person" },
+        { name: "forecastCategory", kind: "enum", values: ["Commit", "Upside", "Omit"] },
+        { name: "nextStep", kind: "string" },
+      ] },
+    { core: true, name: "Account", uri: "", definition: "The customer organisation a relationship is held with", aliases: ["account", "customer account", "client account"], areaHints: ["sales", "account", "customer"],
+      attributes: [
+        { name: "accountName", kind: "string" },
+        { name: "sector", kind: "enum", values: ["Healthcare", "Financial Services", "Manufacturing", "Technology", "Retail", "Energy", "Telecom"] },
+        { name: "tier", kind: "enum", values: ["Strategic", "Growth", "Emerging"] },
+        { name: "owner", kind: "person" },
+        { name: "annualRevenue", kind: "money" },
+        { name: "health", kind: "enum", values: ["Healthy", "Watch", "At Risk"] },
+        { name: "lastContactDate", kind: "date" },
+      ] },
+    { core: true, name: "Contact", uri: "", definition: "A named person at an account", aliases: ["contact", "buyer", "decision maker"], areaHints: ["sales", "marketing", "customer"],
+      attributes: [
+        { name: "contactName", kind: "person" },
+        { name: "jobTitle", kind: "string" },
+        { name: "contactEmail", kind: "email" },
+        { name: "phone", kind: "string" },
+        { name: "influence", kind: "enum", values: ["High", "Medium", "Low"] },
+        { name: "lastTouchDate", kind: "date" },
+      ] },
     // No Quote class: schema.org's Offer already owns "quote"/"quotation" and
     // is core for commerce-primary programmes, so a CRM Quote would be shadowed
     // by first-wins alias resolution rather than reached. Offer IS the quote.
-    { core: true, name: "Campaign", uri: "", definition: "A marketing programme run to generate demand", aliases: ["campaign", "marketing campaign"], areaHints: ["marketing", "demand"] },
-    { core: true, name: "Contract", uri: "", definition: "The signed agreement that closes a deal", aliases: ["contract", "agreement", "msa", "sow", "statement of work"], areaHints: ["legal", "contract", "commercial"] },
+    { core: true, name: "Campaign", uri: "", definition: "A marketing programme run to generate demand", aliases: ["campaign", "marketing campaign"], areaHints: ["marketing", "demand"],
+      attributes: [
+        { name: "campaignName", kind: "string" },
+        { name: "campaignStatus", kind: "enum", values: ["Planned", "Live", "Paused", "Completed"] },
+        { name: "channel", kind: "enum", values: ["Email", "Event", "Digital", "Webinar", "Co-marketing"] },
+        { name: "startDate", kind: "date" },
+        { name: "endDate", kind: "date" },
+        { name: "budget", kind: "money" },
+      ] },
+    { core: true, name: "Contract", uri: "", definition: "The signed agreement that closes a deal", aliases: ["contract", "agreement", "msa", "sow", "statement of work"], areaHints: ["legal", "contract", "commercial"],
+      attributes: [
+        { name: "contractId", kind: "id" },
+        { name: "contractStatus", kind: "enum", values: ["Draft", "In Review", "Signed", "Active", "Expired"] },
+        { name: "startDate", kind: "date" },
+        { name: "endDate", kind: "date" },
+        { name: "totalValue", kind: "money" },
+        { name: "renewalDate", kind: "date" },
+      ] },
     // Extended: real CRM concepts, but scope a sponsor should confirm rather
     // than the seed assert — they arrive as confirm gaps.
-    { name: "Activity", uri: "", definition: "A logged interaction — call, meeting or email", aliases: ["activity", "task", "interaction"] },
-    { name: "Pipeline", uri: "", definition: "The set of open opportunities at a point in time", aliases: ["pipeline", "funnel"] },
-    { name: "Forecast", uri: "", definition: "Projected revenue for a period", aliases: ["forecast", "revenue forecast"] },
-    { name: "Territory", uri: "", definition: "A market or segment assigned to a seller", aliases: ["territory", "patch"] },
+    { name: "Activity", uri: "", definition: "A logged interaction — call, meeting or email", aliases: ["activity", "task", "interaction"],
+      attributes: [
+        { name: "subject", kind: "string" },
+        { name: "activityType", kind: "enum", values: ["Call", "Meeting", "Email", "Note"] },
+        { name: "activityDate", kind: "date" },
+        { name: "owner", kind: "person" },
+      ] },
+    { name: "Pipeline", uri: "", definition: "The set of open opportunities at a point in time", aliases: ["pipeline", "funnel"],
+      attributes: [
+        { name: "pipelineName", kind: "string" },
+        { name: "totalValue", kind: "money" },
+        { name: "snapshotDate", kind: "date" },
+      ] },
+    { name: "Forecast", uri: "", definition: "Projected revenue for a period", aliases: ["forecast", "revenue forecast"],
+      attributes: [
+        { name: "forecastPeriod", kind: "string" },
+        { name: "committedValue", kind: "money" },
+        { name: "upsideValue", kind: "money" },
+        { name: "targetValue", kind: "money" },
+        { name: "owner", kind: "person" },
+      ] },
+    { name: "Territory", uri: "", definition: "A market or segment assigned to a seller", aliases: ["territory", "patch"],
+      attributes: [
+        { name: "territoryName", kind: "string" },
+        { name: "region", kind: "string" },
+        { name: "owner", kind: "person" },
+      ] },
     // "Partner" alone is an Organization alias in schema.org; the qualified name
     // is what makes this class reachable at all.
-    { name: "Alliance Partner", uri: "", definition: "An alliance or channel organisation selling with or through the business", aliases: ["alliance partner", "channel partner", "reseller"], areaHints: ["alliance", "partner", "channel"] },
+    { name: "Alliance Partner", uri: "", definition: "An alliance or channel organisation selling with or through the business", aliases: ["alliance partner", "channel partner", "reseller"], areaHints: ["alliance", "partner", "channel"],
+      attributes: [
+        { name: "partnerName", kind: "string" },
+        { name: "partnerTier", kind: "enum", values: ["Premier", "Advanced", "Registered"] },
+        { name: "coSellStatus", kind: "enum", values: ["Active", "Onboarding", "Dormant"] },
+        { name: "owner", kind: "person" },
+      ] },
   ],
   relations: [
     { from: "Campaign", verb: "produces", to: "Lead" },
@@ -7281,7 +7483,9 @@ PROVISIONAL_BACKBONE_PACKS.crm = {
     { from: "Opportunity", verb: "is part of", to: "Pipeline" },
     { from: "Forecast", verb: "measures", to: "Pipeline" },
     { from: "Alliance Partner", verb: "participates in", to: "Opportunity" },
-    { from: "Territory", verb: "applies to", to: "Account" },
+    // One territory covers MANY accounts — the verb default (N:1) is the wrong
+    // way round for this one association, so the pack states it explicitly.
+    { from: "Territory", verb: "applies to", to: "Account", prior: "1:N" },
   ],
 };
 
@@ -7419,9 +7623,38 @@ function reconcileVotedOntology(
     /** The Discovery Kit's declared coverage domains — the areas the rest of
      * the programme aligns to. Synthesised cores are placed onto these. */
     programAreas?: string[];
+    /** "From verb To" → the cardinality the standard states for it (explicit
+     * pack prior, or the verb-shape default) and the vocabulary that grounds
+     * it. Fills `standardPrior` on every minted relation the packs cover. */
+    packRelationFacts?: Map<string, { prior: string; vocabulary: string }>;
+    /** class name → the standard's attribute set. Merged onto every asserted
+     * entity that grounds to the class, marked to-confirm. */
+    packAttributesByClass?: Map<string, { attributes: ProvisionalPackAttribute[]; vocabulary: string }>;
   },
 ): Record<string, unknown> {
-  const { threshold, total, sponsor, programName, allowedUris, packClasses, uriToClass, packAssociations, coreClasses, packEntityByClass, packAreaHintsByClass, programAreas } = opts;
+  const { threshold, total, sponsor, programName, allowedUris, packClasses, uriToClass, packAssociations, coreClasses, packEntityByClass, packAreaHintsByClass, programAreas, packRelationFacts, packAttributesByClass } = opts;
+  /** The drafted attributes UNIONED with the standard's own set for the class
+   * this entity grounds to. Draft rows win on name collision (they may carry
+   * mandate evidence); the standard's rows arrive marked to-confirm, each with
+   * its kind and — for enum-shaped fields — the closed value set the seed
+   * generator will draw from. This is what turns a one-column provisional
+   * table into the table the standard already describes. */
+  const withPackAttributes = (drafted: unknown, cls: string | undefined): unknown[] => {
+    const base = Array.isArray(drafted) ? [...drafted] : [];
+    const packed = cls ? packAttributesByClass?.get(cls) : undefined;
+    if (!packed) return base;
+    const have = new Set(base.map((a) => ontologyNameKey(isRecord(a) ? a.name : a)).filter(Boolean));
+    for (const attr of packed.attributes) {
+      if (have.has(ontologyNameKey(attr.name))) continue;
+      base.push({
+        name: attr.name,
+        kind: attr.kind,
+        ...(attr.values ? { values: attr.values } : {}),
+        evidence: `${packed.vocabulary} standardBackbone — to confirm`,
+      });
+    }
+    return base;
+  };
   /** Place a synthesised core onto one of the programme's declared areas: the
    * first area whose label contains one of the class's hint words. No hint, no
    * declared areas, or no match leaves it General — the honest answer, and the
@@ -7626,7 +7859,7 @@ function reconcileVotedOntology(
         name,
         definition: typeof rep.definition === "string" ? rep.definition : "",
         area: typeof rep.area === "string" && rep.area ? rep.area : "General",
-        attributes: Array.isArray(rep.attributes) ? rep.attributes : [],
+        attributes: withPackAttributes(rep.attributes, cls),
         systemOfRecord: typeof rep.systemOfRecord === "string" ? rep.systemOfRecord : null,
         aliases: [...new Set(b.names.filter((n) => n !== name))],
         evidence: typeof rep.evidence === "string" ? rep.evidence : "from the sponsor mandate — to confirm",
@@ -7659,7 +7892,7 @@ function reconcileVotedOntology(
         name: pe.name,
         definition: pe.definition + " - to be confirmed in interviews.",
         area: areaForClass(cls),
-        attributes: [] as string[],
+        attributes: withPackAttributes([], cls),
         systemOfRecord: null,
         aliases: [] as string[],
         evidence: "implied by " + pe.vocabulary + " - to confirm",
@@ -7702,7 +7935,7 @@ function reconcileVotedOntology(
         name,
         definition: typeof d.rep.definition === "string" && d.rep.definition ? d.rep.definition : name + ".",
         area,
-        attributes: Array.isArray(d.rep.attributes) ? d.rep.attributes : [],
+        attributes: withPackAttributes(d.rep.attributes, d.cls),
         systemOfRecord: typeof d.rep.systemOfRecord === "string" ? d.rep.systemOfRecord : null,
         aliases: [] as string[],
         evidence: "industry-standard concept covering " + area + " — to confirm in interviews",
@@ -7776,6 +8009,19 @@ function reconcileVotedOntology(
         const clsTo = classByName.get(rb.to);
         const standardAssoc = !!(clsFrom && clsTo && packAssociations.has(clsFrom + " " + verb + " " + clsTo));
         if (!chainLink && !standardAssoc) return [];
+        // THE PRIOR IS DATA, NOT RECALL. Drafts' own standardPrior fields are
+        // discarded by this vote — before this, every reconciled relation
+        // shipped `unknown` with no prior at all, and downstream every one
+        // rendered as an unconfirmed shrug. The shape the standard states
+        // rides the same pack facts the acid test enforces. Cardinality stays
+        // "unknown" — the prior is evidence for how to DRAW the relation, and
+        // the Listen question stays open.
+        if (standardAssoc) {
+          const fact = packRelationFacts?.get(clsFrom + " " + verb + " " + clsTo);
+          if (fact) {
+            return [{ from: rb.from, relation: verb, to: rb.to, cardinality: "unknown", standardPrior: fact.prior, standardPriorSource: fact.vocabulary }];
+          }
+        }
       }
       return [{ from: rb.from, relation: verb, to: rb.to, cardinality: "unknown" }];
     })
@@ -7800,7 +8046,11 @@ function reconcileVotedOntology(
       if (!from || !to || from === to) continue;
       if (existingPairs.has(from + " " + to) || existingPairs.has(to + " " + from)) continue;
       existingPairs.add(from + " " + to);
-      relations.push({ from, relation: verb, to, cardinality: "unknown" });
+      // Closure relations are pack facts by construction — the prior rides too.
+      const fact = packRelationFacts?.get(assoc);
+      relations.push(fact
+        ? { from, relation: verb, to, cardinality: "unknown", standardPrior: fact.prior, standardPriorSource: fact.vocabulary }
+        : { from, relation: verb, to, cardinality: "unknown" });
     }
     relations.sort((a, b) => ontologyCompare(a.from + " " + a.to, b.from + " " + b.to));
   }
@@ -8037,6 +8287,12 @@ async function runVotedProvisionalOntology(
       mandate: mc.mandate, sponsor: mc.sponsor, programName: mc.programName,
       allowedUris, packClasses, uriToClass, packAssociations, coreClasses, packEntityByClass,
       packAreaHintsByClass, programAreas: ontologyKitCoverageDomains(inner),
+      // The standards' own facts, as data: what shape each association carries
+      // and what attributes each class defines. The reconciler fills
+      // standardPrior and merges standard attributes from these — never from
+      // draft recall, so two runs ground identically.
+      packRelationFacts: packRelationFactsOf(packs),
+      packAttributesByClass: packAttributesByClassOf(packs),
     });
     const base = usable[0];
     return {

@@ -894,7 +894,38 @@ export function prototypeArtifactFor(
   // No skeleton, no post-condition: measuring an answer against a build that
   // does not exist would reject it for structure the record never held.
   if (!baseline) return { doc: modelResult, source: "unassembled", verdict: null, baseline: null };
-  return { ...resolvePrototypeDoc(modelResult, baseline), baseline };
+  const resolved = resolvePrototypeDoc(modelResult, baseline);
+  return { ...resolved, doc: withDerivedConfidence(resolved.doc, inner), baseline };
+}
+
+/**
+ * A PROTOTYPE CANNOT BE MORE CERTAIN THAN WHAT IT WAS BUILT FROM. The Laila
+ * New 2 build self-assessed 0.98 atop an ontology at 0.5, an atlas at 0.4 and
+ * an Experience Design carrying seventeen standing gaps — a number that
+ * invites a stakeholder to trust the one document in the chain that merely
+ * RENDERS the others. The build's confidence is now capped by the weakest
+ * upstream document it consumed, and the cap says which one it was.
+ */
+export function withDerivedConfidence(
+  doc: Record<string, unknown>,
+  inner: Record<string, unknown>,
+): Record<string, unknown> {
+  const own = typeof doc.confidence === "number" && Number.isFinite(doc.confidence) ? doc.confidence : 1;
+  const upstream: Array<{ key: string; confidence: number }> = [];
+  for (const key of ["domainOntology", "currentStateAtlas", "experienceDesign", "agenticBlueprint"]) {
+    const art = inner[key];
+    if (isRecord(art) && typeof art.confidence === "number" && Number.isFinite(art.confidence)) {
+      upstream.push({ key, confidence: art.confidence });
+    }
+  }
+  if (!upstream.length) return doc;
+  const weakest = upstream.reduce((a, b) => (b.confidence < a.confidence ? b : a));
+  if (own <= weakest.confidence) return doc;
+  return {
+    ...doc,
+    confidence: weakest.confidence,
+    confidenceBasis: `capped by ${weakest.key} (${weakest.confidence}) — a build renders its inputs and cannot outrank them; the model's own estimate was ${own}`,
+  };
 }
 
 /**
