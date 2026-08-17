@@ -7,7 +7,16 @@ export type { World, Source } from "./precedence";
 
 export type Status = "open" | "weak" | "closed" | "blocked" | "n/a";
 export type Layer = "domain" | "configuration"; // Tier 2 durability
-export type ClosureMethod = "assertion" | "disposition" | "document" | "analysis" | "experiment" | "import";
+/**
+ * HOW a claim came to be closed. `transcript` is the newest and the one that
+ * needs saying: a person's own words, lifted from a meeting recording and
+ * confirmed by an operator. It is not `assertion` — that belongs to a reply
+ * which arrived through their own token-gated link, with nobody in between —
+ * and it is not `import`, which would mean a machine put it there and would
+ * wrongly exclude them from the heard count. They WERE heard; it happened out
+ * loud, in a room, and the claim carries the quote to prove it.
+ */
+export type ClosureMethod = "assertion" | "disposition" | "document" | "analysis" | "experiment" | "transcript" | "import";
 
 /** A1 — a claim value is a tagged union; a reference carries an id, never a name. */
 export type ClaimValue =

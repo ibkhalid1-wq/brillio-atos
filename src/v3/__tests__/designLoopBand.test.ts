@@ -264,9 +264,12 @@ describe("§1 CAPABILITY — every verb the band offered is still reachable", ()
     expect(onRunAgent).toHaveBeenCalled();
   });
 
-  it("CAPABILITY open Validation — the stakeholder zone's header link", () => {
+  it("CAPABILITY reach the demo script — the stakeholder zone's header link", () => {
+    // Named for what it opens, not for the artifact's internal id: a stakeholder
+    // is walked through a SCRIPT, and "Validation" is the pipeline's word for the
+    // document that holds it (operator direction).
     mountShell(seed());
-    expect(buttonSaying(band()!, "open Validation")).toBeTruthy();
+    expect(buttonSaying(band()!, "demo script")).toBeTruthy();
   });
 
   it("CAPABILITY open a design review round — the roster picker, the note and the verb", () => {

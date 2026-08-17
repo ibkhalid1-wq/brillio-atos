@@ -17,6 +17,7 @@ import {
   REFINE_CONTRACT, type PrototypeChangeRequest,
 } from "../_shared/prototypeRefine.ts";
 import { enforceBlueprintInvariants } from "../_shared/blueprintInvariants.ts";
+import { readReviewCapture, reviewAskOf, type ReviewAsk } from "../_shared/reviewCapture.ts";
 // THE VALUE VOCABULARY'S PRODUCER. Everything that decides — whether to spend
 // the one call, what to ask, how to read the reply, what document to store —
 // lives in the shared module as pure functions; this file supplies the transport
@@ -967,6 +968,30 @@ function resolveOutputTokenBudget(agentId: string): number {
   return COMPACT_OUTPUT_AGENTS.has(agentId) ? COMPACT_OUTPUT_TOKENS : DEFAULT_OUTPUT_TOKENS;
 }
 
+/**
+ * WHAT THE REVIEW-CAPTURE AGENT IS GIVEN: the transcript, and the questions it
+ * might answer. Both are stashed by the operator surface on Listen's inputs
+ * under underscore keys, so neither moves the movement fingerprint — and both
+ * are read explicitly here, because an underscore key is deliberately absent
+ * from the generic payload (`_prototypeRefine` is read the same way).
+ *
+ * The transcript is capped: a long meeting runs to hundreds of KB, and past a
+ * point the model is reading padding instead of the room.
+ */
+function reviewCaptureBrief(inner: ProgramState): Record<string, unknown> {
+  const listen = normalizeProgramData(
+    normalizeProgramData(inner.phaseInputs as JsonValue | null).listen as JsonValue | null);
+  const transcript = typeof listen._reviewTranscript === "string" ? listen._reviewTranscript.trim().slice(0, 120000) : "";
+  const asksRaw = typeof listen._reviewAsks === "string"
+    ? (() => { try { return JSON.parse(listen._reviewAsks as string); } catch { return null; } })()
+    : listen._reviewAsks;
+  const asks = Array.isArray(asksRaw) ? reviewAskOf(asksRaw as Array<{ about: string; question: string; owner?: string }>) : [];
+  // No transcript, or nothing open to match against: the agent is given neither
+  // rather than an empty shell it would try to fill.
+  if (!transcript || !asks.length) return {};
+  return { reviewTranscript: transcript, reviewAsks: asks };
+}
+
 const FORMAL_ARTIFACT_AGENTS: Record<string, FormalArtifactSpec> = {
   "charter": {
     phase: "strategy",
@@ -1443,6 +1468,46 @@ Return ONLY valid JSON:
   "ambiguities": [ { "term": "string", "conflictingMeanings": ["meaning per team"], "resolution": "EITHER the exact string 'unresolved', OR the meaning the record should adopt, written as a DECISION ('the client organisation; a partner is a separate entity'). NEVER a restated question: 'To confirm whether X…' or 'Need to check…' is NOT a resolution — it is the collision itself, and writing it here marks the collision resolved so nobody is ever asked. If you do not know which meaning wins, the honest value is 'unresolved'." } ],
   "gaps": ["phrased as plain business questions a stakeholder can answer (e.g. 'Ask Dan: when a deal closes, does the contract live in DocuSign or the CRM?') — or as operator work when only the operator can close it"],
   "summary": "one sentence verdict on ontology completeness",
+  "confidence": 0.0
+}`,
+  },
+  /**
+   * TRANSCRIPT → CANDIDATES. The most direct evidence a programme gets is a
+   * stakeholder talking in a meeting, and it was the one kind that could not
+   * reach the ledger: a pack carries its loci out and home, a transcript is
+   * prose with no addresses in it.
+   *
+   * This agent MATCHES and does not decide. Its output is a queue an operator
+   * confirms, every row carrying the verbatim quote it was drawn from, because
+   * a model inferring which question a sentence answers is doing something
+   * useful that is not testimony. See `reviewCapture.ts` for the reader that
+   * refuses anything which cannot honestly become a closure.
+   */
+  "review-capture": {
+    phase: "listen",
+    fieldKey: "reviewCapture",
+    title: "Review capture",
+    system: `You are the AURA Review Capture Agent. You are given a MEETING TRANSCRIPT (reviewTranscript) and the OPEN QUESTIONS this programme is still waiting on (reviewAsks: each with "about" — an opaque locus id — and "question"). Find the places where somebody in that transcript answered one of those questions.
+
+YOU ARE MATCHING, NOT DECIDING. An operator confirms every row before it becomes anything, so your job is to be precise about what was actually said and honest about how sure you are.
+
+RULES (the reader enforces these; a row that breaks one is dropped and reported):
+- "about" MUST be one of the reviewAsks ids, copied exactly. Never invent a locus, never answer a question that is not on the list.
+- "quote" MUST be the speaker's own words, lifted verbatim from the transcript — not your summary of them. It is the only evidence the operator has, and it becomes the record of what they said.
+- "speaker" MUST be the person who said it, named as the transcript names them. If you cannot tell who spoke, do not emit the candidate.
+- One candidate per question per speaker. If somebody circled a topic three times, quote the clearest statement.
+- confidence is YOUR reading of the match, 0–1. A quote that answers the question head-on is high; an inference from something adjacent is low. Do not inflate it — a low number is useful and a wrong high one costs an operator their trust in the whole queue.
+- Where the transcript CONTRADICTS itself, or two people disagree, emit both candidates and say so in "why". Adjudication is the operator's, not yours.
+
+THE RESIDUE MATTERS AS MUCH AS THE MATCHES. Put in "unmatched" the statements that clearly carry a decision, a constraint or a fact about how the business works and answer NOTHING on the list. That is how the team finds the question they failed to ask. Do not pad it with pleasantries, scheduling or small talk.
+
+Return ONLY valid JSON:
+{
+  "title": "Review capture — <meeting or date>",
+  "candidates": [ { "about": "a reviewAsks id, exactly", "quote": "their words, verbatim", "speaker": "who said it", "confidence": 0.0, "why": "what makes this an answer to that question" } ],
+  "unmatched": [ { "quote": "verbatim", "speaker": "who said it", "note": "what it seems to settle, and why nothing on the list covers it" } ],
+  "gaps": ["anything about the transcript that limited you — unnamed speakers, an unreadable passage, a topic raised and dropped"],
+  "summary": "one sentence on what this meeting settled",
   "confidence": 0.0
 }`,
   },
@@ -3359,6 +3424,13 @@ function buildSpecialAgentInputContext(
       ...(upstreamArtifactDocs.length ? { upstreamArtifactDocs } : {}),
       ...(upstreamDesign ? { upstreamDesign } : {}),
       ...(prototypeRefineBrief ? { prototypeRefineBrief } : {}),
+      // THE TRANSCRIPT AND THE QUESTIONS IT MIGHT ANSWER. Stashed on Listen's
+      // inputs by the operator surface, underscore-prefixed so neither moves a
+      // movement fingerprint, and read HERE explicitly — an underscore key is
+      // not in the generic payload, which is why `_prototypeRefine` is read the
+      // same way. Only for the agent that needs them: a transcript is long, and
+      // no other agent is being asked to match against loci.
+      ...(formalSpec.fieldKey === "reviewCapture" ? reviewCaptureBrief(inner) : {}),
       ...(refineInstruction ? { refineInstruction } : {}),
       ...(priorArtifact ? { priorArtifact } : {}),
     // Compact serialization: the pretty-print indent added ~30% to a context
@@ -11790,6 +11862,22 @@ Deno.serve(async (req) => {
         // the decision is a pure _shared function a test runs: the safety
         // invariant is REPAIRED (demotion to act-with-approval is always
         // safe), coverage and completeness breaches become NAMED gaps.
+        // A MODEL MATCHING A SENTENCE TO A QUESTION IS NOT TESTIMONY. Same
+        // discipline as the prototype line above: the decision is a pure
+        // _shared function a test runs. A candidate pointing at a locus this
+        // review never asked about, or carrying no quote, or naming no speaker,
+        // cannot honestly become a closure — refused HERE, and the refusal is
+        // written into the artifact rather than dropped in silence.
+        if (request.agentId === "review-capture") {
+          const brief = reviewCaptureBrief(getInnerProgramData(contextProgramData));
+          const read = readReviewCapture(formalResult, (brief.reviewAsks ?? []) as ReviewAsk[]);
+          formalResult = {
+            ...formalResult,
+            candidates: read.candidates,
+            unmatched: read.unmatched,
+            gaps: [...(Array.isArray(formalResult.gaps) ? formalResult.gaps : []), ...read.refused],
+          } as typeof formalResult;
+        }
         if (request.agentId === "agentic-blueprint") {
           formalResult = enforceBlueprintInvariants(getInnerProgramData(contextProgramData), formalResult).doc;
         }

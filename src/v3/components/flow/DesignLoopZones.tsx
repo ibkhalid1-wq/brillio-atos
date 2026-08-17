@@ -864,8 +864,8 @@ export default function DesignLoopZones({ band, program, ledger, roster, onOpen,
           <span className="v3dl-zone-t">Stakeholders approve it</span>
           {validation?.card ? (
             <button type="button" className="v3dl-goal-open" onClick={() => onOpen(validation.card!)}
-              title="Open Validation — per-stakeholder demo verdicts and sign-off">
-              open Validation
+              title="Open the demo script — what each stakeholder is walked through, their verdict, and sign-off">
+              demo script
             </button>
           ) : null}
           <ZoneHelp label="how the review round works">

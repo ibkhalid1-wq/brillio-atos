@@ -66,6 +66,24 @@ export interface StakeholderAnswer {
   at: string;
   /** The link the answer arrived on: pack id or token. Provenance, and required. */
   via: string;
+  /**
+   * HOW IT ARRIVED, and the reason this is not always "assertion".
+   *
+   * A reply on somebody's own token-gated link IS an assertion — they answered,
+   * in their own channel, and nobody stood between. A quote lifted from a
+   * meeting transcript is their words too, but an operator read the room and
+   * confirmed the match, so calling it an assertion would claim a channel it
+   * never came through. `"transcript"` says what happened. It is still a HUMAN
+   * closure — not `"import"` — so the person is rightly counted as heard: they
+   * were, out loud, in a meeting.
+   *
+   * Absent ⇒ "assertion", which is what every existing row is.
+   */
+  method?: "assertion" | "transcript";
+  /** Who attested the match, for a row that needed one. The codebase's own rule
+   *  for an operator-attested statement: it names its attester and says what was
+   *  said (`answer`, verbatim). */
+  confirmedBy?: string;
 }
 
 /** Actors that are the SYSTEM, not a person — `isHeardClosure` rejects these, and so
@@ -181,7 +199,11 @@ export function readStakeholderAnswers(program: ProgramSummary | null | undefine
     const about = str(r.about), answer = str(r.answer), saidByName = str(r.saidByName), via = str(r.via);
     if (!about || !answer || !via) continue;
     if (!saidByName || SYSTEM_ACTORS.has(saidByName.toLowerCase())) continue;
-    out.push({ about, answer, saidByName, saidByRole: str(r.saidByRole) || undefined, at: str(r.at), via });
+    const method = str(r.method) === "transcript" ? "transcript" as const : undefined;
+    out.push({
+      about, answer, saidByName, saidByRole: str(r.saidByRole) || undefined, at: str(r.at), via,
+      ...(method ? { method, confirmedBy: str(r.confirmedBy) || undefined } : {}),
+    });
   }
   return dedupeAnswers([...out, ...derived]);
 }
@@ -239,11 +261,13 @@ export function stakeholderAnswerClaims(
       source: "asserted",
       status: "closed",
       closedBy: {
-        method: "assertion",
+        method: a.method ?? "assertion",
         by: a.saidByName,
         verbatim: a.answer,
         ...(a.at ? { at: a.at } : {}),
-        note: `answered on their own link (${a.via})${a.saidByRole ? ` — ${a.saidByRole}` : ""}`,
+        note: a.method === "transcript"
+          ? `said in a review (${a.via}), confirmed by ${a.confirmedBy || "an operator"}${a.saidByRole ? ` — ${a.saidByRole}` : ""}`
+          : `answered on their own link (${a.via})${a.saidByRole ? ` — ${a.saidByRole}` : ""}`,
       },
       ...(a.at ? { createdAt: a.at } : {}),
     });
