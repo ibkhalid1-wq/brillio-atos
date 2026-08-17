@@ -462,6 +462,11 @@ a{color:var(--m-brand);text-decoration:none}
    area owns — true, complete, and no answer to "what do I do". The band above
    them lists what is waiting or off track, in the order a person would work it,
    and says plainly when there is nothing. */
+/* WHERE THIS STANDS — the number an area is judged on, on the screen it opens.
+   Widgets were wired only to list screens, so the front door could not carry
+   one; these are derived from the same seed the tables draw from. */
+.m-msplit{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding-top:11px;margin-top:11px;border-top:1px solid var(--m-line)}
+.m-msplit .m-cell-sub{margin-top:0;min-width:96px}
 .m-todo{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column}
 .m-todo-r{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--m-line)}
 .m-todo-r .m-cell-sub{margin-top:0;flex:1;min-width:0}

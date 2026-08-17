@@ -19,6 +19,7 @@ import {
 import { enforceBlueprintInvariants } from "../_shared/blueprintInvariants.ts";
 import { readReviewCapture, reviewAskOf, type ReviewAsk } from "../_shared/reviewCapture.ts";
 import { checkDemoScripts, demoBriefOf, type DemoBrief } from "../_shared/demoScriptCheck.ts";
+import { watcherGaps } from "../_shared/designCoversWatchers.ts";
 // THE VALUE VOCABULARY'S PRODUCER. Everything that decides — whether to spend
 // the one call, what to ask, how to read the reply, what document to store —
 // lives in the shared module as pure functions; this file supplies the transport
@@ -1601,6 +1602,8 @@ DESIGN RULES (enforced, not optional):
 - Every quoted pain from the record must have a MOMENT in a flow where it visibly disappears — name the verbatim quote it answers.
 - Wireframes speak the ONTOLOGY's vocabulary: every entity a block shows is named exactly as the ontology names it.
 - FIELDS ARE THEIR FIELDS: when a wireframe block shows an entity, its "fields" must be drawn VERBATIM from that ontology entity's attributes — the key data elements stakeholders said they track. Invent a field only when no attribute covers the block's purpose, and never rename theirs. A rep must open the screen and recognise their own columns.
+- DESIGN FOR WHAT THE PERSON DOES, NOT ONLY FOR THE RECORD. A screen per entity serves whoever edits that entity and nobody else. Read each persona's steps in the Atlas: where their work is WATCHING — review, monitor, track, report, oversee, assess, audit, reduce a rate — the first thing they open is a MEASURE, not a table of rows they will never edit. Give that persona a screen whose first region carries "kind": "metric" blocks: the rate they are judged on, its target, and the split that explains it. Measured failure this rule exists for: an "Executive Oversight" area opened on a table of 49 practitioners, while the demo script written for that same executive promised a dashboard, a trend and a target — the script was right about the product and no design had ever authored it.
+- AND GIVE THEM THE LEVER. A person who watches a number usually has one move that changes it. Where their steps name a decision they make — set a target, approve, escalate, reassign — author it as a primaryActions verb on the entity it acts on, in their own words. A screen that shows a number with nothing to do about it is a report, not a product.
 - Every state per screen (empty/loading/populated/error) is designed, not just the happy path.
 - Workflow machines carry the HITL points from the Blueprint as explicit approval states.
 - THEME IS GOVERNED, NOT AD-HOC. Author a concrete design system (the "theme") once here — a restrained, premium, ON-BRAND-for-this-client token set. Ground it in the industry and the designIntent's personality: a claims insurer reads trustworthy and calm; a fintech reads sharp and precise. Real hex values, a real type scale, a real spacing scale — this is what every screen and every area's prototype renders from, so the whole product is visually coherent. Do NOT default to primary-blue-on-white.
@@ -11894,6 +11897,20 @@ Deno.serve(async (req) => {
         // review never asked about, or carrying no quote, or naming no speaker,
         // cannot honestly become a closure — refused HERE, and the refusal is
         // written into the artifact rather than dropped in silence.
+        // WHAT THE DESIGN OWES THE PEOPLE WHO ONLY WATCH. Gap lines, never a
+        // mutation: this is the DESIGNER's document, and a post-condition that
+        // silently wrote screens into it would be inventing design rather than
+        // reporting a hole.
+        if (request.agentId === "experience-design") {
+          const innerNow = getInnerProgramData(contextProgramData);
+          const owed = watcherGaps(formalResult, innerNow.currentStateAtlas);
+          if (owed.length) {
+            formalResult = {
+              ...formalResult,
+              gaps: [...(Array.isArray(formalResult.gaps) ? formalResult.gaps : []), ...owed],
+            } as typeof formalResult;
+          }
+        }
         // A BEAT IS READ ALOUD. Same discipline as the three post-conditions
         // beside it: the decision is a pure _shared function a test runs. A
         // beat promising a chart or a dashboard the build does not draw is

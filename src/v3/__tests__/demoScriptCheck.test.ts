@@ -58,23 +58,38 @@ describe("the inventory is read off the build, not off the design", () => {
 });
 
 describe("a beat the build cannot honour is marked, not deleted", () => {
-  it("catches the dashboard that is not there", () => {
-    // THE DEFECT, verbatim from the live document.
-    const out = checkDemoScripts(script("Set Target action on the dashboard, updating the Hospital's target cancellation rate."), brief);
-    expect(out.gaps).toHaveLength(1);
-    expect(out.gaps[0]).toContain("David Simaon");
-    expect(out.gaps[0]).toContain("dashboard");
+  it("a dashboard IS satisfiable now — the measures band is one", () => {
+    // This changed when the workbench gained "Where this stands". Before it, the
+    // beat was a gap; the honest answer is that the build now draws a summary,
+    // so the script may promise one.
+    expect(brief.hasMeasures).toBe(true);
+    expect(checkDemoScripts(script("Set Target action on the dashboard, updating the target cancellation rate."), brief).gaps).toEqual([]);
   });
 
-  it("catches the trend timeline", () => {
+  it("…but a TREND OVER TIME never is — nothing in this product draws one", () => {
+    // THE DEFECT, verbatim from the live document. The widget kinds are stat,
+    // breakdown and funnel: bars, never a time series. Saying so beats
+    // pretending a bar chart is a trend.
     const out = checkDemoScripts(script("Performance Trend timeline for Hospital, showing historical and current cancellation rates."), brief);
-    expect(out.gaps[0]).toContain("chart");
+    expect(out.gaps).toHaveLength(1);
+    expect(out.gaps[0]).toContain("David Simaon");
+    expect(out.gaps[0]).toContain("trend over time");
+  });
+
+  it("and a chart needs a widget the DESIGN asked for, not the derived band", () => {
+    // The band draws badges; only a spec widget draws bars. Keying this on
+    // `.m-stat` made every build look widgeted the moment the band shipped, and
+    // the check silently stopped firing — caught by these cases going green
+    // when they should have stayed red.
+    expect(brief.hasWidgets).toBe(false);
+    expect(checkDemoScripts(script("A bar chart of cancellations by unit."), brief).gaps).toHaveLength(1);
+    expect(checkDemoScripts(script("A bar chart of cancellations by unit."), { ...brief, hasWidgets: true }).gaps).toEqual([]);
   });
 
   it("KEEPS the beat and marks it — deleting it would hide the gap it proves", () => {
     // What the design intended is worth knowing; a silent drop would leave the
     // team believing the build covers a story it does not.
-    const out = checkDemoScripts(script("A dashboard of cancellation rates."), brief);
+    const out = checkDemoScripts(script("A sparkline of cancellation rates over time."), brief);
     const step = (out.doc.scripts as Array<{ steps: Array<Record<string, unknown>> }>)[0].steps[0];
     expect(step.beat).toBe("Review the numbers");
     expect(step.unbuilt).toContain("does not draw");
@@ -95,9 +110,12 @@ describe("a beat the build cannot honour is marked, not deleted", () => {
     }
   });
 
-  it("allows a chart where the build DOES draw widgets", () => {
+  it("a widget does not buy a time series either", () => {
+    // "by month" is a trend, and the funnel/breakdown/stat set cannot draw one
+    // however many widgets the design asked for.
     const withWidgets: DemoBrief = { ...brief, hasWidgets: true };
-    expect(checkDemoScripts(script("A chart of cancellations by month."), withWidgets).gaps).toEqual([]);
+    expect(checkDemoScripts(script("A chart of cancellations over time."), withWidgets).gaps).toHaveLength(1);
+    expect(checkDemoScripts(script("A chart of cancellations by unit."), withWidgets).gaps).toEqual([]);
   });
 
   it("counts what it checked, so a silent no-op is visible", () => {

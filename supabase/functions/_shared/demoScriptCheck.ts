@@ -29,8 +29,14 @@ export interface DemoBrief {
   entities: string[];
   /** The controls the build draws, by their visible label. */
   actions: string[];
-  /** Whether the build drew any metric widget at all. */
+  /** Whether the build drew a metric WIDGET the design asked for — stat tiles,
+   *  bar breakdowns, funnels. These are the only bars in the product. */
   hasWidgets: boolean;
+  /** Whether a workbench carries the derived measures band ("Where this stands":
+   *  counts, averages, a status split). Not the same thing as a widget, and the
+   *  distinction matters: the band satisfies "a dashboard" and cannot satisfy "a
+   *  chart", because it draws badges rather than bars. */
+  hasMeasures: boolean;
 }
 
 const text = (v: unknown): string => String(v ?? "").trim();
@@ -45,9 +51,16 @@ const isRecord = (v: unknown): v is Record<string, unknown> =>
  * "screen", "page" or "view" are absent on purpose — every beat names one of
  * those, and flagging them would make the check cry wolf.
  */
-const PROMISED: Array<{ noun: RegExp; needs: keyof DemoBrief | "board"; say: string }> = [
-  { noun: /\b(dashboard|command cent(re|er))\b/i, needs: "hasWidgets", say: "a dashboard" },
-  { noun: /\b(chart|graph|timeline|trend line|sparkline|histogram)\b/i, needs: "hasWidgets", say: "a chart" },
+const PROMISED: Array<{ noun: RegExp; needs: "measures" | "widgets" | "board" | "never"; say: string }> = [
+  // A summary on the screen. The derived band IS one, so this passes wherever a
+  // workbench carries it.
+  { noun: /\b(dashboard|command cent(re|er))\b/i, needs: "measures", say: "a dashboard" },
+  // Bars. Only a spec widget draws them; the band draws badges.
+  { noun: /\b(chart|graph|histogram|bar chart)\b/i, needs: "widgets", say: "a chart" },
+  // A TIME SERIES, and nothing in this product draws one — the widget kinds are
+  // stat, breakdown and funnel. So this is a gap on every build, always, and
+  // saying so is more useful than pretending a bar chart is a trend.
+  { noun: /\b(timeline|trend ?line|sparkline|over time|month[- ]on[- ]month|run rate)\b/i, needs: "never", say: "a trend over time" },
   { noun: /\b(kanban|swim ?lane)\b/i, needs: "board", say: "a board" },
 ];
 
@@ -62,7 +75,12 @@ export function demoBriefOf(html: string, entities: readonly string[]): DemoBrie
     actions,
     // A stat widget only exists where a screen spec asked for one AND the
     // ontology could honour it, so this is a fact about THIS build.
-    hasWidgets: /class="m-stat"/.test(html) || /data-region="widget:/.test(html),
+    // The DESIGN's widgets, keyed on the region the spec renderer fills — not on
+    // `.m-stat`, which the derived measures band also emits. Keying it on the
+    // class made every build look widgeted the moment that band shipped, and the
+    // dashboard check silently stopped firing.
+    hasWidgets: /data-region="widget:/.test(html),
+    hasMeasures: /data-region="measures:/.test(html),
   };
 }
 
@@ -72,7 +90,8 @@ const slugOf = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replac
 function unbuilt(show: string, brief: DemoBrief): string | null {
   for (const rule of PROMISED) {
     if (!rule.noun.test(show)) continue;
-    if (rule.needs === "hasWidgets" && brief.hasWidgets) continue;
+    if (rule.needs === "measures" && (brief.hasMeasures || brief.hasWidgets)) continue;
+    if (rule.needs === "widgets" && brief.hasWidgets) continue;
     if (rule.needs === "board" && brief.screens.some((s) => s.startsWith("list-"))) continue;
     return `promises ${rule.say}, which this build does not draw`;
   }

@@ -232,6 +232,12 @@ interface ScreenSpec {
  *  count the lanes the role actually works in. */
 interface QueueSpec extends ColumnSpec {
   region: string; entity: string; slug: string; status: number;
+  /** The entity's numeric columns, as `[label, index, role]` — what a measures
+   *  row can average. Read off the DERIVED roles, so the build never averages a
+   *  phone number, and the ROLE rides along because an average of money has to
+   *  be drawn as money: a bare "228982" beside "avg Annual Revenue" is a number
+   *  nobody can read at a glance, which defeats the point of a measure. */
+  nums: Array<[string, number, string]>;
   emptyTitle: string; cite: EmptyCite | null;
 }
 interface WorkbenchSpec {
@@ -240,6 +246,17 @@ interface WorkbenchSpec {
   /** The today band's slot, and the gated agents whose records this area works —
    *  so "waiting on you" counts THIS area's undecided rows, not the programme's. */
   today: string;
+  /**
+   * THE MEASURES SLOT — the number an area is judged on, on the screen it opens.
+   *
+   * A workbench opened on tables of records, and the one thing an oversight area
+   * arrives wanting is the rate. Widgets existed but were wired only to LIST
+   * screens, so the front door could not carry one at all; and nothing asked the
+   * design for a metric, so none was ever authored. The counts, the status split
+   * and the averages below are DERIVED from the same seed the tables draw from —
+   * no model, nothing invented, and true of every build.
+   */
+  measures: string;
   gates: Array<{ key: string; entity: string }>;
 }
 /** One gated agent's queue. `key` addresses this session's decisions and is the
@@ -962,7 +979,30 @@ const PERSONA_RENDERER = `
         :(wait?"":'<div class="m-cell-sub">Nothing in this area is waiting or off track today.</div>'))
       +"</section>");
   }
-  function renderWorkbench(wb){renderToday(wb);for(var i=0;i<wb.queues.length;i++)renderQueue(wb.queues[i])}
+  function renderMeasures(wb){
+    var tiles="",splits="",i,j,qs,t,ix,n,v,sum,cnt;
+    for(i=0;i<wb.queues.length;i++){
+      qs=wb.queues[i];t=D[qs.entity];if(!t)continue;
+      ix=live(t);
+      tiles+='<div class="m-stat"><div class="m-stat-v">'+ix.length+'</div><div class="m-stat-n">'+mEsc(qs.entity)+"</div></div>";
+      for(j=0;j<qs.nums.length;j++){
+        sum=0;cnt=0;
+        for(n=0;n<ix.length;n++){v=Number(at(t,ix[n],qs.nums[j][1]));if(!isNaN(v)){sum+=v;cnt++}}
+        if(cnt){
+          v=Math.round(sum/cnt);
+          tiles+='<div class="m-stat"><div class="m-stat-v">'
+            +(qs.nums[j][2]==="monetary"?mMoney(v):qs.nums[j][2]==="percent"?v+"%":String(v))
+            +'</div><div class="m-stat-n">'+mEsc(qs.entity)+" · avg "+mEsc(qs.nums[j][0])+"</div></div>";
+        }
+      }
+      if(qs.status>=0&&ix.length)splits+='<div class="m-msplit"><div class="m-cell-sub">'+mEsc(qs.entity)+"</div>"+lanes(t,qs.status,ix)+"</div>";
+    }
+    if(!tiles){fill(wb.measures,"");return}
+    fill(wb.measures,'<section class="m-card" style="margin-top:16px">'
+      +'<div class="m-card-h"><div class="m-card-t">Where this stands</div></div>'
+      +'<div class="m-stats">'+tiles+"</div>"+splits+"</section>");
+  }
+  function renderWorkbench(wb){renderToday(wb);renderMeasures(wb);for(var i=0;i<wb.queues.length;i++)renderQueue(wb.queues[i])}
   // ── THE APPROVAL QUEUE: where a gated agent stops ─────────────────────────
   //
   // The blueprint says which agents a human has to clear before they act. The
@@ -2086,7 +2126,7 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
       seen.add(hit);
       (hasScreen(hit) ? queued : offMenu).push(hit);
     }
-    const spec = { slug: r.slug, queues: [] as QueueSpec[], today: `today:${r.slug}`, gates: [] as Array<{ key: string; entity: string }> };
+    const spec = { slug: r.slug, queues: [] as QueueSpec[], today: `today:${r.slug}`, measures: `measures:${r.slug}`, gates: [] as Array<{ key: string; entity: string }> };
     const queues = queued.slice(0, QUEUES_MAX).map((entity) => {
       const region = `queue:${r.slug}:${es.get(entity)}`;
       spec.queues.push({
@@ -2094,6 +2134,11 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
         entity,
         slug: es.get(entity)!,
         status: statusIndexOf(entity),
+        nums: attrsOf(entity)
+          .map((a) => [humanizeField(a), columnIndex(entity, a), roleOf.get(`${entity} ${a}`)] as const)
+          .filter(([, ix, role]) => ix >= 0 && (role === "percent" || role === "quantity" || role === "monetary"))
+          .slice(0, 2)
+          .map(([label, ix, role]) => [label, ix, String(role)] as [string, number, string]),
         ...columnSpec(entity, leadColumnsFor(entity, 4)),
         emptyTitle: optionsFor(entity).emptyText ?? `No ${entity} records yet`,
         cite: citeOf(assumptionFor(seedParentOf(entity), entity)),
@@ -2157,7 +2202,7 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
       <header class="m-page-h"><div><div class="m-eyebrow">Workbench</div><h1 class="m-title">${esc(title)}</h1>
       <p class="m-sub">${r.workflows.length} workflow${r.workflows.length === 1 ? "" : "s"} mapped today${r.systems.length ? ` · ${esc(r.systems.join(", "))}` : ""}</p>
       ${works}</div></header>
-      ${unowned}${fillSlot(`today:${r.slug}`)}${queues}${alsoQueued}${notHere}${notModelled}${flows}</section>`;
+      ${unowned}${fillSlot(`today:${r.slug}`)}${fillSlot(`measures:${r.slug}`)}${queues}${alsoQueued}${notHere}${notModelled}${flows}</section>`;
   };
 
   // ── one list screen per entity ──
