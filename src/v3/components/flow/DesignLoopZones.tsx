@@ -813,8 +813,13 @@ export default function DesignLoopZones({ band, program, ledger, roster, onOpen,
 
       {/* ZONE 1 — operator builds it, in dependency order */}
       <section className="v3dl-zone is-operator" aria-label="Operator builds it">
+        {/* NO OWNERSHIP CHIP BESIDE A HEADING THAT SAYS THE SAME WORD (operator
+            direction). "operator · Operator builds it" spends a badge on a fact
+            the sentence next to it already states; the zone's own left border
+            still carries the class. The chip stays where it ADDS something —
+            the deviations band below, whose heading does not say "joint", and
+            each tile, where it distinguishes joint work from operator work. */}
         <header className="v3dl-zone-h">
-          <OwnershipTag cls="operator" />
           <span className="v3dl-zone-t">Operator builds it</span>
           <ZoneHelp label="how the build zone works">
             <p>
@@ -856,7 +861,6 @@ export default function DesignLoopZones({ band, program, ledger, roster, onOpen,
           them has approved or is resolved on the record. */}
       <section className="v3dl-zone is-stakeholder" aria-label="Stakeholders approve it — the design review round">
         <header className="v3dl-zone-h">
-          <OwnershipTag cls="stakeholder" />
           <span className="v3dl-zone-t">Stakeholders approve it</span>
           {validation?.card ? (
             <button type="button" className="v3dl-goal-open" onClick={() => onOpen(validation.card!)}

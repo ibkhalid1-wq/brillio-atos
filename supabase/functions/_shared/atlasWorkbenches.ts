@@ -73,10 +73,12 @@ export interface AtlasRole {
   entities: string[];
   /** Systems those steps are performed in, first-mention order. */
   systems: string[];
-  /** Other actors inside this role's workflows — the handoffs. */
+  /** The job titles named on these steps — who actually does the work in this
+   *  area, and the roles it hands off to. Dropped `ownSteps` with the move to
+   *  areas: it counted steps whose actor equalled the GROUP NAME, which meant
+   *  something when the group was a job title and nothing once it is an area.
+   *  Nothing read it. */
   collaborators: string[];
-  /** How many steps this role personally performs across its workflows. */
-  ownSteps: number;
 }
 
 /** The workflows the atlas holds, normalised. The enumeration matches
@@ -139,27 +141,47 @@ export function businessRole(name: unknown): string {
 }
 
 /** The role a workflow belongs to: its owner, else the actor who starts it —
- *  as a job title, with any consulting credential dropped. */
+ *  as a job title, with any consulting credential dropped. Still the answer to
+ *  "who owns this workflow"; no longer the answer to "which workbench". */
 export function roleOf(workflow: AtlasWorkflow): string {
   return businessRole(workflow.owner || workflow.steps.find((s) => s.actor)?.actor || "");
 }
 
 /**
- * The atlas's roles, each with the work that belongs to it.
+ * THE AREA A WORKBENCH IS, which is not the same question as who owns a
+ * workflow (operator direction).
+ *
+ * Grouping by owner made a menu of job titles — "Sales reps - Markets", "GTM -
+ * Practices", "Executive Sponsor" — three of which were the same part of the
+ * business seen from three engagements, and one of which was a person. A
+ * workbench is a PLACE THE WORK HAPPENS, and the atlas already states it: every
+ * workflow carries `area`, and on the measured atlas those areas are Marketing,
+ * Sales, Finance, Delivery — the words the client uses for their own business.
+ *
+ * The owner is the fallback, not the discard: a workflow the atlas gives no
+ * area still has to land somewhere, and the role that runs it is the truest
+ * thing left to say about where it belongs.
+ */
+export function areaOf(workflow: AtlasWorkflow): string {
+  return text(workflow.area) || roleOf(workflow);
+}
+
+/**
+ * The atlas's AREAS, each with the work that belongs to it.
  *
  * A workflow the atlas attributes to nobody is NOT dropped: it lands under an
- * empty role name, and the caller renders that as the open question it is
- * ("who runs this?") rather than as a workflow that does not exist.
+ * empty name, and the caller renders that as the open question it is ("who runs
+ * this?") rather than as a workflow that does not exist.
  */
 export function deriveWorkbenches(atlas: unknown): AtlasRole[] {
   const workflows = atlasWorkflows(atlas);
   const byRole = new Map<string, AtlasRole>();
   const order: string[] = [];
   for (const w of workflows) {
-    const role = roleOf(w);
+    const role = areaOf(w);
     let entry = byRole.get(role);
     if (!entry) {
-      entry = { role, slug: slug(role || "unattributed"), workflows: [], entities: [], systems: [], collaborators: [], ownSteps: 0 };
+      entry = { role, slug: slug(role || "unattributed"), workflows: [], entities: [], systems: [], collaborators: [] };
       byRole.set(role, entry);
       order.push(role);
     }
@@ -167,15 +189,14 @@ export function deriveWorkbenches(atlas: unknown): AtlasRole[] {
     for (const s of w.steps) {
       for (const e of s.entities) if (!entry.entities.includes(e)) entry.entities.push(e);
       if (s.system && !entry.systems.includes(s.system)) entry.systems.push(s.system);
-      // Collaborators are actors shown on this same workbench, so they read as
-      // job titles too — otherwise the header says "Marketing" and the handoff
-      // beneath it says "Sales SME".
+      // The actors on these steps, as job titles — otherwise the header says
+      // "Marketing" and the line beneath it says "Marketing SME". An actor whose
+      // title IS the area name adds nothing to a list headed by that area.
       const actor = businessRole(s.actor);
       if (actor && actor !== role && !entry.collaborators.includes(actor)) entry.collaborators.push(actor);
-      if (!actor || actor === role) entry.ownSteps += 1;
     }
   }
-  // Two roles whose names differ only by their slug would collide in the URL and
+  // Two areas whose names differ only by their slug would collide in the URL and
   // in `data-screen`; suffix the later one rather than let one screen shadow the
   // other. Ordered by first appearance, so the suffix is deterministic.
   const seen = new Map<string, number>();

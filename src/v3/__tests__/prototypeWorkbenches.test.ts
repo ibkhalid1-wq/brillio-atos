@@ -35,6 +35,7 @@ import { assemblePrototype } from "@shared/prototypeAssembly.ts";
 import { deriveFabric } from "@shared/fabric.ts";
 import { generateSeed } from "@shared/seedData.ts";
 import { deriveWorkbenches, atlasWorkflows, roleOf } from "@shared/atlasWorkbenches.ts";
+import { slug } from "@shared/ledgerGenerator.ts";
 import { loadPrototype } from "./helpers/renderPrototype";
 
 const ROOT = resolve(__dirname, "../../..");
@@ -116,27 +117,47 @@ describe("every role the atlas names has a workbench", () => {
   });
 });
 
-describe("a queue is that role's records, not a table of everything", () => {
+describe("a queue is that area's records, not a table of everything", () => {
   const roles = deriveWorkbenches(atlas);
-  const withQueue = roles.find((r) => r.entities.includes("Contract"))!;
+  /**
+   * A BOARD AND AN ENTITY WHOSE QUEUE IS ACTUALLY DRAWN — found, not assumed.
+   *
+   * These cases used to name Contract and the board that first mentioned it.
+   * That was a fact about the OWNER grouping: Contract's first board was Legal,
+   * where it is one of two entities and therefore always queued. Grouping by
+   * area put it fourth on Finance's nine, past the four-queue cap, and three
+   * cases went red on a build where nothing was wrong. The subject was never
+   * Contract — it was "a queue" — so the fixture asks the document which queue
+   * it drew and holds THAT one to the rules.
+   */
+  const drawn = (() => {
+    for (const r of roles) {
+      const s = screen(doc, `work-${r.slug}`);
+      const card = s?.querySelector('[data-region^="queue:"]');
+      const region = card?.getAttribute("data-region") ?? "";
+      const entity = r.entities.find((e) => region.endsWith(`:${slug(e)}`));
+      if (card && entity) return { role: r, entity, card };
+    }
+    throw new Error("no workbench drew a queue at all — the cases below would pass vacuously");
+  })();
+  const QE = drawn.entity;
 
   it("lists real seeded records of an entity the role's own steps name", () => {
     // MUTATION: drop renderQueue from the persona renderer → RED. The card
     // wrapper is served; the rows are the renderer's, so this reads the tree.
-    const s = screen(doc, `work-${withQueue.slug}`)!;
-    const card = s.querySelector('[data-region$=":contract"]')!;
-    expect(card, "no Contract queue on the role whose steps name it").toBeTruthy();
+    const card = drawn.card;
+    expect(card, `no ${QE} queue on the area whose steps name it`).toBeTruthy();
     const rows = [...card.querySelectorAll("tbody tr")];
     expect(rows.length).toBeGreaterThan(0);
     const seed = generateSeed(ontology, deriveFabric(ontology, atlas).version);
-    const ids = new Set((seed.records.Contract ?? []).map((r) => String(r.id)));
-    for (const tr of rows) expect([...ids].some((id) => textOf(tr).includes(id)), `a queue row names no real Contract: ${textOf(tr)}`).toBe(true);
+    const ids = new Set((seed.records[QE] ?? []).map((r) => String(r.id)));
+    for (const tr of rows) expect([...ids].some((id) => textOf(tr).includes(id)), `a queue row names no real ${QE}: ${textOf(tr)}`).toBe(true);
   });
 
   it("every row opens THAT record, and the card states the true total", () => {
-    const card = screen(doc, `work-${withQueue.slug}`)!.querySelector('[data-region$=":contract"]')!;
+    const card = drawn.card;
     const seed = generateSeed(ontology, deriveFabric(ontology, atlas).version);
-    const total = (seed.records.Contract ?? []).length;
+    const total = (seed.records[QE] ?? []).length;
     expect(textOf(card.querySelector(".m-card-h"))).toContain(String(total));
     for (const tr of [...card.querySelectorAll("tbody tr")]) {
       const id = textOf(tr.querySelector(".m-cell-sub"));
@@ -150,15 +171,15 @@ describe("a queue is that role's records, not a table of everything", () => {
 
   it("its lanes are the status values the records actually carry", () => {
     // MUTATION: emit lanes for an entity with no status column → RED below.
-    const card = screen(doc, `work-${withQueue.slug}`)!.querySelector('[data-region$=":contract"]')!;
+    const card = drawn.card;
     const seed = generateSeed(ontology, deriveFabric(ontology, atlas).version);
     const lanes = [...card.querySelectorAll(".m-lanes .m-badge")].map((b) => textOf(b));
     const statusAttr = (ontology.entities as Array<Record<string, unknown>>)
-      .find((e) => e.name === "Contract")!.attributes as string[];
+      .find((e) => e.name === QE)!.attributes as string[];
     if (statusAttr.some((a) => /status|stage|state/i.test(a))) {
       expect(lanes.length).toBeGreaterThan(0);
       const counted = lanes.map((l) => Number(l.split("·").pop())).reduce((a, b) => a + b, 0);
-      expect(counted, "the lanes do not add up to the queue").toBe((seed.records.Contract ?? []).length);
+      expect(counted, "the lanes do not add up to the queue").toBe((seed.records[QE] ?? []).length);
     }
     // An entity with no status attribute is offered no lanes at all.
     const theatre = screen(clinicDoc, "work-theatre-scheduler")!.querySelector('[data-region$=":theatre"]');

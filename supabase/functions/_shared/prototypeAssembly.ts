@@ -2086,7 +2086,9 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
         + `<span class="m-assumed-q">${unmodelled.length === 1 ? "Is that a record" : "Are those records"} the system must keep? To confirm with the team.</span></div>` : "";
     const step = (s: { action: string; actor: string; system: string; entities: string[] }): string => {
       // The step's actor reads as a job title too, or the header says
-      // "Marketing" while the step beneath it says "Marketing SME".
+      // "Marketing" while the step beneath it says "Marketing SME". Under area
+      // grouping the actor is almost always worth showing — it is the one place
+      // the board says WHO, now that the heading says WHERE.
       const stepActor = businessRole(s.actor);
       const meta = [stepActor && stepActor !== r.role ? stepActor : "", s.system].filter(Boolean).join(" · ");
       const chips = s.entities.map((e) => { const hit = asEntity(e); return chip(hit ?? e, hasScreen(hit) ? hit : undefined); }).join(" ");
@@ -2108,9 +2110,12 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
       // wrongly addressed.
       return fid ? region(fid, inner) : inner;
     }).join("");
+    // A workbench is an AREA now, not a job title, so this list is no longer
+    // "who we hand off to" — it is the roles named on these steps, which on an
+    // area's own board is who does the work here.
     const works = r.collaborators.length
-      ? `<p class="m-sub">Works with ${esc(r.collaborators.join(", "))} — the people these workflows hand off to.</p>` : "";
-    const unowned = r.role ? "" : `<div class="m-assumed"><span class="m-assumed-k">Unattributed</span> the atlas names neither an owner nor an actor for ${r.workflows.length === 1 ? "this workflow" : "these workflows"}.<span class="m-assumed-q">Who runs it? To confirm with the team.</span></div>`;
+      ? `<p class="m-sub">Worked by ${esc(r.collaborators.join(", "))}.</p>` : "";
+    const unowned = r.role ? "" : `<div class="m-assumed"><span class="m-assumed-k">Unattributed</span> the atlas names neither an area, an owner nor an actor for ${r.workflows.length === 1 ? "this workflow" : "these workflows"}.<span class="m-assumed-q">Which part of the business runs it? To confirm with the team.</span></div>`;
     return `<section class="m-screen" data-screen="work-${r.slug}" hidden>
       <header class="m-page-h"><div><div class="m-eyebrow">Workbench</div><h1 class="m-title">${esc(title)}</h1>
       <p class="m-sub">${r.workflows.length} workflow${r.workflows.length === 1 ? "" : "s"} mapped today${r.systems.length ? ` · ${esc(r.systems.join(", "))}` : ""}</p>
