@@ -95,9 +95,41 @@ const MIN_QUOTE = 8;
  * a missing quote means there is nothing to attest; a system actor in the
  * speaker slot means nobody said it.
  */
-export function readReviewCapture(raw: unknown, asked: readonly ReviewAsk[]): ReviewCapture {
+/**
+ * The transcript with whitespace and case flattened, for the verbatim check.
+ *
+ * Deliberately forgiving about SHAPE and unforgiving about WORDS. A model that
+ * re-wraps a line, collapses a double space or changes capitalisation has still
+ * quoted the person; one that joins two fragments across a speaker change has
+ * not, and produces a sentence nobody said. Only the second is refused.
+ */
+const flatten = (s: string): string => s.replace(/\s+/g, " ").trim().toLowerCase();
+
+export function readReviewCapture(
+  raw: unknown,
+  asked: readonly ReviewAsk[],
+  /**
+   * THE SOURCE, so a quote can be checked against it.
+   *
+   * MEASURED, on a real 9,105-word discovery session: of 13 candidates the
+   * model returned, FOUR carried quotes that do not appear in the transcript —
+   * stitched from fragments either side of a speaker change. The reader passed
+   * every one, because it checked that a quote EXISTED and never that it was
+   * true. The refusal list came back empty, which read as a clean run and was
+   * actually the reader being too permissive.
+   *
+   * That is the failure this whole path exists to prevent: confirm one of those
+   * and it enters the ledger as that person's own words, attributed, with
+   * `method: "transcript"` and a verbatim that is not verbatim.
+   *
+   * Optional so existing callers keep working — but when it is absent NOTHING
+   * is checked, so the edge always passes it.
+   */
+  transcript?: string,
+): ReviewCapture {
   const doc = isRecord(raw) ? raw : {};
   const known = new Set(asked.map((a) => a.about));
+  const source = typeof transcript === "string" && transcript.trim() ? flatten(transcript) : "";
   const candidates: ReviewCandidate[] = [];
   const refused: string[] = [];
   const seen = new Set<string>();
@@ -117,6 +149,12 @@ export function readReviewCapture(raw: unknown, asked: readonly ReviewAsk[]): Re
     }
     if (!speaker || SYSTEM_ACTORS.has(speaker.toLowerCase())) {
       refused.push(`No named speaker for ${about} — a closure has to be attributed to a person.`);
+      continue;
+    }
+    // THE ONE THAT WAS MISSING. A quote nobody said cannot become what somebody
+    // said, however plausible it reads and however confident the model is.
+    if (source && !source.includes(flatten(quote))) {
+      refused.push(`The quote offered for ${about} does not appear in the transcript — "${quote.slice(0, 60)}…" attributed to ${speaker}. A stitched or paraphrased line cannot become their own words.`);
       continue;
     }
     // One candidate per locus per speaker: a model that quotes the same person

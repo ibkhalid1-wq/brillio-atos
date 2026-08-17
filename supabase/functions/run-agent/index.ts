@@ -162,6 +162,14 @@ const VALID_AGENT_IDS = new Set([
   "demo-scripts",
   "hardening-plan",
   "eval-suite",
+  // TRANSCRIPT → CANDIDATES. Registered in FORMAL_ARTIFACT_AGENTS and omitted
+  // here, which made it UNREACHABLE: the handler rejects an unlisted id with
+  // 400 "Unknown agentId" before any spec is consulted, so the agent existed,
+  // was deployed, was post-conditioned and had eleven passing tests, and could
+  // never once be invoked. Caught only by pressing the button on a real
+  // programme. `agentRegistryLockstep.test.ts` now asserts the two lists agree,
+  // because the comment above promising lockstep was not a mechanism.
+  "review-capture",
   // The prototype's picklist values. Not a formal artifact and not a movement
   // document: one model call per ONTOLOGY CHANGE, producing the input the
   // deterministic seeder reads. See VALUE_VOCABULARY_PHASE below.
@@ -11977,7 +11985,15 @@ Deno.serve(async (req) => {
         }
         if (request.agentId === "review-capture") {
           const brief = reviewCaptureBrief(getInnerProgramData(contextProgramData));
-          const read = readReviewCapture(formalResult, (brief.reviewAsks ?? []) as ReviewAsk[]);
+          // The transcript goes in too, so a quote can be checked against the
+          // thing it claims to come from. Without it the reader could only ask
+          // whether a quote EXISTED, never whether it was true — and on a real
+          // session four of thirteen were stitched lines nobody said.
+          const read = readReviewCapture(
+            formalResult,
+            (brief.reviewAsks ?? []) as ReviewAsk[],
+            typeof brief.reviewTranscript === "string" ? brief.reviewTranscript : "",
+          );
           formalResult = {
             ...formalResult,
             candidates: read.candidates,

@@ -28,6 +28,63 @@ const ASKED: ReviewAsk[] = [
 
 const capture = (extra: Record<string, unknown>) => readReviewCapture(extra, ASKED);
 
+/* ── the quote must be IN the transcript ──────────────────────────────────── */
+
+describe("a quote nobody said cannot become what somebody said", () => {
+  // MEASURED, on a real 9,105-word discovery session: of 13 candidates the
+  // model returned, FOUR carried quotes absent from the transcript — stitched
+  // from fragments either side of a speaker change. Every one passed, because
+  // the reader checked that a quote EXISTED and never that it was true. The
+  // refusal list came back EMPTY, which reads as a clean run and was in fact
+  // the reader being too permissive.
+  const SOURCE = [
+    "Smitha B V  0:14  We don't create anything. The creation happens only by the sales team.",
+    "Ibrahim Khalid  0:31  Right, and the leads?",
+    "Smitha B V  0:36  We run it for about 3 months and capture the leads.",
+  ].join("\n");
+  const read = (quote: string) => readReviewCapture(
+    { candidates: [{ about: "el-lead#status:values", quote, speaker: "Smitha B V", confidence: 0.9 }] },
+    ASKED, SOURCE,
+  );
+
+  it("keeps a quote that is really there", () => {
+    expect(read("We run it for about 3 months and capture the leads.").candidates).toHaveLength(1);
+  });
+
+  it("REFUSES a line stitched across a speaker change", () => {
+    // Exactly the shape of the four that got through: two real fragments,
+    // joined into a sentence nobody uttered.
+    const out = read("The creation happens only by the sales team. Right, and the leads?");
+    expect(out.candidates).toEqual([]);
+    expect(out.refused[0]).toContain("does not appear in the transcript");
+    expect(out.refused[0]).toContain("Smitha B V");
+  });
+
+  it("refuses a paraphrase, however plausible", () => {
+    expect(read("The sales team is the only one that creates records.").candidates).toEqual([]);
+  });
+
+  it("forgives re-wrapping and case — shape is not the claim", () => {
+    // A model that collapses a double space or re-wraps a line has still quoted
+    // the person. Refusing that would make the check cry wolf on every run.
+    expect(read("we  DON'T create   anything.\nThe creation happens only by the sales team.").candidates)
+      .toHaveLength(1);
+  });
+
+  it("checks nothing when it is given no source, rather than refusing everything", () => {
+    // The reader is used in tests and by callers that hold no transcript; a
+    // missing source must not turn every candidate into a refusal.
+    expect(capture({ candidates: [{ about: "el-lead#status:values", quote: "Four stages, that is all.", speaker: "P", confidence: 1 }] }).candidates)
+      .toHaveLength(1);
+  });
+
+  it("the edge hands the transcript in — the check is worthless unarmed", () => {
+    const EDGE_SRC = readFileSync(resolve(__dirname, "../../../supabase/functions/run-agent/index.ts"), "utf8");
+    expect(EDGE_SRC).toMatch(/readReviewCapture\(\s*formalResult,/);
+    expect(EDGE_SRC).toContain("brief.reviewTranscript");
+  });
+});
+
 describe("a candidate is a match, not a closure", () => {
   it("keeps a well-formed one whole — locus, verbatim, speaker, its own confidence", () => {
     const out = capture({
@@ -203,7 +260,11 @@ describe("the agent is registered and post-conditioned", () => {
     // Same discipline as the prototype and blueprint post-conditions: the
     // decision is a pure _shared function, so a test can run it.
     expect(EDGE).toContain('request.agentId === "review-capture"');
-    expect(EDGE).toContain("readReviewCapture(formalResult");
+    // Whitespace-insensitive: this pinned the single-line call and went red the
+    // day the argument list wrapped across lines to take the transcript. What
+    // is being asserted is that the reader RUNS on the result, not how the call
+    // is formatted.
+    expect(EDGE).toMatch(/readReviewCapture\(\s*formalResult/);
   });
 
   it("is told the quote must be verbatim and the locus must be one we asked", () => {
