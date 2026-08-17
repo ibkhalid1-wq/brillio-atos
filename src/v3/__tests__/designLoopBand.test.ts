@@ -264,12 +264,24 @@ describe("§1 CAPABILITY — every verb the band offered is still reachable", ()
     expect(onRunAgent).toHaveBeenCalled();
   });
 
-  it("CAPABILITY reach the demo script — the stakeholder zone's header link", () => {
+  it("CAPABILITY reach the demo script — the stakeholder zone's header action", () => {
     // Named for what it opens, not for the artifact's internal id: a stakeholder
     // is walked through a SCRIPT, and "Validation" is the pipeline's word for the
     // document that holds it (operator direction).
-    mountShell(seed());
-    expect(buttonSaying(band()!, "demo script")).toBeTruthy();
+    //
+    // Matched case-INSENSITIVELY and proven by the card it hands over. The
+    // earlier version pinned the literal lowercase "demo script" and went red
+    // when the control was promoted from a text link to a button and its label
+    // sentence-cased — a capability test failing over a capital D. What is
+    // being asserted is that an operator can reach the script, not how the word
+    // is typeset.
+    const onOpen = vi.fn();
+    mountBandWith(seed(), ledgerWith([]), { onOpen });
+    const btn = [...band()!.querySelectorAll("button")]
+      .find((b) => /demo script/i.test(b.textContent ?? ""));
+    expect(btn, "no control in the design loop reaches the demo script").toBeTruthy();
+    act(() => { btn!.click(); });
+    expect(onOpen).toHaveBeenCalledTimes(1);
   });
 
   it("CAPABILITY open a design review round — the roster picker, the note and the verb", () => {

@@ -862,10 +862,17 @@ export default function DesignLoopZones({ band, program, ledger, roster, onOpen,
       <section className="v3dl-zone is-stakeholder" aria-label="Stakeholders approve it — the design review round">
         <header className="v3dl-zone-h">
           <span className="v3dl-zone-t">Stakeholders approve it</span>
+          {/* THE DEMO SCRIPT IS THE THING SOMEBODY READS ALOUD IN THE ROOM, so it
+              is the one artifact in this zone with a scheduled moment. As an
+              11.5px underlined text link between the zone title and a help
+              toggle it read as a footnote. It is now the header's ACTION —
+              pushed right, on its own accent, sized to be found without
+              hunting. It is still the only button here, so promoting it costs
+              no other control its place. */}
           {validation?.card ? (
-            <button type="button" className="v3dl-goal-open" onClick={() => onOpen(validation.card!)}
+            <button type="button" className="v3dl-script-open" onClick={() => onOpen(validation.card!)}
               title="Open the demo script — what each stakeholder is walked through, their verdict, and sign-off">
-              demo script
+              <span aria-hidden="true">▶</span> Demo script
             </button>
           ) : null}
           <ZoneHelp label="how the review round works">

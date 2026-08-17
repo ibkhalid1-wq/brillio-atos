@@ -8,11 +8,30 @@ import {
   useCurrentFrame,
 } from "remotion";
 import { ELECTRIC, ELECTRIC_TEXT, FAINT, FONT, INK, INK_2, MUTED, T } from "./tokens";
-import { AuraWord, Chip, DrawnLine, Eyebrow, Glow, Ontology3D, Plate, Rise, ScreenInset, Typed } from "./ui";
+import { AuraWord, Chip, DrawnLine, Eyebrow, Glow, Ontology3D, Rise, Typed } from "./ui";
 import {
   b, copy, CONTRADICTION, DIAGNOSIS_POLES, DOMAINS, GOVERNANCE_CHIPS, GRAVEYARD,
   JOURNEY, LIFECYCLE, NUMBERS, ONTOLOGY_RING, ONTOLOGY_SPHERE, PROVISIONAL_LABELS, RECEIPTS, TRANSCRIPT, SPINE, STAKEHOLDERS, STANDARDS, TEAM,
 } from "./content";
+
+/**
+ * THE FOOTAGE IS GONE. On 2026-08-17 the 65 MB of video plates were purged
+ * from git history at the user's instruction and the working copies deleted:
+ * six `plate-*.mp4` backing clips and two `screen-*.mp4` product recordings.
+ * There is no backup. This file was edited to build without them.
+ *
+ * What that cost, so a re-shoot knows what to aim at. The plates sat UNDER the
+ * type as backing motion; `Ground` takes `plate` as an optional named layer, so
+ * dropping the prop leaves the aurora background and every scene still reads —
+ * quieter, but whole. The two screen recordings were load-bearing in a way the
+ * plates were not: they were the film's only LIVE PRODUCT footage, the evidence
+ * behind "the machine proposes, the business validates". Losing them turns two
+ * scenes from demonstration into assertion.
+ *
+ * `Plate` and `ScreenInset` are untouched in `ui.tsx`. They are the machinery,
+ * they are still correct, and re-shooting means passing a filename back in —
+ * not rebuilding a slowdown-and-frame-blend pipeline from scratch.
+ */
 
 /**
  * The film's easing curve. Expo-out rather than cubic-out: it leaves faster
@@ -63,7 +82,7 @@ export const SceneQuestion: React.FC = () => {
   const frame = useCurrentFrame();
   const grave = GRAVEYARD;
   return (
-    <Ground plate={<Plate src="plate-teams.mp4" dur={T.seg1.dur} tone="people" opacity={1} />}>
+    <Ground>
       <div style={{ width: 1680, textAlign: "center" }}>
         <Typed
           start={10}
@@ -118,7 +137,7 @@ export const SceneDiagnosis: React.FC = () => {
     background: "rgba(255,255,255,0.05)", whiteSpace: "nowrap",
   });
   return (
-    <Ground plate={<Plate src="plate-gap.mp4" dur={T.seg2.dur} opacity={0.45} />}>
+    <Ground>
       <div style={{ textAlign: "center" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div style={pill(leftP)}>{DIAGNOSIS_POLES[0]}</div>
@@ -150,7 +169,7 @@ export const SceneReveal: React.FC = () => {
   const spine = SPINE;
   // The chip lands on "in twenty-one days" — the fourth sentence, not the third.
   return (
-    <Ground plate={<Plate src="plate-draw.mp4" dur={T.seg3.dur} opacity={0.5} />}>
+    <Ground>
       <Glow size={900} x="50%" y="34%" />
       <div style={{ textAlign: "center" }}>
         <DrawnLine size={330} progress={draw} />
@@ -205,7 +224,7 @@ export const SceneAlignment: React.FC = () => {
     return { x: cx + Math.cos(a) * R, y: cy + Math.sin(a) * R * 0.62 };
   };
   return (
-    <Ground plate={<Plate src="plate-speaking.mp4" dur={T.seg4.dur} tone="people" opacity={1} />}>
+    <Ground>
       <Rise start={0} style={{ position: "absolute", top: 86, width: "100%", textAlign: "center" }}>
         <Eyebrow>{copy("seg4").eyebrow}</Eyebrow>
         <div style={{ fontFamily: FONT, fontSize: 40, fontWeight: 800, color: "#fff", marginBottom: 8 }}>
@@ -267,23 +286,12 @@ export const SceneAlignment: React.FC = () => {
         <DrawnLine size={92} progress={1} />
       </div>
 
-      {/* A stakeholder working through the workflow AURA routed to them —
-          marking what is right, what doesn't happen, in their own words. */}
-      <div style={{ position: "absolute", left: 64, top: 330 }}>
-        <ScreenInset
-          src="screen-stakeholder.mp4"
-          width={470}
-          start={b(6)}
-          from={1.5}
-          zoom={2.05}
-          origin="46% 30%"
-          rate={0.75}
-          label="LIVE · STAKEHOLDERS VALIDATE"
-        />
-      </div>
-      {/* The plate shows someone talking to a laptop; this is the laptop
-          hearing them. The line is the "two weeks" half of the
-          contradiction the scene surfaces a few beats later. */}
+      {/* A screen recording of a stakeholder working through their routed
+          workflow sat here. Its source was purged with the rest of the
+          footage on 2026-08-17; see the note at the head of this file. */}
+      {/* The "two weeks" half of the contradiction the scene surfaces a few
+          beats later. It carried the beat alongside the recording and still
+          carries it alone. */}
       <Rise start={b(7)} style={{ position: "absolute", right: 70, top: 400 }}>
         <div style={{ fontFamily: FONT, width: 430 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
@@ -527,28 +535,12 @@ export const SceneJourney: React.FC = () => {
           </div>
         </div>
 
-        {/* The other half of "the machine proposes, the business validates":
-            three architectures scored by AURA, one crowned, an operator free
-            to refine it. Replaces the governance chips, which restated the
-            narration word for word. */}
-        {/* The receipt arrives as the last stamp settles and then takes the
-            room: the table dims behind it so the scene ends on evidence
-            rather than on a diagram of itself. 0.52x also keeps the
-            recording from exhausting if the narration is ever re-cut longer. */}
-        <div style={{ marginTop: 12, display: "flex", justifyContent: "center" }}>
-          <ScreenInset
-            src="screen-architecture.mp4"
-            width={980}
-            start={b(14)}
-            from={2}
-            rate={0.52}
-            zoom={2.0}
-            zoomTo={1.0}
-            zoomDur={150}
-            origin="50% 42%"
-            label="LIVE · OPERATORS MAKE THE CHOICE"
-          />
-        </div>
+        {/* A recording of three scored architectures, one crowned, an operator
+            free to refine it — the other half of "the machine proposes, the
+            business validates" — closed this scene on evidence rather than on
+            a diagram of itself. Its source was purged on 2026-08-17; see the
+            note at the head of this file. The scene now ends on the stamp
+            table, which is weaker and is the reason to re-shoot it first. */}
       </div>
     </Ground>
   );
@@ -559,7 +551,7 @@ export const SceneNumbers: React.FC = () => {
   const frame = useCurrentFrame();
   const stamps = NUMBERS;
   return (
-    <Ground plate={<Plate src="plate-demo.mp4" dur={T.seg7.dur} tone="people" opacity={1} />}>
+    <Ground>
       {/* Local scrim so the figures never sit on the plate's highlights. */}
       <AbsoluteFill style={{ background: "radial-gradient(ellipse 54% 46% at 50% 50%, rgba(10,7,28,0.76), transparent 74%)" }} />
       <Glow size={1100} x="50%" y="50%" opacity={0.28} />
@@ -813,7 +805,7 @@ export const SceneClose: React.FC = () => {
   const frame = useCurrentFrame();
   const qP = interpolate(frame, [b(2), b(4)], [0, 1], EASE);
   return (
-    <Ground plate={<Plate src="plate-converge.mp4" dur={T.seg10.dur} opacity={0.5} />}>
+    <Ground>
       <Glow size={800} x="50%" y="42%" opacity={0.25} />
       <div style={{ textAlign: "center" }}>
         <Rise start={b(1)}>

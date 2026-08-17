@@ -496,9 +496,27 @@
   border:1px dashed var(--fs-line);border-radius:10px;background:var(--v3-surface-2)}
 .v3dl-stage-none p{margin:0;font-size:11.5px;line-height:1.55;color:var(--v3-text-muted);max-width:70ch}
 .v3dl-stage-foot{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center}
-/* the goal link — "open Validation" in the stakeholder zone's header */
-.v3dl-goal-open{font:inherit;text-align:left;font-size:11.5px;color:var(--v3-text-secondary);background:none;border:0;padding:0;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
-.v3dl-goal-open:focus-visible{outline:2px solid var(--v3-positive);outline-offset:2px}
+/* THE DEMO SCRIPT, in the stakeholder zone's header. It was an 11.5px
+   underlined text link wedged between the zone title and the help toggle, which
+   made the one artifact somebody reads ALOUD in front of a client look like a
+   footnote. Now a filled accent pill, directly beside the zone title — an
+   action belongs next to the thing it acts on, and a `margin-left:auto` that
+   shoved it right left it stranded in dead centre with the help toggle beyond
+   it. Prominence is carried by weight and fill, not by position. The ▶ and the
+   pill shape are the same idiom as "open & refine" on the prototype stage, so
+   this reads as the zone's primary action rather than a new species of
+   control. Same accent as every other primary action on the surface — no new
+   colour for anyone to learn. */
+.v3dl-script-open{font:inherit;font-size:12px;font-weight:650;letter-spacing:.01em;
+  display:inline-flex;align-items:center;gap:6px;
+  padding:6px 13px;border-radius:99px;cursor:pointer;
+  background:color-mix(in srgb,var(--v3-accent-2) 14%,transparent);
+  border:1px solid color-mix(in srgb,var(--v3-accent-2) 45%,transparent);
+  color:var(--v3-accent-2)}
+.v3dl-script-open span{font-size:9px;opacity:.85}
+.v3dl-script-open:hover{background:color-mix(in srgb,var(--v3-accent-2) 22%,transparent);
+  border-color:var(--v3-accent-2)}
+.v3dl-script-open:focus-visible{outline:2px solid var(--v3-accent-2);outline-offset:2px}
 /* RULES BEHIND A BUTTON. Teaching copy is true on every render, so it is a real
    disclosure with aria-expanded rather than a paragraph competing with the state
    beside it. Same --mv ink as .v3dl-mini, on the same card. */
