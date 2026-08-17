@@ -5773,7 +5773,25 @@ details[open] > summary .v3fs-disc-c::after {display:none}
 
 /* The reading pane: full-document drill-down for every generated artifact. */
 .v3fs-doc-backdrop {position:fixed;inset:0;background:rgba(15,16,32,.5);backdrop-filter:blur(8px);z-index:80}
-.v3fs-docview {position:fixed;top:0;right:0;bottom:0;width:min(780px,calc(100vw - 100px));display:flex;flex-direction:column;background:var(--fs-card);border-left:1px solid var(--fs-line);border-radius:0;box-shadow:-24px 0 80px -24px rgba(15,16,32,.45);z-index:81}
+/* THE PANEL SCROLLS AS ONE.
+   It was a fixed flex column whose only scroller was the document BODY, with
+   the ask panel and the Discovery Kit's coverage matrix pinned above it as
+   siblings. On a real kit the matrix stands 756px tall in a 773px column, so
+   the body — the document itself — was squeezed to 62 and could not be read.
+   The EMBEDDED variant of this same studio already scrolls as one panel
+   (`.v3fs-artpanel .v3fs-docview-b{overflow:visible}`); the overlay never got
+   the same treatment. The header stays put; everything below it moves. */
+.v3fs-docview {position:fixed;top:0;right:0;bottom:0;width:min(780px,calc(100vw - 100px));display:flex;flex-direction:column;overflow-y:auto;overscroll-behavior:contain;background:var(--fs-card);border-left:1px solid var(--fs-line);border-radius:0;box-shadow:-24px 0 80px -24px rgba(15,16,32,.45);z-index:81}
+.v3fs-docview > .v3fs-docview-h {position:sticky;top:0;z-index:3;background:var(--fs-card)}
+.v3fs-docview > .v3fs-docview-b {overflow:visible;max-height:none;flex:0 0 auto}
+/* NO SCROLLER INSIDE A SCROLLER. The coverage matrix caps itself at 64vh and
+   its content came to 493px inside a 494px cap — scrollable by ONE PIXEL, which
+   is enough for the browser to treat it as the scroller under the cursor and
+   never chain the wheel outward. So with the pointer anywhere over the grid —
+   which is most of the panel — the page felt frozen. The panel scrolls as one
+   now, so the cap has nothing left to do vertically; the horizontal scroll for
+   a kit with many areas stays. */
+.v3fs-docview .v3fs-dka-matrixwrap {max-height:none}
 @media (prefers-reduced-motion: no-preference){
   .v3fs-docview{animation:v3fs-dv-in .22s cubic-bezier(.2,.8,.3,1)}
   .v3fs-doc-backdrop{animation:v3fs-dv-fade .22s ease}

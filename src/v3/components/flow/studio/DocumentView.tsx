@@ -10,6 +10,17 @@
 import { useEffect, useRef, useState } from "react";
 import { TextArea, TextField, StringListEditor, TableEditor, ChipsField, asStrings } from "./StudioKit";
 
+/** The nearest ancestor that actually scrolls, or null for the viewport. Asked
+ *  by measurement rather than by class name, so a layout change moves the
+ *  scroller without silently un-rooting the observer that watches it. */
+function scrollParent(from: Element): Element | null {
+  for (let el: Element | null = from.parentElement; el; el = el.parentElement) {
+    const oy = getComputedStyle(el).overflowY;
+    if ((oy === "auto" || oy === "scroll") && el.scrollHeight > el.clientHeight) return el;
+  }
+  return null;
+}
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -283,7 +294,13 @@ export default function DocumentView({ doc, order, hideKeys, onPatch, onOpenFull
       const visible = observed.filter((e) => e.isIntersecting)
         .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
       if (visible) setActiveSection(visible.target.getAttribute("data-dv-sec"));
-    }, { root: rootRef.current.closest(".v3fs-docview-b"), rootMargin: "0px 0px -70% 0px" });
+      // THE ROOT HAS TO BE THE THING THAT ACTUALLY SCROLLS. This asked for
+      // `.v3fs-docview-b` by name, and that element is not the scroller in
+      // either place it appears any more — the embedded panel has scrolled as
+      // one since it was written, and the overlay does now. An observer rooted
+      // on a box that never moves reports everything as visible, so the outline
+      // highlighted the first section for ever and looked like it was working.
+    }, { root: scrollParent(rootRef.current), rootMargin: "0px 0px -70% 0px" });
     sections.forEach((section) => observer.observe(section));
     return () => observer.disconnect();
   }, [showOutline, outlineKey]);
