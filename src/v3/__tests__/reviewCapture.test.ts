@@ -213,3 +213,50 @@ describe("the agent is registered and post-conditioned", () => {
     expect(spec).toMatch(/MATCHING, NOT DECIDING/i);
   });
 });
+
+/* ── the operator surface, as SOURCE facts ────────────────────────────────── */
+
+describe("the queue is wired to the surface an operator actually uses", () => {
+  const LINE = readFileSync(resolve(__dirname, "../components/flow/TheLine.tsx"), "utf8");
+
+  it("the transcript and the open questions are stashed together, then the agent runs", () => {
+    // Stashed on LISTEN under underscore keys so neither moves a movement
+    // fingerprint — the same channel `_prototypeRefine` uses.
+    expect(LINE).toContain("_reviewTranscript");
+    expect(LINE).toContain("_reviewAsks");
+    expect(LINE).toContain('onRunAgent?.("review-capture", "listen")');
+  });
+
+  it("the ask list is built by the ONE renderer the operator reads on screen", () => {
+    // Matching against a second phrasing of the question would mean the model is
+    // answering something nobody was asked.
+    expect(LINE).toContain("reviewAskOf(");
+    expect(LINE).toMatch(/ownedQuestionsFor[\s\S]{0,400}reviewAskOf|reviewAskOf[\s\S]{0,400}ownedQuestionsFor/);
+  });
+
+  it("confirming writes through the answer channel that already existed", () => {
+    // No second write path: the row lands in `_stakeholderAnswers`, which the
+    // ledger already reads and turns into an attributed closure.
+    const fn = LINE.slice(LINE.indexOf("const confirmCandidate"), LINE.indexOf("const confirmCandidate") + 1400);
+    expect(fn).toContain("reviewAnswerRows(");
+    expect(fn).toContain("_stakeholderAnswers");
+    expect(fn).toContain("confirmedBy");
+  });
+
+  it("a dismissal is NOT written to the record", () => {
+    // "That is not an answer" is a judgement about a model's reading, not a fact
+    // about the business. Session state, so the next run re-proposes.
+    const decl = LINE.slice(LINE.indexOf("const [dismissed"), LINE.indexOf("const [dismissed") + 120);
+    expect(decl).toContain("useState");
+    expect(LINE).not.toMatch(/_reviewDismissed|onSaveInputs\([^)]*dismissed/);
+  });
+
+  it("offers the read only when something is open to match against", () => {
+    expect(LINE).toContain("asksForReview.length ?");
+  });
+
+  it("says what will happen and what will not, before it happens", () => {
+    // The operator is agreeing to a MATCH, not to a recording.
+    expect(LINE).toContain("nothing is recorded as said until you do");
+  });
+});

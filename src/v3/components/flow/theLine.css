@@ -1248,3 +1248,29 @@
 .v3ln-cr-area.more{color:var(--v3-text-muted);font-weight:700;background:color-mix(in srgb,var(--v3-text-muted) 8%,transparent)}
 .v3ln-cr-area.more:hover{color:var(--v3-accent-2);background:color-mix(in srgb,var(--v3-accent-2) 12%,transparent)}
 
+
+/* ── FOUND IN THE LAST REVIEW ─────────────────────────────────────────────────
+   A queue, not a verdict. The quote is the loudest thing in each row because it
+   is the only evidence the operator has: they are being asked whether this
+   person really said this, about this. */
+.v3ln-revq{margin-bottom:18px;padding:14px 16px;border-radius:12px;
+  border:1px solid color-mix(in srgb,var(--v3-accent-2) 32%,var(--fs-line));
+  background:color-mix(in srgb,var(--v3-accent-2) 4%,var(--fs-card));display:flex;flex-direction:column;gap:12px}
+.v3ln-revq-h{display:flex;align-items:baseline;gap:10px}
+.v3ln-revq-h b{font-size:13px;font-weight:700}
+.v3ln-revq-n{font-family:var(--v3-font-mono);font-size:11px;color:var(--v3-accent-2)}
+.v3ln-revq-r{display:flex;flex-direction:column;gap:7px;padding-top:12px;border-top:1px solid var(--fs-line)}
+.v3ln-revq-q{margin:0;font-size:11.5px;color:var(--v3-text-muted)}
+.v3ln-revq-said{margin:0;font-size:13.5px;line-height:1.6;color:var(--v3-text-primary);
+  padding-left:12px;border-left:2px solid color-mix(in srgb,var(--v3-accent-2) 45%,transparent)}
+.v3ln-revq-said cite{display:block;margin-top:4px;font-size:11px;font-style:normal;color:var(--v3-text-muted)}
+.v3ln-revq-why{margin:0;font-size:11.5px;color:var(--v3-text-muted);font-style:italic}
+.v3ln-revq-acts{display:flex;gap:12px;align-items:center}
+.v3ln-revq-res{font-size:12px}
+.v3ln-revq-res>summary{cursor:pointer;color:var(--v3-text-secondary);padding:2px 0}
+.v3ln-revq-res>summary:hover{color:var(--v3-accent-2)}
+.v3ln-revq-res .v3ln-revq-said{margin-top:9px}
+/* The offer, in the capture dialog — what will happen, and what will not. */
+.v3ln-cap-find{display:flex;gap:9px;align-items:flex-start;font-size:12px;line-height:1.55;color:var(--v3-text-secondary)}
+.v3ln-cap-find input{margin-top:2px;flex:none}
+.v3ln-cap-find em{display:block;font-style:normal;color:var(--v3-text-muted);font-size:11.5px}

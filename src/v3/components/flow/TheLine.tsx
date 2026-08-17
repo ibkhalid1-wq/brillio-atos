@@ -53,6 +53,9 @@ import { lifecycleEntities } from "@/v3/lib/ledger/lifecycle";
 import { dictionaryCoverage, isSpreadsheetName, mergeDictionaryCsv, parseDictionaryCsv, readDictionaryWorkbook } from "@/v3/lib/ledger/dictionary";
 import { currentDesignRound } from "@/v3/components/flow/flowDesignRound";
 import { renderQuestion } from "@/v3/lib/ledger/renderQuestion";
+import { reviewAskOf, readReviewCapture, reviewAnswerRows, type ReviewCandidate } from "@shared/reviewCapture.ts";
+import { readStakeholderAnswers } from "@/v3/lib/ledger/stakeholderAnswers";
+import { readArtifactDoc } from "@/v3/components/flow/flowArtifactEdit";
 import {
   emptyOwnedLoad, ownedLoadBreakdown, ownedLoadFor, ownedLoadSections, personOwned, sendableCount,
   type OwnedBucket, type OwnedLoad,
@@ -585,6 +588,67 @@ export default function TheLine({ program, actor, onOpenInbox, onSaveInputs, onR
     }
     return m;
   }, [cast, ownedLoadByLabel, ledger.store]);
+  /**
+   * EVERY QUESTION STILL OPEN, as the ask list the review-capture agent matches
+   * against. Drawn from the SAME renderer the operator reads on screen
+   * (`renderQuestion`), so the model is matching against the words a person
+   * would have asked, not a second phrasing of them.
+   */
+  const asksForReview = useMemo(
+    () => reviewAskOf([...ownedQuestionsFor.entries()].flatMap(([owner, rows]) =>
+      rows.map((r) => ({ about: r.about, question: r.question, owner })))),
+    [ownedQuestionsFor],
+  );
+
+  /** Matches this operator has waved away. Session-only ON PURPOSE: "that is not
+   *  an answer" is a judgement about a model's reading, not a fact about the
+   *  business, and writing it to the record would give it a permanence it has
+   *  not earned. The next run re-proposes, and the operator can disagree again. */
+  const [dismissed, setDismissed] = useState<string[]>([]);
+  /**
+   * WHAT THE LAST REVIEW APPEARS TO HAVE SETTLED — a queue, not a verdict.
+   *
+   * The agent matched sentences to questions; a person decides whether it read
+   * the room right. Confirming one writes the SPEAKER's own words to the answer
+   * channel that already existed, so the locus closes attributed to them with
+   * the quote attached. Dismissing one leaves the question open, which is the
+   * correct outcome when a model heard an answer that was not there.
+   */
+  const reviewQueue = useMemo(() => {
+    const doc = readArtifactDoc(program, "reviewCapture");
+    if (!doc) return null;
+    const read = readReviewCapture(doc, asksForReview);
+    const question = new Map(asksForReview.map((a) => [a.about, a.question]));
+    const settled = new Set(readStakeholderAnswers(program).map((a) => `${a.about} ${a.saidByName.toLowerCase()}`));
+    return {
+      // A candidate whose locus this person has already answered is done, not
+      // pending — the queue must not ask twice.
+      candidates: read.candidates.filter((c) =>
+        !settled.has(`${c.about} ${c.speaker.toLowerCase()}`) && !dismissed.includes(`${c.about}|${c.speaker}`)),
+      unmatched: read.unmatched,
+      refused: read.refused,
+      question,
+    };
+  }, [program, asksForReview, dismissed]);
+
+  const confirmCandidate = async (c: ReviewCandidate) => {
+    if (!onSaveInputs) return;
+    const listen = readMovementInputs(program, "listen") as Record<string, unknown>;
+    const held = typeof listen._stakeholderAnswers === "string"
+      ? (() => { try { return JSON.parse(listen._stakeholderAnswers as string) as unknown[]; } catch { return []; } })()
+      : Array.isArray(listen._stakeholderAnswers) ? listen._stakeholderAnswers as unknown[] : [];
+    const rows = reviewAnswerRows([c], {
+      via: "review capture",
+      at: new Date().toISOString(),
+      confirmedBy: actor || "an operator",
+      roleOf: (name) => cast.find((r) => r.label === name)?.role,
+    });
+    await onSaveInputs("listen", { _stakeholderAnswers: JSON.stringify([...held, ...rows]) }, {
+      attest: { action: `Confirmed — ${c.speaker} answered`, detail: c.quote.slice(0, 140) },
+    });
+    setNote(`Recorded — ${c.speaker}'s own words now close that question.`);
+  };
+
   // Does this person sit on either side of an open seam? (blocked = only a joint
   // session left for them). Read from the one session queue, by owner-label.
   const seamPairsFor = useMemo(() => {
@@ -1040,6 +1104,9 @@ export default function TheLine({ program, actor, onOpenInbox, onSaveInputs, onR
 
   // ── capture: append attributed evidence in the one stored evidence format.
   const [capFor, setCapFor] = useState<CastRow | "open" | null>(null);
+  /** Read the transcript for answers to the questions still open (default on —
+   *  the operator is pasting a meeting precisely because things were settled). */
+  const [findAnswers, setFindAnswers] = useState(true);
   const [capWho, setCapWho] = useState<string>("");
   const [capText, setCapText] = useState("");
   /** Files extracted by flow-extract and waiting for the operator to read them.
@@ -1135,6 +1202,17 @@ export default function TheLine({ program, actor, onOpenInbox, onSaveInputs, onR
         : { action: `Captured — ${row.label}` },
     });
     onRunAgent?.("contradiction-detector", row.movementId);
+    // FIND THE ANSWERS IN IT. A transcript is the most direct evidence a
+    // programme gets and the only kind with no addresses in it, so the open
+    // questions ride along and the agent matches. It MATCHES — every row it
+    // returns is a candidate an operator confirms below, never a closure.
+    if (findAnswers && asksForReview.length && text) {
+      await onSaveInputs("listen", {
+        _reviewTranscript: `${header}\n${text}`,
+        _reviewAsks: JSON.stringify(asksForReview),
+      }, { silent: true });
+      onRunAgent?.("review-capture", "listen");
+    }
     setCapFor(null); setCapText(""); setCapDocs([]); setCapDict(null);
     const what = docs.length
       ? `${docs.length} document${docs.length === 1 ? "" : "s"} added${text ? " with a capture" : ""}`
@@ -1685,6 +1763,53 @@ export default function TheLine({ program, actor, onOpenInbox, onSaveInputs, onR
             ) : null}
             <span className="v3ln-scope">{recordGroups.reduce((n, g) => n + g.items.length, 0)} evidence entries</span>
           </header>
+
+          {/* WHAT THE LAST REVIEW APPEARS TO HAVE SETTLED. A queue, not a
+              verdict: the agent matched sentences to questions, and a person
+              decides whether it read the room right. Confirming writes the
+              SPEAKER's own words to the answer channel, so the locus closes
+              attributed to them with the quote attached; dismissing leaves the
+              question open, which is the right outcome when a model heard an
+              answer that was not there. */}
+          {reviewQueue && (reviewQueue.candidates.length || reviewQueue.unmatched.length) ? (
+            <section className="v3ln-revq" aria-label="Answers found in the last review">
+              <header className="v3ln-revq-h">
+                <b>Found in the last review</b>
+                <span className="v3ln-revq-n">{reviewQueue.candidates.length} to confirm</span>
+              </header>
+              {reviewQueue.candidates.map((c) => (
+                <div className="v3ln-revq-r" key={`${c.about}-${c.speaker}`}>
+                  <p className="v3ln-revq-q">{reviewQueue.question.get(c.about) ?? c.about}</p>
+                  <blockquote className="v3ln-revq-said">
+                    &ldquo;{c.quote}&rdquo;
+                    <cite>— {c.speaker}{c.confidence < 0.6 ? " · the match is a stretch" : ""}</cite>
+                  </blockquote>
+                  {c.why ? <p className="v3ln-revq-why">{c.why}</p> : null}
+                  <div className="v3ln-revq-acts">
+                    <button type="button" className="v3ln-btn pri" onClick={() => void confirmCandidate(c)}>
+                      Yes — they said that
+                    </button>
+                    <button type="button" className="v3ln-a" onClick={() => setDismissed((d) => [...d, `${c.about}|${c.speaker}`])}>
+                      Not an answer
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {reviewQueue.unmatched.length ? (
+                <details className="v3ln-revq-res">
+                  <summary>{reviewQueue.unmatched.length} said that answered nothing we asked</summary>
+                  {/* The residue is the point, not the leftovers: a statement
+                      nobody had a question for is how you find the question you
+                      failed to ask. */}
+                  {reviewQueue.unmatched.map((u, i) => (
+                    <blockquote className="v3ln-revq-said" key={i}>
+                      &ldquo;{u.quote}&rdquo;<cite>— {u.speaker || "unattributed"}{u.note ? ` · ${u.note}` : ""}</cite>
+                    </blockquote>
+                  ))}
+                </details>
+              ) : null}
+            </section>
+          ) : null}
           {/* The entries below are attributed evidence (who said it, when) — real.
               But the LEDGER attributes only closures: 26 attributed, and every one
               is an operator touch (weak, no verbatim), not a stakeholder assertion.
@@ -1783,6 +1908,18 @@ export default function TheLine({ program, actor, onOpenInbox, onSaveInputs, onR
                 <textarea rows={7} value={capText} onChange={(e) => setCapText(e.target.value)}
                   placeholder="Paste a transcript, meeting notes, an email thread…" />
               </label>
+              {/* The questions ride along with the transcript. Offered only when
+                  there is something open to match against — a checkbox that
+                  cannot do anything is worse than no checkbox. */}
+              {asksForReview.length ? (
+                <label className="v3ln-cap-find">
+                  <input type="checkbox" checked={findAnswers} onChange={(e) => setFindAnswers(e.target.checked)} />
+                  <span>
+                    Read it for answers to the <b>{asksForReview.length}</b> question{asksForReview.length === 1 ? "" : "s"} still open.
+                    <em> Each match is proposed for you to confirm — nothing is recorded as said until you do.</em>
+                  </span>
+                </label>
+              ) : null}
               {/* Each attachment stays its own reviewable block: the extracted
                   text is EDITABLE here and lands as a “— Document —” entry
                   attributed to the person selected above. Removing one before
