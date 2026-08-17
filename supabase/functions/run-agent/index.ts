@@ -18,6 +18,7 @@ import {
 } from "../_shared/prototypeRefine.ts";
 import { enforceBlueprintInvariants } from "../_shared/blueprintInvariants.ts";
 import { readReviewCapture, reviewAskOf, type ReviewAsk } from "../_shared/reviewCapture.ts";
+import { checkDemoScripts, demoBriefOf, type DemoBrief } from "../_shared/demoScriptCheck.ts";
 // THE VALUE VOCABULARY'S PRODUCER. Everything that decides — whether to spend
 // the one call, what to ask, how to read the reply, what document to store —
 // lives in the shared module as pure functions; this file supplies the transport
@@ -992,6 +993,16 @@ function reviewCaptureBrief(inner: ProgramState): Record<string, unknown> {
   return { reviewTranscript: transcript, reviewAsks: asks };
 }
 
+/** The assembled build's own inventory, for the agent that writes the walkthrough. */
+function demoScriptsBrief(inner: ProgramState): Record<string, unknown> {
+  const baseline = prototypeBaselineOfProgram(inner);
+  if (!baseline) return {};
+  const ontology = normalizeProgramData(inner.domainOntology as JsonValue | null);
+  const entities = (Array.isArray(ontology.entities) ? ontology.entities : [])
+    .map((e) => (e && typeof e === "object" ? String((e as Record<string, unknown>).name ?? "") : "")).filter(Boolean);
+  return { demoBrief: demoBriefOf(baseline.html, entities) };
+}
+
 const FORMAL_ARTIFACT_AGENTS: Record<string, FormalArtifactSpec> = {
   "charter": {
     phase: "strategy",
@@ -1713,6 +1724,11 @@ Return ONLY valid JSON:
 Open each script with their own words — the pain they voiced — then the moment that pain disappears on screen. Use their scenario and their numbers ("you said the credit check takes three days; watch it take forty seconds"). End with the acceptance ask. Do NOT write generic feature tours; a script that could be shown to anyone is a failed script.
 
 DATA IS THEIR DATA: when a beat's "show" line names what is on screen, name the Domain Ontology's entities and their attributes VERBATIM — the fields this stakeholder said they track — never invented columns. The demo lands as recognition, and recognition lives in the field names.
+
+SHOW ONLY WHAT THE BUILD DRAWS. The context carries "demoBrief": the screens the assembled prototype actually routes to, the entities that have them, and the controls it draws with their visible labels. Every "show" line must be satisfiable on one of those screens with one of those controls. This is not a style rule — a script is READ ALOUD in front of a client, so a beat saying "here you'd see the dashboard" to a room looking at a screen with no dashboard is the worst failure this document has. Measured on a real programme: a script promised a "Performance Trend timeline", a "dashboard" and a clickable "Set Target" that the build did not contain; what the build had was a workbench listing "Set targets…" as a read-only STEP describing the work.
+- No dashboards, charts, timelines or graphs unless demoBrief says the build draws widgets.
+- A control you tell them to click must appear in demoBrief.actions. A workflow step is text describing work, NOT a button.
+- Where the story genuinely needs something the build lacks, put it in "gaps" and write the beat around what IS there. An honest walkthrough of a smaller thing beats a polished one of a thing that does not exist.
 
 Return ONLY valid JSON:
 {
@@ -2477,7 +2493,12 @@ const UPSTREAM_ARTIFACT_DEPS: Record<string, readonly string[]> = {
   // The build's real inputs are the blueprint, the ontology and the experience design
   // (via upstreamDesign). None of them is the pack.
   prototypeBuild: ["agenticBlueprint", "domainOntology"],
-  demoScripts: ["experienceDesign", "agenticBlueprint", "domainOntology"],
+  // THE BUILD ITSELF, because a demo script is read aloud in front of a client
+  // and its "show" lines describe a screen. Without it the script was written
+  // from the design's INTENT and never checked against what got assembled —
+  // measured live: a "Performance Trend timeline", a "dashboard" and a
+  // clickable "Set Target" that the build does not contain.
+  demoScripts: ["prototypeBuild", "experienceDesign", "agenticBlueprint", "domainOntology"],
   hardeningPlan: ["agenticBlueprint"],
   evalSuite: ["agenticBlueprint", "hardeningPlan"],
 };
@@ -3431,6 +3452,11 @@ function buildSpecialAgentInputContext(
       // same way. Only for the agent that needs them: a transcript is long, and
       // no other agent is being asked to match against loci.
       ...(formalSpec.fieldKey === "reviewCapture" ? reviewCaptureBrief(inner) : {}),
+      // WHAT THE BUILD ACTUALLY OFFERS A PRESENTER — its screens, the entities
+      // that have them, and the controls it draws. Taken from the assembled
+      // build rather than from the design, because the script's beats are read
+      // out in front of the thing itself.
+      ...(formalSpec.fieldKey === "demoScripts" ? demoScriptsBrief(inner) : {}),
       ...(refineInstruction ? { refineInstruction } : {}),
       ...(priorArtifact ? { priorArtifact } : {}),
     // Compact serialization: the pretty-print indent added ~30% to a context
@@ -11868,6 +11894,21 @@ Deno.serve(async (req) => {
         // review never asked about, or carrying no quote, or naming no speaker,
         // cannot honestly become a closure — refused HERE, and the refusal is
         // written into the artifact rather than dropped in silence.
+        // A BEAT IS READ ALOUD. Same discipline as the three post-conditions
+        // beside it: the decision is a pure _shared function a test runs. A
+        // beat promising a chart or a dashboard the build does not draw is
+        // MARKED and named in gaps — kept, because the design's intent is worth
+        // knowing and deleting it would hide the gap between design and build.
+        if (request.agentId === "demo-scripts") {
+          const brief = demoScriptsBrief(getInnerProgramData(contextProgramData)).demoBrief as DemoBrief | undefined;
+          if (brief) {
+            const checked = checkDemoScripts(formalResult, brief);
+            formalResult = {
+              ...checked.doc,
+              gaps: [...(Array.isArray(formalResult.gaps) ? formalResult.gaps : []), ...checked.gaps],
+            } as typeof formalResult;
+          }
+        }
         if (request.agentId === "review-capture") {
           const brief = reviewCaptureBrief(getInnerProgramData(contextProgramData));
           const read = readReviewCapture(formalResult, (brief.reviewAsks ?? []) as ReviewAsk[]);
