@@ -9,7 +9,7 @@ import { useFocusTrap } from "@/v3/lib/useFocusTrap";
 import { safePrompt } from "@/v3/components/flow/flowCapture";
 import { flowMovements, locateQuote, type EvidenceEntry } from "@/v3/components/flow/flowShellData";
 
-export default function EvidenceReader({ entry, highlight, targets, onTag, onClose, onDownload }: {
+export default function EvidenceReader({ entry, highlight, targets, onTag, onClose, onDownload, onFindAnswers, openAsks }: {
   entry: EvidenceEntry;
   /** A quoted claim to locate and mark inside the source text. */
   highlight?: string;
@@ -21,6 +21,23 @@ export default function EvidenceReader({ entry, highlight, targets, onTag, onClo
    *  a document upload (entry.sourceKey) — the reader shows the extracted text,
    *  this button gets the original .docx/.pdf/etc. */
   onDownload?: () => void;
+  /**
+   * MATCH THIS ENTRY AGAINST THE QUESTIONS STILL OPEN.
+   *
+   * `review-capture` could only ever run at CAPTURE time, off the text in the
+   * paste box. Every transcript already on the record — seven real discovery
+   * sessions on one live programme, ~330kB of it — was therefore unreachable by
+   * the reader that exists to read exactly that. The only way to match one was
+   * to paste it in a second time, which is both absurd and a second copy of the
+   * evidence.
+   *
+   * Absent when there is nothing open to match against: a reader offering to
+   * find answers to zero questions is a button that cannot do anything.
+   */
+  onFindAnswers?: () => Promise<void> | void;
+  /** How many questions are open, so the control says what it will do rather
+   *  than making somebody press it to find out. */
+  openAsks?: number;
 }) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
   useFocusTrap(dialogRef);
@@ -29,6 +46,9 @@ export default function EvidenceReader({ entry, highlight, targets, onTag, onClo
   const [sel, setSel] = useState<{ text: string; top: number; left: number } | null>(null);
   const [copied, setCopied] = useState(false);
   const [picking, setPicking] = useState(false);
+  /** The agent runs on the edge and takes real seconds; without this the button
+   *  looks inert and gets pressed twice, which runs the read twice. */
+  const [finding, setFinding] = useState(false);
   const onSelect = () => {
     const selection = window.getSelection();
     const text = selection?.toString().trim() ?? "";
@@ -81,6 +101,19 @@ export default function EvidenceReader({ entry, highlight, targets, onTag, onClo
             </span>
           </div>
           <div className="v3fs-docview-cta">
+            {/* Only where there is something to match against AND something to
+                match: a reference entry has no text here to read. The count is
+                on the label so the control says what it will do. */}
+            {onFindAnswers && openAsks && entry.kind !== "reference" && entry.text.trim().length > 400 ? (
+              <button type="button" className="v3fs-btn v3fs-btn--go" disabled={finding}
+                title={`Match this against the ${openAsks} question${openAsks === 1 ? "" : "s"} still open. Every match is a candidate you confirm — nothing is recorded as said until you do.`}
+                onClick={async () => {
+                  setFinding(true);
+                  try { await onFindAnswers(); } finally { setFinding(false); }
+                }}>
+                {finding ? "Reading…" : `⌕ Find answers — ${openAsks} open`}
+              </button>
+            ) : null}
             {onDownload ? <button type="button" className="v3fs-btn" onClick={onDownload} title="Download the original uploaded file">⬇ Download original</button> : null}
             <button type="button" className="v3fs-btn" onClick={onClose} aria-label="Close">Close</button>
           </div>

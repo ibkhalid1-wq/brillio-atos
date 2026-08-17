@@ -5212,6 +5212,12 @@ button.v3fs-stale-tag {font-family:inherit;border:none;cursor:pointer}
 .v3fs-btn:hover {filter:brightness(1.04)}
 .v3fs-btn:active {transform:translateY(1px)}
 .v3fs-btn:disabled {opacity:.55;cursor:default}
+/* THE ONE ACTION IN A READER THAT DOES SOMETHING, rather than closing or
+   downloading. Accent-filled because it is the reason a person opened a
+   transcript rather than skimmed its excerpt; the neighbours stay quiet so
+   there is one obvious verb, not three competing ones. */
+.v3fs-btn--go {border-color:transparent;background:color-mix(in srgb,var(--v3-accent-2) 16%,var(--fs-card));color:var(--v3-accent-2)}
+.v3fs-btn--go:hover {background:color-mix(in srgb,var(--v3-accent-2) 26%,var(--fs-card))}
 .v3fs-btn.pri {background:var(--v3-accent);border-color:transparent;color:#fff}
 .v3fs-btn.pri:hover {background:color-mix(in srgb,var(--v3-accent) 85%,#fff);filter:none}
 .v3fs-tdot {width:8px;height:8px;border-radius:99px;flex-shrink:0;background:var(--v3-green)}

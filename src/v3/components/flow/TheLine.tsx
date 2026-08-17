@@ -1867,7 +1867,25 @@ export default function TheLine({ program, actor, onOpenInbox, onSaveInputs, onR
 
       {reading ? (
         <Suspense fallback={null}>
-          <EvidenceReader entry={reading} onClose={() => setReading(null)} />
+          <EvidenceReader entry={reading} onClose={() => setReading(null)}
+            openAsks={asksForReview.length}
+            /* THE SAME STASH THE CAPTURE PATH USES — `_reviewTranscript` plus
+               the open asks, then the agent. Not a second route into the
+               reader: one channel, so a transcript matched here and a
+               transcript matched at capture time are the same operation on the
+               same evidence. The entry is ALREADY on the record, so nothing is
+               written to it; only the underscore keys move, and they stay out
+               of the movement fingerprint. */
+            onFindAnswers={asksForReview.length && onSaveInputs ? async () => {
+              await onSaveInputs("listen", {
+                _reviewTranscript: `— ${reading.who}, ${reading.fieldLabel} —\n${reading.text}`,
+                _reviewAsks: JSON.stringify(asksForReview),
+              }, { silent: true });
+              onRunAgent?.("review-capture", "listen");
+              setReading(null);
+              setNote(`Reading ${reading.who} for answers to ${asksForReview.length} open question${asksForReview.length === 1 ? "" : "s"} — matches will appear below to confirm.`);
+              window.setTimeout(() => setNote(null), 8000);
+            } : undefined} />
         </Suspense>
       ) : null}
 

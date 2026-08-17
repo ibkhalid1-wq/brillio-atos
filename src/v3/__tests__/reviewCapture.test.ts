@@ -255,6 +255,51 @@ describe("the queue is wired to the surface an operator actually uses", () => {
     expect(LINE).toContain("asksForReview.length ?");
   });
 
+  it("a transcript ALREADY on the record can be read, without pasting it again", () => {
+    // THE GAP THIS CLOSED. `review-capture` could only run at capture time, off
+    // the text in the paste box — so seven real discovery sessions sitting on a
+    // live programme (~330kB of genuine speech) were unreachable by the reader
+    // that exists to read exactly that. The only route was to paste one in a
+    // second time, which is absurd and duplicates the evidence.
+    expect(LINE).toContain("onFindAnswers={asksForReview.length && onSaveInputs");
+    expect(LINE).toContain("openAsks={asksForReview.length}");
+  });
+
+  it("…through the SAME stash, not a second route into the reader", () => {
+    // One channel, so a transcript matched from the reader and one matched at
+    // capture time are the same operation on the same evidence.
+    const block = LINE.slice(LINE.indexOf("onFindAnswers={asksForReview.length"));
+    expect(block.slice(0, 700)).toContain("_reviewTranscript");
+    expect(block.slice(0, 700)).toContain("_reviewAsks");
+    expect(block.slice(0, 900)).toContain('onRunAgent?.("review-capture", "listen")');
+  });
+
+  it("writes NOTHING to the entry it reads", () => {
+    // The evidence is already on the record. Only the underscore keys move,
+    // and they stay out of the movement fingerprint — reading a transcript
+    // must not restate it as new evidence.
+    const block = LINE.slice(LINE.indexOf("onFindAnswers={asksForReview.length"));
+    expect(block.slice(0, 700)).toContain('onSaveInputs("listen"');
+    expect(block.slice(0, 700)).toContain("silent: true");
+  });
+
+  it("the control says what it will do before it is pressed", () => {
+    const READER = readFileSync(resolve(__dirname, "../components/flow/EvidenceReader.tsx"), "utf8");
+    expect(READER).toContain("Find answers — ");
+    expect(READER).toContain("nothing is recorded as said until you do");
+    // A reader offering to find answers to zero questions is a button that
+    // cannot do anything; a reference entry has no text here to read.
+    expect(READER).toContain('onFindAnswers && openAsks && entry.kind !== "reference"');
+  });
+
+  it("and cannot be fired twice while it is running", () => {
+    // The agent takes real seconds on the edge. Without this the button looks
+    // inert and gets pressed again, which runs the read — and the spend — twice.
+    const READER = readFileSync(resolve(__dirname, "../components/flow/EvidenceReader.tsx"), "utf8");
+    expect(READER).toContain("const [finding, setFinding]");
+    expect(READER).toContain("disabled={finding}");
+  });
+
   it("says what will happen and what will not, before it happens", () => {
     // The operator is agreeing to a MATCH, not to a recording.
     expect(LINE).toContain("nothing is recorded as said until you do");
