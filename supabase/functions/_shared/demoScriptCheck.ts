@@ -32,6 +32,10 @@ export interface DemoBrief {
   /** Whether the build drew a metric WIDGET the design asked for — stat tiles,
    *  bar breakdowns, funnels. These are the only bars in the product. */
   hasWidgets: boolean;
+  /** Whether the build draws a TIME SERIES — the `trend` widget kind. Separate
+   *  from `hasWidgets` because a bar breakdown is a snapshot: promising "the
+   *  trend" over a funnel is the same lie in a smaller hat. */
+  hasTrend: boolean;
   /** Whether a workbench carries the derived measures band ("Where this stands":
    *  counts, averages, a status split). Not the same thing as a widget, and the
    *  distinction matters: the band satisfies "a dashboard" and cannot satisfy "a
@@ -51,16 +55,18 @@ const isRecord = (v: unknown): v is Record<string, unknown> =>
  * "screen", "page" or "view" are absent on purpose — every beat names one of
  * those, and flagging them would make the check cry wolf.
  */
-const PROMISED: Array<{ noun: RegExp; needs: "measures" | "widgets" | "board" | "never"; say: string }> = [
+const PROMISED: Array<{ noun: RegExp; needs: "measures" | "widgets" | "trend" | "board"; say: string }> = [
   // A summary on the screen. The derived band IS one, so this passes wherever a
   // workbench carries it.
   { noun: /\b(dashboard|command cent(re|er))\b/i, needs: "measures", say: "a dashboard" },
   // Bars. Only a spec widget draws them; the band draws badges.
   { noun: /\b(chart|graph|histogram|bar chart)\b/i, needs: "widgets", say: "a chart" },
-  // A TIME SERIES, and nothing in this product draws one — the widget kinds are
-  // stat, breakdown and funnel. So this is a gap on every build, always, and
-  // saying so is more useful than pretending a bar chart is a trend.
-  { noun: /\b(timeline|trend ?line|sparkline|over time|month[- ]on[- ]month|run rate)\b/i, needs: "never", say: "a trend over time" },
+  // A TIME SERIES. This WAS a gap on every build — the widget kinds were stat,
+  // breakdown and funnel, all snapshots of now, so the one question an oversight
+  // role asks ("is this getting better or worse") had no answer anywhere. The
+  // `trend` kind closed it, and the rule moved with it: a script may promise a
+  // trend where the DESIGN asked for one, and only there.
+  { noun: /\b(timeline|trend ?line|sparkline|over time|month[- ]on[- ]month|run rate)\b/i, needs: "trend", say: "a trend over time" },
   { noun: /\b(kanban|swim ?lane)\b/i, needs: "board", say: "a board" },
 ];
 
@@ -81,6 +87,7 @@ export function demoBriefOf(html: string, entities: readonly string[]): DemoBrie
     // dashboard check silently stopped firing.
     hasWidgets: /data-region="widget:/.test(html),
     hasMeasures: /data-region="measures:/.test(html),
+    hasTrend: /class="m-spark"/.test(html),
   };
 }
 
@@ -92,6 +99,7 @@ function unbuilt(show: string, brief: DemoBrief): string | null {
     if (!rule.noun.test(show)) continue;
     if (rule.needs === "measures" && (brief.hasMeasures || brief.hasWidgets)) continue;
     if (rule.needs === "widgets" && brief.hasWidgets) continue;
+    if (rule.needs === "trend" && brief.hasTrend) continue;
     if (rule.needs === "board" && brief.screens.some((s) => s.startsWith("list-"))) continue;
     return `promises ${rule.say}, which this build does not draw`;
   }

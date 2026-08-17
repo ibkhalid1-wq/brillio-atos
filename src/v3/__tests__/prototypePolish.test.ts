@@ -19,7 +19,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { assemblePrototype } from "@shared/prototypeAssembly.ts";
-import { meridianStylesheet, stripSheetComments, MERIDIAN_TOKENS, MERIDIAN_VERSION } from "@shared/prototypeDesignSystem.ts";
+import { meridianStylesheet, stripSheetComments, stripScriptComments, MERIDIAN_TOKENS, MERIDIAN_VERSION } from "@shared/prototypeDesignSystem.ts";
 import { prototypeBaselineFor, prototypeBaselineOfProgram, DOCUMENT_REFINE_BUDGET } from "@shared/prototypeRefine.ts";
 import { loadPrototype } from "./helpers/renderPrototype";
 
@@ -53,6 +53,40 @@ describe("developer commentary does not ship to the client", () => {
     expect(stripSheetComments("/* why */\n.a{color:red}\n/* how */\n.b{color:blue}"))
       .toContain(".a{color:red}");
     expect(stripSheetComments("/* why */\n.a{color:red}")).not.toContain("why");
+  });
+
+  it("the RENDERER's commentary goes the same way — it was the bigger purse", () => {
+    // Measured at ~5.1kB in one build, against a 57,500-byte ceiling. Same
+    // bargain as the sheet: kept where a developer reads it, gone where a
+    // client downloads it.
+    const html = assemblePrototype(ontology, atlas).html;
+    const script = html.slice(html.indexOf("<script>"), html.lastIndexOf("</script>"));
+    expect(script).not.toMatch(/^\s*\/\//m);
+    const src = readFileSync(resolve(__dirname, "../../../supabase/functions/_shared/prototypeAssembly.ts"), "utf8");
+    const renderer = src.slice(src.indexOf("const PROTOTYPE_RENDERER = `"), src.indexOf("function rendererFor"));
+    expect(renderer.split("\n").filter((l) => l.trim().startsWith("//")).length).toBeGreaterThan(40);
+  });
+
+  it("cuts only whole-line comments — a slash-slash inside a string survives", () => {
+    // The timid rule, asserted. Parsing JS to find real comments is the only
+    // way to cut a trailing one safely, and a wrong cut here is a blank
+    // prototype rather than a warning, so it does not try.
+    const kept = stripScriptComments([
+      "// why",
+      'var u="https://example.test";',
+      "var n=1; // how many",
+      "/* a block",
+      "   spanning lines */",
+      "/* one-liner */",
+      "var m=2;",
+    ].join("\n"));
+    expect(kept.split("\n")).toEqual(['var u="https://example.test";', "var n=1; // how many", "var m=2;"]);
+  });
+
+  it("keeps the renderer runnable after the cut", () => {
+    // The real proof: the stripped script is what jsdom executes in every one
+    // of these suites, and a cut that broke it would show up as an error here.
+    expect(loadPrototype(assemblePrototype(ontology, atlas).html).consoleErrors).toEqual([]);
   });
 });
 

@@ -344,6 +344,42 @@ export function stripSheetComments(css: string): string {
     .replace(/\n{3,}/g, "\n\n");
 }
 
+/**
+ * THE SAME BARGAIN, FOR THE CLIENT RENDERER.
+ *
+ * The renderer is the other place where a developer's reasoning ships to every
+ * viewer of every prototype: measured at ~5.1kB of `//` lines in one build,
+ * against a document budget of 57,500 bytes. Deleting them was the wrong fix —
+ * that reasoning is the only account of why the client draws what it draws — so
+ * they stay in the source and leave at emit, exactly as the sheet's do.
+ *
+ * DELIBERATELY NOT A MINIFIER, and deliberately timid: only a line that is
+ * ENTIRELY a comment goes. A trailing `// …` after code is left alone, because
+ * a slash-slash inside a string literal is indistinguishable from one here
+ * without parsing, and a wrong cut is a blank prototype rather than a warning.
+ * Whole-line block comments go the same way; an unterminated one would swallow
+ * code, so the scan tracks depth rather than regexing across lines.
+ *
+ * Run AFTER the placeholder substitutions in `rendererFor` — `/*PERSONA-…` is
+ * a whole-line comment to this scanner, and cutting it first would leave the
+ * persona renderer with nowhere to land.
+ */
+export function stripScriptComments(js: string): string {
+  const out: string[] = [];
+  let inBlock = false;
+  for (const line of js.split("\n")) {
+    const t = line.trim();
+    if (inBlock) {
+      if (t.endsWith("*/")) inBlock = false;
+      continue;
+    }
+    if (t.startsWith("/*") && !t.endsWith("*/")) { inBlock = true; continue; }
+    if (t.startsWith("//") || (t.startsWith("/*") && t.endsWith("*/"))) continue;
+    out.push(line);
+  }
+  return out.join("\n");
+}
+
 export function meridianStylesheet(theme?: Partial<PrototypeTheme> | null): string {
   return stripSheetComments(`${meridianRootVars(theme)}
 *,*::before,*::after{box-sizing:border-box}
@@ -465,6 +501,13 @@ a{color:var(--m-brand);text-decoration:none}
 /* WHERE THIS STANDS — the number an area is judged on, on the screen it opens.
    Widgets were wired only to list screens, so the front door could not carry
    one; these are derived from the same seed the tables draw from. */
+/* A TREND — the only widget that answers "is this getting better or worse".
+   Bars over months, drawn from the same rows the table below lists. */
+.m-spark{display:flex;align-items:flex-end;gap:6px;height:104px;margin-top:14px;padding-bottom:2px}
+.m-spark-c{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%;gap:4px}
+.m-spark-b{width:100%;max-width:34px;background:var(--m-brand);border-radius:var(--m-r-sm) var(--m-r-sm) 0 0;min-height:4px}
+.m-spark-k{font-size:10px;color:var(--m-muted);font-variant-numeric:tabular-nums}
+.m-spark-v{font-size:11px;font-weight:600;color:var(--m-ink);font-variant-numeric:tabular-nums;order:-1}
 .m-msplit{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding-top:11px;margin-top:11px;border-top:1px solid var(--m-line)}
 .m-msplit .m-cell-sub{margin-top:0;min-width:96px}
 .m-todo{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column}

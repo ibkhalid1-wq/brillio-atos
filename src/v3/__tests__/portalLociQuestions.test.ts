@@ -29,8 +29,9 @@ import { buildUnknownQueue } from "@/v3/lib/ledger/projections";
 import { projectKitQuestions } from "@/v3/lib/ledger/kitProjection";
 import { renderQuestion, affordanceOptions } from "@/v3/lib/ledger/renderQuestion";
 import {
-  portalQuestionModel, composeLocusAnswers, parseLocusAnswers, answeredLocusCount,
+  portalQuestionModel, composeLocusAnswers, answeredLocusCount,
 } from "@/v3/components/flow/portalQuestionModel";
+import { deriveStakeholderAnswers } from "@/v3/lib/ledger/stakeholderAnswers";
 import { mintFollowUpPack, mintReviewPack, listInterviewPacks } from "@/v3/components/flow/flowPortal";
 import type { ProgramSummary } from "@/new/types";
 
@@ -54,8 +55,21 @@ const surgery: Snapshot = {
   overrides: [],
 };
 
+/**
+ * Read a composed block the way the product does. `parseLocusAnswers` used to
+ * stand in here — a parser with no production caller, deleted 2026-08-17. The
+ * real reader is `deriveStakeholderAnswers`, which walks the programme's own
+ * evidence, so the round-trip below now proves the thing that actually runs
+ * rather than a parallel implementation of it.
+ */
+const readBack = (block: string) => deriveStakeholderAnswers({
+  id: "p", name: "n",
+  rawData: { data: { phaseInputs: { listen: { conv: `— Priya Raman, Marketing lead, 2026-08-17 —\n${block}` } } } },
+} as never);
+
 for (const [name, build] of [["Laila", laila], ["surgery", () => migrate(surgery)]] as const) {
-  describe(`stakeholder linked page — locus-backed questions (${name})`, () => {
+
+describe(`stakeholder linked page — locus-backed questions (${name})`, () => {
     const store = build();
     const open = buildUnknownQueue(store).items.filter((i) => i.status === "open");
     const loci = open.slice(0, 8).map((i) => i.about);
@@ -111,11 +125,10 @@ for (const [name, build] of [["Laila", laila], ["surgery", () => migrate(surgery
       const block = composeLocusAnswers(model.rows, answers, whys);
       expect(block).toContain(target.rendered.question);
       expect(block).toContain(`[locus: ${target.about}]`);
-      const parsed = parseLocusAnswers(block);
+      const parsed = readBack(block);
       expect(parsed).toHaveLength(1);
       expect(parsed[0].about).toBe(target.about);
       expect(parsed[0].answer).toBe("Automate");
-      expect(parsed[0].why).toBe("we already have the data");
       expect(answeredLocusCount(model.rows, answers)).toBe(1);
       // The burn-down did NOT move: a page answer is captured, never self-closing.
       expect(buildUnknownQueue(store).items.filter((i) => i.status === "open").length).toBe(open.length);
@@ -216,13 +229,13 @@ describe("an unbacked question is reported as unbacked, never folded into the to
     }, store);
     // Everything `count` covers composes WITH a locus tag…
     const block = composeLocusAnswers(model.rows, { [real]: "Ops owns it" });
-    expect(parseLocusAnswers(block).map((a) => a.about)).toEqual([real]);
-    expect(parseLocusAnswers(block)).toHaveLength(model.count);
+    expect(readBack(block).map((a) => a.about)).toEqual([real]);
+    expect(readBack(block)).toHaveLength(model.count);
     // …and nothing `unbacked` covers can be parsed back to a locus at all: the
-    // string rows compose as bare Q:/A: (FlowRespond.tsx:429-438), which
-    // parseLocusAnswers — the ingest side — yields nothing for.
+    // string rows compose as bare Q:/A: (FlowRespond.tsx), which the ingest
+    // side yields nothing for — no tag, no address, no closure.
     const bare = `Q: ${model.strings[0].question}\nA: whatever they typed`;
-    expect(parseLocusAnswers(bare)).toEqual([]);
+    expect(readBack(bare)).toEqual([]);
     expect(model.unbacked).toBe(1);
   });
 

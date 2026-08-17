@@ -13,7 +13,7 @@
 import { deriveFabric, type Fabric } from "./fabric.ts";
 import { deriveRoles, type ValueRole } from "./semanticRoles.ts";
 import { generateSeed, type SeedAssumption, type SeedRecord } from "./seedData.ts";
-import { meridianStylesheet, valueTone, type PrototypeTheme } from "./prototypeDesignSystem.ts";
+import { meridianStylesheet, stripScriptComments, valueTone, type PrototypeTheme } from "./prototypeDesignSystem.ts";
 import { deriveScreenActions, type ScreenAction } from "./experienceActions.ts";
 import { businessRole, deriveWorkbenches, type AtlasRole, type AtlasWorkflow } from "./atlasWorkbenches.ts";
 import { deriveAgenticSurface, agentsOnEntity, gatedAgents, type SurfacedAgent } from "./agenticSurface.ts";
@@ -670,8 +670,11 @@ function mCell(R,ri,v){
     }else if(shown.length){
       var body="";for(i=0;i<shown.length;i++)body+="<tr>"+cells(t,kd,shown[i],kd.slug,true)+"</tr>";
       inner='<div class="m-table-wrap"><table class="m-table"><thead><tr>'+heads(kd,"")+"</tr></thead><tbody>"+body+"</tbody></table></div>"
-        +(all.length>shown.length&&kd.listed
-          ?'<div class="m-card-f"><button class="m-btn m-btn--secondary m-btn--sm" onclick="go('+Q+"#"+kd.slug+Q+')">View all '+all.length+" →</button></div>"
+        +((all.length>shown.length||kd.listed)
+          ?'<div class="m-card-f">'
+            +(all.length>shown.length?'<span class="m-cell-sub" style="margin-right:auto">Showing '+shown.length+" of "+all.length+"</span>":"")
+            +(kd.listed?'<button class="m-btn m-btn--secondary m-btn--sm" onclick="go('+Q+"#"+kd.slug+Q+')">All '+mEsc(kd.entity)+" →</button>":"")
+            +"</div>"
           :"");
     }else inner=empty(kd.emptyTitle,kd.cite);
     fill(kd.region,'<section class="m-card" style="margin-top:16px">'+head+inner+"</section>");
@@ -1078,10 +1081,14 @@ const ACTION_RENDERER = `  function doAct(sl,ix){
 `;
 
 function rendererFor(persona: boolean, widgets: boolean, acts: boolean): string {
-  return PROTOTYPE_RENDERER
-    .replace("/*PERSONA-RENDERER*/", () => (persona ? PERSONA_RENDERER : ""))
-    .replace("/*WIDGET-RENDERER*/", () => (widgets ? WIDGET_RENDERER : ""))
-    .replace("/*ACTION-RENDERER*/", () => (acts ? ACTION_RENDERER : ""));
+  // Substitute first, strip second: the placeholders ARE whole-line comments,
+  // and a strip that ran ahead of them would leave nowhere to land.
+  return stripScriptComments(
+    PROTOTYPE_RENDERER
+      .replace("/*PERSONA-RENDERER*/", () => (persona ? PERSONA_RENDERER : ""))
+      .replace("/*WIDGET-RENDERER*/", () => (widgets ? WIDGET_RENDERER : ""))
+      .replace("/*ACTION-RENDERER*/", () => (acts ? ACTION_RENDERER : "")),
+  );
 }
 
 /**
@@ -1862,11 +1869,30 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
       return `<button class="m-btn m-btn--secondary" title="${esc(a.basis)}" onclick="doAct('${s}',${ix})"${i === 0 ? ' data-act-first="1"' : ""}>${esc(a.label)}</button>`;
     }).join("");
   };
-  /** Verbs that need no record — they belong in the list's toolbar, beside New. */
+  /**
+   * THE DESIGNER'S OWN WORD FOR MAKING ONE.
+   *
+   * "New Campaign" is the assembler's phrasing; "Launch a campaign" may be the
+   * client's, and where the design authored a create verb for this entity that
+   * IS the New button — the same control, named the way the people who use it
+   * name it. Rendering both put two buttons side by side that did the same
+   * thing, which is one of the six false refusals the verb work already had to
+   * unpick ("Create Campaign" IS the New button).
+   */
+  const createVerbFor = (name: string): { label: string; ix: number } | null => {
+    registerActions(name);
+    const list = actionsFor(name);
+    const ix = list.findIndex((a) => a.kind === "create" && a.target === name);
+    return ix < 0 ? null : { label: list[ix].label, ix };
+  };
+  const newLabelFor = (name: string): string => createVerbFor(name)?.label ?? `New ${entityLabel(name)}`;
+  /** Verbs that need no record — they belong in the list's toolbar, beside New.
+   *  A create verb is EXCLUDED: it is already the New button (see above). */
   const listActionsFor = (name: string): string => {
     registerActions(name);
     const s = es.get(name)!;
-    return actionsFor(name).filter((a) => a.scope === "list").map((a) => {
+    const made = createVerbFor(name);
+    return actionsFor(name).filter((a) => a.scope === "list" && !(made && a.label === made.label)).map((a) => {
       const ix = actionsFor(name).indexOf(a);
       return `<button class="m-btn m-btn--secondary" title="${esc(a.basis)}" onclick="doAct('${s}',${ix})">${esc(a.label)}</button>`;
     }).join("");
@@ -2262,7 +2288,7 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
     const bands = widgetBands(`list-${s}`);
     return `<section class="m-screen" data-screen="list-${s}" hidden>
       <header class="m-page-h"><div><div class="m-eyebrow">${esc(entityLabel(name))}</div><h1 class="m-title">${esc(entityLabel(name))}</h1><p class="m-sub">${rows.length} record${rows.length === 1 ? "" : "s"} · sample data</p></div>
-      <div class="m-toolbar">${toggle}<input class="m-input m-search" type="search" data-search="${s}" aria-label="Filter ${esc(entityLabel(name))}" placeholder="Filter ${esc(entityLabel(name))}" oninput="setFilter('${s}',this.value)" />${listActionsFor(name)}<button class="m-btn m-btn--primary" onclick="go('#${s}/new')">New ${esc(entityLabel(name))}</button></div></header>
+      <div class="m-toolbar">${toggle}<input class="m-input m-search" type="search" data-search="${s}" aria-label="Filter ${esc(entityLabel(name))}" placeholder="Filter ${esc(entityLabel(name))}" oninput="setFilter('${s}',this.value)" />${listActionsFor(name)}<button class="m-btn m-btn--primary" onclick="go('#${s}/new')">${esc(newLabelFor(name))}</button></div></header>
       ${bands}${bands ? `<div class="m-section-h">All ${esc(name)}</div>` : ""}${slot(`screen:${s}:list`)}</section>`;
   };
 
@@ -2515,7 +2541,7 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
     }).join("");
     return `<section class="m-screen" data-screen="form-${s}" hidden>
       <div class="m-crumbs"><a href="#${s}">${esc(name)}</a> / <span data-form-crumb="${s}">New</span></div>
-      <header class="m-page-h"><div><div class="m-eyebrow">${esc(entityLabel(name))}</div><h1 class="m-title" data-form-title="${s}">New ${esc(entityLabel(name))}</h1></div></header>
+      <header class="m-page-h"><div><div class="m-eyebrow">${esc(entityLabel(name))}</div><h1 class="m-title" data-form-title="${s}">${esc(newLabelFor(name))}</h1></div></header>
       <section class="m-card" style="max-width:620px" data-form="${s}">${fields}<div class="m-form-actions"><button class="m-btn m-btn--ghost" onclick="go('#${s}')">Cancel</button><button class="m-btn m-btn--primary" onclick="saveRec('${s}')">Save</button></div></section></section>`;
   };
 

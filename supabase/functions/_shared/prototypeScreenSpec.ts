@@ -37,7 +37,18 @@ import type { ValueRole } from "./semanticRoles.ts";
 
 // ── the schema, derived from the ontology ────────────────────────────────────
 
-export type WidgetKind = "stat" | "breakdown" | "funnel";
+/**
+ * `trend` is the newest, and the one the product could not draw at all.
+ *
+ * A demo script written for an executive promised a "Performance Trend
+ * timeline" and the build had no time series anywhere: stat, breakdown and
+ * funnel are all snapshots of NOW. So the one question an oversight role
+ * actually asks — is this getting better or worse — had no answer on any
+ * screen. A trend buckets rows by a DATE attribute and counts them, which is
+ * the honest thing a seeded prototype can show: the shape over time, drawn from
+ * the same records the table below it lists.
+ */
+export type WidgetKind = "stat" | "breakdown" | "funnel" | "trend";
 export type WidgetAgg = "count" | "sum" | "avg";
 
 /** The roles a number can be aggregated from. Anything else is a label. */
@@ -63,6 +74,8 @@ export interface SpecEntity {
   shares: string[];
   /** Attributes that carry a repeating label: legal for grouping and filtering. */
   dimensions: string[];
+  /** Attributes that carry a DATE — the only thing a trend can bucket by. */
+  periods: string[];
 }
 
 export interface PrototypeSpecSchema {
@@ -94,7 +107,7 @@ export const WIDGETS_PER_SCREEN = 4;
 export function buildSpecSchema(input: SpecSchemaInput): PrototypeSpecSchema {
   return {
     version: input.version,
-    kinds: ["stat", "breakdown", "funnel"],
+    kinds: ["stat", "breakdown", "funnel", "trend"],
     maxWidgetsPerScreen: WIDGETS_PER_SCREEN,
     entities: input.entities.map((e) => ({
       entity: e.entity,
@@ -102,11 +115,13 @@ export function buildSpecSchema(input: SpecSchemaInput): PrototypeSpecSchema {
       measures: e.attributes.filter((a) => a.role && MEASURE_ROLES.has(a.role)).map((a) => a.name),
       shares: e.attributes.filter((a) => a.role === "percent").map((a) => a.name),
       dimensions: e.attributes.filter((a) => a.role && DIMENSION_ROLES.has(a.role)).map((a) => a.name),
+      periods: e.attributes.filter((a) => a.role === "date").map((a) => a.name),
     })),
     rules: [
       'A widget names a "screen" from this schema, a "kind", and an "entity" this schema lists.',
       '"stat" is one number: the count of that entity, or "measure" set to one of its measures for a total. A measure this schema also lists under "shares" is averaged instead — a total of percentages states nothing.',
       '"breakdown" and "funnel" group the entity by "attribute", which must be one of its dimensions; a funnel is ordered by volume.',
+      '"trend" counts the entity by MONTH of "attribute", which must be one of its dates — the only widget that answers "is this getting better or worse", and the only one an oversight screen usually needs.',
       'Any widget may carry "where": { "attribute": <a dimension>, "equals": <a value that occurs in the data> } to count a subset.',
       "Every heading, every number and every layout decision is produced by the renderer from these references — do not write labels, captions or counts.",
       `At most ${WIDGETS_PER_SCREEN} widgets per screen. A screen you have nothing to say about takes none.`,
@@ -273,6 +288,23 @@ function validateWidget(
     where = { attribute, equals };
   }
   const whereNote = where ? ` where ${specLabel(where.attribute)} is "${where.equals}"` : "";
+
+  if (kind === "trend") {
+    const attribute = str(raw.attribute);
+    if (!spec.periods.includes(attribute)) {
+      violations.push(
+        known.has(attribute)
+          ? `${at} trends ${entity} over "${attribute}", which is not a date on ${entity} (datable: ${some(spec.periods)}).`
+          : `${at} trends ${entity} over "${attribute || "(none)"}", which this ontology does not hold on ${entity} (datable: ${some(spec.periods)}).`,
+      );
+      return null;
+    }
+    return {
+      kind, entity, attribute, agg: "count", where,
+      label: `${entity} over ${specLabel(attribute)}`,
+      note: `Every ${entity}${whereNote}, counted by month of ${specLabel(attribute)}.`,
+    };
+  }
 
   if (kind === "breakdown" || kind === "funnel") {
     const attribute = str(raw.attribute);
@@ -479,10 +511,39 @@ export const WIDGET_RENDERER = `
       +(out?'<div class="m-bars">'+out+"</div>"
         :'<div class="m-cell-sub">No '+mEsc(it.entity)+" record in this build carries that value yet.</div>")+"</section>";
   }
+  function wTrend(it){
+    var t=D[it.entity];if(!t)return "";
+    var rows=wRows(t,it),by={},order=[],i,v,d,key,max=0,out="";
+    for(i=0;i<rows.length;i++){
+      v=at(t,rows[i],it.col);if(v==null||v==="")continue;
+      // A CHARACTER CLASS, NOT \d. This renderer lives in a TEMPLATE LITERAL,
+      // where an unknown escape collapses — \d emits as a bare "d", so the
+      // pattern became /^d{4}-d{2}$/ and matched nothing. The widget drew, the
+      // spec validated, and every month bucket came back empty.
+      d=String(v).slice(0,7);
+      if(!/^[0-9]{4}-[0-9]{2}$/.test(d))continue;
+      if(by[d]===undefined){by[d]=0;order.push(d)}by[d]++;
+    }
+    order.sort();
+    for(i=0;i<order.length;i++)if(by[order[i]]>max)max=by[order[i]];
+    for(i=0;i<order.length;i++){
+      key=order[i];
+      out+='<div class="m-spark-c"><div class="m-spark-b" style="height:'+(max?Math.max(4,Math.round(by[key]/max*100)):4)+'%"></div>'
+        +'<div class="m-spark-k">'+mEsc(key.slice(5))+'</div><div class="m-spark-v">'+by[key]+"</div></div>";
+    }
+    return '<section class="m-card"><div class="m-card-h"><div class="m-card-t">'+mEsc(it.label)+'</div>'
+      +'<span class="m-badge">'+order.length+" month"+(order.length===1?"":"s")+"</span></div>"
+      +'<p class="m-cell-sub">'+mEsc(it.note)+"</p>"
+      +(out?'<div class="m-spark">'+out+"</div>"
+        :'<div class="m-cell-sub">No '+mEsc(it.entity)+" record carries a readable date there yet.</div>")+"</section>";
+  }
   function renderWidgets(){
     for(var i=0;i<WIDG.length;i++){
-      var g=WIDG[i],out="",k;
-      for(k=0;k<g.items.length;k++)out+=(g.items[k].kind==="stat"?wStat:wBars)(g.items[k]);
+      var g=WIDG[i],out="",k,kind;
+      for(k=0;k<g.items.length;k++){
+        kind=g.items[k].kind;
+        out+=(kind==="stat"?wStat:kind==="trend"?wTrend:wBars)(g.items[k]);
+      }
       fill(g.region,out);
     }
   }

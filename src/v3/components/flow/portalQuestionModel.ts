@@ -133,7 +133,6 @@ export function portalQuestionModel(
 
 /** How the locus rides the composed answer text so an ingest can attribute it. */
 export const locusTag = (about: string): string => `[locus: ${about}]`;
-const LOCUS_RE = /^\[locus:\s*(.+?)\]\s*$/;
 
 /** A locus-backed answer as the composer writes it and a reader parses it back. */
 export interface LocusAnswer { about: string; question: string; answer: string; why?: string }
@@ -162,20 +161,19 @@ export function composeLocusAnswers(
   return ["Answers to open points in the model — each names the exact point it answers:", ...blocks].join("\n\n");
 }
 
-/** Read a composed block back into locus-attributed answers (the ingest side). */
-export function parseLocusAnswers(text: string): LocusAnswer[] {
-  const out: LocusAnswer[] = [];
-  for (const block of String(text ?? "").split(/\n{2,}/)) {
-    const lines = block.split("\n").map((l) => l.trim()).filter(Boolean);
-    const tag = lines.length ? LOCUS_RE.exec(lines[lines.length - 1]) : null;
-    if (!tag) continue;
-    const question = lines.find((l) => l.startsWith("Q: "))?.slice(3).trim() ?? "";
-    const answer = lines.find((l) => l.startsWith("A: "))?.slice(3).trim() ?? "";
-    const why = lines.find((l) => l.startsWith("Why: "))?.slice(5).trim();
-    if (answer) out.push({ about: tag[1].trim(), question, answer, ...(why ? { why } : {}) });
-  }
-  return out;
-}
+/**
+ * THE PARSER THAT NEVER GOT A CALLER — deleted 2026-08-17, not left to rot.
+ *
+ * `parseLocusAnswers` read the `[locus: …]` tags back out of a returned block
+ * and had exactly one occurrence outside its own tests: its definition. The
+ * ingest was eventually built the other way round, as `deriveStakeholderAnswers`
+ * reading the evidence already on the record, so this had no future caller
+ * either. Two ways to do one thing, one of them dead, is how a reader loses an
+ * afternoon deciding which is the real one.
+ *
+ * `composeLocusAnswers` above STAYS: it is what writes the tags, and the
+ * derivation depends on them.
+ */
 
 /** Questions this person has handled — answered or routed to someone else. */
 export function answeredLocusCount(
