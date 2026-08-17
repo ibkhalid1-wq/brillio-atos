@@ -20,6 +20,7 @@ import { enforceBlueprintInvariants } from "../_shared/blueprintInvariants.ts";
 import { readReviewCapture, reviewAskOf, type ReviewAsk } from "../_shared/reviewCapture.ts";
 import { checkDemoScripts, demoBriefOf, type DemoBrief } from "../_shared/demoScriptCheck.ts";
 import { watcherGaps } from "../_shared/designCoversWatchers.ts";
+import { reconciliationOf, type OntologyVoteOutcome } from "../_shared/ontologyVote.ts";
 // THE VALUE VOCABULARY'S PRODUCER. Everything that decides — whether to spend
 // the one call, what to ask, how to read the reply, what document to store —
 // lives in the shared module as pure functions; this file supplies the transport
@@ -8356,13 +8357,23 @@ function ontologyMandateContext(inner: Record<string, unknown>, programRow: Reco
 
 /** Run the ontology prompt N times in parallel and reconcile by vote. Returns a
  * streamClaudeText-shaped result (so the shared repair / cost-ledger / persist
- * path is untouched) or null to fall through to a single generation. */
+ * path is untouched) or null to fall through to a single generation.
+ *
+ * `report` is an OUT-PARAMETER, and it is one on purpose: the outcome has to
+ * reach the caller on the paths where there is no return value to carry it —
+ * the too-few-drafts fall-through and the catch. Those are exactly the runs
+ * whose provenance matters, so a stamp that could only ride on success would
+ * record nothing in every case worth recording. */
 async function runVotedProvisionalOntology(
   prompt: { system: string; user: string },
   inner: Record<string, unknown>,
   programRow: Record<string, unknown>,
   opts: { maxTokens: number; tier?: "tier1" },
+  report: { outcome?: OntologyVoteOutcome },
 ): Promise<Awaited<ReturnType<typeof streamClaudeText>> | null> {
+  // Stamped before the first call, so a throw anywhere below still leaves a
+  // truthful "asked N, got 0" rather than no record at all.
+  report.outcome = { asked: ONTOLOGY_VOTE_N, usable: 0, threshold: ONTOLOGY_VOTE_THRESHOLD };
   try {
     const results = await Promise.all(Array.from({ length: ONTOLOGY_VOTE_N }, () =>
       streamClaudeText({
@@ -8375,6 +8386,9 @@ async function runVotedProvisionalOntology(
     const usable = results.filter((r): r is NonNullable<typeof r> => !!r);
     const drafts = usable.map((r) => extractAgentJson(r.text)).filter(isRecord)
       .filter((d) => Array.isArray(d.entities) && d.entities.length);
+    // DRAFTS, not `usable`: a call that returned prose or a truncated stream
+    // cannot vote, so counting it would overstate the agreement behind the doc.
+    report.outcome = { asked: ONTOLOGY_VOTE_N, usable: drafts.length, threshold: ONTOLOGY_VOTE_THRESHOLD };
     if (drafts.length < ONTOLOGY_VOTE_THRESHOLD) return null; // not enough to vote — fall through
     const mc = ontologyMandateContext(inner, programRow);
     // The same packs the context shipped as facts also gate the reconciliation:
@@ -11292,6 +11306,7 @@ Deno.serve(async (req) => {
     // evidence boundary is the real gate; runMode is not. Null (not this
     // agent, evidence on record, or too few usable drafts) falls through to
     // the normal single generation below.
+    const voteReport: { outcome?: OntologyVoteOutcome } = {};
     let claudeResult = request.agentId === "domain-ontology"
       && !ontologyListenEvidenceOnRecord(getInnerProgramData(contextProgramData))
       ? await runVotedProvisionalOntology(
@@ -11299,6 +11314,7 @@ Deno.serve(async (req) => {
           getInnerProgramData(contextProgramData),
           programRow as Record<string, unknown>,
           { maxTokens: outputTokenBudget, tier: routedTier },
+          voteReport,
         )
       : null;
     if (!claudeResult) {
@@ -11938,6 +11954,23 @@ Deno.serve(async (req) => {
         }
         if (request.agentId === "agentic-blueprint") {
           formalResult = enforceBlueprintInvariants(getInnerProgramData(contextProgramData), formalResult).doc;
+        }
+        // HOW THIS ONTOLOGY WAS MADE, on the ontology. The ensemble falls
+        // through to a single generation when too few drafts come back, which
+        // is right — a programme should not stall on an API's bad afternoon —
+        // but it used to do it in silence, and a single-draft document looked
+        // exactly like a reconciled one. That is worse than a failure: a
+        // failure gets retried and this gets trusted.
+        //
+        // NOT in `gaps`, deliberately. Gaps drive the movement gate and become
+        // interview questions; "two of five drafts timed out" is neither, and
+        // routing it there would block a programme on something nobody can
+        // answer. Provenance belongs on the document.
+        if (request.agentId === "domain-ontology" && voteReport.outcome) {
+          formalResult = {
+            ...formalResult,
+            reconciliation: reconciliationOf(voteReport.outcome),
+          } as typeof formalResult;
         }
         // Tag experience-design flows / demo scripts with their business area so
         // the Show demo can default a recipient to their own area's flow — done

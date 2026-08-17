@@ -50,6 +50,7 @@
  */
 import { generatedStamp } from "@/v3/lib/whenGenerated";
 import { prototypeBaselineOfProgram } from "@shared/prototypeRefine.ts";
+import { anchorKey, anchorLabel, anchorResolves, anchorWorldOf } from "@shared/changeAnchors.ts";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ProgramSummary } from "@/new/types";
 import type { LineBand, LineStation } from "@/v3/lib/lineModel";
@@ -74,7 +75,7 @@ import {
 export type DesignRoundOp =
   | { op: "open"; roster: Array<{ name: string; role?: string; email?: string }>; note?: string }
   | { op: "link"; roundId: string }
-  | { op: "verdict"; roundId: string; who: string; verdict?: "approved" | "changes"; attestation: "self" | "operator"; text?: string; source?: string }
+  | { op: "verdict"; roundId: string; who: string; verdict?: "approved" | "changes"; attestation: "self" | "operator"; text?: string; source?: string; anchors?: unknown }
   | { op: "waive"; roundId: string; who: string; reason: string }
   | { op: "delegate"; roundId: string; who: string; to: { name: string; role?: string; email?: string }; reason: string }
   | { op: "close"; roundId: string };
@@ -480,12 +481,29 @@ function DesignRoundZone({ program, roster, locked, onMintReview, onDesignRound 
   const live = !!round && !round.closedAt && !round.supersededBy;
   const canWrite = !!onDesignRound && !locked;
 
+  // WHAT THE BUILD CAN STILL BE POINTED AT. A change request outlives the build
+  // it was made against — that is the whole reason its anchor is a source tuple
+  // and not a fabric id — so the addresses are re-resolved against what exists
+  // NOW, and one that no longer lands is marked rather than dropped. Whether a
+  // request survives its target being renamed away is a judgement; the surface
+  // says so and lets a person make it.
+  const anchorWorld = useMemo(() => {
+    try {
+      const raw = (program.rawData ?? {}) as Record<string, unknown>;
+      const inner = (typeof raw.data === "object" && raw.data !== null ? raw.data : raw) as Record<string, unknown>;
+      return anchorWorldOf(prototypeBaselineOfProgram(inner)?.html ?? "", inner.domainOntology);
+    } catch { return null; }
+  }, [program]);
+
   const [picking, setPicking] = useState(false);
   const [picked, setPicked] = useState<Record<string, boolean>>({});
   const [note, setNote] = useState("");
   const [meeting, setMeeting] = useState(false);
   const [openFor, setOpenFor] = useState<Record<string, boolean>>({});
   const [verdictPick, setVerdictPick] = useState<Record<string, "approved" | "changes">>({});
+  /** Screens picked for a change request, per person. Session state: nothing is
+   *  on the record until the verdict is. */
+  const [anchorPick, setAnchorPick] = useState<Record<string, string[]>>({});
   const [basis, setBasis] = useState<Record<string, string>>({});
   const [reason, setReason] = useState<Record<string, string>>({});
   const [delegateTo, setDelegateTo] = useState<Record<string, string>>({});
@@ -676,6 +694,26 @@ function DesignRoundZone({ program, roster, locked, onMintReview, onDesignRound 
                     {person.delegatedFrom ? <span className="v3dr-from">answering in place of {person.delegatedFrom}</span> : null}
                   </div>
                   {person.text ? <p className="v3dr-said-text">&ldquo;{person.text}&rdquo;</p> : null}
+                  {/* WHAT THEY ASKED TO CHANGE. Absent on plenty of legitimate
+                      feedback — "the whole thing feels heavy" points at no one
+                      screen — so nothing is drawn where nothing was pointed at,
+                      and the empty case must never read as a defect. */}
+                  {person.anchors.length ? (
+                    <p className="v3dr-anchors">
+                      <span className="v3dr-anchors-l">about</span>
+                      {person.anchors.map((a) => {
+                        const gone = !!anchorWorld && !anchorResolves(a, anchorWorld);
+                        return (
+                          <span key={anchorKey(a)} className={`v3dr-anchor${gone ? " is-gone" : ""}`}
+                            title={gone
+                              ? "The current build no longer has this. Re-point the request or close it — do not assume it was done."
+                              : "Still in the current build"}>
+                            {anchorLabel(a)}{gone ? " — no longer in the build" : ""}
+                          </span>
+                        );
+                      })}
+                    </p>
+                  ) : null}
                   {person.capture && person.capture !== "typed" ? (
                     // Said as a note ABOUT the words, not inside them. A transcript is
                     // a machine's reading of somebody's speech, and quoting it with no
@@ -726,6 +764,35 @@ function DesignRoundZone({ program, roster, locked, onMintReview, onDesignRound 
                             <textarea rows={2} value={basis[person.name] ?? ""}
                               onChange={(e) => setBasis((prev) => ({ ...prev, [person.name]: e.target.value }))} />
                           </label>
+                          {/* WHAT IT IS ABOUT — offered only for a change request,
+                              because an approval points at the whole design by
+                              definition. The options are the screens the BUILD
+                              routes to, so an operator cannot record a request
+                              against a screen that does not exist: the same
+                              refusal `reviewCapture` makes about a locus, made
+                              here by not offering the wrong answer in the first
+                              place. Optional on purpose — "the whole thing feels
+                              heavy" is real feedback and must stay recordable. */}
+                          {verdictPick[person.name] === "changes" && anchorWorld?.screens.size ? (
+                            <div className="v3dr-field">
+                              <span>Which screens — optional, and what makes this findable later</span>
+                              <div className="v3dr-apick" role="group" aria-label={`Screens ${person.name} asked about`}>
+                                {[...anchorWorld.screens].sort().map((s) => {
+                                  const on = (anchorPick[person.name] ?? []).includes(s);
+                                  return (
+                                    <button key={s} type="button" aria-pressed={on}
+                                      className={`v3dr-achip${on ? " on" : ""}`}
+                                      onClick={() => setAnchorPick((prev) => {
+                                        const cur = prev[person.name] ?? [];
+                                        return { ...prev, [person.name]: on ? cur.filter((x) => x !== s) : [...cur, s] };
+                                      })}>
+                                      {s}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ) : null}
                           <button type="button" className="v3dl-mini"
                             disabled={busy || !(basis[person.name] ?? "").trim() || !verdictPick[person.name]}
                             title={!(basis[person.name] ?? "").trim()
@@ -735,6 +802,11 @@ function DesignRoundZone({ program, roster, locked, onMintReview, onDesignRound 
                               op: "verdict", roundId: round.id, who: person.name,
                               verdict: verdictPick[person.name], attestation: "operator",
                               text: (basis[person.name] ?? "").trim(),
+                              // Only ever sent with a change request; an approval
+                              // that named screens would read as a partial one.
+                              anchors: verdictPick[person.name] === "changes"
+                                ? (anchorPick[person.name] ?? []).map((screen) => ({ of: "screen", screen }))
+                                : undefined,
                               source: meeting ? "meeting" : undefined,
                             }, `Recorded ${person.name}'s verdict — attested by you.`)}>
                             record {person.name}&rsquo;s verdict as the operator

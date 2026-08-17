@@ -43,6 +43,7 @@ import { FORMAL_ARTIFACT_FIELD_KEYS } from "@/v3/lib/formalArtifacts";
 // share uses (`mintReviewPack`), never a second link type. Type-only import, so no
 // runtime edge is added between the two modules.
 import type { FlowInterviewPack } from "@/v3/components/flow/flowPortal";
+import { readAnchors, type ChangeAnchor } from "@shared/changeAnchors.ts";
 
 /** The two methodology phases the Design Loop band renders as one. */
 export const DESIGN_LOOP_MOVEMENT_IDS: readonly string[] = ["envision", "show"];
@@ -182,6 +183,23 @@ export interface DesignRoundResponse {
   capture?: CaptureMode;
   /** The design version this answer was ABOUT — what a regeneration answers. */
   designVersion: string;
+  /**
+   * WHAT the feedback is about — a screen, an entity, a field, a relation.
+   *
+   * `designVersion` above says WHEN a request was made and is what makes it
+   * detectably stale; this says WHERE, and is what makes it work. Without it
+   * "the status column is wrong" is prose attached to a whole build and
+   * somebody has to go hunting. The address is `designOverrides`'s source
+   * tuple, chosen for the property that matters here: it survives a rename,
+   * and when it genuinely stops resolving it becomes a named orphan rather
+   * than a silent miss.
+   *
+   * Optional, and staying optional. Plenty of real feedback is about the whole
+   * design, and forcing an anchor would either block those or invite a wrong
+   * one — which is worse than none, because it sends the next person to the
+   * wrong screen.
+   */
+  anchors?: ChangeAnchor[];
   /** Operator captures: who wrote it down. Absent on self-attested answers. */
   recordedBy?: string;
   /** Where it came from — "portal", "meeting", "call"… */
@@ -441,6 +459,9 @@ export interface RecordVerdictInput {
   recordingRef?: string;
   capture?: CaptureMode;
   source?: string;
+  /** What the feedback is about. Shape-validated on the way in; whether the
+   *  address still EXISTS is asked later, against the build in front of you. */
+  anchors?: unknown;
 }
 
 /**
@@ -483,10 +504,14 @@ export function recordDesignRoundVerdict(
   if (input.attestation === "operator" && person.response?.attestation === "self") return null;
 
   const now = new Date().toISOString();
+  // Kept only when there is at least one well-formed address, so a response
+  // never carries an empty array that reads as "they pointed at nothing".
+  const anchors = readAnchors(input.anchors);
   const response: DesignRoundResponse = {
     at: now,
     attestation: input.attestation,
     verdict: input.verdict,
+    anchors: anchors.length ? anchors : undefined,
     text: text || undefined,
     recordingRef: String(input.recordingRef ?? "").trim() || undefined,
     capture: CAPTURE_MODES.has(String(input.capture ?? "")) ? input.capture : undefined,
@@ -634,6 +659,11 @@ export interface DesignRoundPerson {
   versionStale: boolean;
   /** Their round link has been minted (the ask genuinely went out). */
   linked: boolean;
+  /** WHAT they asked to change — screens, entities, fields, relations. Empty
+   *  where the feedback was about the design as a whole, which is legitimate
+   *  and common; a surface must not read an empty list as a defect. Validated
+   *  on read, because a stored round is a cast and anything could be in it. */
+  anchors: ChangeAnchor[];
 }
 
 export type DesignRoundState = "not-started" | "in-flight" | "objections" | "complete";
@@ -710,6 +740,9 @@ export function designRoundRollup(program: ProgramSummary, roundId?: string): De
       delegatedFrom: person.delegatedFrom,
       answeredVersion: person.response?.designVersion,
       versionStale: Boolean(person.response && person.response.designVersion !== round.design.key),
+      // Re-read rather than passed through: `readRounds` casts stored JSON, so
+      // what is on the record has never been checked by anything.
+      anchors: readAnchors(person.response?.anchors),
       linked: linked.has(normName(person.name)) || Boolean(person.packId),
     };
   });

@@ -603,6 +603,37 @@
 .v3dr-link.is-none{font-style:italic}
 .v3dr-stale,.v3dr-from{font-size:10px;color:var(--v3-amber)}
 .v3dr-said-text{margin:0;font-size:11px;line-height:1.5;color:var(--v3-text-secondary)}
+/* WHAT A CHANGE REQUEST POINTS AT — under the quote, because it qualifies the
+   words rather than standing on its own. An anchor the current build no longer
+   has is struck through and named, never removed: whether a request survives its
+   target being renamed away is a judgement for a person, and a silent drop would
+   make it look answered. */
+.v3dr-anchors{margin:2px 0 0;display:flex;flex-wrap:wrap;gap:5px;align-items:baseline}
+.v3dr-anchors-l{font-size:9.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--v3-text-muted)}
+.v3dr-anchor{font-size:10px;font-family:var(--v3-font-mono,ui-monospace,monospace);
+  padding:1px 6px;border-radius:3px;background:color-mix(in srgb,var(--mv) 8%,transparent);color:var(--mv)}
+.v3dr-anchor.is-gone{background:color-mix(in srgb,var(--v3-amber) 12%,transparent);
+  color:var(--v3-amber);text-decoration:line-through;text-decoration-color:color-mix(in srgb,var(--v3-amber) 60%,transparent)}
+/* The picker, in the record panel. Same chip shape as the anchors it writes, so
+   what you choose and what lands look like the same thing.
+
+   SCROLLS, because a real build has thirty screens and thirty chips is a wall
+   that buries the record button underneath it — measured on the surgery
+   programme, which draws 30. Filtering the list down (dropping the `form-*`
+   screens, say) was the other option and is worse: it would quietly make some
+   feedback unaddressable, and an operator cannot ask for a screen the picker
+   refuses to show. So all of them stay and the box is bounded. The height is a
+   deliberate 3-ish rows — enough that the overflow is obvious rather than the
+   one-pixel kind that reads as frozen, which is exactly how the Discovery Kit
+   matrix failed. */
+.v3dr-apick{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px;
+  max-height:92px;overflow-y:auto;padding:2px;
+  border:1px solid var(--v3-control-line);border-radius:4px}
+.v3dr-achip{font:inherit;font-size:10px;font-family:var(--v3-font-mono,ui-monospace,monospace);
+  background:none;border:1px solid var(--v3-control-line);border-radius:3px;padding:2px 7px;cursor:pointer;
+  color:var(--v3-text-secondary)}
+.v3dr-achip.on{border-color:var(--mv);color:var(--mv);background:color-mix(in srgb,var(--mv) 10%,transparent)}
+.v3dr-achip:focus-visible{outline:2px solid var(--mv);outline-offset:2px}
 .v3dr-rec,.v3dr-res,.v3dr-guard,.v3dr-capture{margin:0;font-size:10.5px;color:var(--v3-text-muted);line-height:1.5}
 /* a note ABOUT the quote — set apart from it so it never reads as part of what
    they said (which is the whole point of recording how the words were produced) */

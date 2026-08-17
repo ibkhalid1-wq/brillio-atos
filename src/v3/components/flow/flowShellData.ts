@@ -23,6 +23,7 @@ import { migrate, ambiguityLoci, type Snapshot } from "@/v3/lib/ledger/migrate";
 import { renderQuestion } from "@/v3/lib/ledger/renderQuestion";
 import { readOperatorActions, decidedFates, type CaptureAction } from "@/v3/lib/ledger/operatorActions";
 import { aboutOf } from "@/v3/lib/ledger/types";
+import { wasReconciled } from "@shared/ontologyVote.ts";
 import type { LedgerStore } from "@/v3/lib/ledger/store";
 
 /**
@@ -115,6 +116,29 @@ export interface ArtifactCardModel {
   stale: boolean;
   /** Open gaps the generator declared inside the document itself. */
   gaps: number;
+  /**
+   * A SHORT WARNING ABOUT HOW THIS DOCUMENT WAS MADE — or null, which is the
+   * normal case and must stay the normal case.
+   *
+   * Today this is the ontology's ensemble: five drafts reconciled by majority
+   * vote, falling through to ONE ordinary generation when too few come back.
+   * The fallback is right; its silence was not. A single-draft ontology carries
+   * a confidence figure it did not earn — nothing in it cleared an agreement
+   * bar — and it looked identical to a reconciled one on every surface.
+   *
+   * Set ONLY when the document says something went differently. A field that
+   * described the happy path too would appear on every tile in the programme
+   * and stop being read, which is the same failure as a gap channel that cries
+   * wolf. Absent stamp means unknown, never degraded: every document generated
+   * before the stamp existed has no reconciliation and may well have been
+   * voted.
+   *
+   * OPTIONAL, unlike `stale` beside it, and the difference is real: `stale:
+   * false` is a claim (the inputs have not moved), while an absent warning is
+   * the absence of one. Nothing is asserted about a document that never said
+   * how it was made.
+   */
+  provenanceWarning?: string | null;
   /**
    * WHEN THIS DOCUMENT WAS LAST GENERATED — the artifact's own `generatedAt`,
    * ISO, or null when nothing on the record says.
@@ -497,9 +521,14 @@ export function movementArtifacts(program: ProgramSummary, movement: PhaseDefini
           : null;
       return iso && !Number.isNaN(Date.parse(iso)) ? iso : null;
     })();
+    // Only a document that SAYS it was not reconciled gets a warning. Unknown
+    // (no stamp — every document older than the stamp) reads as nothing.
+    const provenanceWarning = wasReconciled(mirror) === false
+      ? "single draft — not reconciled by vote"
+      : null;
     return {
       id: def.id, movementId: movement.id, title: def.label, description: def.description,
-      excerpt, confidence, present, gaps, generatedAt,
+      excerpt, confidence, present, gaps, generatedAt, provenanceWarning,
       stale: present && (statusStale
         || (typeof stub?.inputsFingerprint === "string" && stub.inputsFingerprint !== currentFingerprint)),
     };

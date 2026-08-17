@@ -45,6 +45,8 @@ FULLY TRUE**.
 | 18 | Agentify rationale: "grounded in the pain, the wait or the judgement" | **TRUE** (model-facing) | None — re-status if ever shown to a client |
 | 19 | ontology prompt: backbone ships attributes + bracketed cardinality priors "as facts … never recall" | **TRUE** (enforced in code) | None — reconciler writes both from the packs |
 | 20 | prototype restyle: styleTokens — "a syntax error is impossible by construction" | **TRUE** (deploy-gated) | None — tokens are slot-checked; sheets syntax-gated |
+| 21 | ontology colophon: "Reconciled by majority vote … anything short of that rode into gaps" | **TRUE** (deploy-gated) | None — the stamp reports the run it describes |
+| 22 | change request: "no longer in the build" on a stale anchor | **TRUE** | None — resolved against the live assembly |
 
 **Applied 2026-08-07** — rows **1–5** edited to the phrasing below and re-statused
 **TRUE** (see each row for file, before→after). No surface in the repo now asserts
@@ -263,6 +265,28 @@ into those steps' definitions of done — not touched here.
 - **True today?** Yes as worded: a `styleTokens` answer is slot-checked per key (`themePatchOf`), merged over the baseline's resolved theme, and the sheet is rebuilt by `meridianStylesheet` — model-authored CSS text never enters the document on this path. Legacy `styleCss` and refined whole documents are gated by `checkStylesheetSyntax` inside `checkRefinedPrototype`, and a broken prior skin is refused re-adoption. Pinned by `prototypeStyleIntegrity.test.ts`.
 - **Deploy-gated:** the claim reaches clients only after `run-agent` redeploys.
 - **Status:** **TRUE** (deploy-gated).
+- **Remediation:** none.
+
+---
+
+### 21 · Ontology colophon — "Reconciled by majority vote from all N drafts" / "this document is a SINGLE generation"
+
+- **Where:** `_shared/ontologyVote.ts` (`reconciliationOf`), stamped onto the ontology by the `domain-ontology` post-condition in `run-agent/index.ts`; rendered in the artifact studio's "About this document" as **How it was made**, and beside the confidence figure as a short warning.
+- **True today?** Yes, and it is the correction of a claim the product used to make by SILENCE. The ensemble runs five drafts and reconciles by majority; when fewer than three come back it falls through to one ordinary generation. The fallback is right — a programme should not stall on an API's bad afternoon — but nothing recorded it, so a single-draft ontology was indistinguishable from a reconciled one while carrying a confidence figure it had not earned. The stamp reports the run it describes: counts come from the drafts that actually parsed, not from the calls that returned, so agreement is never overstated.
+- **What it does NOT claim.** Nothing about whether the reconciled document is CORRECT — only how it was produced. And an ontology generated before the stamp existed carries none; `wasReconciled` returns null there and no surface reports it as degraded, because nobody recorded either way.
+- **Deploy-gated:** the stamp is written by `run-agent`, so it reaches documents only after redeploy. Documents generated before then stay unstamped.
+- **Status:** **TRUE** (deploy-gated) — pinned by `ontologyVoteProvenance.test.ts`, including that the happy path does not read as a warning.
+- **Remediation:** none.
+
+---
+
+### 22 · Change request — "no longer in the build" on a stale anchor
+
+- **Where:** `_shared/changeAnchors.ts` (`anchorResolves`, `staleAnchorNotes`); rendered struck-through in the design round's person rows (`DesignLoopZones.tsx`).
+- **True today?** Yes: the anchor is resolved against the LIVE assembly (`prototypeBaselineOfProgram`) and the current ontology, not against a stored snapshot, so "no longer in the build" means the build in front of you does not route to that screen or state that field. The address is `designOverrides`'s source tuple, so an ordinary rename does not produce a false positive — only a genuine removal does.
+- **What it does NOT claim.** Not that the request was done, ignored, or is obsolete. Nothing is re-bound and nothing is dropped: whether a request survives its target being renamed away is a judgement, and the copy says so — *"Re-point the request or close it — do not assume it was done."*
+- **The honest limit.** Screen ids are read from the assembled HTML, so an anchor written against a build that failed to assemble resolves to nothing and every anchor reads as stale. The world is built inside a `try`, and a failure yields `null`, which suppresses the mark entirely rather than showing a page of false alarms.
+- **Status:** **TRUE** — pinned by `changeAnchors.test.ts`.
 - **Remediation:** none.
 
 ---
