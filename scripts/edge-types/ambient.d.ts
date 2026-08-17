@@ -32,24 +32,25 @@ declare const Deno: {
 declare module "https://esm.sh/@supabase/supabase-js@2.49.8" {
   export * from "@supabase/supabase-js";
   /**
-   * `createClient` is re-declared UNTYPED, and that is the accurate statement.
+   * `createClient` is bound to the project's REAL schema.
    *
-   * The edge calls it with no `Database` generic, so it has no schema to work
-   * from. Newer supabase-js typings resolve an unparameterised client's rows to
-   * `never`, which made every `row.id` in the edge an error — 137 of them,
-   * every one an artifact of THIS SHIM resolving 2.108 typings against a 2.49.8
-   * import, not a defect in the code. Silencing them by editing the edge would
-   * have been fixing the product to suit the measuring instrument.
+   * It briefly returned `SupabaseClient<any, any, any>`, which was the honest
+   * description of what the edge had: it calls `createClient` with no
+   * `Database` generic, so it had no schema and every row was untyped. (Newer
+   * supabase-js typings resolve an unparameterised client's rows to `never`,
+   * which turned every `row.id` into an error — an artifact of this shim, not a
+   * defect in the code, so silencing it by editing the edge would have been
+   * fixing the product to suit the measuring instrument.)
    *
-   * The honest description of a client with no schema is `any` rows. It costs
-   * nothing that was ever there — the edge never had row types — and it lets
-   * the check surface the errors that are actually about the code. Generating a
-   * real `Database` type from the migrations is the upgrade; until someone does
-   * that, this states the truth rather than implying a safety nobody has.
+   * `database.types.ts` is the upgrade, generated from the live project. Now a
+   * column renamed out from under the edge is a type error rather than an
+   * `undefined` at runtime — which is the whole reason to typecheck this tree.
    */
   export function createClient(
     url: string,
     key: string,
     options?: Record<string, unknown>,
-  ): import("@supabase/supabase-js").SupabaseClient<any, any, any>;
+  ): import("@supabase/supabase-js").SupabaseClient<
+    import("../../supabase/functions/_shared/database.types.ts").Database
+  >;
 }

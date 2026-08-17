@@ -45,11 +45,68 @@ describe("the edge is typechecked, and the check is in the gate", () => {
     expect(amb).toContain('declare module "https://esm.sh/@supabase/supabase-js@2.49.8"');
   });
 
-  it("and says out loud that the client is untyped, rather than implying it is not", () => {
-    // `createClient` is re-declared with `any` rows. That is the accurate
-    // description of a client given no schema — the alternative was editing the
-    // edge to satisfy the measuring instrument.
-    expect(read("scripts/edge-types/ambient.d.ts")).toContain("SupabaseClient<any, any, any>");
+  it("binds the client to the project's REAL schema", () => {
+    // It was briefly `SupabaseClient<any, any, any>` — the honest description
+    // of a client given no schema. `database.types.ts` is the upgrade: a column
+    // renamed out from under the edge is now a type error rather than an
+    // `undefined` at runtime, which is the whole reason to check this tree.
+    // Read from the DECLARATION, not the whole file: the comment above it
+    // still says the words "SupabaseClient<any, any, any>" while explaining
+    // what it used to be, and a file-wide match tested the prose.
+    const amb = read("scripts/edge-types/ambient.d.ts");
+    const decl = amb.slice(amb.indexOf("export function createClient"));
+    expect(decl).toContain("database.types.ts");
+    expect(decl).not.toContain("any, any, any");
+  });
+
+  it("the schema is generated and says so, with the command to refresh it", () => {
+    // A generated file with no provenance gets hand-edited, and then it is not
+    // a schema any more — it is a wish.
+    const db = read("supabase/functions/_shared/database.types.ts");
+    expect(db).toContain("GENERATED — DO NOT HAND-EDIT");
+    expect(db).toContain("npm run gen:db-types");
+    const pkg = JSON.parse(read("package.json")) as { scripts: Record<string, string> };
+    expect(pkg.scripts["gen:db-types"]).toContain("gen types typescript");
+  });
+});
+
+describe("what the real schema caught the moment it was switched on", () => {
+  const db = read("supabase/functions/_shared/database.types.ts");
+  const tableInSchema = (t: string) => db.includes(`      ${t}: {`);
+
+  it("THREE TABLES THE EDGE WRITES TO DO NOT EXIST", () => {
+    // Found by the typecheck within a minute of binding the real schema, and
+    // invisible for the life of the repo before it. No migration creates any of
+    // them and the live database has none of them.
+    for (const t of ["adam_decisions", "adam_meeting_notes", "adam_raid_log"]) {
+      expect(tableInSchema(t), `${t} unexpectedly exists — re-check the finding`).toBe(false);
+    }
+  });
+
+  it("and the writes cannot report their own failure", () => {
+    // The call sites wrap each insert in try/catch and push to an `errors`
+    // array. supabase-js does not THROW on a failed write — it returns
+    // `{ data, error }` — and the error is never read. So the catch never
+    // fires, `errors` stays empty, and the handler answers `ok: true` with
+    // `savedDecisions: N` having saved nothing at all.
+    const fn = read("supabase/functions/meeting-notes-processor/index.ts");
+    expect(fn).toContain('await admin.from("adam_decisions").insert({');
+    expect(fn).toContain("ok: errors.length === 0");
+    // The precise claim: the insert's RESULT is never destructured, so the
+    // `error` it returns is never looked at. (An earlier version of this case
+    // searched a 420-character window for the word "error" and matched the
+    // `catch (err)` block below it — which proved nothing.) Goes RED the day
+    // somebody reads the result, at which point the finding is fixed and this
+    // case should be rewritten.
+    expect(fn).toContain('await admin.from("adam_decisions").insert({');
+    expect(fn).not.toMatch(/=\s*await admin\.from\("adam_decisions"\)/);
+  });
+
+  it("the tables the edge DOES use are all real", () => {
+    // So the finding above is three specific tables, not a broken generator.
+    for (const t of ["adam_programs", "adam_agent_runs", "adam_program_artifacts", "adam_program_texts"]) {
+      expect(tableInSchema(t), t).toBe(true);
+    }
   });
 });
 

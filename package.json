@@ -20,7 +20,8 @@
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
     "check:edge-syntax": "esbuild supabase/functions/run-agent/index.ts supabase/functions/_shared/*.ts --outdir=/tmp/edge-syntax-check --log-level=error",
-    "check:edge-types": "node scripts/edge-types/check.mjs"
+    "check:edge-types": "node scripts/edge-types/check.mjs",
+    "gen:db-types": "supabase gen types typescript --project-id vudqrrqpipnkxzxslbim > supabase/functions/_shared/database.types.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.1",
