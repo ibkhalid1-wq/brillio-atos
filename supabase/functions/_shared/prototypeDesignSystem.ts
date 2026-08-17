@@ -458,6 +458,13 @@ a{color:var(--m-brand);text-decoration:none}
 .m-table tbody tr{transition:background var(--m-dur)}
 .m-table tbody tr:hover{background:var(--m-surface-2)}
 .m-table tbody tr.is-flagged{background:color-mix(in srgb,var(--m-danger) 5%,transparent);box-shadow:inset 3px 0 0 var(--m-danger)}
+/* TODAY, not a table of everything. A workbench opened on the records this
+   area owns — true, complete, and no answer to "what do I do". The band above
+   them lists what is waiting or off track, in the order a person would work it,
+   and says plainly when there is nothing. */
+.m-todo{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column}
+.m-todo-r{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--m-line)}
+.m-todo-r .m-cell-sub{margin-top:0;flex:1;min-width:0}
 .m-cell-main{font-weight:600;color:var(--m-ink)}
 /* THE NAME IS THE WAY IN. A column of identical filled "Open" buttons is the
    loudest thing on a table and says nothing a record's own name does not — so

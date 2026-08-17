@@ -234,7 +234,14 @@ interface QueueSpec extends ColumnSpec {
   region: string; entity: string; slug: string; status: number;
   emptyTitle: string; cite: EmptyCite | null;
 }
-interface WorkbenchSpec { slug: string; queues: QueueSpec[] }
+interface WorkbenchSpec {
+  slug: string;
+  queues: QueueSpec[];
+  /** The today band's slot, and the gated agents whose records this area works —
+   *  so "waiting on you" counts THIS area's undecided rows, not the programme's. */
+  today: string;
+  gates: Array<{ key: string; entity: string }>;
+}
 /** One gated agent's queue. `key` addresses this session's decisions and is the
  *  agent's slug — an agent renamed in the blueprint is a different gate, which
  *  is correct: the decisions were about the old one. */
@@ -926,7 +933,36 @@ const PERSONA_RENDERER = `
       +'<div class="m-card-h"><div class="m-card-t">'+mEsc(qs.entity)+'</div><span class="m-badge">'+ix.length+"</span></div>"
       +inner+"</section>");
   }
-  function renderWorkbench(wb){for(var i=0;i<wb.queues.length;i++)renderQueue(wb.queues[i])}
+  function renderToday(wb){
+    var rows=[],wait=0,i,j,qs,t,ix,v,tn,gk;
+    for(i=0;i<wb.queues.length;i++){
+      qs=wb.queues[i];t=D[qs.entity];if(!t)continue;
+      ix=live(t);
+      gk=null;for(j=0;j<wb.gates.length;j++)if(wb.gates[j].entity===qs.entity)gk=wb.gates[j].key;
+      for(j=0;j<ix.length;j++){
+        if(gk&&!DECIDED[gk+"|"+at(t,ix[j],0)])wait++;
+        if(qs.status<0)continue;
+        v=at(t,ix[j],qs.status);tn=TONE[String(v)];
+        if(tn==="risk"||tn==="warn")rows.push([qs,t,ix[j],v,tn]);
+      }
+    }
+    var shown=rows.slice(0,6),li="",r,id;
+    for(i=0;i<shown.length;i++){
+      r=shown[i];id=at(r[1],r[2],0);
+      li+='<li class="m-todo-r"><button class="m-cell-go" onclick="'+act(href(r[0].slug,id))+'">'+mEsc(nameOf(r[1],r[2]))+"</button>"
+        +'<span class="m-cell-sub">'+mEsc(r[0].entity)+"</span>"
+        +'<span class="m-pill m-pill--'+r[4]+'"><span class="m-dot m-dot--'+r[4]+'"></span>'+mEsc(r[3])+"</span></li>";
+    }
+    var n=wait+rows.length;
+    fill(wb.today,'<section class="m-card" style="margin-top:16px">'
+      +'<div class="m-card-h"><div class="m-card-t">Waiting on you</div><span class="m-badge">'+n+"</span></div>"
+      +(wait?'<p class="m-cell-sub">'+wait+" decision"+(wait===1?"":"s")+" the agents here cannot make alone"
+        +' — <button class="m-btn m-btn--ghost m-btn--sm" onclick="go('+Q+"#"+APR+Q+')">Approvals →</button></p>':"")
+      +(li?'<ul class="m-todo">'+li+"</ul>"+(rows.length>shown.length?'<div class="m-cell-sub">and '+(rows.length-shown.length)+" more below.</div>":"")
+        :(wait?"":'<div class="m-cell-sub">Nothing in this area is waiting or off track today.</div>'))
+      +"</section>");
+  }
+  function renderWorkbench(wb){renderToday(wb);for(var i=0;i<wb.queues.length;i++)renderQueue(wb.queues[i])}
   // ── THE APPROVAL QUEUE: where a gated agent stops ─────────────────────────
   //
   // The blueprint says which agents a human has to clear before they act. The
@@ -2050,7 +2086,7 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
       seen.add(hit);
       (hasScreen(hit) ? queued : offMenu).push(hit);
     }
-    const spec = { slug: r.slug, queues: [] as QueueSpec[] };
+    const spec = { slug: r.slug, queues: [] as QueueSpec[], today: `today:${r.slug}`, gates: [] as Array<{ key: string; entity: string }> };
     const queues = queued.slice(0, QUEUES_MAX).map((entity) => {
       const region = `queue:${r.slug}:${es.get(entity)}`;
       spec.queues.push({
@@ -2064,6 +2100,7 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
       });
       return fillSlot(region, entity);
     }).join("");
+    for (const a of apprSpecs) if (queued.includes(a.entity)) spec.gates.push({ key: a.key, entity: a.entity });
     workSpecs.push(spec);
     // THE THIRD EMITTER of a bare list address. An agent band names the records
     // it reads and writes, and each name was a control pointing at `#<entity>`
@@ -2120,7 +2157,7 @@ export function assemblePrototype(ontology: Record<string, unknown>, atlas: Reco
       <header class="m-page-h"><div><div class="m-eyebrow">Workbench</div><h1 class="m-title">${esc(title)}</h1>
       <p class="m-sub">${r.workflows.length} workflow${r.workflows.length === 1 ? "" : "s"} mapped today${r.systems.length ? ` · ${esc(r.systems.join(", "))}` : ""}</p>
       ${works}</div></header>
-      ${unowned}${queues}${alsoQueued}${notHere}${notModelled}${flows}</section>`;
+      ${unowned}${fillSlot(`today:${r.slug}`)}${queues}${alsoQueued}${notHere}${notModelled}${flows}</section>`;
   };
 
   // ── one list screen per entity ──

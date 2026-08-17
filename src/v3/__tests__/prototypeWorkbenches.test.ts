@@ -285,3 +285,61 @@ describe("the workbench is addressable and deterministic", () => {
     expect([...aux.querySelectorAll(".m-nav-item")].length).toBeGreaterThanOrEqual(roles.length);
   });
 });
+
+/**
+ * A WORKBENCH OPENED ON THE RECORDS THIS AREA OWNS — true, complete, and no
+ * answer to the question a person actually arrives with (operator direction,
+ * 2026-08-17). The band above the queues says what is WAITING or OFF TRACK, in
+ * the order somebody would work it.
+ *
+ * Nothing new is computed for it. The tone table already knows which status
+ * words carry a verdict; the blueprint already says which agents cannot act
+ * alone; the queues already carry each entity's status column. The band is a
+ * different arrangement of what the build already held.
+ */
+describe("the workbench opens on what to do, not on what exists", () => {
+  const bandOf = (slug: string) => screen(doc, `work-${slug}`)?.querySelector('[data-region^="today:"]');
+
+  it("every workbench has the band, and it stands above the queues", () => {
+    const roles = deriveWorkbenches(atlas);
+    for (const r of roles) {
+      const s = screen(doc, `work-${r.slug}`);
+      if (!s) continue;
+      const band = s.querySelector('[data-region^="today:"]');
+      expect(band, `${r.slug} has no today band`).toBeTruthy();
+      const first = s.querySelector('[data-region^="today:"], [data-region^="queue:"]');
+      expect(first?.getAttribute("data-region"), `${r.slug} leads with a queue`).toMatch(/^today:/);
+    }
+  });
+
+  it("it lists records whose own state says they need a move", () => {
+    // Drawn by the renderer from the data island, so this reads the tree.
+    const roles = deriveWorkbenches(atlas);
+    const withRows = roles.map((r) => bandOf(r.slug)).find((b) => b?.querySelector(".m-todo-r"));
+    expect(withRows, "no workbench surfaced a single thing to do").toBeTruthy();
+    for (const row of withRows!.querySelectorAll(".m-todo-r")) {
+      // A row names the record, what kind it is, and the state that put it here.
+      expect(row.querySelector(".m-cell-go"), "a row with no way into the record").toBeTruthy();
+      const tone = row.querySelector(".m-pill");
+      expect(tone?.className).toMatch(/m-pill--(risk|warn)/);
+    }
+  });
+
+  it("a state that carries no verdict is not dressed up as work", () => {
+    // "Prospecting" is not a problem. The band would be noise if every value
+    // landed in it, and the tone table is what keeps it honest.
+    const roles = deriveWorkbenches(atlas);
+    for (const r of roles) {
+      const band = bandOf(r.slug);
+      for (const row of band?.querySelectorAll(".m-todo-r") ?? []) {
+        expect(textOf(row.querySelector(".m-pill"))).not.toMatch(/^(New|Prospecting|Draft)$/i);
+      }
+    }
+  });
+
+  it("says so plainly when there is nothing", () => {
+    const empty = deriveWorkbenches(atlas).map((r) => bandOf(r.slug))
+      .find((b) => b && !b.querySelector(".m-todo-r") && !/decision/.test(textOf(b)));
+    if (empty) expect(textOf(empty)).toMatch(/Nothing in this area is waiting or off track today/);
+  });
+});

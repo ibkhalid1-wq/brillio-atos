@@ -92,7 +92,7 @@ export default function PrototypeStudio({ doc, onChange, program, onRefineProtot
       return prototypeBaselineOfProgram(inner)?.html ?? null;
     } catch { return null; }
   }, [program]);
-  const [view, setView] = useState<"fabric" | "build">("fabric");
+
   /**
    * ANNOTATE — point at something in the running build and say what it should
    * be called, or that it should not be there.
@@ -158,7 +158,7 @@ export default function PrototypeStudio({ doc, onChange, program, onRefineProtot
   };
 
   // fabric is the default; fall through honestly when one side is missing
-  const effectiveView: "fabric" | "build" = assembled && (view === "fabric" || !html) ? "fabric" : "build";
+
 
   // Re-seed the editor when the underlying build changes (a rebuild lands, or
   // a proposed edit is confirmed and flows back into the doc).
@@ -194,7 +194,9 @@ export default function PrototypeStudio({ doc, onChange, program, onRefineProtot
   // stands, which is also what a stakeholder's link renders — and the stored
   // snapshot behind the toggle. The editor always edits the STORED build: the
   // live assembly has no stored source to edit.
-  const shown = effectiveView === "fabric" && assembled ? assembled : html;
+  // The live assembly, always — the stored document is only what the editor
+  // proposes against and what a round-trip is diffed from.
+  const shown = assembled ?? html;
   const source = mode === "edit" ? draft : shown;
   const dirty = draft !== html;
 
@@ -214,21 +216,27 @@ export default function PrototypeStudio({ doc, onChange, program, onRefineProtot
               title="Point at anything in the running build and say what it should be called — or that it should not be there. What you record is kept as data and re-applied by every later build."
               onClick={() => { setAnnotating((on) => !on); setPick(null); setMode("preview"); }}>◎ Annotate</button>
           ) : null}
-          {html ? <button type="button" className={mode === "edit" ? "on" : ""} title="Edit this build's screens and markup in place — the assembled prototype is regenerated, so edits belong on the refined build" onClick={() => setMode("edit")}>✎ Edit this build</button> : null}
-          {/* LIVE vs AS GENERATED — not two designs, one freshness comparison.
-              Both now assemble from the same inputs, carry the same accepted
-              screen spec and wear the same approved skin; Live is rebuilt from
-              the record on every render, while the stored build is the snapshot
-              its "Generated …" stamp names. The old labels (Fabric / Refined
-              build) described how each was produced, which read as a choice
-              between two products.
-              The fabric assembly is the deterministic
-              default (0 model tokens for structure); the model-refined build is
-              the layer on top, reachable when it exists. */}
-          {assembled && html ? (<>
-            <button type="button" className={effectiveView === "fabric" ? "on" : ""} title="Assembled from the record as it stands right now — the current ontology, atlas and design, wearing the approved skin and carrying the widgets a previous round accepted. This is what a stakeholder opens on their link." onClick={() => { setView("fabric"); setMode("preview"); }}>◇ Live</button>
-            <button type="button" className={effectiveView === "build" ? "on" : ""} title="The build stored on the record, exactly as it was generated — a snapshot. It is what the editor edits and what Export downloads; compare it with Live to see what has moved since." onClick={() => setView("build")}>✦ As generated</button>
-          </>) : null}
+          {/* ONE BUILD (operator direction, 2026-08-17). There were two views —
+              Live and As generated — and the second was a snapshot whose only
+              unique content was the refine's in-region work. That work does not
+              survive the next generation anyway (only the stylesheet carries),
+              so the toggle preserved something already doomed while making it
+              look durable, and offered a stale build to show in a review. The
+              question it answered — "has anything moved since we generated?" —
+              is answered without a second rendering now: the tile carries its
+              generation stamp and the stage says when evidence moved.
+
+              LIVE IS THE ONE THAT SURVIVES: it is what a stakeholder's link
+              renders and what the refine post-condition measures against, so
+              keeping the other one meant the operator could be looking at a
+              build nobody else could see.
+
+              "Edit this build" went with it, and for the same reason: it edited
+              the STORED document — the snapshot — so its edits were bytes, and
+              bytes are what a rebuild erases. Annotate is the editing path, and
+              what it writes is data the next build re-applies. The source
+              editor is still reachable from Import, where a round-trip has to
+              be reviewed before it lands. */}
           {/* TAKE IT ELSEWHERE — one door over four transfer controls.
               Eight buttons sat in one row at equal weight: three that change what you
               are LOOKING AT (run it, assembled, refined) and five that move the thing
