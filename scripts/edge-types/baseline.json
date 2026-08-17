@@ -1,0 +1,5 @@
+{
+  "supabase/functions/_shared/extractText.ts": 3,
+  "supabase/functions/copilot-chat/index.ts": 1,
+  "supabase/functions/run-agent/index.ts": 58
+}

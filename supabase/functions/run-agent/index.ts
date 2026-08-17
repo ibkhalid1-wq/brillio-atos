@@ -379,7 +379,23 @@ function stringifyJson(value: unknown): string {
   }
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+/**
+ * GENERIC ON PURPOSE, and it is not a style preference.
+ *
+ * As `(value: unknown): value is Record<string, unknown>` this guard did not
+ * narrow `.filter(isRecord)` AT ALL. `Array.filter`'s type-predicate overload
+ * requires the guarded type to extend the element type, and
+ * `Record<string, unknown>` does not extend `JsonValue` — so TypeScript fell
+ * back to the plain overload and handed back `JsonValue[]`, null still in it.
+ * Every `.filter(isRecord).map((row) => row.x)` in this file was therefore
+ * reported as reading a property off a possible null: 109 errors, one cause,
+ * and no runtime defect behind any of them — the check itself was always right.
+ *
+ * Written generically, the guard yields `T & Record<string, unknown>`, which
+ * DOES extend `T`, so the overload matches and the filter narrows as it reads.
+ * The runtime behaviour is byte-identical.
+ */
+function isRecord<T>(value: T): value is T & Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
@@ -10517,6 +10533,23 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: `Unknown agentId "${request.agentId}".` }, 400);
     }
 
+    /**
+     * THE SAME REQUEST, BOUND NON-NULL, for use inside callbacks.
+     *
+     * `request` is declared `| null` for one reason: the catch at the bottom
+     * reports on a body that failed to parse, and at that point there genuinely
+     * is no request. Everything from here down runs after it is fully built —
+     * but a closure resets TypeScript's narrowing, so every `request.phaseId`
+     * inside a `.some(…)` or `.map(…)` read as possibly-null. Six sites, no
+     * reachable null behind any of them.
+     *
+     * Bound rather than asserted with `!`: an assertion tells the compiler to
+     * stop asking, while a binding gives it the fact. Callbacks below use
+     * `req0`; straight-line code keeps using `request`, where the narrowing
+     * holds on its own and a second name would only be noise.
+     */
+    const req0 = request;
+
     if (request.agentId === "escalation" && request.programId === "ALL") {
       if (!auth.isService) {
         return jsonResponse({ error: "Only the service role may run escalation checks for all programs." }, 403);
@@ -10543,7 +10576,7 @@ Deno.serve(async (req) => {
             agentId: "escalation",
             phaseId: "program",
             triggeredBy: "schedule",
-            triggerEvent: request.triggerEvent || "cron:escalation",
+            triggerEvent: req0.triggerEvent || "cron:escalation",
           } satisfies RunAgentRequest),
         },
       )));
@@ -11227,7 +11260,7 @@ Deno.serve(async (req) => {
           // must not flood the inbox with duplicates.
           const openBudgetDecision = (getInnerProgramData(blocked).flowDecisions as JsonValue[] | undefined ?? [])
             .filter(isRecord)
-            .some((entry) => entry.status === "open" && entry.agentId === "governance" && entry.movementId === request.phaseId);
+            .some((entry) => entry.status === "open" && entry.agentId === "governance" && entry.movementId === req0.phaseId);
           if (!openBudgetDecision) {
             blocked = queueFlowDecision(blocked, {
               tier: 2,
@@ -11625,7 +11658,7 @@ Deno.serve(async (req) => {
               priority: "medium",
               status: "open",
               recommendation: "",
-              phaseId: request.phaseId,
+              phaseId: req0.phaseId,
               source: "meeting-notes",
               sourceDocumentId: documentId,
               createdAt: new Date().toISOString(),
@@ -11637,7 +11670,7 @@ Deno.serve(async (req) => {
               id: `meeting-action-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
               title: typeof entry.title === "string" ? entry.title : "Meeting action",
               status: "not-started",
-              phaseId: request.phaseId,
+              phaseId: req0.phaseId,
               targetDate: typeof entry.dueDate === "string" ? entry.dueDate : null,
               owner: typeof entry.owner === "string" ? entry.owner : null,
               source: "meeting-notes",
@@ -11655,7 +11688,7 @@ Deno.serve(async (req) => {
                 title: typeof entry.title === "string" ? entry.title : "Meeting risk",
                 severity: ["critical", "high", "medium", "low"].includes(String(entry.severity)) ? entry.severity : "medium",
                 status: "open",
-                phase: request.phaseId,
+                phase: req0.phaseId,
                 source: "meeting-notes",
                 sourceDocumentId: documentId,
               })),
@@ -12557,7 +12590,7 @@ Deno.serve(async (req) => {
         nextProgramData = appendDecisionQueueItems(nextProgramData, parsed.decisions.map((decision) => ({
           id: crypto.randomUUID(),
           type: "agent_recommendation",
-          phase: request.phaseId,
+          phase: req0.phaseId,
           title: decision.title,
           body: decision.question,
           options: decision.options || [],
